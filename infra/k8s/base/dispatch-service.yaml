@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dispatch-service
+  namespace: cosmos
+  labels: { app: dispatch-service }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: dispatch-service }
+  template:
+    metadata:
+      labels: { app: dispatch-service }
+    spec:
+      containers:
+        - name: dispatch-service
+          image: REPLACE_REGISTRY/cosmos-dispatch-service:latest
+          ports:
+            - containerPort: 3011
+          envFrom:
+            - configMapRef: { name: cosmos-config }
+            - secretRef: { name: cosmos-secrets }
+          env:
+            - name: PORT
+              value: "3011"
+            - name: SERVICE_NAME
+              value: "dispatch-service"
+            - name: COSMOS_OTEL_ENABLED
+              value: "false"
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: 3011 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: 3011 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dispatch-service
+  namespace: cosmos
+spec:
+  selector: { app: dispatch-service }
+  ports:
+    - port: 3011
+      targetPort: 3011
+      name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dispatch-service
+  namespace: cosmos
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dispatch-service
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }

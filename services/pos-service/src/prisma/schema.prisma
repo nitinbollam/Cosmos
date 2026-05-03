@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PosRegister {
+  id       String     @id @default(cuid())
+  tenantId String
+  code     String
+  name     String
+  shifts   PosShift[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model PosShift {
+  id          String      @id @default(cuid())
+  tenantId    String
+  registerId  String
+  openedAt    DateTime    @default(now())
+  closedAt    DateTime?
+  openingCash Decimal     @db.Decimal(12, 2)
+  closingCash Decimal?    @db.Decimal(12, 2)
+  openedBy    String
+  closedBy    String?
+  register    PosRegister @relation(fields: [registerId], references: [id], onDelete: Cascade)
+  sales       PosSale[]
+
+  @@index([tenantId])
+  @@index([registerId])
+}
+
+model PosSale {
+  id         String   @id @default(cuid())
+  tenantId   String
+  shiftId    String
+  saleRef    String
+  lines      Json
+  total      Decimal  @db.Decimal(12, 2)
+  voided     Boolean  @default(false)
+  voidReason String?
+  createdAt  DateTime @default(now())
+  shift      PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([shiftId])
+}

@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --cosmos-bg:        #06060F;
+  --cosmos-surface:   #0D0D1A;
+  --cosmos-surface-2: #13132A;
+  --cosmos-border:    #1E1E3A;
+  --cosmos-primary:   #6366F1;
+  --cosmos-primary-glow: rgba(99,102,241,0.3);
+  --cosmos-accent:    #22D3EE;
+  --cosmos-success:   #10B981;
+  --cosmos-warning:   #F59E0B;
+  --cosmos-danger:    #EF4444;
+  --cosmos-white:     #F1F5F9;
+  --cosmos-muted:     #64748B;
+  --cosmos-text:      #CBD5E1;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--cosmos-bg);
+  color: var(--cosmos-text);
+  font-family: 'Space Grotesk', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.cosmos-card {
+  background: var(--cosmos-surface);
+  border: 1px solid var(--cosmos-border);
+  border-radius: 12px;
+}

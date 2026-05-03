@@ -1,0 +1,43 @@
+{
+  "name": "@cosmos/pos-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "prisma generate --schema=src/prisma/schema.prisma && nest build",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "lint": "eslint src --ext .ts || true",
+    "test": "prisma generate --schema=src/prisma/schema.prisma && jest --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate --schema=src/prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema=src/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.3.10",
+    "@nestjs/core": "^10.3.10",
+    "@nestjs/platform-express": "^10.3.10",
+    "@nestjs/config": "^3.2.3",
+    "@nestjs/passport": "^10.0.3",
+    "passport": "^0.7.0",
+    "@prisma/client": "^5.18.0",
+    "class-validator": "^0.14.1",
+    "class-transformer": "^0.5.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "@cosmos/logger": "workspace:*",
+    "@cosmos/event-bus": "workspace:*",
+    "@cosmos/auth-middleware": "workspace:*",
+    "@cosmos/types": "workspace:*",
+    "@cosmos/tracing": "workspace:*"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.2",
+    "@nestjs/testing": "^10.3.10",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.10",
+    "jest": "^29.7.0",
+    "prisma": "^5.18.0",
+    "ts-jest": "^29.2.2",
+    "typescript": "^5.5.3"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@cosmos/logger",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --ext .ts || true",
+    "test": "echo 'no tests in @cosmos/logger'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pino": "^9.3.1",
+    "pino-pretty": "^11.2.1",
+    "nanoid": "^3.3.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "@types/node": "^20.14.10"
+  }
+}

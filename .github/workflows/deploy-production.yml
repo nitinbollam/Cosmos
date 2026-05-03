@@ -1,0 +1,69 @@
+name: Deploy Production
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit SHA to deploy'
+        required: true
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  EKS_CLUSTER: cosmos-production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve image tag
+        id: tag
+        run: echo "image_tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push images
+        run: |
+          IMAGE_TAG=${{ steps.tag.outputs.image_tag || github.sha }}
+          for svc in services/*; do
+            name=$(basename "$svc")
+            docker build -f infra/docker/node-service.Dockerfile -t "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG" "$svc"
+            docker push "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG"
+          done
+          for svc in ai/*; do
+            name=$(basename "$svc")
+            docker build -f infra/docker/python-service.Dockerfile -t "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG" "$svc"
+            docker push "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG"
+          done
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+
+      - name: Deploy
+        run: |
+          IMAGE_TAG=${{ steps.tag.outputs.image_tag || github.sha }}
+          cd infra/k8s/overlays/production
+          kubectl apply -k . --record
+          kubectl rollout status deploy -n cosmos --timeout=15m
+
+      - name: Notify PagerDuty on failure
+        if: failure()
+        run: |
+          curl -sS -X POST https://events.pagerduty.com/v2/enqueue \
+            -H 'Content-Type: application/json' \
+            -d "{\"routing_key\":\"${{ secrets.PAGERDUTY_ROUTING_KEY }}\",\"event_action\":\"trigger\",\"payload\":{\"summary\":\"Cosmos production deploy failed\",\"severity\":\"critical\",\"source\":\"github-actions\"}}"

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Cosmos Delivery",
+    "slug": "cosmos-delivery",
+    "version": "1.0.0",
+    "scheme": "cosmosdelivery",
+    "userInterfaceStyle": "dark",
+    "ios": { "bundleIdentifier": "app.cosmos.delivery" },
+    "android": { "package": "app.cosmos.delivery" },
+    "plugins": ["expo-router", "expo-location"]
+  }
+}

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wms-service
+  namespace: cosmos
+  labels: { app: wms-service }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: wms-service }
+  template:
+    metadata:
+      labels: { app: wms-service }
+    spec:
+      containers:
+        - name: wms-service
+          image: REPLACE_REGISTRY/cosmos-wms-service:latest
+          ports:
+            - containerPort: 3004
+          envFrom:
+            - configMapRef: { name: cosmos-config }
+            - secretRef: { name: cosmos-secrets }
+          env:
+            - name: PORT
+              value: "3004"
+            - name: SERVICE_NAME
+              value: "wms-service"
+            - name: COSMOS_OTEL_ENABLED
+              value: "false"
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: 3004 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: 3004 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wms-service
+  namespace: cosmos
+spec:
+  selector: { app: wms-service }
+  ports:
+    - port: 3004
+      targetPort: 3004
+      name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: wms-service
+  namespace: cosmos
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: wms-service
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }

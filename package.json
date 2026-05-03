@@ -1,0 +1,38 @@
+{
+  "name": "cosmos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cosmos — production-grade ERP/distribution platform",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@9.7.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "infra:up": "docker compose -f docker-compose.yml up -d",
+    "infra:down": "docker compose -f docker-compose.yml down",
+    "infra:logs": "docker compose -f docker-compose.yml logs -f",
+    "seed": "tsx scripts/seed-db.ts",
+    "migrate:all": "tsx scripts/migrate-all.ts",
+    "ensure:tracing": "node scripts/ensure-nest-tracing.mjs",
+    "build:turbo": "pnpm exec turbo run build",
+    "prod:preflight": "node scripts/production-preflight.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "pnpm": "9.7.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.16.2",
+    "turbo": "^2.0.6",
+    "typescript": "^5.5.3"
+  }
+}

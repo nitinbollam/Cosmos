@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model ChartAccount {
+  id           String        @id @default(cuid())
+  tenantId     String
+  code         String
+  name         String
+  type         AccountType
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  journalLines JournalLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model JournalEntry {
+  id                 String        @id @default(cuid())
+  tenantId           String
+  description        String
+  postedAt           DateTime      @default(now())
+  fiscalPeriodClosed Boolean       @default(false)
+  isPosted           Boolean       @default(false)
+  lines              JournalLine[]
+
+  @@index([tenantId, postedAt])
+}
+
+model JournalLine {
+  id        String       @id @default(cuid())
+  entryId   String
+  accountId String
+  memo      String?
+  debit     Decimal      @default(0) @db.Decimal(18, 4)
+  credit    Decimal      @default(0) @db.Decimal(18, 4)
+  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account   ChartAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([entryId])
+  @@index([accountId])
+}

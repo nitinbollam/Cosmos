@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TenantOrganization {
+  id               String               @id
+  slug             String               @unique
+  displayName      String
+  plan             TenantPlan           @default(STARTER)
+  onboardingPhase  OnboardingPhase      @default(PROFILE)
+  settings         Json                 @default("{}")
+  billingEmail     String?
+  timeZone         String               @default("Etc/UTC")
+  suspended        Boolean              @default(false)
+  metadata         Json                 @default("{}")
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  onboardingSteps  TenantOnboardingStep[]
+
+  @@index([slug])
+}
+
+model TenantOnboardingStep {
+  id           String               @id @default(cuid())
+  tenantId     String
+  stepKey      String
+  completed    Boolean              @default(false)
+  completedAt  DateTime?
+  payload      Json?
+  tenant       TenantOrganization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, stepKey])
+  @@index([tenantId])
+}
+
+enum TenantPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum OnboardingPhase {
+  PROFILE
+  BILLING
+  READY
+}

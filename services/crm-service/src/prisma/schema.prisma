@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus {
+  OPEN
+  CONVERTED
+  LOST
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  NOTE
+}
+
+model Customer {
+  id         String     @id @default(cuid())
+  tenantId   String
+  name       String
+  email      String?
+  phone      String?
+  externalRef String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  activities Activity[]
+  leads      Lead[]
+
+  @@index([tenantId])
+}
+
+model Lead {
+  id          String       @id @default(cuid())
+  tenantId    String
+  companyName String
+  email       String?
+  status      LeadStatus   @default(OPEN)
+  customerId  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  activities  Activity[]
+
+  @@index([tenantId])
+  @@index([customerId])
+}
+
+model Activity {
+  id         String       @id @default(cuid())
+  tenantId   String
+  type       ActivityType
+  subject    String?
+  body       String?
+  customerId String?
+  leadId     String?
+  occurredAt DateTime     @default(now())
+  customer   Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead       Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([leadId])
+}

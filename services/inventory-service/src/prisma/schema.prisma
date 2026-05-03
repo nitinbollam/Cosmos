@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model StockLedgerEntry {
+  id            String   @id @default(cuid())
+  tenantId      String
+  skuId         String
+  warehouseId   String
+  locationId    String?
+  batchId       String?
+  eventType     String
+  quantityDelta Int
+  quantityAfter Int
+  unitCost      Decimal  @db.Decimal(10, 4)
+  referenceId   String?
+  referenceType String?
+  performedBy   String
+  correlationId String
+  occurredAt    DateTime @default(now())
+
+  @@index([tenantId, skuId, warehouseId])
+  @@index([tenantId, occurredAt])
+  @@index([correlationId])
+  @@index([batchId])
+}
+
+model StockLevel {
+  id                String   @id @default(cuid())
+  tenantId          String
+  skuId             String
+  warehouseId       String
+  locationId        String?
+  batchId           String?
+  quantityOnHand    Int      @default(0)
+  quantityReserved  Int      @default(0)
+  quantityAvailable Int      @default(0)
+  reorderPoint      Int      @default(0)
+  reorderQty        Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  @@unique([tenantId, skuId, warehouseId, batchId])
+  @@index([tenantId, warehouseId])
+  @@index([tenantId, skuId])
+}
+
+model SKU {
+  id                String   @id @default(cuid())
+  tenantId          String
+  code              String
+  name              String
+  description       String?
+  category          String
+  subcategory       String?
+  barcode           String?
+  unitOfMeasure     String   @default("EACH")
+  weightGrams       Decimal? @db.Decimal(10, 3)
+  isTobacco         Boolean  @default(false)
+  isRegulated       Boolean  @default(false)
+  manufacturerId    String?
+  manufacturerDid   String?
+  exciseTaxCategory String?
+  cost              Decimal  @db.Decimal(10, 4)
+  price             Decimal  @db.Decimal(10, 4)
+  minPrice          Decimal? @db.Decimal(10, 4)
+  isActive          Boolean  @default(true)
+  imageUrls         String[] @default([])
+  attributes        Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, category])
+  @@index([barcode])
+  @@index([manufacturerDid])
+}
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  code      String
+  address   Json
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model StockReservation {
+  id          String            @id @default(cuid())
+  tenantId    String
+  skuId       String
+  warehouseId String
+  batchId     String?
+  orderId     String
+  quantity    Int
+  expiresAt   DateTime
+  status      ReservationStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+
+  @@index([tenantId, orderId])
+  @@index([tenantId, skuId, warehouseId])
+  @@index([expiresAt])
+}
+
+enum ReservationStatus {
+  ACTIVE
+  FULFILLED
+  RELEASED
+  EXPIRED
+}
