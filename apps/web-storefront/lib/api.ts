@@ -9,10 +9,19 @@ const baseURL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? 'http://localhost:3000/ap
 
 const FIRST: Record<string, string> = {
   analytics: 'analytics',
+  kpi: 'analytics',
   tenants: 'tenant',
   quotes: 'storefront',
   auth: 'auth',
   orders: 'order',
+  skus: 'inventory',
+  warehouses: 'inventory',
+  inventory: 'inventory',
+  customers: 'crm',
+  leads: 'crm',
+  activities: 'crm',
+  'purchase-orders': 'purchasing',
+  ai: 'gateway',
 }
 
 function buildProxiedPath(original: string): string {
@@ -35,7 +44,8 @@ client.interceptors.request.use((cfg) => {
 })
 
 export const api = {
-  get: <T,>(path: string) => client.get<T>(path).then((r) => r.data),
-  post: <T,>(path: string, body?: unknown) =>
-    client.post<T>(path, body).then((r) => r.data),
+  get: <T>(path: string) => client.get<T>(path).then((r) => r.data),
+  post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
+    client.post<T>(path, body, headers ? { headers } : undefined).then((r) => r.data),
+  patch: <T>(path: string, body?: unknown) => client.patch<T>(path, body).then((r) => r.data),
 }

@@ -12,4 +12,13 @@ module.exports = {
       },
     ],
   },
+  collectCoverageFrom: ['src/**/*.ts', '!src/main.ts', '!src/**/*.module.ts'],
+  coverageThreshold: {
+    './src/proxy/parseProxyParts.ts': {
+      statements: 100,
+      branches: 75,
+      lines: 100,
+      functions: 100,
+    },
+  },
 }

@@ -55,6 +55,8 @@ crash.log
 
 # secrets
 *.pem
+.service-jwt-private.pem
+.service-jwt-public.pem
 *.key
 secrets/
 

@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "eslint src --ext .ts || true",
+    "lint": "node ../../scripts/eslint-soft.mjs",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

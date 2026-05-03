@@ -1,8 +1,17 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
 import { api } from '@/lib/api'
+import { axiosErr } from '@/lib/axios-error'
+import { emitStorefrontAuthChanged } from '@/lib/auth-events'
+import { parseJwtPayload } from '@/lib/jwt'
+import { setB2bSession } from '@/lib/session'
+
+type LoginRes = { accessToken: string; refreshToken: string }
+
+type CustomerRow = { id: string; name: string; email?: string | null }
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,68 +22,77 @@ export default function LoginPage() {
     e.preventDefault()
     setErr(null)
     try {
-      const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', {
-        email,
-        password,
-      })
+      const r = await api.post<LoginRes>('/auth/login', { email, password })
       window.localStorage.setItem('cosmos.accessToken', r.accessToken)
       window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
-      window.location.href = '/quotes'
+
+      const payload = parseJwtPayload(r.accessToken)
+      const tenantId = typeof payload?.tenantId === 'string' ? payload.tenantId : null
+      const jwtMail = typeof payload?.email === 'string' ? payload.email.toLowerCase() : email.toLowerCase()
+      if (!tenantId) {
+        setErr('Token missing tenant. Contact support.')
+        return
+      }
+
+      const customers = await api.get<CustomerRow[]>('/customers')
+      const match = customers.find((c) => c.email?.toLowerCase() === jwtMail)
+      if (!match) {
+        setErr(
+          'No CRM customer record matches your email. Ask your tenant admin to create a customer with this address.',
+        )
+        window.localStorage.removeItem('cosmos.accessToken')
+        window.localStorage.removeItem('cosmos.refreshToken')
+        return
+      }
+
+      setB2bSession(tenantId, match.id)
+      emitStorefrontAuthChanged()
+      window.location.href = '/catalog'
     } catch (e: unknown) {
-      setErr((e as Error).message ?? 'Login failed')
+      setErr(axiosErr(e))
     }
   }
 
   return (
-    <main style={{ maxWidth: 420, margin: '64px auto', padding: '0 20px', color: '#e2e8f0' }}>
-      <Link href="/" style={{ color: '#a5b4fc', fontSize: 13 }}>
-        ← Back
-      </Link>
-      <h1 style={{ marginTop: 24 }}>B2B sign in</h1>
-      <form onSubmit={submit} style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          type="email"
-          required
-          placeholder="email"
-          style={inputStyle}
-        />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          type="password"
-          required
-          placeholder="password"
-          style={inputStyle}
-        />
-        <button type="submit" style={btn}>
-          Continue
-        </button>
-      </form>
-      {err && (
-        <p style={{ marginTop: 12, color: '#f97316', fontSize: 13 }}>{err}</p>
-      )}
+    <main
+      style={{
+        minHeight: '100vh',
+        background: '#000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div className="cosmos-card" style={{ width: '100%', maxWidth: 400, background: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <Image src="/cosmos-logo.png" alt="" width={120} height={60} style={{ height: 60, width: 'auto' }} priority />
+          <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 28, color: 'var(--c-white)', margin: '16px 0 0' }}>
+            Welcome back
+          </h1>
+          <p style={{ color: 'var(--c-text-3)', fontSize: 14, marginTop: 8 }}>B2B buyer portal</p>
+        </div>
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <input className="cosmos-input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="Email" />
+          <input
+            className="cosmos-input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            required
+            placeholder="Password"
+          />
+          <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: 8 }}>
+            Sign In
+          </button>
+        </form>
+        {err ? <p style={{ marginTop: 16, color: 'var(--c-danger)', fontSize: 14 }}>{err}</p> : null}
+        <p style={{ marginTop: 20, textAlign: 'center' }}>
+          <Link href="/" style={{ color: 'var(--c-accent)', fontSize: 13 }}>
+            ← Home
+          </Link>
+        </p>
+      </div>
     </main>
   )
-}
-
-const inputStyle: React.CSSProperties = {
-  background: '#13131f',
-  border: '1px solid #2b2f45',
-  borderRadius: 10,
-  color: '#e2e8f0',
-  padding: '12px 14px',
-  outline: 'none',
-}
-
-const btn: React.CSSProperties = {
-  marginTop: 8,
-  padding: '12px 14px',
-  borderRadius: 10,
-  background: '#4f46e5',
-  color: '#fff',
-  border: 'none',
-  cursor: 'pointer',
-  fontWeight: 700,
 }

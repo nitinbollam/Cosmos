@@ -8,5 +8,6 @@ import { EventBusModule } from '../events/event-bus.module'
   imports: [HttpModule, EventBusModule],
   controllers: [ReceivingController],
   providers: [ReceivingService],
+  exports: [ReceivingService],
 })
 export class ReceivingModule {}

@@ -1,9 +1,11 @@
 import { database } from '../db/watermelon'
 import { synchronize } from '@nozbe/watermelondb/sync'
+import type { SyncPullResult } from '@nozbe/watermelondb/sync'
 import { OfflineQueue } from '../db/models/OfflineQueue'
 import NetInfo from '@react-native-community/netinfo'
 import { wmsClient } from '../api/wms.client'
 import { logger } from '../utils/logger'
+import { resolveByUpdatedAt } from './conflict.resolver'
 
 export class SyncService {
   private syncInProgress = false
@@ -52,9 +54,10 @@ export class SyncService {
   private async pullRemoteChanges(): Promise<void> {
     await synchronize({
       database,
+      conflictResolver: resolveByUpdatedAt,
       pullChanges: async ({ lastPulledAt }) => {
-        const response = await wmsClient.pullChanges(lastPulledAt)
-        return response.data as { changes: unknown; timestamp: number }
+        const response = await wmsClient.pullChanges(lastPulledAt ?? null)
+        return response.data as SyncPullResult
       },
       pushChanges: async ({ changes }) => {
         await wmsClient.pushChanges(changes)

@@ -3,11 +3,13 @@ import './tracing-bootstrap'
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe, Logger } from '@nestjs/common'
 import { AppModule } from './app.module'
+import { mountPrometheusMetrics } from '@cosmos/metrics'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true })
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   app.setGlobalPrefix('api/v1')
+  mountPrometheusMetrics(app.getHttpAdapter().getInstance(), 'crm-service')
   const port = parseInt(process.env.PORT ?? '3010', 10)
   await app.listen(port)
   new Logger('crm-service').log('crm-service listening on :' + port)

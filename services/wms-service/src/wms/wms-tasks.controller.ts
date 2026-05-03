@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Req } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Query, Req } from '@nestjs/common'
 import { FulfillmentService } from '../fulfillment/fulfillment.service'
 
 @Controller('wms')
@@ -14,7 +14,21 @@ export class WmsTasksController {
   }
 
   @Get('tasks')
-  list(@Req() req: { user: { tenantId: string } }, @Query('status') status?: string) {
-    return this.fulfillment.listTasksForFloor(req.user.tenantId, status)
+  list(
+    @Req() req: { user: { tenantId: string } },
+    @Query('status') status?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('orderId') orderId?: string,
+  ) {
+    return this.fulfillment.listTasksForFloor(req.user.tenantId, status, warehouseId, orderId)
+  }
+
+  @Patch('tasks/:taskId/assign')
+  assign(
+    @Req() req: { user: { tenantId: string } },
+    @Param('taskId') taskId: string,
+    @Body() body: { userId: string | null },
+  ) {
+    return this.fulfillment.assignTask(req.user.tenantId, taskId, body?.userId ?? null)
   }
 }

@@ -3,11 +3,13 @@ import 'reflect-metadata'
 import { NestFactory, Reflector } from '@nestjs/core'
 import { ValidationPipe, Logger } from '@nestjs/common'
 import { AppModule } from './app.module'
+import { mountPrometheusMetrics } from '@cosmos/metrics'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true })
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   app.setGlobalPrefix('api/v1')
+  mountPrometheusMetrics(app.getHttpAdapter().getInstance(), 'auth-service')
   const port = parseInt(process.env.PORT ?? '3001', 10)
   await app.listen(port)
   new Logger('AuthService').log(`auth-service listening on :${port}`)

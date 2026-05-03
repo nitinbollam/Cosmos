@@ -1,9 +1,14 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Query, Req } from '@nestjs/common'
+import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import { SkuService, CreateSkuInput } from './sku.service'
 
 @Controller('skus')
 export class SkuController {
   constructor(private skus: SkuService) {}
+
+  @Get('categories')
+  categories(@Req() req: { user: { tenantId: string } }) {
+    return this.skus.distinctCategories(req.user.tenantId)
+  }
 
   @Get()
   list(
@@ -11,8 +16,17 @@ export class SkuController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('q') q?: string,
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('inStock') inStock?: string,
   ) {
-    return this.skus.list(req.user.tenantId, page ? +page : 1, pageSize ? +pageSize : 50, q)
+    const term = (search ?? q)?.trim() || undefined
+    return this.skus.list(req.user.tenantId, page ? +page : 1, pageSize ? +pageSize : 50, term, {
+      category: category?.trim() || undefined,
+      warehouseId: warehouseId?.trim() || undefined,
+      inStockOnly: inStock === 'true' || inStock === '1',
+    })
   }
 
   /** Code or barcode — receiving / warehouse scans. Must stay above `:id`. */
@@ -43,5 +57,14 @@ export class SkuController {
   @Post()
   create(@Req() req: { user: { tenantId: string } }, @Body() body: CreateSkuInput) {
     return this.skus.create(req.user.tenantId, body)
+  }
+
+  @Patch(':id')
+  patch(
+    @Req() req: { user: { tenantId: string } },
+    @Param('id') id: string,
+    @Body() body: Partial<CreateSkuInput> & { isActive?: boolean },
+  ) {
+    return this.skus.update(req.user.tenantId, id, body)
   }
 }

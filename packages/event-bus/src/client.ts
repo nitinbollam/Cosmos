@@ -106,7 +106,7 @@ export class EventBusClient {
       logger.debug({ jobId: job.id, eventType }, 'event handled')
     })
 
-    if (opts.dlq?.pdRoutingKey) {
+    if (opts.dlq) {
       attachWorkerDlqPagerDuty(worker, String(eventType), opts.dlq)
     }
 

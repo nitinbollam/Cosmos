@@ -2,7 +2,8 @@ import type { Job, Worker } from 'bullmq'
 import { logger } from '@cosmos/logger'
 
 export interface DLQAlertConfig {
-  pdRoutingKey: string
+  /** When set, exhausted jobs trigger a PagerDuty Events v2 enqueue. */
+  pdRoutingKey?: string
   serviceName: string
   environment: string
 }
@@ -17,12 +18,15 @@ async function sendPagerDutyAlert(
     customDetails: Record<string, unknown>
   },
 ): Promise<void> {
+  const key = config.pdRoutingKey?.trim()
+  if (!key) return
+
   try {
     const response = await fetch('https://events.pagerduty.com/v2/enqueue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        routing_key: config.pdRoutingKey,
+        routing_key: key,
         event_action: 'trigger',
         payload: {
           summary: details.summary,

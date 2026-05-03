@@ -3,8 +3,10 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api'
+import { StatusBadge } from '@/components/cosmos/status-badge'
 
 type TaskDetail = {
   id: string
@@ -14,6 +16,7 @@ type TaskDetail = {
   warehouseCode: string
   warehouseId?: string
   correlationId?: string
+  assignedUserId?: string | null
   pickItems: {
     id: string
     skuId: string
@@ -24,15 +27,48 @@ type TaskDetail = {
   }[]
 }
 
+type UserRow = { id: string; email: string; firstName?: string | null; lastName?: string | null }
+
+function userLabel(u: UserRow) {
+  const n = [u.firstName, u.lastName].filter(Boolean).join(' ').trim()
+  return n || u.email
+}
+
+function errMsg(e: unknown): string {
+  if (e && typeof e === 'object' && 'response' in e) {
+    const m = (e as { response?: { data?: { message?: unknown } } }).response?.data?.message
+    if (Array.isArray(m)) return m.join(', ')
+    if (typeof m === 'string') return m
+  }
+  if (e instanceof Error) return e.message
+  return 'Request failed'
+}
+
 export default function FulfillmentTaskDetailPage() {
   const params = useParams<{ taskId: string }>()
   const taskId = decodeURIComponent(params?.taskId ?? '')
   const qc = useQueryClient()
+  const [assignPick, setAssignPick] = useState('')
 
   const task = useQuery<TaskDetail>({
     queryKey: ['wms', 'task', taskId],
     queryFn: () => api.get<TaskDetail>(`/wms/tasks/${encodeURIComponent(taskId)}`),
     enabled: Boolean(taskId),
+  })
+
+  const users = useQuery<{ items: UserRow[] }>({
+    queryKey: ['users', 'fulfillment-task'],
+    queryFn: () => api.get('/users?pageSize=200'),
+    enabled: Boolean(taskId),
+  })
+
+  const assignMut = useMutation({
+    mutationFn: (userId: string | null) =>
+      api.patch(`/wms/tasks/${encodeURIComponent(taskId)}/assign`, { userId }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wms', 'task', taskId] })
+      void qc.invalidateQueries({ queryKey: ['wms', 'tasks'] })
+    },
   })
 
   const packReq = useMutation({
@@ -62,14 +98,15 @@ export default function FulfillmentTaskDetailPage() {
   })
 
   const t = task.data
+
+  useEffect(() => {
+    if (!t) return
+    setAssignPick(t.assignedUserId ?? '')
+  }, [t])
   const packingReady =
     t &&
     t.pickItems.length > 0 &&
     t.pickItems.every((p) => p.status === 'PICKED' || p.status === 'SHORT')
-
-  const errPack = packReq.error instanceof Error ? packReq.error.message : null
-  const errDispatch =
-    dispatchReq.error instanceof Error ? dispatchReq.error.message : null
 
   return (
     <div className="p-6 space-y-4">
@@ -80,7 +117,7 @@ export default function FulfillmentTaskDetailPage() {
       {!taskId ? (
         <p className="text-sm text-red-400">Missing task id.</p>
       ) : task.error ? (
-        <p className="text-sm text-red-400">{(task.error as Error)?.message ?? 'Unable to load task'}</p>
+        <p className="text-sm text-red-400">{errMsg(task.error)}</p>
       ) : null}
       {task.isLoading ? <p className="text-cosmos-muted text-sm">Loading…</p> : null}
 
@@ -88,24 +125,63 @@ export default function FulfillmentTaskDetailPage() {
         <div className="space-y-4">
           <Card>
             <CardTitle className="font-mono text-xs truncate">{t.id}</CardTitle>
-            <div className="mt-2 text-sm space-y-1 text-cosmos-muted">
+            <div className="mt-2 text-sm space-y-2 text-cosmos-muted">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>Status</span>
+                <StatusBadge status={t.status} />
+              </div>
               <div>
                 Order{' '}
                 <Link
                   href={`/orders/${encodeURIComponent(t.orderId)}`}
-                  className="font-mono text-sky-300 hover:text-sky-200 underline"
+                  className="font-mono text-cosmos-primary hover:underline"
                 >
                   {t.orderId}
                 </Link>
-              </div>
-              <div>
-                Status <span className="text-cosmos-white font-medium">{t.status}</span>
               </div>
               <div>Warehouse {t.warehouseCode}</div>
               {t.correlationId ? (
                 <div className="font-mono text-[11px] text-cosmos-muted/90">Correlation {t.correlationId}</div>
               ) : null}
             </div>
+
+            <div className="mt-4 pt-4 border-t border-cosmos-border">
+              <p className="text-xs text-cosmos-muted mb-2">Assign picker (optional)</p>
+              <div className="flex flex-wrap gap-2 items-center max-w-xl">
+                <select
+                  className="flex-1 min-w-[200px] rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+                  value={assignPick}
+                  onChange={(e) => setAssignPick(e.target.value)}
+                  disabled={t.status === 'CANCELLED' || t.status === 'DISPATCHED'}
+                >
+                  <option value="">Unassigned</option>
+                  {(users.data?.items ?? []).map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {userLabel(u)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={
+                    assignMut.isPending || t.status === 'CANCELLED' || t.status === 'DISPATCHED'
+                  }
+                  onClick={() => assignMut.mutate(assignPick.trim() || null)}
+                  className="h-10 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+                >
+                  {assignMut.isPending ? 'Saving…' : 'Save assignee'}
+                </button>
+              </div>
+              {t.assignedUserId && (
+                <p className="text-xs text-cosmos-muted mt-2 font-mono">
+                  Current: {t.assignedUserId}
+                </p>
+              )}
+              {assignMut.error ? (
+                <p className="text-xs text-red-400 mt-2">{errMsg(assignMut.error)}</p>
+              ) : null}
+            </div>
+
             <div className="flex flex-wrap gap-2 mt-4">
               <button
                 type="button"
@@ -130,8 +206,10 @@ export default function FulfillmentTaskDetailPage() {
                 {dispatchReq.isPending ? 'Dispatching…' : 'Dispatch'}
               </button>
             </div>
-            {errPack ? <p className="text-xs text-red-400 mt-2">{errPack}</p> : null}
-            {errDispatch ? <p className="text-xs text-red-400 mt-2">{errDispatch}</p> : null}
+            {packReq.error ? <p className="text-xs text-red-400 mt-2">{errMsg(packReq.error)}</p> : null}
+            {dispatchReq.error ? (
+              <p className="text-xs text-red-400 mt-2">{errMsg(dispatchReq.error)}</p>
+            ) : null}
             {!packingReady && ['PENDING', 'PICKING'].includes(t.status) ? (
               <p className="text-xs text-amber-300/90 mt-2">
                 Pack is disabled until all pick lines reach PICKED or SHORT (typically via warehouse handheld).
@@ -149,7 +227,7 @@ export default function FulfillmentTaskDetailPage() {
                     <th className="pb-2 pr-3 font-medium">SKU</th>
                     <th className="pb-2 pr-3 font-medium">Qty</th>
                     <th className="pb-2 pr-3 font-medium">Picked</th>
-                    <th className="pb-2 font-medium">Stat</th>
+                    <th className="pb-2 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -159,7 +237,9 @@ export default function FulfillmentTaskDetailPage() {
                       <td className="py-2 pr-3 font-mono text-[11px] text-cosmos-text">{p.skuId}</td>
                       <td className="py-2 pr-3">{p.quantity}</td>
                       <td className="py-2 pr-3">{p.pickedQty}</td>
-                      <td className="py-2 text-cosmos-white text-xs">{p.status}</td>
+                      <td className="py-2">
+                        <StatusBadge status={p.status} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

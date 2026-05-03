@@ -24,7 +24,7 @@ for (const svc of services) {
     continue
   }
   console.log(`[generate] ${svc}`)
-  execSync('npx prisma generate --schema=src/prisma/schema.prisma', {
+  execSync('node ../../scripts/prisma-generate-retry.mjs src/prisma/schema.prisma', {
     cwd: path.join(ROOT, 'services', svc),
     stdio: 'inherit',
   })

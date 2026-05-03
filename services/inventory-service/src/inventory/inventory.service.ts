@@ -8,6 +8,7 @@ import { EventBusClient, EventType } from '@cosmos/event-bus'
 import { ReceiveStockDto } from './dto/receive-stock.dto'
 import { ReserveStockDto } from './dto/reserve-stock.dto'
 import { AdjustStockDto } from './dto/adjust-stock.dto'
+import { TransferStockDto } from './dto/transfer-stock.dto'
 import { randomUUID } from 'crypto'
 import { logger } from '@cosmos/logger'
 import { Decimal } from '../generated/prisma-client/runtime/library'
@@ -33,6 +34,7 @@ export class InventoryService {
     const correlationId = randomUUID()
     const entryId = randomUUID()
     const batchKey = dto.batchId ?? ''
+    const supplierId = dto.supplierId?.trim() || 'INTERNAL'
 
     const result = await this.prisma.$transaction(async (tx) => {
       const currentLevel = await tx.stockLevel.upsert({
@@ -97,7 +99,7 @@ export class InventoryService {
         batchId: dto.batchId,
         quantity: dto.quantity,
         unitCost: dto.unitCost,
-        supplierId: dto.supplierId,
+        supplierId,
         poId: dto.poId,
         receivedBy: performedBy,
       },
@@ -161,6 +163,103 @@ export class InventoryService {
     })
 
     return updated
+  }
+
+  async transferStock(tenantId: string, dto: TransferStockDto, performedBy: string) {
+    if (dto.fromWarehouseId === dto.toWarehouseId) {
+      throw new BadRequestException('Source and destination warehouse must differ')
+    }
+    const batchKey = dto.batchId ?? ''
+    const correlationId = randomUUID()
+
+    await this.prisma.$transaction(async (tx) => {
+      const from = await tx.stockLevel.findFirst({
+        where: { tenantId, skuId: dto.skuId, warehouseId: dto.fromWarehouseId, batchId: batchKey },
+      })
+      if (!from || from.quantityAvailable < dto.quantity) {
+        throw new BadRequestException('Insufficient available stock at source warehouse')
+      }
+
+      const fromOnHand = from.quantityOnHand - dto.quantity
+      await tx.stockLevel.update({
+        where: { id: from.id },
+        data: {
+          quantityOnHand: fromOnHand,
+          quantityAvailable: from.quantityAvailable - dto.quantity,
+        },
+      })
+
+      await tx.stockLedgerEntry.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          skuId: dto.skuId,
+          warehouseId: dto.fromWarehouseId,
+          batchId: batchKey,
+          eventType: 'TRANSFER_OUT',
+          quantityDelta: -dto.quantity,
+          quantityAfter: fromOnHand,
+          unitCost: new Decimal(0),
+          referenceId: correlationId,
+          referenceType: 'TRANSFER',
+          performedBy,
+          correlationId,
+        },
+      })
+
+      const toRow = await tx.stockLevel.upsert({
+        where: {
+          tenantId_skuId_warehouseId_batchId: {
+            tenantId,
+            skuId: dto.skuId,
+            warehouseId: dto.toWarehouseId,
+            batchId: batchKey,
+          },
+        },
+        update: {
+          quantityOnHand: { increment: dto.quantity },
+          quantityAvailable: { increment: dto.quantity },
+        },
+        create: {
+          id: randomUUID(),
+          tenantId,
+          skuId: dto.skuId,
+          warehouseId: dto.toWarehouseId,
+          batchId: batchKey,
+          quantityOnHand: dto.quantity,
+          quantityReserved: 0,
+          quantityAvailable: dto.quantity,
+        },
+      })
+
+      await tx.stockLedgerEntry.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          skuId: dto.skuId,
+          warehouseId: dto.toWarehouseId,
+          batchId: batchKey,
+          eventType: 'TRANSFER_IN',
+          quantityDelta: dto.quantity,
+          quantityAfter: toRow.quantityOnHand,
+          unitCost: new Decimal(0),
+          referenceId: correlationId,
+          referenceType: 'TRANSFER',
+          performedBy,
+          correlationId,
+        },
+      })
+    })
+
+    return { ok: true as const, correlationId }
+  }
+
+  async ledgerForSku(tenantId: string, skuId: string, limit = 100) {
+    return this.prisma.stockLedgerEntry.findMany({
+      where: { tenantId, skuId },
+      orderBy: { occurredAt: 'desc' },
+      take: Math.min(500, Math.max(1, limit)),
+    })
   }
 
   async reserveStock(tenantId: string, dto: ReserveStockDto): Promise<string> {
@@ -324,6 +423,7 @@ export class InventoryService {
         skuId: r.skuId,
         name: skuName.get(r.skuId) ?? r.skuId,
         available: r.quantityAvailable,
+        reorderPoint: r.reorderPoint,
       })),
     }
   }

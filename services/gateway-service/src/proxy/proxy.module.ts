@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { HttpModule } from '@nestjs/axios'
 import { ProxyService } from './proxy.service'
+import { ServiceJwtModule } from '../service-jwt/service-jwt.module'
 
 @Module({
   imports: [
@@ -8,6 +9,7 @@ import { ProxyService } from './proxy.service'
       timeout: 120_000,
       maxRedirects: 0,
     }),
+    ServiceJwtModule,
   ],
   providers: [ProxyService],
   exports: [ProxyService],

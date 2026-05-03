@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { EventBusClient, EventType } from '@cosmos/event-bus'
 import { CreateOrderDto, OrderLineItemDto } from './dto/create-order.dto'
@@ -67,11 +67,58 @@ export class OrderService {
     return { order, correlationId }
   }
 
-  async list(tenantId: string, page = 1, pageSize = 20, status?: string) {
-    const where: Prisma.OrderWhereInput = {
-      tenantId,
-      ...(status ? { status: status as Prisma.OrderWhereInput['status'] } : {}),
+  async list(
+    tenantId: string,
+    page = 1,
+    pageSize = 20,
+    filters?: {
+      status?: string
+      channel?: string
+      search?: string
+      fromIso?: string
+      toIso?: string
+      customerId?: string
+    },
+  ) {
+    const where: Prisma.OrderWhereInput = { tenantId }
+
+    if (filters?.customerId?.trim()) {
+      where.customerId = filters.customerId.trim()
     }
+
+    if (filters?.channel && filters.channel !== 'ALL') {
+      where.channel = filters.channel as Prisma.OrderWhereInput['channel']
+    }
+
+    const from = filters?.fromIso ? new Date(filters.fromIso) : null
+    const to = filters?.toIso ? new Date(filters.toIso) : null
+    if ((from && !Number.isNaN(from.getTime())) || (to && !Number.isNaN(to.getTime()))) {
+      where.createdAt = {}
+      if (from && !Number.isNaN(from.getTime())) where.createdAt.gte = from
+      if (to && !Number.isNaN(to.getTime())) {
+        const end = new Date(to)
+        end.setHours(23, 59, 59, 999)
+        where.createdAt.lte = end
+      }
+    }
+
+    if (filters?.search?.trim()) {
+      const s = filters.search.trim()
+      where.OR = [
+        { id: { contains: s, mode: 'insensitive' } },
+        { customerId: { contains: s, mode: 'insensitive' } },
+      ]
+    }
+
+    const st = filters?.status?.trim()
+    if (st && st !== 'ALL') {
+      if (st === 'FULFILLED') {
+        where.status = { in: ['PROCESSING', 'PACKED'] }
+      } else {
+        where.status = st as Prisma.OrderWhereInput['status']
+      }
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
         where,
@@ -92,6 +139,17 @@ export class OrderService {
     })
     if (!order) throw new NotFoundException('Order not found')
     return order
+  }
+
+  async confirm(tenantId: string, id: string) {
+    const order = await this.findById(tenantId, id)
+    if (order.status !== 'PENDING') {
+      throw new BadRequestException(`Order cannot be confirmed from status ${order.status}`)
+    }
+    return this.prisma.order.update({
+      where: { id },
+      data: { status: 'CONFIRMED', confirmedAt: new Date() },
+    })
   }
 
   async cancel(tenantId: string, id: string, reason: string) {

@@ -7,6 +7,6 @@ export class ReceiveStockDto {
   @IsOptional() @IsString() batchId?: string
   @IsInt() @IsPositive() quantity!: number
   @IsNumber() unitCost!: number
-  @IsString() supplierId!: string
+  @IsOptional() @IsString() supplierId?: string
   @IsOptional() @IsString() poId?: string
 }

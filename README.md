@@ -7,7 +7,7 @@ A monorepo containing:
 - **`apps/`** — web frontends (Next.js 14) and mobile apps (Expo SDK 51)
 - **`services/`** — NestJS 10 microservices (Postgres + Prisma + Redis/BullMQ)
 - **`ai/`** — Python 3.11 / FastAPI ML services (Mistral 7B LoRA, LSTM+Prophet, PaddleOCR)
-- **`packages/`** — shared TypeScript packages (event-bus, logger, config, types, auth, ui)
+- **`packages/`** — shared TypeScript packages (event-bus, logger, config, types, auth, metrics, tracing, ui)
 - **`infra/`** — Docker, Kubernetes (Kustomize), Terraform (AWS EKS + RDS + Redis + S3)
 
 ## Prerequisites
@@ -38,6 +38,10 @@ pnpm db:migrate
 pnpm dev
 ```
 
+**Docker:** `pnpm infra:up` needs the Docker daemon (on Windows, start **Docker Desktop** first). If Compose fails with a `dockerDesktopLinuxEngine` / pipe error, the engine is not running.
+
+**Package manager:** If `pnpm` is not on your PATH, use e.g. `npx pnpm@9.7.0` for the commands above (same as root `packageManager` pin).
+
 ## Service ports (dev)
 
 | Service | Port | Stack |
@@ -65,6 +69,28 @@ pnpm dev
 | anomaly-detection | 8005 | FastAPI |
 | web-admin | 4000 | Next.js |
 | web-storefront | 4001 | Next.js |
+
+Each Nest service exposes **GET /metrics** (Prometheus text, via `@cosmos/metrics`) on the same port as the API, outside the `/api/v1` prefix.
+
+### Windows: Prisma `EPERM` on `query_engine`
+
+If `prisma generate` or `pnpm prod:preflight` fails renaming `query_engine-windows.dll.node`, another process (often a stuck `nest start`, Jest run, or tool importing `@prisma/client`) still has the DLL open. Stop those Node processes, then retry. To see which engine files are locked:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/diagnose-prisma-engines.ps1
+```
+
+(PowerShell 7 users can use `pwsh` instead of `powershell`.)
+
+Root `pnpm db:generate` uses per-service scripts with retries (`scripts/prisma-generate-retry.mjs`); persistent locks still require releasing the file.
+
+**Technical monorepo gate:** `pnpm prod:preflight` runs lint → test → build via Turbo. On Windows the preflight script lowers Turbo concurrency to reduce parallel Prisma generates; Linux CI is unaffected.
+
+## B2B storefront (`web-storefront`)
+
+Buyer flow is under the **`(shop)`** route group (shared **ShopHeader**): **Catalog** (filters, search, Zustand cart), **Cart**, **Checkout** (shipping → payment → review → **`POST /orders`** with **`Idempotency-Key`**), **order confirmation**, **orders** list (scoped by **`customerId`** + **`B2B_PORTAL`** when session is set), **quotes** unchanged. **Login** resolves a **CRM `Customer`** row whose **email** matches the JWT email and stores **`cosmos.customerId`** / **`cosmos.tenantId`** in **sessionStorage**; without that record, sign-in is rejected with a clear message. Design tokens live in **`app/globals.css`**; logo on dark **`#000000` / `#06060F`** only.
+
+Set **`NEXT_PUBLIC_GATEWAY_URL`** (defaults to `http://localhost:3000/api/v1`) and optionally **`NEXT_PUBLIC_WEB_ADMIN_ORIGIN`** for admin deep links on orders.
 
 ## Implementation status
 

@@ -6,6 +6,7 @@ import type { NextFunction, Request, Response } from 'express'
 import { AppModule } from './app.module'
 import { ProxyService } from './proxy/proxy.service'
 import { parseProxyParts } from './proxy/parseProxyParts'
+import { mountPrometheusMetrics } from '@cosmos/metrics'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true, bodyParser: true })
@@ -16,6 +17,8 @@ async function bootstrap() {
   const logger = new Logger('gateway-proxy')
 
   const server = app.getHttpAdapter().getInstance()
+  mountPrometheusMetrics(server, 'gateway-service')
+
   server.use(async (req: Request, res: Response, next: NextFunction) => {
     const parsed = parseProxyParts(req.originalUrl ?? '')
     if (!parsed) return next()

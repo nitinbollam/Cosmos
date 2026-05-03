@@ -12,7 +12,11 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const pm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
-const r = spawnSync(pm, ['exec', 'turbo', 'run', 'lint', 'test', 'build'], {
+const turboArgs = ['exec', 'turbo', 'run', 'lint', 'test', 'build']
+// Many parallel prisma generates on Windows often hit EPERM renaming query_engine DLLs (Defender / FS locks).
+if (process.platform === 'win32') turboArgs.push('--concurrency', '2')
+
+const r = spawnSync(pm, turboArgs, {
   stdio: 'inherit',
   cwd: root,
   env: process.env,

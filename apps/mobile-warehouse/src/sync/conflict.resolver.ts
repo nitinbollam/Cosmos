@@ -1,16 +1,17 @@
-/**
- * Minimal conflict resolution for offline warehouse sync.
- * WatermelonDB sync delegates conflict handling to the app — use this when
- * merging server rows with local drafts (extend when you add multi-field merges).
- */
-export function resolveByUpdatedAt<T extends { updated_at?: string | null }>(
-  local: T,
-  remote: T,
-): T {
-  const lt = local.updated_at ? Date.parse(local.updated_at) : 0
-  const rt = remote.updated_at ? Date.parse(remote.updated_at) : 0
-  if (Number.isFinite(lt) && Number.isFinite(rt)) {
-    return rt >= lt ? remote : local
-  }
-  return remote
+import type { SyncConflictResolver } from '@nozbe/watermelondb/sync'
+import type { DirtyRaw } from '@nozbe/watermelondb/RawRecord'
+import type { TableName } from '@nozbe/watermelondb'
+
+/** Prefer newer row by numeric/string timestamps on pull (Watermelon sync hook). */
+export const resolveByUpdatedAt: SyncConflictResolver = (
+  _table: TableName<any>,
+  local: DirtyRaw,
+  remote: DirtyRaw,
+  resolved: DirtyRaw,
+): DirtyRaw => {
+  const localTs = Number(local._changed ?? local.updated_at ?? local.updatedAt ?? 0)
+  const remoteTs = Number(remote.updated_at ?? remote.updatedAt ?? 0)
+  const winner =
+    Number.isFinite(localTs) && Number.isFinite(remoteTs) && remoteTs >= localTs ? remote : local
+  return { ...resolved, ...winner }
 }

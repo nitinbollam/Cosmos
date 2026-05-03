@@ -2,6 +2,8 @@ import { HttpException, HttpStatus, Injectable, NotFoundException } from '@nestj
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import type { Request, Response } from 'express'
+import { ServiceJwtFactory } from '../service-jwt/service-jwt.factory'
+import { audienceForProxyServiceKey } from '../service-jwt/proxy-service-audience'
 
 const SERVICE_ENV_KEYS: Record<string, string> = {
   auth: 'AUTH_SERVICE_URL',
@@ -40,7 +42,10 @@ export class ProxyService {
   private readonly maxRequests = 200
   private readonly hits = new Map<string, number[]>()
 
-  constructor(private readonly http: HttpService) {}
+  constructor(
+    private readonly http: HttpService,
+    private readonly serviceJwt: ServiceJwtFactory,
+  ) {}
 
   private throttle(clientKey: string) {
     const now = Date.now()
@@ -81,6 +86,14 @@ export class ProxyService {
       const low = k.toLowerCase()
       if (!FORWARD_HEADERS.has(low)) continue
       headers[k] = Array.isArray(v) ? v.join(',') : v
+    }
+
+    const aud = audienceForProxyServiceKey(serviceKey)
+    if (aud) {
+      const svcTok = await this.serviceJwt.mintTargetAudience(aud)
+      if (svcTok) {
+        headers['x-service-token'] = svcTok
+      }
     }
 
     const method = req.method.toUpperCase()

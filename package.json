@@ -25,7 +25,8 @@
     "migrate:all": "tsx scripts/migrate-all.ts",
     "ensure:tracing": "node scripts/ensure-nest-tracing.mjs",
     "build:turbo": "pnpm exec turbo run build",
-    "prod:preflight": "node scripts/production-preflight.mjs"
+    "prod:preflight": "node scripts/production-preflight.mjs",
+    "gen:service-keys": "node scripts/generate-service-keys.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

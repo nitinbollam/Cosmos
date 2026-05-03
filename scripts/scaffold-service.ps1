@@ -20,7 +20,7 @@ New-Item -ItemType Directory -Force -Path "$root\src\health","$root\src\prisma" 
     "lint": "eslint src --ext .ts || true",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate --schema=src/prisma/schema.prisma",
+    "db:generate": "node ../../scripts/prisma-generate-retry.mjs src/prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema=src/prisma/schema.prisma"
   },
   "dependencies": {

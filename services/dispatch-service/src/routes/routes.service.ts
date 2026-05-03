@@ -60,6 +60,18 @@ export class RoutesService {
     })
   }
 
+  /** Mobile / telemetry — log driver GPS (persist to DB when product needs live maps). */
+  recordDriverLocation(
+    tenantId: string,
+    body: { lat: number; lng: number; timestamp?: string },
+  ): { ok: boolean } {
+    logger.info(
+      { tenantId, lat: body.lat, lng: body.lng, at: body.timestamp ?? new Date().toISOString() },
+      'driver location',
+    )
+    return { ok: true }
+  }
+
   async markStopDelivered(
     tenantId: string,
     routeId: string,

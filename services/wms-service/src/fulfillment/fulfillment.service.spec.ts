@@ -6,15 +6,21 @@ import {
 import { EventBusClient, EventType } from '@cosmos/event-bus'
 import { FulfillmentService } from './fulfillment.service'
 import type { PrismaService } from '../prisma/prisma.service'
+import type { ReceivingService } from '../receiving/receiving.service'
 
 function makeService(mocks: {
   prisma?: Record<string, unknown>
   publish?: jest.Mock
+  receiving?: Partial<ReceivingService>
 }) {
   const publish = mocks.publish ?? jest.fn().mockResolvedValue(undefined)
   const bus = { publish } as unknown as EventBusClient
   const prisma = mocks.prisma as unknown as PrismaService
-  return { svc: new FulfillmentService(prisma, bus), publish }
+  const receiving = {
+    scanItem: jest.fn().mockResolvedValue({ id: 'ri1' }),
+    ...mocks.receiving,
+  } as unknown as ReceivingService
+  return { svc: new FulfillmentService(prisma, bus, receiving), publish }
 }
 
 describe('FulfillmentService', () => {

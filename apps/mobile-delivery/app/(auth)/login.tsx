@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { dispatchClient } from '../../src/api/dispatch.client'
+import { dispatchClient, parseAccessTokenClaims } from '../../src/api/dispatch.client'
 import { useAuthStore } from '../../src/stores/auth.store'
 
 export default function DriverLogin() {
   const router = useRouter()
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated)
+  const setSession = useAuthStore((s) => s.setSession)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -14,7 +15,9 @@ export default function DriverLogin() {
   async function submit() {
     setLoading(true)
     try {
-      await dispatchClient.login(email.trim(), password)
+      const data = await dispatchClient.login(email.trim(), password)
+      const claims = parseAccessTokenClaims(data.accessToken)
+      setSession(data.accessToken, claims.tenantId ?? null)
       setAuthenticated(true)
       router.replace('/(tabs)/route')
     } catch (e) {

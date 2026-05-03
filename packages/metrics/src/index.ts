@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express'
+import type { Application, Request, Response } from 'express'
 import * as client from 'prom-client'
 
 /** Prometheus registry with default process metrics and a static service label. */
@@ -15,4 +15,14 @@ export function metricsMiddleware(registry: client.Registry) {
     res.setHeader('Content-Type', registry.contentType)
     res.status(200).send(await registry.metrics())
   }
+}
+
+/**
+ * Registers **GET /metrics** on the raw Express app (outside Nest `api/v1` when that prefix is set on Nest).
+ * Returns the registry so callers can register custom metrics.
+ */
+export function mountPrometheusMetrics(httpApp: Application, serviceName: string): client.Registry {
+  const registry = createMetricsRegistry(serviceName)
+  httpApp.get('/metrics', metricsMiddleware(registry))
+  return registry
 }

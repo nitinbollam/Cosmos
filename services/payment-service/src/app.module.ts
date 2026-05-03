@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_GUARD } from '@nestjs/core'
 import { PassportModule } from '@nestjs/passport'
 import { CosmosJwtStrategy, JwtAuthGuard, InternalOrJwtAuthGuard } from '@cosmos/auth-middleware'
-import { PrismaService } from './prisma/prisma.service'
+import { PrismaModule } from './prisma/prisma.module'
 import { IdempotencyModule } from '@cosmos/idempotency'
 import { EventBusModule } from './events/event-bus.module'
 import { HealthController } from './health/health.controller'
@@ -13,15 +13,12 @@ import { PaymentsModule } from './payments/payments.module'
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
+    PrismaModule,
     EventBusModule,
-    IdempotencyModule.register({
-      redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
-    }),
     PaymentsModule,
   ],
   controllers: [HealthController],
   providers: [
-    PrismaService,
     {
       provide: CosmosJwtStrategy,
       inject: [ConfigService],
@@ -30,6 +27,6 @@ import { PaymentsModule } from './payments/payments.module'
     JwtAuthGuard,
     { provide: APP_GUARD, useClass: InternalOrJwtAuthGuard },
   ],
-  exports: [PrismaService],
+  exports: [],
 })
 export class AppModule {}

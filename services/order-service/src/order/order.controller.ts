@@ -41,8 +41,27 @@ export class OrderController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('status') status?: string,
+    @Query('channel') channel?: string,
+    @Query('search') search?: string,
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('customerId') customerId?: string,
   ) {
-    return this.orders.list(req.user.tenantId, page ? +page : 1, pageSize ? +pageSize : 20, status)
+    const term = (search ?? q)?.trim() || undefined
+    return this.orders.list(req.user.tenantId, page ? +page : 1, pageSize ? +pageSize : 20, {
+      status: status?.trim() || undefined,
+      channel: channel?.trim() || undefined,
+      search: term,
+      fromIso: from?.trim() || undefined,
+      toIso: to?.trim() || undefined,
+      customerId: customerId?.trim() || undefined,
+    })
+  }
+
+  @Post(':id/confirm')
+  confirm(@Req() req: { user: { tenantId: string } }, @Param('id') id: string) {
+    return this.orders.confirm(req.user.tenantId, id)
   }
 
   @Get(':id')

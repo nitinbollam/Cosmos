@@ -4,7 +4,7 @@ import {
   EventType,
   type OrderCreatedPayload,
   type ReceivingCompletedPayload,
-  pagerDutyDlqFromEnv,
+  dlqMonitorFromEnv,
 } from '@cosmos/event-bus'
 import { NotificationChannel } from '../generated/prisma-client'
 import { NotificationsService } from '../notifications/notifications.service'
@@ -40,7 +40,7 @@ export class OrderEventsConsumer implements OnModuleInit, OnModuleDestroy {
         )
         this.log.debug({ eventId: event.id, orderId: p.orderId }, 'order created notification enqueued')
       },
-      { dlq: pagerDutyDlqFromEnv('notification-service') },
+      { dlq: dlqMonitorFromEnv('notification-service') },
     )
 
     this.bus.subscribe<ReceivingCompletedPayload>(
@@ -65,7 +65,7 @@ export class OrderEventsConsumer implements OnModuleInit, OnModuleDestroy {
         )
         this.log.debug({ eventId: event.id, sessionId: p.sessionId }, 'receiving completed notification enqueued')
       },
-      { dlq: pagerDutyDlqFromEnv('notification-service') },
+      { dlq: dlqMonitorFromEnv('notification-service') },
     )
 
     this.log.log('subscribed to ORDER_CREATED and RECEIVING_COMPLETED')

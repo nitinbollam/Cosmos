@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { clearCart, readCart } from '@/lib/b2b-cart'
 
 type QuoteLineDraft = {
   lineNo: number
@@ -14,7 +15,20 @@ type QuoteLineDraft = {
 }
 
 export default function NewQuotePage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 720, margin: '40px auto', padding: '0 20px', color: '#94a3b8' }}>Loading…</main>
+      }
+    >
+      <NewQuoteForm />
+    </Suspense>
+  )
+}
+
+function NewQuoteForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [customerRef, setCustomerRef] = useState('PO-REFERENCE')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<QuoteLineDraft[]>([
@@ -22,6 +36,21 @@ export default function NewQuotePage() {
   ])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('from') !== 'cart') return
+    const cartLines = readCart()
+    if (cartLines.length === 0) return
+    setLines(
+      cartLines.map((l, i) => ({
+        lineNo: i + 1,
+        skuCode: l.skuCode,
+        description: l.description,
+        qty: String(l.qty),
+        unitPrice: String(l.unitPrice),
+      })),
+    )
+  }, [searchParams])
 
   const submit = async () => {
     setBusy(true)
@@ -39,6 +68,7 @@ export default function NewQuotePage() {
         })),
       }
       const created = await api.post<{ id: string }>('/quotes', body)
+      if (searchParams.get('from') === 'cart') clearCart()
       router.push(`/quotes/${created.id}`)
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Create failed — check auth and gateway.')
@@ -54,7 +84,15 @@ export default function NewQuotePage() {
       </Link>
       <h1 style={{ marginTop: 20 }}>New quote</h1>
       <p style={{ color: '#94a3b8', fontSize: 14 }}>
-        Sends <span style={{ fontFamily: 'monospace' }}>POST /quotes</span> through the gateway. Admin submit-to-order{' '}
+        Sends <span style={{ fontFamily: 'monospace' }}>POST /quotes</span> through the gateway. Use{' '}
+        <Link href="/catalog" style={{ color: '#93c5fd' }}>
+          Catalog
+        </Link>{' '}
+        +{' '}
+        <Link href="/cart" style={{ color: '#93c5fd' }}>
+          Cart
+        </Link>{' '}
+        to pre-fill lines. Admin submit-to-order{' '}
         <strong style={{ color: '#cbd5f5' }}>requires a SKU code on every line.</strong>
       </p>
       {err ? <p style={{ color: '#fca5a5', marginTop: 12 }}>{err}</p> : null}

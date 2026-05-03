@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate --schema=src/prisma/schema.prisma && nest build",
+    "build": "node ../../scripts/prisma-generate-retry.mjs src/prisma/schema.prisma && nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
-    "lint": "eslint src --ext .ts || true",
+    "lint": "node ../../scripts/eslint-soft.mjs",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate --schema=src/prisma/schema.prisma",
+    "db:generate": "node ../../scripts/prisma-generate-retry.mjs src/prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema=src/prisma/schema.prisma"
   },
   "dependencies": {
@@ -28,6 +28,7 @@
     "@cosmos/event-bus": "workspace:*",
     "@cosmos/auth-middleware": "workspace:*",
     "@cosmos/types": "workspace:*",
+    "@cosmos/metrics": "workspace:*",
     "@cosmos/tracing": "workspace:*"
   },
   "devDependencies": {

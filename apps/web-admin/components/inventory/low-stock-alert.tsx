@@ -1,21 +1,43 @@
-import { Card, CardTitle } from '@cosmos/ui'
+import Link from 'next/link'
+import { CardTitle } from '@cosmos/ui'
 
-export function LowStockAlert({ alerts }: { alerts: { skuId: string; name: string; available: number }[] }) {
+export type LowStockRow = { skuId: string; name: string; available: number; reorderPoint?: number }
+
+export function LowStockAlert({ alerts }: { alerts: LowStockRow[] }) {
   return (
-    <Card>
+    <div className="cosmos-card">
       <CardTitle>Low stock</CardTitle>
       {alerts.length === 0 ? (
-        <div className="text-cosmos-muted text-sm mt-2">No low-stock items</div>
+        <p className="text-sm mt-3" style={{ color: 'var(--c-text-3)' }}>
+          No SKUs are at or below reorder point.
+        </p>
       ) : (
-        <ul className="mt-2 space-y-1">
-          {alerts.slice(0, 5).map((a) => (
-            <li key={a.skuId} className="text-sm flex justify-between">
-              <span className="text-cosmos-text">{a.name}</span>
-              <span className="text-cosmos-warning">{a.available} left</span>
+        <ul className="mt-3 space-y-3">
+          {alerts.slice(0, 8).map((a) => (
+            <li
+              key={a.skuId}
+              className="flex flex-wrap items-center justify-between gap-2 text-sm border-b pb-3 last:border-0"
+              style={{ borderColor: 'var(--c-border)' }}
+            >
+              <div className="min-w-0">
+                <div style={{ color: 'var(--c-text)' }} className="font-medium truncate">
+                  {a.name}
+                </div>
+                <div className="font-mono text-xs mt-0.5" style={{ color: 'var(--c-text-3)' }}>
+                  {a.available} available
+                  {a.reorderPoint != null ? ` · reorder at ${a.reorderPoint}` : ''}
+                </div>
+              </div>
+              <Link
+                href={`/purchasing?skuId=${encodeURIComponent(a.skuId)}`}
+                className="btn-primary !py-2 !px-3 !text-xs shrink-0 whitespace-nowrap"
+              >
+                Create PO
+              </Link>
             </li>
           ))}
         </ul>
       )}
-    </Card>
+    </div>
   )
 }

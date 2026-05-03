@@ -98,8 +98,12 @@ export class InternalOrJwtAuthGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest()
 
-    const pubKey =
-      process.env.GATEWAY_SERVICE_JWT_PUBLIC_KEY?.replace(/\\n/g, '\n')?.trim() ?? ''
+    const rawPub = process.env.GATEWAY_SERVICE_JWT_PUBLIC_KEY?.trim() ?? ''
+    const pubKey = rawPub.includes('BEGIN')
+      ? rawPub.replace(/\\n/g, '\n')
+      : rawPub
+        ? Buffer.from(rawPub, 'base64').toString('utf-8')
+        : ''
     const svcTokenRaw = req.headers['x-service-token'] as string | undefined
     const svcToken = svcTokenRaw?.trim()
     const serviceName = process.env.SERVICE_NAME?.trim() ?? ''
@@ -177,3 +181,4 @@ export class TenantIsolationInterceptor {
 }
 
 export * from './service-jwt'
+export { ServiceJwtGuard } from './service-jwt.guard'

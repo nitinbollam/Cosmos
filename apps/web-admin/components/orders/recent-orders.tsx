@@ -1,38 +1,107 @@
 'use client'
-import { useQuery } from '@tanstack/react-query'
-import { Card, CardTitle } from '@cosmos/ui'
-import { api } from '@/lib/api'
 
-interface OrderItem {
+import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
+import { CardTitle } from '@cosmos/ui'
+import { api } from '@/lib/api'
+import { StatusBadge } from '@/components/cosmos/status-badge'
+import { EmptyState } from '@/components/cosmos/empty-state'
+
+type OrderRow = {
   id: string
   customerId: string
   status: string
-  totalAmount: number
+  totalAmount: string | number
   createdAt: string
+  lineItems?: { id: string }[]
+  shippingAddress?: { company?: string; line1?: string } | null
+}
+
+type ListResp = {
+  items: OrderRow[]
+  total: number
+}
+
+function customerLabel(o: OrderRow): string {
+  const addr = o.shippingAddress
+  if (addr && typeof addr === 'object' && 'company' in addr && addr.company) {
+    return String(addr.company)
+  }
+  return `Customer …${o.customerId.slice(-6)}`
 }
 
 export function RecentOrders() {
-  const { data, isLoading } = useQuery<{ items: OrderItem[] }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<ListResp>({
     queryKey: ['orders', 'recent'],
-    queryFn: () => api.get('/orders?page=1&pageSize=10'),
+    queryFn: () => api.get(`/orders?page=1&pageSize=10`),
     refetchInterval: 30_000,
   })
+
+  const rows = data?.items ?? []
+
   return (
-    <Card>
-      <CardTitle>Recent orders</CardTitle>
+    <div className="cosmos-card">
+      <div className="flex items-center justify-between gap-4">
+        <CardTitle>Recent orders</CardTitle>
+        <button type="button" className="btn-ghost !py-1.5 !px-3 !text-xs" onClick={() => void refetch()}>
+          Refresh
+        </button>
+      </div>
+
       {isLoading ? (
-        <div className="text-cosmos-muted text-sm mt-2">Loading…</div>
-      ) : (
-        <ul className="mt-3 divide-y divide-cosmos-border">
-          {(data?.items ?? []).map((o) => (
-            <li key={o.id} className="py-2 flex justify-between text-sm">
-              <span className="text-cosmos-text font-mono">#{o.id.slice(-6)}</span>
-              <span className="text-cosmos-muted">{o.status}</span>
-              <span className="text-cosmos-white">${Number(o.totalAmount).toFixed(2)}</span>
-            </li>
+        <div className="mt-4 space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="skeleton h-12 w-full" />
           ))}
-        </ul>
+        </div>
+      ) : isError ? (
+        <p className="mt-4 text-sm" style={{ color: 'var(--c-danger)' }}>
+          {error instanceof Error ? error.message : 'Failed to load orders'}
+        </p>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon="🛒"
+          title="No orders yet"
+          description="New orders will appear here as customers place them."
+        />
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="cosmos-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Amount</th>
+                <th>Created</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((o) => (
+                <tr key={o.id}>
+                  <td className="font-mono text-sm" style={{ color: 'var(--c-text-2)' }}>
+                    #{o.id.slice(-8)}
+                  </td>
+                  <td>{customerLabel(o)}</td>
+                  <td>
+                    <StatusBadge status={o.status} />
+                  </td>
+                  <td className="font-mono">${Number(o.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+                    {new Date(o.createdAt).toLocaleString()}
+                  </td>
+                  <td>
+                    <Link href={`/orders/${encodeURIComponent(o.id)}`} className="btn-ghost !py-1.5 !px-3 !text-xs">
+                      View
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
-    </Card>
+    </div>
   )
 }

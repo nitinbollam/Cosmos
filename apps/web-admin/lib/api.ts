@@ -36,6 +36,7 @@ const FIRST_TO_SERVICE: Record<string, string> = {
   wms: 'wms',
   sync: 'wms',
   dispatch: 'dispatch',
+  routes: 'dispatch',
 }
 
 function buildProxiedRelativePath(original: string): string {

@@ -1,14 +1,13 @@
 import type { DLQAlertConfig } from './dlq-monitor'
 
 /**
- * When **`EventBusClient.subscribe`** is used, pass **`{ dlq: pagerDutyDlqFromEnv(process.env.SERVICE_NAME) }`**
- * to fire **[PagerDuty Events v2](https://developer.pagerduty.com/docs/ZG9jOjExMDI5NTgw-send-an-event-events-api-v2)** alerts after BullMQ retries are exhausted.
- * Set **`PAGERDUTY_ROUTING_KEY`** in the environment (see root `.env.example`).
+ * Build **DLQ monitor config** from the environment. Always safe to pass to **`EventBusClient.subscribe`**
+ * as **`{ dlq: dlqMonitorFromEnv('my-service') }`** — exhausted jobs are logged at **error**; PagerDuty fires
+ * only when **`PAGERDUTY_ROUTING_KEY`** or **`PAGERDUTY_EVENTS_ROUTING_KEY`** is set.
  */
-export function pagerDutyDlqFromEnv(preferredServiceName?: string): DLQAlertConfig | undefined {
+export function dlqMonitorFromEnv(preferredServiceName?: string): DLQAlertConfig {
   const pdRoutingKey =
-    process.env.PAGERDUTY_ROUTING_KEY?.trim() || process.env.PAGERDUTY_EVENTS_ROUTING_KEY?.trim()
-  if (!pdRoutingKey) return undefined
+    process.env.PAGERDUTY_ROUTING_KEY?.trim() || process.env.PAGERDUTY_EVENTS_ROUTING_KEY?.trim() || undefined
   const serviceName = (
     preferredServiceName ??
     process.env.SERVICE_NAME ??
@@ -16,8 +15,16 @@ export function pagerDutyDlqFromEnv(preferredServiceName?: string): DLQAlertConf
     'cosmos-service'
   ).trim()
   return {
-    pdRoutingKey,
+    ...(pdRoutingKey ? { pdRoutingKey } : {}),
     serviceName,
     environment: process.env.NODE_ENV ?? 'development',
   }
+}
+
+/**
+ * @deprecated Use **`dlqMonitorFromEnv`** — it always returns a config so **`subscribe`** can attach the DLQ
+ * listener (log + optional PagerDuty). This alias kept for compatibility.
+ */
+export function pagerDutyDlqFromEnv(preferredServiceName?: string): DLQAlertConfig {
+  return dlqMonitorFromEnv(preferredServiceName)
 }

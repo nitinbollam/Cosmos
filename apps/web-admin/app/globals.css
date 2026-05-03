@@ -2,35 +2,164 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
 :root {
-  --cosmos-bg:        #06060F;
-  --cosmos-surface:   #0D0D1A;
-  --cosmos-surface-2: #13132A;
-  --cosmos-border:    #1E1E3A;
-  --cosmos-primary:   #6366F1;
-  --cosmos-primary-glow: rgba(99,102,241,0.3);
-  --cosmos-accent:    #22D3EE;
-  --cosmos-success:   #10B981;
-  --cosmos-warning:   #F59E0B;
-  --cosmos-danger:    #EF4444;
-  --cosmos-white:     #F1F5F9;
-  --cosmos-muted:     #64748B;
-  --cosmos-text:      #CBD5E1;
+  --c-bg: #06060f;
+  --c-surface: #0d0d1a;
+  --c-surface-2: #13132a;
+  --c-surface-3: #1a1a35;
+  --c-border: #1e1e3a;
+  --c-border-2: #2d2d52;
+  --c-primary: #6366f1;
+  --c-primary-dim: rgba(99, 102, 241, 0.15);
+  --c-primary-glow: rgba(99, 102, 241, 0.35);
+  --c-accent: #22d3ee;
+  --c-accent-dim: rgba(34, 211, 238, 0.12);
+  --c-cosmos-blue: #2563eb;
+  --c-cosmos-deep: #1b3a6b;
+  --c-success: #10b981;
+  --c-warning: #f59e0b;
+  --c-danger: #ef4444;
+  --c-info: #3b82f6;
+  --c-text: #e2e8f0;
+  --c-text-2: #94a3b8;
+  --c-text-3: #64748b;
+  --c-white: #f8fafc;
+  --font-display: var(--font-syne), system-ui, sans-serif;
+  --font-body: var(--font-dm-sans), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  /* Legacy aliases used by existing Tailwind cosmos-* classes */
+  --cosmos-bg: var(--c-bg);
+  --cosmos-surface: var(--c-surface);
+  --cosmos-surface-2: var(--c-surface-2);
+  --cosmos-border: var(--c-border);
+  --cosmos-primary: var(--c-primary);
+  --cosmos-primary-glow: var(--c-primary-glow);
+  --cosmos-accent: var(--c-accent);
+  --cosmos-success: var(--c-success);
+  --cosmos-warning: var(--c-warning);
+  --cosmos-danger: var(--c-danger);
+  --cosmos-white: var(--c-white);
+  --cosmos-muted: var(--c-text-3);
+  --cosmos-text: var(--c-text);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
-  background-color: var(--cosmos-bg);
-  color: var(--cosmos-text);
-  font-family: 'Space Grotesk', sans-serif;
+  background-color: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
 
 .cosmos-card {
-  background: var(--cosmos-surface);
-  border: 1px solid var(--cosmos-border);
-  border-radius: 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 14px;
+  padding: 20px;
+  transition: border-color 0.15s ease;
+}
+.cosmos-card:hover {
+  border-color: var(--c-border-2);
+}
+
+.btn-primary {
+  background: var(--c-primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+.btn-primary:hover {
+  opacity: 0.9;
+  box-shadow: 0 0 16px var(--c-primary-glow);
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: border-color 0.15s, background 0.15s;
+}
+.btn-ghost:hover {
+  border-color: var(--c-primary);
+  background: var(--c-primary-dim);
+}
+
+.cosmos-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cosmos-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-text-3);
+  border-bottom: 1px solid var(--c-border);
+}
+.cosmos-table td {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: var(--c-text);
+  border-bottom: 1px solid var(--c-border);
+  font-family: var(--font-body);
+}
+.cosmos-table tr:hover td {
+  background: var(--c-surface-3);
+}
+
+.cosmos-input {
+  width: 100%;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--c-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.cosmos-input:focus {
+  border-color: var(--c-primary);
+}
+.cosmos-input::placeholder {
+  color: var(--c-text-3);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--c-surface) 25%, var(--c-surface-3) 50%, var(--c-surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { CurrentUser, JwtAuthGuard, Roles, RolesGuard, TenantId } from '@cosmos/auth-middleware'
 import type { AuthenticatedUser } from '@cosmos/types'
 import { ReceivingService } from './receiving.service'
@@ -10,6 +10,12 @@ import { CompleteReceivingSessionDto } from './dto/complete-receiving-session.dt
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReceivingController {
   constructor(private readonly receiving: ReceivingService) {}
+
+  @Roles('WAREHOUSE_STAFF', 'MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN')
+  @Get('sessions')
+  list(@TenantId() tenantId: string, @Query('status') status?: string) {
+    return this.receiving.listSessions(tenantId, status)
+  }
 
   @Roles('WAREHOUSE_STAFF', 'MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN')
   @Post('sessions')

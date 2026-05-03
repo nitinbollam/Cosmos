@@ -10,6 +10,8 @@ import { CreateFulfillmentTaskDto } from './dto/create-fulfillment-task.dto'
 import { randomUUID } from 'crypto'
 import { logger } from '@cosmos/logger'
 import type { FulfillmentTask, PickLine, FulfillmentTaskStatus } from '../generated/prisma-client'
+import type { Prisma } from '../generated/prisma-client'
+import { ReceivingService } from '../receiving/receiving.service'
 
 type FulfillmentTaskWithLines = FulfillmentTask & { pickLines: PickLine[] }
 
@@ -18,6 +20,7 @@ export class FulfillmentService {
   constructor(
     private prisma: PrismaService,
     private bus: EventBusClient,
+    private receiving: ReceivingService,
   ) {}
 
   async createTask(tenantId: string, dto: CreateFulfillmentTaskDto) {
@@ -117,6 +120,7 @@ export class FulfillmentService {
       warehouseCode: t.warehouseCode,
       correlationId: t.correlationId,
       warehouseId: t.warehouseId,
+      assignedUserId: t.assignedUserId,
       pickItems: t.pickLines.map((p) => ({
         id: p.id,
         skuId: p.skuId,
@@ -128,14 +132,57 @@ export class FulfillmentService {
     }
   }
 
-  async listTasksForFloor(tenantId: string, status?: string) {
-    const where =
-      status && status.length > 0
-        ? {
-            tenantId,
-            status: status as 'PENDING' | 'PICKING' | 'PACKED' | 'DISPATCHED' | 'CANCELLED',
-          }
-        : { tenantId, status: { in: ['PENDING', 'PICKING'] as FulfillmentTaskStatus[] } }
+  async listTasksForFloor(
+    tenantId: string,
+    status?: string,
+    warehouseId?: string,
+    orderId?: string,
+  ) {
+    const st = status?.trim()
+    const wh = warehouseId?.trim()
+    const ord = orderId?.trim()
+
+    const base: Prisma.FulfillmentTaskWhereInput = {
+      tenantId,
+      ...(wh ? { warehouseId: wh } : {}),
+      ...(ord ? { orderId: ord } : {}),
+    }
+
+    let where: Prisma.FulfillmentTaskWhereInput
+
+    if (ord) {
+      where = { ...base, status: { not: 'CANCELLED' } }
+    } else if (!st) {
+      where = {
+        ...base,
+        status: { in: ['PENDING', 'PICKING'] satisfies FulfillmentTaskStatus[] },
+      }
+    } else if (st.toUpperCase() === 'ALL') {
+      where = { ...base, status: { not: 'CANCELLED' } }
+    } else if (st.toUpperCase() === 'ASSIGNED') {
+      where = {
+        ...base,
+        assignedUserId: { not: null },
+        status: { not: 'CANCELLED' },
+      }
+    } else if (st.toUpperCase() === 'PICKED' || st.toUpperCase() === 'PACKING') {
+      where = {
+        ...base,
+        status: 'PICKING',
+        pickLines: { every: { OR: [{ status: 'PICKED' }, { status: 'SHORT' }] } },
+      }
+    } else {
+      const u = st.toUpperCase()
+      if (u === 'PENDING' || u === 'PICKING' || u === 'PACKED' || u === 'DISPATCHED' || u === 'CANCELLED') {
+        where = { ...base, status: u as FulfillmentTaskStatus }
+      } else {
+        where = {
+          ...base,
+          status: { in: ['PENDING', 'PICKING'] satisfies FulfillmentTaskStatus[] },
+        }
+      }
+    }
+
     const rows = await this.prisma.fulfillmentTask.findMany({
       where,
       include: { pickLines: true },
@@ -148,6 +195,9 @@ export class FulfillmentService {
       status: t.status,
       priority: t.priority,
       warehouseCode: t.warehouseCode,
+      warehouseId: t.warehouseId,
+      assignedUserId: t.assignedUserId,
+      createdAt: t.createdAt,
       pickItems: t.pickLines.map((p) => ({
         id: p.id,
         skuId: p.skuId,
@@ -158,15 +208,48 @@ export class FulfillmentService {
     }))
   }
 
+  async assignTask(tenantId: string, taskId: string, userId: string | null) {
+    const task = await this.prisma.fulfillmentTask.findFirst({
+      where: { id: taskId, tenantId },
+    })
+    if (!task) throw new NotFoundException('Task not found')
+    if (task.status === 'CANCELLED' || task.status === 'DISPATCHED') {
+      throw new BadRequestException(`Cannot assign task in status ${task.status}`)
+    }
+    return this.prisma.fulfillmentTask.update({
+      where: { id: taskId },
+      data: { assignedUserId: userId },
+    })
+  }
+
   /** Offline replay endpoint — applies idempotent mutations from the mobile queue. */
   async replayAction(tenantId: string, action: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     switch (action) {
       case 'pick_progress':
         return this.applyPickProgress(tenantId, payload)
+      case 'receiving_scan':
+        return this.applyReceivingScan(tenantId, payload)
       default:
         logger.warn({ action }, 'unknown replay action — acknowledged')
         return { acknowledged: true, action }
     }
+  }
+
+  private async applyReceivingScan(tenantId: string, payload: Record<string, unknown>) {
+    const sessionId = String(payload.sessionId ?? '')
+    const userId = String(payload.userId ?? '')
+    const barcode = String(payload.barcode ?? '')
+    const receivedQty = Number(payload.receivedQty ?? 0)
+    const damagedQty = Number(payload.damagedQty ?? 0)
+    if (!sessionId || !userId || !barcode || receivedQty < 1) {
+      return { ok: false, reason: 'sessionId, userId, barcode, and receivedQty are required' }
+    }
+    const item = await this.receiving.scanItem(sessionId, tenantId, userId, {
+      barcode,
+      receivedQty,
+      damagedQty: Number.isFinite(damagedQty) ? damagedQty : 0,
+    })
+    return { ok: true, itemId: item.id }
   }
 
   private async applyPickProgress(tenantId: string, payload: Record<string, unknown>) {

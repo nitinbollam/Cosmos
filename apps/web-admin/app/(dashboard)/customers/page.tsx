@@ -1,5 +1,6 @@
-﻿'use client'
+'use client'
 
+import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api'
@@ -83,7 +84,12 @@ export default function CustomersPage() {
             {(data ?? []).map((c) => (
               <li key={c.id} className="py-3 flex justify-between gap-4">
                 <div>
-                  <div className="text-cosmos-white font-medium">{c.name}</div>
+                  <Link
+                    href={`/customers/${c.id}`}
+                    className="text-cosmos-white font-medium hover:text-cosmos-primary"
+                  >
+                    {c.name}
+                  </Link>
                   <div className="text-xs text-cosmos-muted font-mono">{c.id.slice(-14)}…</div>
                 </div>
                 <div className="text-right text-sm text-cosmos-muted">

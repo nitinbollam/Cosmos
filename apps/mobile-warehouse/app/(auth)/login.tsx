@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { useRouter } from 'expo-router'
-import { wmsClient } from '../../src/api/wms.client'
+import { wmsClient, parseAccessTokenClaims } from '../../src/api/wms.client'
 import { useAuthStore } from '../../src/stores/auth.store'
 
 export default function Login() {
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuthenticated)
+  const setSession = useAuthStore((s) => s.setSession)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -14,7 +15,9 @@ export default function Login() {
   async function submit() {
     setLoading(true)
     try {
-      await wmsClient.login(email, password)
+      const data = await wmsClient.login(email, password)
+      const claims = parseAccessTokenClaims(data.accessToken)
+      setSession(data.accessToken, claims.tenantId ?? null, claims.sub ?? null)
       setAuth(true)
       router.replace('/(tabs)/dashboard')
     } catch (e) {

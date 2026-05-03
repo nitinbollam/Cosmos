@@ -12,6 +12,7 @@ import {
 @Injectable()
 export class PaymentsIdempotencyRequiredGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
+    const req = context.switchToHttp().getRequest()
     const url = `${(req.originalUrl ?? (req as { url?: string }).url ?? '')}`.toLowerCase()
     if (url.includes('/webhook')) return true
 

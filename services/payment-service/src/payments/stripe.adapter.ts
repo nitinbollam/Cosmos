@@ -111,4 +111,9 @@ export class StripeAdapter {
     if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET not configured')
     return this.stripe.webhooks.constructEvent(rawBody, signatureHeader, secret)
   }
+
+  /** For **`GET /payments/webhook/stripe/status`** — does not expose the secret. */
+  isWebhookSecretConfigured(): boolean {
+    return Boolean(this.config.get<string>('STRIPE_WEBHOOK_SECRET')?.trim())
+  }
 }

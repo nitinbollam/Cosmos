@@ -12,6 +12,7 @@ import { logger } from '@cosmos/logger'
 import { Trace } from '@cosmos/tracing'
 import { PrismaService } from '../prisma/prisma.service'
 import type { ScanReceivingItemDto } from './dto/scan-receiving-item.dto'
+import { ReceivingStatus } from '../generated/prisma-client'
 
 const PO_OPEN_FOR_RECEIVE = new Set(['SUBMITTED', 'PARTIALLY_RECEIVED'])
 
@@ -61,6 +62,24 @@ export class ReceivingService {
     const b = this.config.get<string>('PURCHASING_SERVICE_URL')?.replace(/\/$/, '')
     if (!b) throw new BadRequestException('PURCHASING_SERVICE_URL not configured')
     return b
+  }
+
+  listSessions(tenantId: string, status?: string) {
+    const st = status?.trim()
+    const allowed = Object.values(ReceivingStatus) as string[]
+    const filter =
+      st && allowed.includes(st)
+        ? { status: st as ReceivingStatus }
+        : {}
+    return this.prisma.receivingSession.findMany({
+      where: {
+        tenantId,
+        ...filter,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { _count: { select: { items: true } } },
+    })
   }
 
   @Trace()

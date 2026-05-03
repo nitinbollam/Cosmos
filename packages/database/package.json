@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "eslint src --ext .ts || true",
+    "lint": "node ../../scripts/eslint-soft.mjs",
     "test": "echo 'no tests in @cosmos/database'",
     "typecheck": "tsc --noEmit"
   },

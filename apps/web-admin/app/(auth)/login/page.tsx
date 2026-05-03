@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
+import { axiosErr } from '@/lib/axios-error'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,7 +21,7 @@ export default function LoginPage() {
       window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
       router.push('/')
     } catch (e) {
-      setErr((e as Error).message ?? 'Login failed')
+      setErr(axiosErr(e))
     } finally {
       setLoading(false)
     }

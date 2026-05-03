@@ -1,46 +1,59 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
+import NetInfo from '@react-native-community/netinfo'
 import { useRouteStore } from '../../src/stores/route.store'
 import { dispatchClient } from '../../src/api/dispatch.client'
+import { syncService } from '../../src/sync/sync.service'
+import { useAuthStore } from '../../src/stores/auth.store'
 
 export default function RouteScreen() {
   const stops = useRouteStore((s) => s.stops)
   const currentStopIndex = useRouteStore((s) => s.currentStopIndex)
   const routeId = useRouteStore((s) => s.routeId)
   const seedDemoRoute = useRouteStore((s) => s.seedDemoRoute)
-  const markDelivered = useRouteStore((s) => s.markDelivered)
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null)
   const mapRef = useRef<MapView>(null)
   const router = useRouter()
-  const [recipient, setRecipient] = useState('')
-  const [signature, setSignature] = useState('')
+  const { token, tenantId } = useAuthStore()
 
   useEffect(() => {
     if (!stops.length && !routeId) seedDemoRoute()
   }, [stops.length, routeId, seedDemoRoute])
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null
+    let sub: Location.LocationSubscription | null = null
     const start = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') {
         Alert.alert('Permission required', 'Location improves navigation — you can dismiss for dry runs.')
         return
       }
-      subscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 50 },
+      sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 10000, distanceInterval: 50 },
         async ({ coords }) => {
           setDriverLocation({ latitude: coords.latitude, longitude: coords.longitude })
-          dispatchClient.updateDriverLocation(coords.latitude, coords.longitude).catch(() => undefined)
+          const payload = {
+            lat: coords.latitude,
+            lng: coords.longitude,
+            timestamp: new Date().toISOString(),
+          }
+          const net = await NetInfo.fetch()
+          if (net.isConnected) {
+            dispatchClient.updateDriverLocation(token, tenantId, payload).catch(() => undefined)
+          } else {
+            void syncService.queueAction('driver_location', payload)
+          }
         },
       )
     }
     void start()
-    return () => { subscription?.remove() }
-  }, [])
+    return () => {
+      sub?.remove()
+    }
+  }, [token, tenantId])
 
   const currentStop = stops[currentStopIndex]
 
@@ -83,44 +96,20 @@ export default function RouteScreen() {
             </Text>
             <Text style={s.name}>{currentStop.customerName}</Text>
             <Text style={s.address}>{currentStop.address}</Text>
-            <Text style={s.order}>{currentStop.packageCount} packages · #{currentStop.orderId.slice(-8)}</Text>
-
-            <Text style={s.podLabel}>Recipient (signature text)</Text>
-            <TextInput
-              placeholder="Jane Doe"
-              placeholderTextColor="#64748B"
-              style={s.podInput}
-              value={recipient}
-              onChangeText={setRecipient}
-            />
-            <TextInput
-              placeholder="Signer agrees release — free text POD"
-              placeholderTextColor="#64748B"
-              style={[s.podInput, { minHeight: 56 }]}
-              value={signature}
-              onChangeText={setSignature}
-              multiline
-            />
+            <Text style={s.order}>
+              {currentStop.packageCount} packages · #{currentStop.orderId.slice(-8)}
+            </Text>
 
             <View style={s.actions}>
               <TouchableOpacity
                 style={[s.btn, s.delivered]}
-                onPress={async () => {
-                  await markDelivered(currentStop.id)
-                  const rid = currentStop.routeId
-                  await dispatchClient
-                    .markDelivered(rid, currentStop.id, {
-                      recipient: recipient || undefined,
-                      signature: signature || undefined,
-                      timestamp: new Date().toISOString(),
-                      driverLocation,
-                    })
-                    .catch(() => undefined)
-                  setRecipient('')
-                  setSignature('')
-                }}
+                onPress={() =>
+                  router.push(
+                    `/delivery/pod/${encodeURIComponent(currentStop.id)}?routeId=${encodeURIComponent(currentStop.routeId)}`,
+                  )
+                }
               >
-                <Text style={s.btnText}>Delivered</Text>
+                <Text style={s.btnText}>Proof of delivery</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.btn, s.failed]}
@@ -149,26 +138,24 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   panel: {
-    backgroundColor: '#0A0A0F', padding: 20, paddingBottom: 40,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24, minHeight: 280,
+    backgroundColor: '#0A0A0F',
+    padding: 20,
+    paddingBottom: 40,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    minHeight: 220,
   },
-  stopLabel: { color: '#6366F1', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
+  stopLabel: {
+    color: '#6366F1',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
   name: { color: '#E2E8F0', fontSize: 20, fontWeight: '700', marginTop: 4 },
   address: { color: '#94A3B8', fontSize: 14, marginTop: 4 },
   order: { color: '#64748B', fontSize: 12, marginTop: 4 },
-  podLabel: { color: '#94A3B8', marginTop: 14, marginBottom: 6, fontSize: 12 },
-  podInput: {
-    borderWidth: 1,
-    borderColor: '#273043',
-    borderRadius: 10,
-    color: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 8,
-    backgroundColor: '#111119',
-    fontSize: 14,
-  },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
   btn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
   delivered: { backgroundColor: '#16A34A' },
   failed: { backgroundColor: '#DC2626' },
