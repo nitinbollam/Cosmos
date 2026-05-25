@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { StatusBadge } from '@/components/cosmos/status-badge'
+import { CosmosDialogModal } from '@/components/cosmos/radix-overlays'
 
 type Sku = {
   id: string
@@ -33,19 +34,29 @@ type StockLevel = {
   quantityReserved: number
   quantityAvailable: number
   reorderPoint: number
+  reorderQty?: number
 }
 
 type LedgerRow = {
   id: string
   warehouseId: string
+  locationId?: string | null
+  batchId?: string | null
   eventType: string
   quantityDelta: number
   quantityAfter: number
+  unitCost: string | number
+  referenceId?: string | null
+  referenceType?: string | null
   performedBy: string
   occurredAt: string
 }
 
 type WarehouseRow = { id: string; name: string; code: string }
+
+function isNonBatchBatchId(batchId: string | null | undefined) {
+  return batchId == null || batchId === ''
+}
 
 export default function SkuDetailPage() {
   const params = useParams()
@@ -64,6 +75,7 @@ export default function SkuDetailPage() {
   const [xferFrom, setXferFrom] = useState('')
   const [xferTo, setXferTo] = useState('')
   const [xferQty, setXferQty] = useState(1)
+  const [xferBatchId, setXferBatchId] = useState('')
 
   const skuQ = useQuery({
     queryKey: ['skus', skuId],
@@ -89,6 +101,54 @@ export default function SkuDetailPage() {
   })
 
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
+
+  const xferBatchMeta = useMemo(() => {
+    const rows = (levelsQ.data ?? []).filter((l) => l.warehouseId === xferFrom && l.quantityAvailable > 0)
+    const batches = new Set<string>()
+    let hasNonBatch = false
+    for (const l of rows) {
+      if (isNonBatchBatchId(l.batchId)) hasNonBatch = true
+      else if (l.batchId) batches.add(l.batchId)
+    }
+    const batchList = [...batches].sort()
+    return { hasNonBatch, batchList, batchKey: batchList.join('|') }
+  }, [levelsQ.data, xferFrom])
+
+  const sku = skuQ.data
+
+  useEffect(() => {
+    if (recvOpen && sku) {
+      setRecvWh('')
+      setRecvQty(1)
+      setRecvCost(String(Number(sku.cost ?? 0)))
+      setRecvBatch('')
+      setRecvPo('')
+    }
+  }, [recvOpen, sku])
+
+  useEffect(() => {
+    if (xferOpen) {
+      setXferFrom('')
+      setXferTo('')
+      setXferQty(1)
+      setXferBatchId('')
+    }
+  }, [xferOpen])
+
+  useEffect(() => {
+    if (!xferFrom) {
+      setXferBatchId('')
+      return
+    }
+    if (xferBatchMeta.hasNonBatch) {
+      setXferBatchId('')
+      return
+    }
+    const b = xferBatchMeta.batchList
+    if (b.length === 1) setXferBatchId(b[0])
+    else if (b.length > 1) setXferBatchId((cur) => (cur && b.includes(cur) ? cur : b[0]))
+    else setXferBatchId('')
+  }, [xferFrom, xferBatchMeta.hasNonBatch, xferBatchMeta.batchKey, xferBatchMeta.batchList])
 
   const patchSku = useMutation({
     mutationFn: async (patch: Record<string, unknown>) => {
@@ -123,7 +183,7 @@ export default function SkuDetailPage() {
         fromWarehouseId: xferFrom,
         toWarehouseId: xferTo,
         quantity: xferQty,
-        batchId: '',
+        batchId: xferBatchId.trim() || undefined,
       })
     },
     onSuccess: () => {
@@ -134,7 +194,13 @@ export default function SkuDetailPage() {
     },
   })
 
-  const sku = skuQ.data
+  const batchRows = (levelsQ.data ?? []).filter((l) => !isNonBatchBatchId(l.batchId))
+
+  const xferNeedsExplicitBatch =
+    !!xferFrom &&
+    !xferBatchMeta.hasNonBatch &&
+    xferBatchMeta.batchList.length > 0 &&
+    !xferBatchId.trim()
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
@@ -194,61 +260,71 @@ export default function SkuDetailPage() {
             {levelsQ.isLoading ? (
               <div className="skeleton h-24 w-full" />
             ) : (
-              <table className="cosmos-table">
-                <thead>
-                  <tr>
-                    <th>Location / batch</th>
-                    <th>Warehouse</th>
-                    <th>On hand</th>
-                    <th>Reserved</th>
-                    <th>Available</th>
-                    <th>Reorder</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(levelsQ.data ?? []).map((l) => (
-                    <tr key={l.id}>
-                      <td className="font-mono text-xs">
-                        {l.locationId ?? '—'} {l.batchId ? `· ${l.batchId.slice(0, 12)}` : ''}
-                      </td>
-                      <td className="text-sm">{whMap.get(l.warehouseId) ?? l.warehouseId.slice(-8)}</td>
-                      <td>{l.quantityOnHand}</td>
-                      <td>{l.quantityReserved}</td>
-                      <td>{l.quantityAvailable}</td>
-                      <td>{l.reorderPoint}</td>
+              <div className="overflow-x-auto">
+                <table className="cosmos-table">
+                  <thead>
+                    <tr>
+                      <th>Location / batch</th>
+                      <th>Warehouse</th>
+                      <th>On hand</th>
+                      <th>Reserved</th>
+                      <th>Available</th>
+                      <th>Reorder pt</th>
+                      <th>Reorder qty</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(levelsQ.data ?? []).map((l) => (
+                      <tr key={l.id}>
+                        <td className="font-mono text-xs">
+                          {l.locationId ?? '—'} {l.batchId ? `· ${l.batchId}` : ''}
+                        </td>
+                        <td className="text-sm">{whMap.get(l.warehouseId) ?? l.warehouseId.slice(-8)}</td>
+                        <td>{l.quantityOnHand}</td>
+                        <td>{l.quantityReserved}</td>
+                        <td>{l.quantityAvailable}</td>
+                        <td>{l.reorderPoint}</td>
+                        <td>{l.reorderQty ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
             {(levelsQ.data ?? []).length === 0 && !levelsQ.isLoading && (
               <p className="text-sm text-cosmos-text-3 py-4">No stock levels yet — receive or transfer stock in.</p>
             )}
           </div>
 
-          {sku.isTobacco && (levelsQ.data ?? []).some((l) => l.batchId) && (
+          {sku.isTobacco && (
             <div className="cosmos-card">
-              <h3 className="text-cosmos-white font-semibold font-display mb-3">Batch positions</h3>
-              <table className="cosmos-table">
-                <thead>
-                  <tr>
-                    <th>Batch</th>
-                    <th>Warehouse</th>
-                    <th>Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(levelsQ.data ?? [])
-                    .filter((l) => l.batchId)
-                    .map((l) => (
-                      <tr key={l.id}>
-                        <td className="font-mono text-xs">{l.batchId}</td>
-                        <td>{whMap.get(l.warehouseId) ?? l.warehouseId.slice(-8)}</td>
-                        <td>{l.quantityOnHand}</td>
+              <h3 className="text-cosmos-white font-semibold font-display mb-3">Batch tracking</h3>
+              {batchRows.length === 0 ? (
+                <p className="text-sm text-cosmos-text-3 py-2">No batch-tracked stock yet — receive with a batch id to track excise lots.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="cosmos-table">
+                    <thead>
+                      <tr>
+                        <th>Batch</th>
+                        <th>Warehouse</th>
+                        <th>On hand</th>
+                        <th>Available</th>
                       </tr>
-                    ))}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {batchRows.map((l) => (
+                        <tr key={l.id}>
+                          <td className="font-mono text-xs">{l.batchId}</td>
+                          <td>{whMap.get(l.warehouseId) ?? l.warehouseId.slice(-8)}</td>
+                          <td>{l.quantityOnHand}</td>
+                          <td>{l.quantityAvailable}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -257,115 +333,150 @@ export default function SkuDetailPage() {
             {ledgerQ.isLoading ? (
               <div className="skeleton h-32 w-full" />
             ) : (
-              <table className="cosmos-table">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Event</th>
-                    <th>Delta</th>
-                    <th>After</th>
-                    <th>Warehouse</th>
-                    <th>By</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(ledgerQ.data ?? []).map((e) => (
-                    <tr key={e.id}>
-                      <td className="text-sm text-cosmos-text-3">{new Date(e.occurredAt).toLocaleString()}</td>
-                      <td className="font-mono text-xs">{e.eventType}</td>
-                      <td className="font-mono" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
-                        {e.quantityDelta >= 0 ? '+' : ''}
-                        {e.quantityDelta}
-                      </td>
-                      <td className="font-mono">{e.quantityAfter}</td>
-                      <td className="font-mono text-xs">{e.warehouseId.slice(-6)}</td>
-                      <td className="font-mono text-xs">{e.performedBy.slice(-8)}</td>
+              <div className="overflow-x-auto">
+                <table className="cosmos-table text-sm">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Warehouse</th>
+                      <th>Location</th>
+                      <th>Batch</th>
+                      <th>Event</th>
+                      <th>Delta</th>
+                      <th>After</th>
+                      <th>Unit cost</th>
+                      <th>Ref</th>
+                      <th>By</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(ledgerQ.data ?? []).map((e) => (
+                      <tr key={e.id}>
+                        <td className="text-cosmos-text-3 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString()}</td>
+                        <td className="font-mono text-xs">{whMap.get(e.warehouseId) ?? e.warehouseId.slice(-6)}</td>
+                        <td className="font-mono text-xs">{e.locationId ?? '—'}</td>
+                        <td className="font-mono text-xs">{e.batchId || '—'}</td>
+                        <td className="font-mono text-xs">{e.eventType}</td>
+                        <td className="font-mono" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
+                          {e.quantityDelta >= 0 ? '+' : ''}
+                          {e.quantityDelta}
+                        </td>
+                        <td className="font-mono">{e.quantityAfter}</td>
+                        <td className="font-mono text-xs">{Number(e.unitCost ?? 0).toFixed(4)}</td>
+                        <td className="font-mono text-xs max-w-[100px] truncate">
+                          {e.referenceType ?? '—'} {e.referenceId ? e.referenceId.slice(0, 8) : ''}
+                        </td>
+                        <td className="font-mono text-xs">{e.performedBy.slice(-8)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </>
       )}
 
-      {recvOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setRecvOpen(false)}>
-          <div className="cosmos-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-3">Receive stock</h3>
-            <select className="cosmos-input mb-3" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
-              <option value="">Warehouse…</option>
-              {(warehousesQ.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code}
-                </option>
-              ))}
-            </select>
-            <label className="text-xs text-cosmos-text-3">Quantity</label>
-            <input type="number" className="cosmos-input mb-3" value={recvQty} onChange={(e) => setRecvQty(Math.max(1, +e.target.value))} />
-            <label className="text-xs text-cosmos-text-3">Unit cost</label>
-            <input type="number" step="0.01" className="cosmos-input mb-3" value={recvCost} onChange={(e) => setRecvCost(e.target.value)} />
-            <label className="text-xs text-cosmos-text-3">Batch id (optional)</label>
-            <input className="cosmos-input mb-3 font-mono text-sm" value={recvBatch} onChange={(e) => setRecvBatch(e.target.value)} />
-            <label className="text-xs text-cosmos-text-3">PO id (optional)</label>
-            <input className="cosmos-input mb-4 font-mono text-sm" value={recvPo} onChange={(e) => setRecvPo(e.target.value)} />
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost" onClick={() => setRecvOpen(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={!recvWh || receiveMut.isPending}
-                onClick={() => receiveMut.mutate()}
-              >
-                Receive
-              </button>
-            </div>
+      <CosmosDialogModal
+        open={recvOpen}
+        onOpenChange={setRecvOpen}
+        title="Receive stock"
+        maxWidthClass="max-w-md"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn-ghost" onClick={() => setRecvOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!recvWh || receiveMut.isPending}
+              onClick={() => receiveMut.mutate()}
+            >
+              Receive
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <select className="cosmos-input mb-3" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
+          <option value="">Warehouse…</option>
+          {(warehousesQ.data ?? []).map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.code}
+            </option>
+          ))}
+        </select>
+        <label className="text-xs text-cosmos-text-3">Quantity</label>
+        <input type="number" className="cosmos-input mb-3" value={recvQty} onChange={(e) => setRecvQty(Math.max(1, +e.target.value))} />
+        <label className="text-xs text-cosmos-text-3">Unit cost</label>
+        <input type="number" step="0.01" className="cosmos-input mb-3" value={recvCost} onChange={(e) => setRecvCost(e.target.value)} />
+        <label className="text-xs text-cosmos-text-3">Batch id (optional)</label>
+        <input className="cosmos-input mb-3 font-mono text-sm" value={recvBatch} onChange={(e) => setRecvBatch(e.target.value)} />
+        <label className="text-xs text-cosmos-text-3">PO id (optional)</label>
+        <input className="cosmos-input font-mono text-sm" value={recvPo} onChange={(e) => setRecvPo(e.target.value)} />
+      </CosmosDialogModal>
 
-      {xferOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setXferOpen(false)}>
-          <div className="cosmos-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-3">Transfer stock</h3>
-            <label className="text-xs text-cosmos-text-3">From</label>
-            <select className="cosmos-input mb-3" value={xferFrom} onChange={(e) => setXferFrom(e.target.value)}>
-              <option value="">…</option>
-              {(warehousesQ.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code}
-                </option>
-              ))}
-            </select>
-            <label className="text-xs text-cosmos-text-3">To</label>
-            <select className="cosmos-input mb-3" value={xferTo} onChange={(e) => setXferTo(e.target.value)}>
-              <option value="">…</option>
-              {(warehousesQ.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code}
-                </option>
-              ))}
-            </select>
-            <label className="text-xs text-cosmos-text-3">Quantity</label>
-            <input type="number" className="cosmos-input mb-4" value={xferQty} onChange={(e) => setXferQty(Math.max(1, +e.target.value))} />
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost" onClick={() => setXferOpen(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={!xferFrom || !xferTo || xferFrom === xferTo || transferMut.isPending}
-                onClick={() => transferMut.mutate()}
-              >
-                Transfer
-              </button>
-            </div>
+      <CosmosDialogModal
+        open={xferOpen}
+        onOpenChange={setXferOpen}
+        title="Transfer stock"
+        maxWidthClass="max-w-md"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn-ghost" onClick={() => setXferOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={
+                !xferFrom ||
+                !xferTo ||
+                xferFrom === xferTo ||
+                xferNeedsExplicitBatch ||
+                transferMut.isPending
+              }
+              onClick={() => transferMut.mutate()}
+            >
+              Transfer
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <label className="text-xs text-cosmos-text-3">From</label>
+        <select className="cosmos-input mb-3" value={xferFrom} onChange={(e) => setXferFrom(e.target.value)}>
+          <option value="">…</option>
+          {(warehousesQ.data ?? []).map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.code}
+            </option>
+          ))}
+        </select>
+        <label className="text-xs text-cosmos-text-3">To</label>
+        <select className="cosmos-input mb-3" value={xferTo} onChange={(e) => setXferTo(e.target.value)}>
+          <option value="">…</option>
+          {(warehousesQ.data ?? []).map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.code}
+            </option>
+          ))}
+        </select>
+        {(xferBatchMeta.hasNonBatch || xferBatchMeta.batchList.length > 0) && (
+          <>
+            <label className="text-xs text-cosmos-text-3">Batch / lot</label>
+            <select className="cosmos-input mb-3 font-mono text-sm" value={xferBatchId} onChange={(e) => setXferBatchId(e.target.value)}>
+              {xferBatchMeta.hasNonBatch && <option value="">Non-batch (aggregated)</option>}
+              {xferBatchMeta.batchList.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        <label className="text-xs text-cosmos-text-3">Quantity</label>
+        <input type="number" className="cosmos-input" value={xferQty} onChange={(e) => setXferQty(Math.max(1, +e.target.value))} />
+      </CosmosDialogModal>
     </div>
   )
 }

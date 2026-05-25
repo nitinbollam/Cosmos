@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { Roles, RolesGuard, TenantId } from '@cosmos/auth-middleware'
 import { RoutesService } from './routes.service'
 import { CreateRouteDto } from './dto/create-route.dto'
 import { AssignDriverDto } from './dto/assign-driver.dto'
+import { ReorderStopsDto } from './dto/reorder-stops.dto'
 
 @Controller('routes')
 @UseGuards(RolesGuard)
@@ -10,8 +11,8 @@ export class RoutesController {
   constructor(private readonly routes: RoutesService) {}
 
   @Get()
-  list(@TenantId() tenantId: string) {
-    return this.routes.list(tenantId)
+  list(@TenantId() tenantId: string, @Query('date') date?: string) {
+    return this.routes.list(tenantId, date)
   }
 
   @Get(':id')
@@ -28,6 +29,15 @@ export class RoutesController {
   @Patch(':id/driver')
   assignDriver(@TenantId() tenantId: string, @Param('id') id: string, @Body() dto: AssignDriverDto) {
     return this.routes.assignDriver(tenantId, id, dto)
+  }
+
+  @Patch(':id/stops/reorder')
+  reorderStops(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: ReorderStopsDto,
+  ) {
+    return this.routes.reorderStops(tenantId, id, dto.stopIds)
   }
 
   @Post(':routeId/stops/:stopId/delivered')

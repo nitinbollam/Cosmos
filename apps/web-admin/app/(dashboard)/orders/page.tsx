@@ -125,9 +125,9 @@ export default function OrdersPage() {
             onClick={() => setStatusTab(s)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
             style={{
-              background: statusTab === s ? 'var(--c-primary-dim)' : 'var(--c-surface-2)',
-              color: statusTab === s ? 'var(--c-white)' : 'var(--c-text-2)',
-              border: `1px solid ${statusTab === s ? 'var(--c-primary)' : 'var(--c-border)'}`,
+              background: statusTab === s ? 'var(--c-accent-soft)' : 'var(--c-surface-2)',
+              color: statusTab === s ? 'var(--c-accent)' : 'var(--c-text-2)',
+              border: `1px solid ${statusTab === s ? 'var(--c-accent)' : 'var(--c-border-card)'}`,
             }}
           >
             {s.replace(/_/g, ' ')}

@@ -129,4 +129,32 @@ export class PurchaseOrdersService {
       include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
     })
   }
+
+  poLineTotal(lines: { qtyOrdered: number; unitCost: unknown }[]): number {
+    return lines.reduce((s, l) => {
+      const c = l.unitCost != null ? Number(l.unitCost as string | number) : 0
+      return s + l.qtyOrdered * c
+    }, 0)
+  }
+
+  async recordPayment(tenantId: string, id: string, body: { amount: number; method: string; reference?: string }) {
+    const po = await this.get(tenantId, id)
+    if (po.status === PurchaseOrderStatus.CANCELLED) {
+      throw new BadRequestException('Cannot pay a cancelled PO')
+    }
+    const total = this.poLineTotal(po.lines)
+    const paid = Number(po.amountPaid ?? 0)
+    const remaining = Math.max(0, total - paid)
+    const apply = Math.min(body.amount, remaining)
+    if (apply <= 0) {
+      throw new BadRequestException('Nothing to pay or invalid amount')
+    }
+    void body.method
+    void body.reference
+    return this.prisma.purchaseOrder.update({
+      where: { id },
+      data: { amountPaid: paid + apply },
+      include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
+    })
+  }
 }

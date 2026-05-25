@@ -13,6 +13,7 @@ import {
 import { OrderService } from './order.service'
 import { OrderSaga } from './order.saga'
 import { CreateOrderDto } from './dto/create-order.dto'
+import { RecordOrderPaymentDto } from './dto/record-payment.dto'
 
 @Controller('orders')
 export class OrderController {
@@ -77,5 +78,19 @@ export class OrderController {
   ) {
     if (!body?.reason) throw new BadRequestException('reason is required')
     return this.orders.cancel(req.user.tenantId, id, body.reason)
+  }
+
+  /** Apply partial/full collection against order balance (AR-style, gateway-exposed for finance UI). */
+  @Post(':id/payments')
+  recordPayment(
+    @Req() req: { user: { tenantId: string } },
+    @Param('id') id: string,
+    @Body() body: RecordOrderPaymentDto,
+  ) {
+    return this.orders.recordPayment(req.user.tenantId, id, {
+      amount: body.amount,
+      method: body.method,
+      reference: body.reference,
+    })
   }
 }

@@ -1,396 +1,543 @@
 'use client'
 
 import Link from 'next/link'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Card, CardTitle } from '@cosmos/ui'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { api } from '@/lib/api'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 
-type Snap = {
+type OrderRow = {
   id: string
-  date: string
-  ordersCount: number
-  revenue: string | number
-  skusActive: number
+  customerId: string
+  status: string
+  totalAmount: string | number
+  amountPaid?: string | number
+  createdAt: string
+  paymentMethod: string
 }
 
-type ChartAccount = {
+type OrderList = { items: OrderRow[]; total: number }
+
+type PoRow = {
   id: string
-  code: string
-  name: string
+  number: string
+  status: string
+  amountPaid?: string | number
+  supplier: { id: string; name: string }
+  lines: { qtyOrdered: number; qtyReceived: number; unitCost: string | number | null }[]
+}
+
+type TrialRow = {
+  accountCode: string
+  accountName: string
   type: string
-  isActive: boolean
+  debits: number
+  credits: number
+  netBalance: number
 }
 
-type JournalLine = {
-  id?: string
-  accountId: string
-  debit: string | number
-  credit: string | number
-  memo?: string | null
-  account?: { code: string; name: string }
+type CashflowBucket = {
+  label?: string
+  period?: string
+  projected_net: number
+  projected_inflow: number
+  projected_outflow: number
 }
 
-type Journal = {
-  id: string
-  description: string
-  isPosted: boolean
-  postedAt: string
-  fiscalPeriodClosed?: boolean
-  lines?: JournalLine[]
+type CashflowResp = {
+  tenant_id: string
+  weekly_net_baseline: number
+  forecast: CashflowBucket[]
+  warnings: string[]
 }
 
-function errMsg(e: unknown): string {
-  if (e && typeof e === 'object' && 'response' in e) {
-    const m = (e as { response?: { data?: { message?: unknown } } }).response?.data?.message
-    if (Array.isArray(m)) return m.join(', ')
-    if (typeof m === 'string') return m
-  }
-  if (e instanceof Error) return e.message
-  return 'Request failed'
+function money(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+}
+
+function orderBalance(o: OrderRow): number {
+  const t = Number(o.totalAmount)
+  const p = Number(o.amountPaid ?? 0)
+  return Math.max(0, t - p)
+}
+
+function invoiceStatus(o: OrderRow): string {
+  const b = orderBalance(o)
+  const t = Number(o.totalAmount)
+  if (o.status === 'CANCELLED' || o.status === 'FAILED') return o.status
+  if (b <= 0.01) return 'PAID'
+  if (Number(o.amountPaid ?? 0) > 0) return 'PARTIALLY_PAID'
+  const days = (Date.now() - new Date(o.createdAt).getTime()) / (86400 * 1000)
+  if (days > 30 && o.paymentMethod === 'NET_TERMS') return 'OVERDUE'
+  return 'ISSUED'
+}
+
+function poTotal(po: PoRow): number {
+  return po.lines.reduce((s, l) => {
+    const c = l.unitCost != null ? Number(l.unitCost) : 0
+    return s + l.qtyOrdered * c
+  }, 0)
+}
+
+function poBalance(po: PoRow): number {
+  const t = poTotal(po)
+  const p = Number(po.amountPaid ?? 0)
+  return Math.max(0, t - p)
+}
+
+function apStatus(po: PoRow): string {
+  const b = poBalance(po)
+  if (po.status === 'CANCELLED') return 'VOIDED'
+  if (b <= 0.01) return 'PAID'
+  if (Number(po.amountPaid ?? 0) > 0) return 'PARTIALLY_PAID'
+  return 'ISSUED'
 }
 
 export default function FinancePage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'kpis' | 'journals' | 'chart'>('kpis')
-  const [journalOpen, setJournalOpen] = useState(false)
+  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow'>('invoices')
+  const [invFilter, setInvFilter] = useState('ALL')
+  const [apFilter, setApFilter] = useState('ALL')
+  const [year, setYear] = useState(new Date().getFullYear())
+  const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [cfHorizon, setCfHorizon] = useState<30 | 60 | 90>(30)
 
-  const snaps = useQuery<Snap[]>({
-    queryKey: ['finance', 'kpi'],
-    queryFn: () => api.get('/kpi/snapshots'),
-    enabled: tab === 'kpis',
-    refetchInterval: tab === 'kpis' ? 180_000 : false,
+  const [payOrder, setPayOrder] = useState<OrderRow | null>(null)
+  const [payPo, setPayPo] = useState<PoRow | null>(null)
+  const [payAmount, setPayAmount] = useState('')
+  const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
+
+  const ordersQ = useQuery({
+    queryKey: ['finance', 'orders-ar'],
+    queryFn: () => api.get<OrderList>('/orders?page=1&pageSize=200'),
+    enabled: tab === 'invoices',
   })
 
-  const journals = useQuery<Journal[]>({
-    queryKey: ['finance', 'journals'],
-    queryFn: () => api.get('/journal-entries'),
-    enabled: tab === 'journals',
+  const posQ = useQuery({
+    queryKey: ['finance', 'pos-ap'],
+    queryFn: () => api.get<PoRow[]>('/purchase-orders'),
+    enabled: tab === 'bills',
   })
 
-  const accounts = useQuery<ChartAccount[]>({
-    queryKey: ['chart-accounts'],
-    queryFn: () => api.get('/chart-accounts'),
-    enabled: tab === 'journals' || tab === 'chart' || journalOpen,
+  const trialQ = useQuery({
+    queryKey: ['finance', 'trial', year, month],
+    queryFn: () => api.get<TrialRow[]>(`/reports/trial-balance?year=${year}&month=${month}`),
+    enabled: tab === 'trial',
   })
+
+  type KpiSnap = { tenantId: string; date: string; revenue: string | number }
+  const snapsQ = useQuery({
+    queryKey: ['finance', 'kpi-snapshots'],
+    queryFn: () => api.get<KpiSnap[]>('/kpi/snapshots'),
+    enabled: tab === 'cashflow',
+  })
+
+  const cashInput = useMemo(() => {
+    const rows = [...(snapsQ.data ?? [])].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    )
+    if (rows.length < 2) return null
+    const tail = rows.slice(-20)
+    const tenantId = tail[tail.length - 1]?.tenantId ?? 'tenant'
+    const history = tail.map((s) => {
+      const inflow = Number(s.revenue)
+      return { period: new Date(s.date).toISOString().slice(0, 10), inflow, outflow: Math.max(0, inflow * 0.55) }
+    })
+    return {
+      tenant_id: tenantId,
+      history,
+      horizon_weeks: Math.max(1, Math.ceil(cfHorizon / 7)),
+    }
+  }, [snapsQ.data, cfHorizon])
+
+  const cashQ = useQuery({
+    queryKey: ['finance', 'cashflow', cfHorizon, (snapsQ.data ?? []).length],
+    enabled: tab === 'cashflow' && !!cashInput,
+    queryFn: async () => {
+      const res = await fetch('/api/cashflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cashInput),
+      })
+      const j = (await res.json()) as CashflowResp & { message?: string }
+      if (!res.ok) throw new Error(j.message ?? 'Cashflow failed')
+      return j
+    },
+  })
+
+  const aging = useMemo(() => {
+    const rows = ordersQ.data?.items ?? []
+    const open = rows.filter((o) => orderBalance(o) > 0.01 && !['CANCELLED', 'FAILED'].includes(o.status))
+    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
+    const now = Date.now()
+    for (const o of open) {
+      const days = (now - new Date(o.createdAt).getTime()) / (86400 * 1000)
+      const b = orderBalance(o)
+      if (days <= 30) buckets.current += b
+      else if (days <= 60) buckets.d30 += b
+      else if (days <= 90) buckets.d60 += b
+      else if (days <= 120) buckets.d90 += b
+      else buckets.d90p += b
+    }
+    return buckets
+  }, [ordersQ.data])
+
+  const filteredInvoices = useMemo(() => {
+    const rows = ordersQ.data?.items ?? []
+    return rows.filter((o) => {
+      const st = invoiceStatus(o)
+      if (invFilter === 'ALL') return !['CANCELLED', 'FAILED'].includes(o.status)
+      return st === invFilter
+    })
+  }, [ordersQ.data, invFilter])
+
+  const filteredBills = useMemo(() => {
+    const rows = posQ.data ?? []
+    return rows.filter((po) => {
+      if (po.status === 'CANCELLED') return false
+      if (apFilter === 'ALL') return poBalance(po) > 0.01 || Number(po.amountPaid ?? 0) > 0
+      return apStatus(po) === apFilter
+    })
+  }, [posQ.data, apFilter])
+
+  const payOrderMut = useMutation({
+    mutationFn: async () => {
+      if (!payOrder) return
+      await api.post(`/orders/${payOrder.id}/payments`, {
+        amount: parseFloat(payAmount),
+        method: payMethod,
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'orders-ar'] })
+      setPayOrder(null)
+      setPayAmount('')
+    },
+  })
+
+  const payPoMut = useMutation({
+    mutationFn: async () => {
+      if (!payPo) return
+      await api.post(`/purchase-orders/${payPo.id}/payments`, {
+        amount: parseFloat(payAmount),
+        method: payMethod,
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'pos-ap'] })
+      setPayPo(null)
+      setPayAmount('')
+    },
+  })
+
+  function exportTrialCsv() {
+    const rows = trialQ.data ?? []
+    const head = ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net']
+    const lines = [head.join(','), ...rows.map((r) =>
+      [r.accountCode, `"${r.accountName.replace(/"/g, '""')}"`, r.type, r.debits, r.credits, r.netBalance].join(','))]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `cosmos-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const cfChart = useMemo(() => {
+    const fc = cashQ.data?.forecast ?? []
+    if (fc.length === 0) return []
+    let bal = cashQ.data?.weekly_net_baseline ?? 0
+    return fc.map((w, i) => {
+      bal += w.projected_net
+      return {
+        i,
+        label: w.label ?? w.period ?? String(i),
+        closing: bal,
+        neg: bal < 0 ? bal : 0,
+      }
+    })
+  }, [cashQ.data])
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-cosmos-white">Finance</h1>
-          <p className="text-cosmos-muted text-sm mt-1">KPI history, general ledger journals, and chart of accounts.</p>
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="flex rounded-lg border border-cosmos-border overflow-hidden">
-            {(['kpis', 'journals', 'chart'] as const).map((id) => (
-              <button
-                key={id}
-                type="button"
-                className={`px-3 py-2 text-sm capitalize ${tab === id ? 'bg-cosmos-primary text-white' : 'text-cosmos-text'}`}
-                onClick={() => setTab(id)}
-              >
-                {id === 'kpis' ? 'KPIs' : id === 'chart' ? 'Chart' : 'Journals'}
+    <div className="p-6 space-y-6" style={{ fontFamily: 'var(--font-body)' }}>
+      <div>
+        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+          Finance
+        </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
+          AR (orders), AP (purchase orders), trial balance, and cash outlook
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(['invoices', 'bills', 'trial', 'cashflow'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={tab === id ? 'btn-primary' : 'btn-ghost'}
+            onClick={() => setTab(id)}
+          >
+            {id === 'invoices' ? 'Invoices (AR)' : id === 'bills' ? 'Bills (AP)' : id === 'trial' ? 'Trial balance' : 'Cash flow'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'invoices' && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { k: 'current', label: 'Current (0–30d)', v: aging.current, color: 'var(--c-success)' },
+              { k: 'd30', label: '1–30 Days', v: aging.d30, color: 'var(--c-warning)' },
+              { k: 'd60', label: '31–60 Days', v: aging.d60, color: '#ea580c' },
+              { k: 'd90', label: '61–90 Days', v: aging.d90, color: 'var(--c-danger)' },
+              { k: 'd90p', label: '90+ Days', v: aging.d90p, color: '#b91c1c' },
+            ].map((c) => (
+              <div key={c.k} className="cosmos-card metric-accent" style={{ borderLeftColor: c.color }}>
+                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
+                <div className="text-lg font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'FAILED'].map((s) => (
+              <button key={s} type="button" className={invFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setInvFilter(s)}>
+                {s}
               </button>
             ))}
           </div>
-          {tab === 'journals' && (
-            <button
-              type="button"
-              onClick={() => setJournalOpen(true)}
-              className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm"
-            >
-              New journal draft
-            </button>
-          )}
-        </div>
-      </div>
-
-      {tab === 'kpis' && (
-        <Card>
-          <CardTitle>Daily KPI snapshots</CardTitle>
-          <p className="text-xs text-cosmos-muted mt-1">From analytics-service (read-only).</p>
-          {snaps.isLoading ? (
-            <p className="text-sm text-cosmos-muted mt-3">Loading…</p>
-          ) : snaps.isError ? (
-            <p className="text-sm text-red-400 mt-3">Could not load KPI history.</p>
-          ) : (snaps.data?.length ?? 0) === 0 ? (
-            <EmptyState
-              icon="📊"
-              title="No snapshots"
-              description="Run analytics refresh or seed data to populate daily KPIs."
-            />
-          ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-full text-sm">
+          <div className="cosmos-card overflow-x-auto">
+            {ordersQ.isLoading ? <div className="skeleton h-40 w-full" /> : ordersQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>Could not load orders</p>
+            ) : filteredInvoices.length === 0 ? (
+              <EmptyState icon="📄" title="No invoices" description="Orders with an outstanding balance appear here." />
+            ) : (
+              <table className="cosmos-table">
                 <thead>
-                  <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
-                    <th className="pb-2 pr-4">Date</th>
-                    <th className="pb-2 pr-4">Orders</th>
-                    <th className="pb-2 pr-4">Revenue</th>
-                    <th className="pb-2">Active SKUs</th>
+                  <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Issue</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {(snaps.data ?? []).slice(0, 31).map((s) => (
-                    <tr key={s.id} className="border-b border-cosmos-border/60">
-                      <td className="py-2 pr-4 text-cosmos-text">{new Date(s.date).toLocaleDateString()}</td>
-                      <td className="py-2 pr-4 font-mono text-cosmos-muted">{s.ordersCount}</td>
-                      <td className="py-2 pr-4 text-cosmos-white">${Number(s.revenue).toFixed(2)}</td>
-                      <td className="py-2 text-cosmos-muted">{s.skusActive}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {tab === 'journals' && (
-        <Card>
-          <CardTitle>Journal entries</CardTitle>
-          <p className="text-xs text-cosmos-muted mt-1">
-            Draft and posted entries from ledger-service. Posting requires tenant admin.
-          </p>
-          {journals.isLoading ? (
-            <p className="text-sm text-cosmos-muted mt-3">Loading…</p>
-          ) : journals.isError ? (
-            <p className="text-sm text-red-400 mt-3">Could not load journals.</p>
-          ) : (journals.data?.length ?? 0) === 0 ? (
-            <EmptyState
-              icon="📒"
-              title="No journal entries"
-              description="Create a balanced draft (debits = credits) or post from integrations."
-            />
-          ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
-                    <th className="pb-2 pr-4">ID</th>
-                    <th className="pb-2 pr-4">Memo</th>
-                    <th className="pb-2 pr-4">Status</th>
-                    <th className="pb-2 pr-4">Lines</th>
-                    <th className="pb-2">Saved</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(journals.data ?? []).slice(0, 60).map((j) => (
-                    <tr key={j.id} className="border-b border-cosmos-border/60">
-                      <td className="py-2 pr-4 font-mono text-xs">
-                        <Link href={`/finance/journals/${j.id}`} className="text-cosmos-primary hover:underline">
-                          {j.id.slice(-12)}…
-                        </Link>
-                      </td>
-                      <td className="py-2 pr-4 text-cosmos-muted max-w-[240px] truncate">{j.description}</td>
-                      <td className="py-2 pr-4">
-                        <StatusBadge status={j.isPosted ? 'POSTED' : 'DRAFT'} />
-                      </td>
-                      <td className="py-2 pr-4 text-cosmos-muted">{j.lines?.length ?? '—'}</td>
-                      <td className="py-2 text-xs text-cosmos-muted whitespace-nowrap">
-                        {new Date(j.postedAt).toLocaleString()}
+                  {filteredInvoices.map((o) => (
+                    <tr key={o.id}>
+                      <td className="font-mono text-xs">{o.id.slice(0, 12)}…</td>
+                      <td>{o.customerId.slice(0, 12)}…</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(o.createdAt).toLocaleDateString()}</td>
+                      <td className="font-mono">{money(Number(o.totalAmount))}</td>
+                      <td className="font-mono">{money(Number(o.amountPaid ?? 0))}</td>
+                      <td className="font-mono">{money(orderBalance(o))}</td>
+                      <td><StatusBadge status={invoiceStatus(o)} /></td>
+                      <td className="space-x-2">
+                        {orderBalance(o) > 0.01 && !['CANCELLED', 'FAILED'].includes(o.status) && (
+                          <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
+                            setPayOrder(o)
+                            setPayAmount(String(orderBalance(o).toFixed(2)))
+                          }}>Record payment</button>
+                        )}
+                        <Link href={`/orders/${o.id}`} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
-        </Card>
+            )}
+          </div>
+        </>
       )}
 
-      {tab === 'chart' && (
-        <Card>
-          <CardTitle>Chart of accounts</CardTitle>
-          <p className="text-xs text-cosmos-muted mt-1">Read-only directory. Manage accounts via API or admin tools.</p>
-          {accounts.isLoading ? (
-            <p className="text-sm text-cosmos-muted mt-3">Loading…</p>
-          ) : accounts.isError ? (
-            <p className="text-sm text-red-400 mt-3">Could not load accounts.</p>
-          ) : (accounts.data?.length ?? 0) === 0 ? (
-            <EmptyState icon="📐" title="No accounts" description="Seed chart accounts for your tenant in ledger-service." />
-          ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-full text-sm">
+      {tab === 'bills' && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'VOIDED'].map((s) => (
+              <button key={s} type="button" className={apFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setApFilter(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="cosmos-card overflow-x-auto">
+            {posQ.isLoading ? <div className="skeleton h-40 w-full" /> : posQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>Could not load purchase orders</p>
+            ) : filteredBills.length === 0 ? (
+              <EmptyState icon="📥" title="No bills" description="Submitted POs with a balance appear here." />
+            ) : (
+              <table className="cosmos-table">
                 <thead>
-                  <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
-                    <th className="pb-2 pr-4">Code</th>
-                    <th className="pb-2 pr-4">Name</th>
-                    <th className="pb-2 pr-4">Type</th>
-                    <th className="pb-2">Active</th>
+                  <tr>
+                    <th>PO #</th>
+                    <th>Supplier</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {(accounts.data ?? []).map((a) => (
-                    <tr key={a.id} className="border-b border-cosmos-border/60">
-                      <td className="py-2 pr-4 font-mono text-cosmos-text">{a.code}</td>
-                      <td className="py-2 pr-4 text-cosmos-white">{a.name}</td>
-                      <td className="py-2 pr-4">
-                        <StatusBadge status={a.type} />
+                  {filteredBills.map((po) => (
+                    <tr key={po.id}>
+                      <td className="font-mono">{po.number}</td>
+                      <td>{po.supplier.name}</td>
+                      <td className="font-mono">{money(poTotal(po))}</td>
+                      <td className="font-mono">{money(Number(po.amountPaid ?? 0))}</td>
+                      <td className="font-mono">{money(poBalance(po))}</td>
+                      <td><StatusBadge status={apStatus(po)} /></td>
+                      <td className="space-x-2">
+                        {poBalance(po) > 0.01 && (
+                          <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
+                            setPayPo(po)
+                            setPayAmount(String(poBalance(po).toFixed(2)))
+                          }}>Mark paid</button>
+                        )}
+                        <Link href={`/purchasing/${po.id}`} style={{ color: 'var(--c-accent)' }}>View PO</Link>
                       </td>
-                      <td className="py-2 text-cosmos-muted">{a.isActive ? 'Yes' : 'No'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
-        </Card>
+            )}
+          </div>
+        </>
       )}
 
-      {journalOpen && (
-        <NewJournalDrawer
-          accounts={accounts.data ?? []}
-          onClose={() => setJournalOpen(false)}
-          onCreated={() => {
-            setJournalOpen(false)
-            void qc.invalidateQueries({ queryKey: ['finance', 'journals'] })
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-function NewJournalDrawer(props: {
-  accounts: ChartAccount[]
-  onClose: () => void
-  onCreated: () => void
-}) {
-  const [description, setDescription] = useState('')
-  const [rows, setRows] = useState([
-    { accountId: '', debit: '', credit: '' },
-    { accountId: '', debit: '', credit: '' },
-  ])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit() {
-    setError(null)
-    if (!description.trim()) {
-      setError('Description is required.')
-      return
-    }
-    const lines = rows
-      .map((r) => ({
-        accountId: r.accountId,
-        debit: Number(r.debit) || 0,
-        credit: Number(r.credit) || 0,
-      }))
-      .filter((l) => l.accountId && (l.debit > 0 || l.credit > 0))
-    if (lines.length < 2) {
-      setError('At least two lines with accounts and amounts are required.')
-      return
-    }
-    const td = lines.reduce((s, l) => s + l.debit, 0)
-    const tc = lines.reduce((s, l) => s + l.credit, 0)
-    if (Math.abs(td - tc) > 0.001) {
-      setError(`Debits (${td.toFixed(2)}) must equal credits (${tc.toFixed(2)}).`)
-      return
-    }
-    setBusy(true)
-    try {
-      await api.post('/journal-entries', { description: description.trim(), lines })
-      props.onCreated()
-    } catch (e) {
-      setError(errMsg(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="w-full max-w-lg bg-cosmos-surface border-l border-cosmos-border p-6 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-cosmos-white">New journal draft</h2>
-        <p className="text-xs text-cosmos-muted mt-1">Balanced entry only. Tenant admin role required.</p>
-        <label className="block mt-4 text-xs text-cosmos-muted">Description</label>
-        <input
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-        <p className="text-xs text-cosmos-muted mt-4">Lines (debit XOR credit per line)</p>
-        {rows.map((r, idx) => (
-          <div key={idx} className="mt-2 grid grid-cols-12 gap-2 items-center border border-cosmos-border rounded-md p-2">
-            <select
-              className="col-span-12 sm:col-span-5 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-2 py-1.5 text-xs text-cosmos-text"
-              value={r.accountId}
-              onChange={(e) => {
-                const n = [...rows]
-                n[idx] = { ...r, accountId: e.target.value }
-                setRows(n)
-              }}
-            >
-              <option value="">Account…</option>
-              {props.accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.code} · {a.name}
-                </option>
+      {tab === 'trial' && (
+        <div className="cosmos-card space-y-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
+            <select className="cosmos-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
               ))}
             </select>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder="Debit"
-              className="col-span-6 sm:col-span-3 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-2 py-1.5 text-xs text-cosmos-text"
-              value={r.debit}
-              onChange={(e) => {
-                const n = [...rows]
-                n[idx] = { ...r, debit: e.target.value }
-                setRows(n)
-              }}
-            />
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder="Credit"
-              className="col-span-6 sm:col-span-3 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-2 py-1.5 text-xs text-cosmos-text"
-              value={r.credit}
-              onChange={(e) => {
-                const n = [...rows]
-                n[idx] = { ...r, credit: e.target.value }
-                setRows(n)
-              }}
-            />
+            <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Year</label>
+            <select className="cosmos-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
+              {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button type="button" className="btn-ghost" onClick={() => void trialQ.refetch()}>Load</button>
+            <button type="button" className="btn-primary" onClick={exportTrialCsv} disabled={!(trialQ.data?.length)}>Export CSV</button>
           </div>
-        ))}
-        <button
-          type="button"
-          className="mt-2 text-xs text-cosmos-primary"
-          onClick={() => setRows((x) => [...x, { accountId: '', debit: '', credit: '' }])}
-        >
-          + Line
-        </button>
-        {props.accounts.length === 0 && (
-          <p className="text-amber-400 text-xs mt-2">No chart accounts loaded — open the Chart tab first or seed the ledger.</p>
-        )}
-        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
-        <div className="mt-6 flex gap-2">
-          <button
-            type="button"
-            className="flex-1 h-10 rounded-md border border-cosmos-border text-cosmos-text text-sm"
-            onClick={props.onClose}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            className="flex-1 h-10 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
-            onClick={() => void submit()}
-          >
-            {busy ? 'Saving…' : 'Create draft'}
-          </button>
+          {trialQ.isLoading ? <div className="skeleton h-48 w-full" /> : trialQ.isError ? (
+            <p style={{ color: 'var(--c-danger)' }}>Could not load trial balance</p>
+          ) : (trialQ.data?.length ?? 0) === 0 ? (
+            <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this month to see balances." />
+          ) : (
+            <table className="cosmos-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Debits</th>
+                  <th>Credits</th>
+                  <th>Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(trialQ.data ?? []).map((r) => (
+                  <tr key={r.accountCode}>
+                    <td className="font-mono">{r.accountCode}</td>
+                    <td>{r.accountName}</td>
+                    <td><StatusBadge status={r.type} /></td>
+                    <td className="font-mono">{money(r.debits)}</td>
+                    <td className="font-mono">{money(r.credits)}</td>
+                    <td className="font-mono" style={{ color: r.netBalance < 0 ? 'var(--c-danger)' : 'var(--c-text)' }}>
+                      {money(r.netBalance)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-      </div>
+      )}
+
+      {tab === 'cashflow' && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            {[30, 60, 90].map((h) => (
+              <button key={h} type="button" className={cfHorizon === h ? 'btn-primary' : 'btn-ghost'} onClick={() => setCfHorizon(h as 30 | 60 | 90)}>
+                {h} days
+              </button>
+            ))}
+          </div>
+          <div className="cosmos-card">
+            {!cashInput ? (
+              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Need KPI snapshots from analytics to run cashflow. Open dashboard once data exists.</p>
+            ) : cashQ.isLoading ? <div className="skeleton h-64 w-full" /> : cashQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>{cashQ.error instanceof Error ? cashQ.error.message : 'Error'}</p>
+            ) : (
+              <>
+                <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>Weekly buckets from native EWMA forecast (no Python sidecar)</p>
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={cfChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="cfPos" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--c-primary)" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="var(--c-primary)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
+                      <XAxis dataKey="label" tick={{ fill: 'var(--c-text-3)', fontSize: 10 }} />
+                      <YAxis tick={{ fill: 'var(--c-text-3)', fontSize: 10 }} tickFormatter={(v) => money(v)} />
+                      <Tooltip
+                        contentStyle={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)', borderRadius: 8 }}
+                        formatter={(v: number) => [money(v), 'Closing']}
+                      />
+                      <Area type="monotone" dataKey="closing" stroke="var(--c-primary)" fill="url(#cfPos)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                {(cashQ.data?.warnings?.length ?? 0) > 0 && (
+                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">{cashQ.data!.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(payOrder || payPo) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+          <div className="cosmos-card max-w-md w-full space-y-4">
+            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Record payment</h3>
+            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
+            <input className="cosmos-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
+            <select className="cosmos-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
+              {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayPo(null) }}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={payOrderMut.isPending || payPoMut.isPending}
+                onClick={() => {
+                  if (payOrder) void payOrderMut.mutate()
+                  else void payPoMut.mutate()
+                }}
+              >Submit</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

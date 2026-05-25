@@ -1,0 +1,36 @@
+-- Customer: credit + profile (Cosmos admin CRM spec)
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "customerKind" TEXT NOT NULL DEFAULT 'BUSINESS';
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "firstName" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "lastName" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "taxId" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "isLicensedTobacco" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "tobaccoLicenseNumber" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "creditLimit" DECIMAL(14,2);
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "creditUsed" DECIMAL(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "paymentTermsDays" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "salesRepUserId" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "primaryAddressLine1" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "primaryCity" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "primaryState" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "primaryZip" TEXT;
+
+-- Lead: Kanban fields + status as text (replaces LeadStatus enum)
+ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "contactName" TEXT;
+ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "source" TEXT;
+ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "pipelineValue" DECIMAL(14,2);
+ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "assignedToUserId" TEXT;
+
+ALTER TABLE "Lead" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "Lead" ALTER COLUMN "status" TYPE TEXT USING ("status"::text);
+ALTER TABLE "Lead" ALTER COLUMN "status" SET DEFAULT 'NEW';
+UPDATE "Lead" SET "status" = CASE "status"
+  WHEN 'OPEN' THEN 'NEW'
+  WHEN 'CONVERTED' THEN 'WON'
+  WHEN 'LOST' THEN 'LOST'
+  ELSE "status"
+END;
+
+DROP TYPE IF EXISTS "LeadStatus";
+
+-- Activity: outcome on log
+ALTER TABLE "Activity" ADD COLUMN IF NOT EXISTS "outcome" TEXT;

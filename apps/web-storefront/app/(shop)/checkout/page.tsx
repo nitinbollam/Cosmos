@@ -2,15 +2,20 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Elements } from '@stripe/react-stripe-js'
+import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { getB2bCustomerId } from '@/lib/session'
 import { useCartStore } from '@/stores/cart.store'
+import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
 type CustomerRow = { id: string; name: string; email?: string | null; phone?: string | null }
 
 type PaymentMethod = 'NET_TERMS' | 'CARD' | 'CASH' | 'CHECK' | 'ACH'
+
+const stripePublishable = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -22,6 +27,8 @@ export default function CheckoutPage() {
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2),
   )
+
+  const stripePromise = useMemo(() => (stripePublishable ? loadStripe(stripePublishable) : null), [])
 
   const [step, setStep] = useState(1)
   const [customer, setCustomer] = useState<CustomerRow | null>(null)
@@ -36,6 +43,7 @@ export default function CheckoutPage() {
   const [zip, setZip] = useState('')
 
   const [payment, setPayment] = useState<PaymentMethod>('NET_TERMS')
+  const [cardPaymentMethodId, setCardPaymentMethodId] = useState<string | null>(null)
 
   const loadCustomer = useCallback(async () => {
     const cid = getB2bCustomerId()
@@ -56,22 +64,25 @@ export default function CheckoutPage() {
     void loadCustomer()
   }, [loadCustomer])
 
-  if (items.length === 0) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center' }}>
-        <p style={{ color: 'var(--c-text-3)' }}>Your cart is empty.</p>
-        <Link href="/catalog" className="btn-primary" style={{ display: 'inline-block', marginTop: 16 }}>
-          Catalog
-        </Link>
-      </div>
-    )
-  }
+  useEffect(() => {
+    setCardPaymentMethodId(null)
+  }, [payment])
 
   async function placeOrder() {
     const cid = getB2bCustomerId()
     if (!cid) {
       router.push('/login')
       return
+    }
+    if (payment === 'CARD') {
+      if (!stripePublishable) {
+        setErr('Set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY for card checkout.')
+        return
+      }
+      if (!cardPaymentMethodId) {
+        setErr('Save your card on step 2 before placing the order.')
+        return
+      }
     }
     setSubmitting(true)
     setErr(null)
@@ -92,6 +103,27 @@ export default function CheckoutPage() {
         },
         { 'Idempotency-Key': idempotencyKey.current },
       )
+
+      if (payment === 'CARD' && cardPaymentMethodId) {
+        const authKey =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : Math.random().toString(36).slice(2)
+        await api.post(
+          '/payments/authorize',
+          {
+            orderId: order.id,
+            amount: cartSubtotal,
+            currency: 'usd',
+            paymentMethod: 'CARD',
+            customerId: cid,
+            paymentMethodId: cardPaymentMethodId,
+            correlationId: authKey,
+          },
+          { 'Idempotency-Key': authKey },
+        )
+      }
+
       clear()
       router.push(`/orders/${encodeURIComponent(order.id)}/confirmation`)
     } catch (e: unknown) {
@@ -100,6 +132,19 @@ export default function CheckoutPage() {
       setSubmitting(false)
     }
   }
+
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <p style={{ color: 'var(--c-text-3)' }}>Your cart is empty.</p>
+        <Link href="/catalog" className="btn-primary" style={{ display: 'inline-block', marginTop: 16 }}>
+          Catalog
+        </Link>
+      </div>
+    )
+  }
+
+  const showStripe = payment === 'CARD' && !!stripePromise
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
@@ -160,27 +205,18 @@ export default function CheckoutPage() {
       ) : null}
 
       {step === 2 ? (
-        <div className="cosmos-card">
-          <h2 style={{ marginTop: 0 }}>Payment</h2>
-          <select className="cosmos-input" value={payment} onChange={(e) => setPayment(e.target.value as PaymentMethod)}>
-            <option value="NET_TERMS">Net terms</option>
-            <option value="CASH">Cash</option>
-            <option value="CHECK">Check</option>
-            <option value="ACH">ACH</option>
-            <option value="CARD">Card (billed via payment-service when configured)</option>
-          </select>
-          <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 12 }}>
-            Total due: <strong style={{ fontFamily: 'var(--font-mono)' }}>${cartSubtotal.toFixed(2)}</strong>
-          </p>
-          <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-            <button type="button" className="btn-ghost" onClick={() => setStep(1)}>
-              Back
-            </button>
-            <button type="button" className="btn-primary" onClick={() => setStep(3)}>
-              Review
-            </button>
-          </div>
-        </div>
+        <PaymentStep2
+          payment={payment}
+          setPayment={setPayment}
+          cartSubtotal={cartSubtotal}
+          showStripe={showStripe}
+          stripeConfigured={!!stripePublishable}
+          stripePromise={stripePromise}
+          cardPaymentMethodId={cardPaymentMethodId}
+          setCardPaymentMethodId={setCardPaymentMethodId}
+          onBack={() => setStep(1)}
+          onReview={() => setStep(3)}
+        />
       ) : null}
 
       {step === 3 ? (
@@ -198,6 +234,9 @@ export default function CheckoutPage() {
           </p>
           <p>
             Pay with: <strong>{payment.replace(/_/g, ' ')}</strong>
+            {payment === 'CARD' && cardPaymentMethodId ? (
+              <span style={{ color: 'var(--c-success)', fontSize: 13 }}> — card on file</span>
+            ) : null}
           </p>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18 }}>${cartSubtotal.toFixed(2)}</p>
           <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
@@ -212,4 +251,86 @@ export default function CheckoutPage() {
       ) : null}
     </div>
   )
+}
+
+function PaymentStep2({
+  payment,
+  setPayment,
+  cartSubtotal,
+  showStripe,
+  stripeConfigured,
+  stripePromise,
+  cardPaymentMethodId,
+  setCardPaymentMethodId,
+  onBack,
+  onReview,
+}: {
+  payment: PaymentMethod
+  setPayment: (p: PaymentMethod) => void
+  cartSubtotal: number
+  showStripe: boolean
+  stripeConfigured: boolean
+  stripePromise: Promise<Stripe | null> | null
+  cardPaymentMethodId: string | null
+  setCardPaymentMethodId: (id: string | null) => void
+  onBack: () => void
+  onReview: () => void
+}) {
+  const inner = (
+    <>
+      <h2 style={{ marginTop: 0 }}>Payment</h2>
+      <select className="cosmos-input" value={payment} onChange={(e) => setPayment(e.target.value as PaymentMethod)}>
+        <option value="NET_TERMS">Net terms</option>
+        <option value="CASH">Cash</option>
+        <option value="CHECK">Check</option>
+        <option value="ACH">ACH</option>
+        <option value="CARD">Credit card (Stripe)</option>
+      </select>
+      {payment === 'NET_TERMS' ? (
+        <p style={{ fontSize: 13, color: 'var(--c-success)', marginTop: 12 }}>
+          ✓ Invoiced on terms — place order to confirm.
+        </p>
+      ) : null}
+      {showStripe ? (
+        <>
+          {!stripeConfigured ? (
+            <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.</p>
+          ) : (
+            <StorefrontCardCapture onPaymentMethodId={(id) => setCardPaymentMethodId(id)} />
+          )}
+          {cardPaymentMethodId ? (
+            <p style={{ fontSize: 13, color: 'var(--c-success)', marginTop: 8 }}>Card saved for this checkout.</p>
+          ) : null}
+        </>
+      ) : null}
+      <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 12 }}>
+        Total due: <strong style={{ fontFamily: 'var(--font-mono)' }}>${cartSubtotal.toFixed(2)}</strong>
+      </p>
+      <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+        <button type="button" className="btn-ghost" onClick={onBack}>
+          Back
+        </button>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={onReview}
+          disabled={payment === 'CARD' && stripeConfigured && !cardPaymentMethodId}
+        >
+          Review
+        </button>
+      </div>
+    </>
+  )
+
+  if (showStripe && stripePromise) {
+    return (
+      <div className="cosmos-card">
+        <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>
+          {inner}
+        </Elements>
+      </div>
+    )
+  }
+
+  return <div className="cosmos-card">{inner}</div>
 }

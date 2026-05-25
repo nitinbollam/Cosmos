@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo } from 'react'
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api'
 import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
 
 interface MSAReportRow {
   id: string
@@ -31,8 +31,8 @@ export function MSAStatusCard() {
   }, [latest?.weekEnding])
 
   return (
-    <div className="cosmos-card">
-      <CardTitle>MSA status</CardTitle>
+    <>
+      <CardTitle>MSA reports</CardTitle>
 
       {isLoading ? (
         <div className="mt-4 space-y-2">
@@ -44,49 +44,48 @@ export function MSAStatusCard() {
           {error instanceof Error ? error.message : 'Could not load MSA data'}
         </p>
       ) : !latest ? (
-        <div className="mt-2">
-          <EmptyState
-            icon="✅"
-            title="No MSA reports"
-            description="Generate a report from the Compliance page when you are ready."
-          />
+        <div className="empty-note mt-4">
+          No reports yet.{' '}
+          <Link href="/compliance" className="font-semibold" style={{ color: 'var(--c-accent)' }}>
+            Generate from Compliance →
+          </Link>
         </div>
       ) : (
         <dl className="mt-4 space-y-3 text-sm">
           <div className="flex justify-between gap-4">
-            <dt style={{ color: 'var(--c-text-3)' }}>Last report week</dt>
-            <dd className="font-mono" style={{ color: 'var(--c-text)' }}>
+            <dt style={{ color: 'var(--c-text-2)' }}>Last report week</dt>
+            <dd className="font-mono font-medium" style={{ color: 'var(--c-heading)' }}>
               {new Date(latest.weekEnding).toLocaleDateString()}
             </dd>
           </div>
           <div className="flex justify-between gap-4 items-center">
-            <dt style={{ color: 'var(--c-text-3)' }}>Status</dt>
+            <dt style={{ color: 'var(--c-text-2)' }}>Status</dt>
             <dd>
               <StatusBadge status={latest.status} />
             </dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt style={{ color: 'var(--c-text-3)' }}>Manufacturer DID</dt>
-            <dd className="font-mono text-xs truncate max-w-[160px]" style={{ color: 'var(--c-text-2)' }}>
+            <dt style={{ color: 'var(--c-text-2)' }}>Manufacturer DID</dt>
+            <dd className="font-mono text-xs truncate max-w-[160px]" style={{ color: 'var(--c-text)' }}>
               {latest.manufacturerDid}
             </dd>
           </div>
           {latest.submittedAt && (
             <div className="flex justify-between gap-4">
-              <dt style={{ color: 'var(--c-text-3)' }}>Submitted</dt>
-              <dd style={{ color: 'var(--c-text-2)' }}>{new Date(latest.submittedAt).toLocaleString()}</dd>
+              <dt style={{ color: 'var(--c-text-2)' }}>Submitted</dt>
+              <dd style={{ color: 'var(--c-text)' }}>{new Date(latest.submittedAt).toLocaleString()}</dd>
             </div>
           )}
           {nextRun && (
             <div className="flex justify-between gap-4">
-              <dt style={{ color: 'var(--c-text-3)' }}>Next run (est.)</dt>
-              <dd className="font-mono" style={{ color: 'var(--c-accent)' }}>
+              <dt style={{ color: 'var(--c-text-2)' }}>Next run (est.)</dt>
+              <dd className="font-mono font-medium" style={{ color: 'var(--c-accent)' }}>
                 {nextRun}
               </dd>
             </div>
           )}
         </dl>
       )}
-    </div>
+    </>
   )
 }

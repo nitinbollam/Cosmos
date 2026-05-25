@@ -39,6 +39,7 @@ export default function RouteScreen() {
             lat: coords.latitude,
             lng: coords.longitude,
             timestamp: new Date().toISOString(),
+            ...(routeId ? { routeId } : {}),
           }
           const net = await NetInfo.fetch()
           if (net.isConnected) {
@@ -53,7 +54,7 @@ export default function RouteScreen() {
     return () => {
       sub?.remove()
     }
-  }, [token, tenantId])
+  }, [token, tenantId, routeId])
 
   const currentStop = stops[currentStopIndex]
 

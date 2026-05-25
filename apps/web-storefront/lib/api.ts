@@ -21,6 +21,7 @@ const FIRST: Record<string, string> = {
   leads: 'crm',
   activities: 'crm',
   'purchase-orders': 'purchasing',
+  payments: 'payment',
   ai: 'gateway',
 }
 

@@ -61,6 +61,17 @@ Legend:
 | `@cosmos/ui` | DONE (basic) | Button, Card, StatsCard, cn helper. **No Radix integration, no charts library, no full design system; expand in follow-up.** |
 | `@cosmos/tracing` | DONE | OTLP GRPC via **`bootstrapTelemetry`**, idle unless **`COSMOS_OTEL_ENABLED=true`**; wired from every Nest `main.ts`. |
 | `@cosmos/metrics` | DONE (basic) | **`prom-client`** registry + default process metrics, **`metricsMiddleware`**, **`mountPrometheusMetrics(expressApp, serviceName)`** → **GET `/metrics`** (root path, outside `api/v1`). Jest with coverage thresholds. Wired on **all Nest `services/*`** (`gateway-service` + every domain service **`main.ts`**). |
+| `@cosmos/analytics-engine` | DONE | Pure TypeScript EWMA cashflow forecast + robust anomaly detection (replaces Python `cashflow-model` / `anomaly-detection` for web-admin). |
+
+## ai/ *(legacy — optional)*
+
+| Service | Port | Status | Notes |
+|---|---|---|---|
+| `ai/cosmos-llm` | 8001 | LEGACY | Verbatim spec impl. **Not required for web-admin dev.** |
+| `ai/demand-forecasting` | 8002 | LEGACY | LSTM/Prophet sidecar — **not wired to web-admin**. |
+| `ai/ocr-engine` | 8003 | LEGACY | PaddleOCR sidecar — **not wired to web-admin**. |
+| `ai/cashflow-model` | 8004 | SUPERSEDED | Logic ported to **`@cosmos/analytics-engine`** + **`POST /api/cashflow`**. |
+| `ai/anomaly-detection` | 8005 | SUPERSEDED | Logic ported to **`@cosmos/analytics-engine`** + **`POST /api/anomaly`**. |
 
 ## services/ — fully implemented (per spec)
 
@@ -88,16 +99,6 @@ Legend:
 | Service | Port | Status | Follow-up needed |
 |---|---|---|---|
 | _(none newly listed here — previously scaffold services in this tranche are now implemented.)_ | | | |
-
-## ai/
-
-| Service | Port | Status | Notes |
-|---|---|---|---|
-| `ai/cosmos-llm` | 8001 | DONE | Verbatim spec impl. **No fine-tuned LoRA adapter — service falls back to base Mistral. Adapter training pipeline TODO.** |
-| `ai/demand-forecasting` | 8002 | DONE | LSTMForecaster + HybridForecaster + ModelStore with **optional S3 persistence** (`MODEL_STORE_S3_BUCKET`, SSE-KMS/AES256 on put). Local `/tmp` (or `MODEL_STORE_DIR`) when bucket unset. |
-| `ai/ocr-engine` | 8003 | DONE | Verbatim spec impl. **PaddleOCR weights download on first start; no fine-tuned wholesale-invoice weights.** |
-| `ai/cashflow-model` | 8004 | DONE | `POST /forecast/cash-flow` with EWMA + optional seasonal damping (numpy); **still simple heuristics, not audited treasury model** |
-| `ai/anomaly-detection` | 8005 | DONE | `POST /detect/series` robust MAD z-score + Tukey IQR; **not calibrated per-tenant KPI baselines yet** |
 
 ## apps/
 

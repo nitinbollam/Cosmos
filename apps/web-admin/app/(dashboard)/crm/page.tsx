@@ -1,34 +1,73 @@
 'use client'
 
 import Link from 'next/link'
+import {
+  closestCorners,
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
-import { Card, CardTitle } from '@cosmos/ui'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '@/lib/api'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
+import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
+import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
+
+const KANBAN_COLUMNS = [
+  { id: 'NEW', label: 'New' },
+  { id: 'CONTACTED', label: 'Contacted' },
+  { id: 'QUALIFIED', label: 'Qualified' },
+  { id: 'PROPOSAL', label: 'Proposal' },
+  { id: 'NEGOTIATION', label: 'Negotiation' },
+  { id: 'WON', label: 'Won' },
+  { id: 'LOST', label: 'Lost' },
+] as const
+
+const COLUMN_IDS = new Set<string>(KANBAN_COLUMNS.map((c) => c.id))
+
+function normalizeLeadStatus(status: string) {
+  return COLUMN_IDS.has(status) ? status : 'NEW'
+}
 
 type LeadRow = {
   id: string
   companyName: string
+  contactName?: string | null
   email?: string | null
   status: string
+  source?: string | null
+  pipelineValue?: string | number | null
+  assignedToUserId?: string | null
+  createdAt: string
   customer?: { id: string; name: string } | null
 }
 
-type CustomerRow = { id: string; name: string; email?: string | null; phone?: string | null }
-
-type ActivityRow = {
+type CustomerRow = {
   id: string
-  type: string
-  subject?: string | null
-  body?: string | null
-  customerId?: string | null
-  leadId?: string | null
-  occurredAt: string
+  name: string
+  email?: string | null
+  phone?: string | null
+  customerKind?: string | null
+  creditLimit?: string | number | null
+  creditUsed?: string | number | null
+  paymentTermsDays?: number | null
+  salesRepUserId?: string | null
 }
 
-type LeadStatusFilter = '' | 'OPEN' | 'CONVERTED' | 'LOST'
+type UserRow = {
+  id: string
+  email: string
+  firstName?: string | null
+  lastName?: string | null
+  role: string
+}
 
 function errMsg(e: unknown): string {
   if (e && typeof e === 'object' && 'response' in e) {
@@ -40,258 +79,743 @@ function errMsg(e: unknown): string {
   return 'Request failed'
 }
 
+function money(n: number) {
+  if (!Number.isFinite(n)) return '—'
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
+
+function userLabel(u: UserRow) {
+  const n = [u.firstName, u.lastName].filter(Boolean).join(' ')
+  return n || u.email
+}
+
 export default function CrmPage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'leads' | 'customers' | 'activity'>('leads')
+  const [tab, setTab] = useState<'customers' | 'leads'>('customers')
 
   const leadsQ = useQuery<LeadRow[]>({
     queryKey: ['leads'],
     queryFn: () => api.get('/leads'),
-    enabled: tab === 'leads' || tab === 'activity',
+    enabled: tab === 'leads',
   })
 
   const customersQ = useQuery<CustomerRow[]>({
     queryKey: ['customers'],
     queryFn: () => api.get('/customers'),
-    enabled: tab === 'customers' || tab === 'activity',
+    enabled: tab === 'customers',
   })
 
-  const activitiesQ = useQuery<ActivityRow[]>({
-    queryKey: ['activities'],
-    queryFn: () => api.get('/activities'),
-    enabled: tab === 'activity',
-    refetchInterval: tab === 'activity' ? 60_000 : false,
+  const usersQ = useQuery<{ items: UserRow[] }>({
+    queryKey: ['users', 'crm'],
+    queryFn: () => api.get('/users?page=1&pageSize=200'),
+    enabled: tab === 'customers' || tab === 'leads',
   })
+
+  const repById = useMemo(() => {
+    const m = new Map<string, UserRow>()
+    for (const u of usersQ.data?.items ?? []) m.set(u.id, u)
+    return m
+  }, [usersQ.data])
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" style={{ fontFamily: 'var(--font-body)' }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white">CRM</h1>
-          <p className="text-cosmos-muted text-sm mt-1">Leads, customers, and activities from crm-service.</p>
+          <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+            CRM
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>Customers and pipeline — real-time from crm-service</p>
         </div>
-        <div className="flex rounded-lg border border-cosmos-border overflow-hidden">
-          {(
-            [
-              ['leads', 'Leads'],
-              ['customers', 'Customers'],
-              ['activity', 'Activity'],
-            ] as const
-          ).map(([id, label]) => (
+        <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--c-border)' }}>
+          {(['customers', 'leads'] as const).map((id) => (
             <button
               key={id}
               type="button"
-              className={`px-4 py-2 text-sm ${tab === id ? 'bg-cosmos-primary text-white' : 'text-cosmos-text'}`}
               onClick={() => setTab(id)}
+              className={`px-4 py-2 text-sm font-semibold capitalize ${tab === id ? 'btn-primary !rounded-none' : 'btn-ghost !rounded-none !border-0'}`}
             >
-              {label}
+              {id}
             </button>
           ))}
         </div>
       </div>
 
-      {tab === 'leads' && (
-        <LeadsPanel
-          leads={leadsQ.data ?? []}
-          loading={leadsQ.isLoading}
-          error={leadsQ.isError}
-          onInvalidate={() => void qc.invalidateQueries({ queryKey: ['leads'] })}
-        />
-      )}
-
       {tab === 'customers' && (
-        <CustomersPanel
+        <CustomersSection
           customers={customersQ.data ?? []}
           loading={customersQ.isLoading}
           error={customersQ.isError}
-          onInvalidate={() => void qc.invalidateQueries({ queryKey: ['customers'] })}
+          repById={repById}
+          users={usersQ.data?.items ?? []}
+          usersLoading={usersQ.isLoading}
+          onInvalidateCustomers={() => void qc.invalidateQueries({ queryKey: ['customers'] })}
         />
       )}
 
-      {tab === 'activity' && (
-        <ActivityPanel
-          activities={activitiesQ.data ?? []}
-          loading={activitiesQ.isLoading}
-          error={activitiesQ.isError}
-          customers={customersQ.data ?? []}
+      {tab === 'leads' && (
+        <LeadsKanbanSection
           leads={leadsQ.data ?? []}
-          onInvalidate={() => void qc.invalidateQueries({ queryKey: ['activities'] })}
+          loading={leadsQ.isLoading}
+          error={leadsQ.isError}
+          repById={repById}
+          onInvalidateLeads={() => void qc.invalidateQueries({ queryKey: ['leads', 'customers'] })}
         />
       )}
     </div>
   )
 }
 
-function LeadsPanel(props: {
+function CustomersSection(props: {
+  customers: CustomerRow[]
+  loading: boolean
+  error: boolean
+  repById: Map<string, UserRow>
+  users: UserRow[]
+  usersLoading: boolean
+  onInvalidateCustomers: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim().toLowerCase()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const filtered = useMemo(() => {
+    if (!debounced) return props.customers
+    return props.customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(debounced) ||
+        (c.email?.toLowerCase().includes(debounced) ?? false) ||
+        (c.phone?.toLowerCase().includes(debounced) ?? false),
+    )
+  }, [props.customers, debounced])
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <input
+          className="cosmos-input max-w-md"
+          placeholder="Search company, email, phone…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button type="button" className="btn-primary" onClick={() => setDrawerOpen(true)}>
+          New customer
+        </button>
+        <button type="button" className="btn-ghost" onClick={() => setImportOpen((open) => !open)}>
+          {importOpen ? 'Hide import' : 'Import CSV/Excel'}
+        </button>
+      </div>
+
+      {importOpen ? (
+        <SpreadsheetImportPanel
+          title="Import customers"
+          expectedColumns={[
+            'name',
+            'email',
+            'phone',
+            'customerKind',
+            'creditLimit',
+            'paymentTermsDays',
+            'primaryAddressLine1',
+            'primaryCity',
+            'primaryState',
+            'primaryZip',
+          ]}
+          templateFilename="customers-import-template.csv"
+          onImport={async (rows) => {
+            const payload = rows
+              .map((row) => {
+                const name = rowValue(row, 'name', 'companyName', 'company')
+                if (!name) return null
+                const creditLimit = rowNumber(row, 'creditLimit', 'credit_limit')
+                const paymentTermsDays = rowNumber(row, 'paymentTermsDays', 'payment_terms_days', 'terms')
+                const kind = rowValue(row, 'customerKind', 'customer_kind', 'type').toUpperCase()
+                return {
+                  name,
+                  email: rowValue(row, 'email') || undefined,
+                  phone: rowValue(row, 'phone') || undefined,
+                  customerKind:
+                    kind === 'INDIVIDUAL' || kind === 'BUSINESS'
+                      ? (kind as 'INDIVIDUAL' | 'BUSINESS')
+                      : undefined,
+                  creditLimit,
+                  paymentTermsDays: paymentTermsDays != null ? Math.trunc(paymentTermsDays) : undefined,
+                  primaryAddressLine1: rowValue(row, 'primaryAddressLine1', 'address', 'address1') || undefined,
+                  primaryCity: rowValue(row, 'primaryCity', 'city') || undefined,
+                  primaryState: rowValue(row, 'primaryState', 'state') || undefined,
+                  primaryZip: rowValue(row, 'primaryZip', 'zip', 'postalCode') || undefined,
+                }
+              })
+              .filter((row): row is NonNullable<typeof row> => row != null)
+            const result = await api.post<BulkImportResult>('/customers/import', { rows: payload })
+            props.onInvalidateCustomers()
+            return result
+          }}
+        />
+      ) : null}
+
+      <div className="cosmos-card overflow-x-auto">
+        {props.loading ? (
+          <div className="skeleton h-40 w-full" />
+        ) : props.error ? (
+          <p style={{ color: 'var(--c-danger)' }}>Could not load customers.</p>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="🏢" title="No customers" description="Add a customer with the button above." />
+        ) : (
+          <table className="cosmos-table">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Contact</th>
+                <th>Credit</th>
+                <th>Terms</th>
+                <th>Rep</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((c) => {
+                const limit = c.creditLimit != null ? Number(c.creditLimit) : 0
+                const used = c.creditUsed != null ? Number(c.creditUsed) : 0
+                const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
+                let barColor = 'var(--c-success)'
+                if (pct >= 80) barColor = 'var(--c-danger)'
+                else if (pct >= 60) barColor = 'var(--c-warning)'
+                const rep = c.salesRepUserId ? props.repById.get(c.salesRepUserId) : undefined
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <Link href={`/crm/customers/${c.id}`} className="font-semibold" style={{ color: 'var(--c-text)' }}>
+                        {c.name}
+                      </Link>
+                      {c.customerKind === 'INDIVIDUAL' ? (
+                        <span className="ml-2">
+                          <StatusBadge status="INDIVIDUAL" />
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>
+                      {c.email ?? '—'}
+                      {c.phone ? <div>{c.phone}</div> : null}
+                    </td>
+                    <td style={{ minWidth: 140 }}>
+                      {limit > 0 ? (
+                        <>
+                          <div className="h-2 rounded-full overflow-hidden mt-1" style={{ background: 'var(--c-surface-2)' }}>
+                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
+                          </div>
+                          <div className="text-xs font-mono mt-1" style={{ color: 'var(--c-text-3)' }}>
+                            {money(used)} / {money(limit)}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-sm" style={{ color: 'var(--c-text-3)' }}>—</span>
+                      )}
+                    </td>
+                    <td className="text-sm">{c.paymentTermsDays != null ? `${c.paymentTermsDays} d` : '—'}</td>
+                    <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>
+                      {rep ? userLabel(rep) : '—'}
+                    </td>
+                    <td>
+                      <Link href={`/crm/customers/${c.id}`} style={{ color: 'var(--c-accent)' }} className="text-sm font-semibold">
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {drawerOpen && (
+        <NewCustomerDrawer
+          salesReps={props.users.filter((u) => u.role === 'SALES_REP')}
+          usersLoading={props.usersLoading}
+          onClose={() => setDrawerOpen(false)}
+          onSaved={() => {
+            setDrawerOpen(false)
+            props.onInvalidateCustomers()
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+function NewCustomerDrawer(props: {
+  salesReps: UserRow[]
+  usersLoading: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [customerKind, setCustomerKind] = useState<'BUSINESS' | 'INDIVIDUAL'>('BUSINESS')
+  const [name, setName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [taxId, setTaxId] = useState('')
+  const [isTobacco, setIsTobacco] = useState(false)
+  const [license, setLicense] = useState('')
+  const [creditLimit, setCreditLimit] = useState('')
+  const [creditUsed, setCreditUsed] = useState('0')
+  const [terms, setTerms] = useState('0')
+  const [salesRepUserId, setSalesRepUserId] = useState('')
+  const [addr1, setAddr1] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [zip, setZip] = useState('')
+
+  const create = useMutation({
+    mutationFn: () => {
+      const displayName =
+        customerKind === 'BUSINESS'
+          ? name.trim()
+          : [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') || 'Customer'
+      return api.post('/customers', {
+        name: displayName,
+        customerKind,
+        firstName: customerKind === 'INDIVIDUAL' ? firstName.trim() || undefined : undefined,
+        lastName: customerKind === 'INDIVIDUAL' ? lastName.trim() || undefined : undefined,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        taxId: taxId.trim() || undefined,
+        isLicensedTobacco: isTobacco,
+        tobaccoLicenseNumber: isTobacco ? license.trim() || undefined : undefined,
+        creditLimit: creditLimit.trim() ? parseFloat(creditLimit) : undefined,
+        creditUsed: creditUsed.trim() ? parseFloat(creditUsed) : 0,
+        paymentTermsDays: terms.trim() ? parseInt(terms, 10) : 0,
+        salesRepUserId: salesRepUserId || undefined,
+        primaryAddressLine1: addr1.trim() || undefined,
+        primaryCity: city.trim() || undefined,
+        primaryState: state.trim() || undefined,
+        primaryZip: zip.trim() || undefined,
+      })
+    },
+    onSuccess: () => props.onSaved(),
+  })
+
+  const valid =
+    customerKind === 'BUSINESS'
+      ? name.trim().length > 0
+      : firstName.trim().length > 0 || lastName.trim().length > 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
+      <div
+        className="w-full max-w-lg overflow-y-auto border-l p-6"
+        style={{ background: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
+      >
+        <h2 className="text-lg font-bold" style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>
+          New customer
+        </h2>
+        <label className="block text-xs mt-4" style={{ color: 'var(--c-text-3)' }}>Type</label>
+        <select
+          className="cosmos-input mt-1"
+          value={customerKind}
+          onChange={(e) => setCustomerKind(e.target.value as 'BUSINESS' | 'INDIVIDUAL')}
+        >
+          <option value="BUSINESS">Business</option>
+          <option value="INDIVIDUAL">Individual</option>
+        </select>
+
+        {customerKind === 'BUSINESS' ? (
+          <>
+            <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Company name *</label>
+            <input className="cosmos-input mt-1" value={name} onChange={(e) => setName(e.target.value)} />
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <div>
+              <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>First name</label>
+              <input className="cosmos-input mt-1" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>Last name</label>
+              <input className="cosmos-input mt-1" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </div>
+          </div>
+        )}
+
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Email</label>
+        <input className="cosmos-input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Phone</label>
+        <input className="cosmos-input mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Tax ID</label>
+        <input className="cosmos-input mt-1" value={taxId} onChange={(e) => setTaxId(e.target.value)} />
+
+        <label className="flex items-center gap-2 mt-4 text-sm" style={{ color: 'var(--c-text)' }}>
+          <input type="checkbox" checked={isTobacco} onChange={(e) => setIsTobacco(e.target.checked)} />
+          Licensed tobacco
+        </label>
+        {isTobacco ? (
+          <>
+            <label className="block text-xs mt-2" style={{ color: 'var(--c-text-3)' }}>License #</label>
+            <input className="cosmos-input mt-1" value={license} onChange={(e) => setLicense(e.target.value)} />
+          </>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <div>
+            <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>Credit limit</label>
+            <input className="cosmos-input mt-1" type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>Credit used</label>
+            <input className="cosmos-input mt-1" type="number" value={creditUsed} onChange={(e) => setCreditUsed(e.target.value)} />
+          </div>
+        </div>
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Payment terms (days, 0 = prepay)</label>
+        <input className="cosmos-input mt-1" type="number" value={terms} onChange={(e) => setTerms(e.target.value)} />
+
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Sales rep</label>
+        <select
+          className="cosmos-input mt-1"
+          value={salesRepUserId}
+          onChange={(e) => setSalesRepUserId(e.target.value)}
+          disabled={props.usersLoading}
+        >
+          <option value="">—</option>
+          {props.salesReps.map((u) => (
+            <option key={u.id} value={u.id}>{userLabel(u)}</option>
+          ))}
+        </select>
+
+        <label className="block text-xs mt-4" style={{ color: 'var(--c-text-3)' }}>Primary address</label>
+        <input className="cosmos-input mt-1" placeholder="Line 1" value={addr1} onChange={(e) => setAddr1(e.target.value)} />
+        <div className="grid grid-cols-3 gap-2 mt-2">
+          <input className="cosmos-input" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
+          <input className="cosmos-input" placeholder="State" value={state} onChange={(e) => setState(e.target.value)} />
+          <input className="cosmos-input" placeholder="ZIP" value={zip} onChange={(e) => setZip(e.target.value)} />
+        </div>
+
+        {create.error && <p className="text-sm mt-3" style={{ color: 'var(--c-danger)' }}>{errMsg(create.error)}</p>}
+
+        <div className="flex gap-2 mt-6">
+          <button type="button" className="btn-ghost flex-1" onClick={props.onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn-primary flex-1"
+            disabled={!valid || create.isPending}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? 'Saving…' : 'Create customer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LeadsKanbanSection(props: {
   leads: LeadRow[]
   loading: boolean
   error: boolean
-  onInvalidate: () => void
+  repById: Map<string, UserRow>
+  onInvalidateLeads: () => void
 }) {
   const qc = useQueryClient()
-  const [companyName, setCompanyName] = useState('')
-  const [email, setEmail] = useState('')
-  const [statusFilter, setStatusFilter] = useState<LeadStatusFilter>('')
-  const [convertId, setConvertId] = useState<string | null>(null)
-  const [convertName, setConvertName] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [activeDrag, setActiveDrag] = useState<LeadRow | null>(null)
 
-  const filtered = useMemo(() => {
-    if (!statusFilter) return props.leads
-    return props.leads.filter((l) => l.status === statusFilter)
-  }, [props.leads, statusFilter])
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
-  const create = useMutation({
-    mutationFn: () => api.post<LeadRow>('/leads', { companyName, email: email.trim() || undefined }),
-    onSuccess: () => {
-      setCompanyName('')
-      setEmail('')
+  const normalizedLeads = useMemo(
+    () => props.leads.map((l) => ({ ...l, status: normalizeLeadStatus(l.status) })),
+    [props.leads],
+  )
+
+  const byColumn = useMemo(() => {
+    const m: Record<string, LeadRow[]> = {}
+    for (const c of KANBAN_COLUMNS) m[c.id] = []
+    for (const l of normalizedLeads) {
+      const col = normalizeLeadStatus(l.status)
+      if (!m[col]) m[col] = []
+      m[col].push(l)
+    }
+    return m
+  }, [normalizedLeads])
+
+  const patchStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.patch(`/leads/${encodeURIComponent(id)}`, { status }),
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries({ queryKey: ['leads'] })
+      const prev = qc.getQueryData<LeadRow[]>(['leads'])
+      qc.setQueryData<LeadRow[]>(['leads'], (old) =>
+        (old ?? []).map((l) => (l.id === id ? { ...l, status } : l)),
+      )
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['leads'], ctx.prev)
+    },
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['leads'] })
     },
   })
 
-  const convert = useMutation({
-    mutationFn: ({ id, customerName }: { id: string; customerName: string }) =>
-      api.post(`/leads/${encodeURIComponent(id)}/convert`, { customerName }),
-    onSuccess: () => {
-      setConvertId(null)
-      setConvertName('')
-      props.onInvalidate()
-      void qc.invalidateQueries({ queryKey: ['customers'] })
-      void qc.invalidateQueries({ queryKey: ['activities'] })
+  const onDragEnd = useCallback(
+    (e: DragEndEvent) => {
+      setActiveDrag(null)
+      const { active, over } = e
+      if (!over) return
+      const leadId = String(active.id)
+      let overId = String(over.id)
+      let targetCol: string | null = COLUMN_IDS.has(overId) ? overId : null
+      if (!targetCol) {
+        const targetLead = normalizedLeads.find((l) => l.id === overId)
+        targetCol = targetLead ? normalizeLeadStatus(targetLead.status) : null
+      }
+      if (!targetCol || !COLUMN_IDS.has(targetCol)) return
+      const lead = normalizedLeads.find((l) => l.id === leadId)
+      if (!lead || lead.status === targetCol) return
+      patchStatus.mutate({ id: leadId, status: targetCol })
     },
-  })
+    [normalizedLeads, patchStatus],
+  )
 
-  const FILTERS: Array<{ label: string; value: LeadStatusFilter }> = [
-    { label: 'All', value: '' },
-    { label: 'Open', value: 'OPEN' },
-    { label: 'Converted', value: 'CONVERTED' },
-    { label: 'Lost', value: 'LOST' },
-  ]
+  const totals = useMemo(() => {
+    const value: Record<string, number> = {}
+    for (const c of KANBAN_COLUMNS) value[c.id] = 0
+    for (const l of normalizedLeads) {
+      const v = l.pipelineValue != null ? Number(l.pipelineValue) : 0
+      value[l.status] = (value[l.status] ?? 0) + v
+    }
+    return value
+  }, [normalizedLeads])
 
   return (
     <>
-      <Card>
-        <CardTitle>New lead</CardTitle>
-        <div className="mt-4 flex flex-col sm:flex-row gap-2">
-          <input
-            className="flex-1 bg-cosmos-surface-2 border border-cosmos-border rounded-md px-3 h-10 text-sm text-cosmos-white"
-            placeholder="Company name"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-          />
-          <input
-            className="flex-1 bg-cosmos-surface-2 border border-cosmos-border rounded-md px-3 h-10 text-sm text-cosmos-white"
-            placeholder="Email (optional)"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button
-            type="button"
-            disabled={!companyName.trim() || create.isPending}
-            onClick={() => create.mutate()}
-            className="h-10 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
-          >
-            {create.isPending ? 'Saving…' : 'Add lead'}
-          </button>
-        </div>
-        {create.error && <p className="text-red-400 text-xs mt-2">{errMsg(create.error)}</p>}
-      </Card>
-
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.label}
-            type="button"
-            onClick={() => setStatusFilter(f.value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
-              statusFilter === f.value
-                ? 'border-cosmos-primary bg-cosmos-primary/20 text-cosmos-white'
-                : 'border-cosmos-border text-cosmos-muted'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={() => setImportOpen((open) => !open)}>
+          {importOpen ? 'Hide import' : 'Import CSV/Excel'}
+        </button>
+        <button type="button" className="btn-primary" onClick={() => setDrawerOpen(true)}>
+          New lead
+        </button>
       </div>
 
-      <Card>
-        <CardTitle>Leads</CardTitle>
-        {props.loading ? (
-          <p className="mt-4 text-cosmos-muted text-sm">Loading…</p>
-        ) : props.error ? (
-          <p className="mt-4 text-red-400 text-sm">Could not load leads.</p>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon="📇"
-            title="No leads"
-            description={statusFilter ? 'No leads in this status.' : 'Add a lead or import from another channel.'}
-          />
-        ) : (
-          <ul className="mt-4 divide-y divide-cosmos-border">
-            {filtered.map((l) => (
-              <li key={l.id} className="py-3 flex flex-wrap justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-cosmos-white font-medium">{l.companyName}</p>
-                  {l.email && <p className="text-cosmos-muted text-sm">{l.email}</p>}
-                  {l.customer && (
-                    <Link
-                      href={`/customers/${l.customer.id}`}
-                      className="text-xs text-cosmos-primary hover:underline mt-1 inline-block"
-                    >
-                      Customer: {l.customer.name}
-                    </Link>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <StatusBadge status={l.status} />
-                  {l.status === 'OPEN' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setConvertId(l.id)
-                        setConvertName(l.companyName)
-                      }}
-                      className="text-xs px-2 py-1 rounded border border-cosmos-border text-cosmos-text hover:bg-cosmos-surface-2"
-                    >
-                      Convert
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      {importOpen ? (
+        <SpreadsheetImportPanel
+          title="Import leads into pipeline stages"
+          hint="Set status to NEW, CONTACTED, QUALIFIED, PROPOSAL, NEGOTIATION, WON, or LOST."
+          expectedColumns={[
+            'companyName',
+            'contactName',
+            'email',
+            'source',
+            'pipelineValue',
+            'status',
+          ]}
+          templateFilename="leads-import-template.csv"
+          onImport={async (rows) => {
+            const payload = rows
+              .map((row) => {
+                const companyName = rowValue(row, 'companyName', 'company', 'name')
+                if (!companyName) return null
+                const status = rowValue(row, 'status', 'stage', 'pipelineStage').toUpperCase()
+                const pipelineValue = rowNumber(row, 'pipelineValue', 'pipeline_value', 'value')
+                return {
+                  companyName,
+                  contactName: rowValue(row, 'contactName', 'contact') || undefined,
+                  email: rowValue(row, 'email') || undefined,
+                  source: rowValue(row, 'source') || undefined,
+                  pipelineValue,
+                  status: COLUMN_IDS.has(status) ? status : undefined,
+                }
+              })
+              .filter((row): row is NonNullable<typeof row> => row != null)
+            const result = await api.post<BulkImportResult>('/leads/import', { rows: payload })
+            props.onInvalidateLeads()
+            return result
+          }}
+        />
+      ) : null}
 
-      {convertId && (
-        <div className="fixed inset-0 z-50 flex">
-          <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={() => setConvertId(null)} />
-          <div className="w-full max-w-md bg-cosmos-surface border-l border-cosmos-border p-6">
-            <h2 className="text-lg font-semibold text-cosmos-white">Convert lead</h2>
-            <p className="text-xs text-cosmos-muted mt-1">Creates a customer and links the lead (admin role).</p>
-            <label className="block mt-4 text-xs text-cosmos-muted">Customer / account name</label>
-            <input
-              className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-              value={convertName}
-              onChange={(e) => setConvertName(e.target.value)}
-            />
-            {convert.error && <p className="text-red-400 text-xs mt-2">{errMsg(convert.error)}</p>}
-            <div className="mt-6 flex gap-2">
+      {drawerOpen && (
+        <NewLeadDrawer
+          onClose={() => setDrawerOpen(false)}
+          onSaved={() => {
+            setDrawerOpen(false)
+            props.onInvalidateLeads()
+          }}
+        />
+      )}
+
+      {props.loading ? (
+        <div className="skeleton h-96 w-full" />
+      ) : props.error ? (
+        <p style={{ color: 'var(--c-danger)' }}>Could not load leads.</p>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={(e) => {
+          const l = normalizedLeads.find((x) => x.id === String(e.active.id))
+          setActiveDrag(l ?? null)
+        }} onDragEnd={onDragEnd}>
+          <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 480 }}>
+            {KANBAN_COLUMNS.map((col) => (
+              <KanbanColumn key={col.id} columnId={col.id} label={col.label} count={byColumn[col.id]?.length ?? 0} sum={totals[col.id] ?? 0}>
+                {(byColumn[col.id] ?? []).map((lead) => (
+                  <LeadKanbanCard key={lead.id} lead={lead} repById={props.repById} onConverted={props.onInvalidateLeads} />
+                ))}
+              </KanbanColumn>
+            ))}
+          </div>
+          <DragOverlay>
+            {activeDrag ? (
+              <div className="cosmos-card opacity-95 shadow-xl" style={{ width: 260 }}>
+                <p className="font-semibold" style={{ color: 'var(--c-text)' }}>{activeDrag.companyName}</p>
+                <StatusBadge status={activeDrag.status} />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
+    </>
+  )
+}
+
+function KanbanColumn({
+  columnId,
+  label,
+  count,
+  sum,
+  children,
+}: {
+  columnId: string
+  label: string
+  count: number
+  sum: number
+  children: ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: columnId })
+  return (
+    <div
+      ref={setNodeRef}
+      className="shrink-0 rounded-xl p-2 flex flex-col gap-2 w-[280px]"
+      style={{
+        background: 'var(--c-surface)',
+        border: `1px solid ${isOver ? 'var(--c-accent)' : 'var(--c-border-card)'}`,
+        minHeight: 400,
+      }}
+    >
+      <div className="px-2 py-2 border-b" style={{ borderColor: 'var(--c-border-card)' }}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-display font-bold text-sm" style={{ color: 'var(--c-heading)' }}>{label}</span>
+          <span className="text-xs font-mono px-2 py-0.5 rounded-full" style={{ background: 'var(--c-primary-dim)', color: 'var(--c-primary)' }}>
+            {count}
+          </span>
+        </div>
+        <div className="text-xs mt-1 font-mono" style={{ color: 'var(--c-text-3)' }}>{money(sum)} pipeline</div>
+      </div>
+      <div className="flex flex-col gap-2 flex-1 overflow-y-auto max-h-[70vh]">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function LeadKanbanCard({
+  lead,
+  repById,
+  onConverted,
+}: {
+  lead: LeadRow
+  repById: Map<string, UserRow>
+  onConverted: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: lead.id,
+  })
+  const qc = useQueryClient()
+  const [convertOpen, setConvertOpen] = useState(false)
+  const [custName, setCustName] = useState(lead.companyName)
+
+  const convert = useMutation({
+    mutationFn: () => api.post(`/leads/${encodeURIComponent(lead.id)}/convert`, { customerName: custName.trim() }),
+    onSuccess: () => {
+      setConvertOpen(false)
+      onConverted()
+      void qc.invalidateQueries({ queryKey: ['customers'] })
+    },
+  })
+
+  const rep = lead.assignedToUserId ? repById.get(lead.assignedToUserId) : undefined
+  const pv = lead.pipelineValue != null ? Number(lead.pipelineValue) : 0
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.5 : 1 }
+    : { opacity: isDragging ? 0.5 : 1 }
+
+  const canConvert = !lead.customer && lead.status !== 'LOST' && lead.status !== 'WON'
+
+  return (
+    <>
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        className="cosmos-card cursor-grab active:cursor-grabbing"
+        style={{ ...style, padding: 12 }}
+      >
+        <p className="font-semibold text-sm leading-tight" style={{ color: 'var(--c-text)' }}>{lead.companyName}</p>
+        {lead.contactName ? <p className="text-xs mt-1" style={{ color: 'var(--c-text-2)' }}>{lead.contactName}</p> : null}
+        {lead.email ? <p className=" text-xs font-mono mt-0.5" style={{ color: 'var(--c-text-3)' }}>{lead.email}</p> : null}
+        {lead.source ? <p className="text-[11px] mt-1 uppercase tracking-wide" style={{ color: 'var(--c-accent)' }}>{lead.source}</p> : null}
+        {rep ? <p className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>Rep: {userLabel(rep)}</p> : null}
+        {pv > 0 ? <p className="text-xs font-mono mt-1" style={{ color: 'var(--c-heading)' }}>{money(pv)}</p> : null}
+        <p className="text-[10px] mt-2" style={{ color: 'var(--c-text-3)' }}>{new Date(lead.createdAt).toLocaleDateString()}</p>
+        <div className="flex flex-wrap gap-2 mt-2 items-center">
+          <StatusBadge status={lead.status} />
+          {lead.customer ? (
+            <Link
+              href={`/crm/customers/${lead.customer.id}`}
+              className="text-xs"
+              style={{ color: 'var(--c-accent)' }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              Customer
+            </Link>
+          ) : null}
+        </div>
+        {canConvert ? (
+          <button
+            type="button"
+            className="btn-ghost w-full mt-2 !py-1.5 !text-xs"
+            onClick={(e) => {
+              e.stopPropagation()
+              setConvertOpen(true)
+            }}
+          >
+            Convert to customer
+          </button>
+        ) : null}
+      </div>
+
+      {convertOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="cosmos-card max-w-sm w-full space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display font-bold" style={{ color: 'var(--c-heading)' }}>Convert lead</h3>
+            <label className="text-xs" style={{ color: 'var(--c-text-3)' }}>Customer / account name</label>
+            <input className="cosmos-input" value={custName} onChange={(e) => setCustName(e.target.value)} />
+            {convert.error && <p className="text-sm" style={{ color: 'var(--c-danger)' }}>{errMsg(convert.error)}</p>}
+            <div className="flex gap-2">
+              <button type="button" className="btn-ghost flex-1" onClick={() => setConvertOpen(false)}>Cancel</button>
               <button
                 type="button"
-                className="flex-1 h-10 rounded-md border border-cosmos-border text-cosmos-text text-sm"
-                onClick={() => setConvertId(null)}
+                className="btn-primary flex-1"
+                disabled={!custName.trim() || convert.isPending}
+                onClick={() => convert.mutate()}
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!convertName.trim() || convert.isPending}
-                className="flex-1 h-10 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
-                onClick={() => convert.mutate({ id: convertId, customerName: convertName.trim() })}
-              >
-                {convert.isPending ? 'Converting…' : 'Convert'}
+                {convert.isPending ? '…' : 'Convert'}
               </button>
             </div>
           </div>
@@ -301,255 +825,57 @@ function LeadsPanel(props: {
   )
 }
 
-function CustomersPanel(props: {
-  customers: CustomerRow[]
-  loading: boolean
-  error: boolean
-  onInvalidate: () => void
-}) {
-  const [name, setName] = useState('')
+function NewLeadDrawer(props: { onClose: () => void; onSaved: () => void }) {
+  const [companyName, setCompanyName] = useState('')
+  const [contactName, setContactName] = useState('')
   const [email, setEmail] = useState('')
-
-  const create = useMutation({
-    mutationFn: () => api.post('/customers', { name, email: email || undefined }),
-    onSuccess: () => {
-      setName('')
-      setEmail('')
-      props.onInvalidate()
-    },
-  })
-
-  return (
-    <>
-      <Card>
-        <CardTitle>New customer</CardTitle>
-        <div className="mt-4 flex flex-col sm:flex-row gap-2">
-          <input
-            className="flex-1 bg-cosmos-surface-2 border border-cosmos-border rounded-md px-3 h-10 text-sm text-cosmos-white"
-            placeholder="Account name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            className="flex-1 bg-cosmos-surface-2 border border-cosmos-border rounded-md px-3 h-10 text-sm text-cosmos-white"
-            placeholder="Email (optional)"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button
-            type="button"
-            disabled={!name.trim() || create.isPending}
-            onClick={() => create.mutate()}
-            className="h-10 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
-          >
-            {create.isPending ? 'Saving…' : 'Create'}
-          </button>
-        </div>
-        {create.error && <p className="text-red-400 text-xs mt-2">{errMsg(create.error)}</p>}
-      </Card>
-
-      <Card>
-        <CardTitle>Directory</CardTitle>
-        {props.loading ? (
-          <p className="text-cosmos-muted text-sm mt-3">Loading…</p>
-        ) : props.error ? (
-          <p className="text-red-400 text-sm mt-3">Could not load customers.</p>
-        ) : props.customers.length === 0 ? (
-          <EmptyState icon="🏢" title="No customers" description="Create a customer or convert a lead." />
-        ) : (
-          <ul className="mt-4 divide-y divide-cosmos-border">
-            {props.customers.map((c) => (
-              <li key={c.id} className="py-3 flex flex-wrap justify-between gap-4">
-                <div>
-                  <Link href={`/customers/${c.id}`} className="text-cosmos-white font-medium hover:text-cosmos-primary">
-                    {c.name}
-                  </Link>
-                  <div className="text-xs text-cosmos-muted font-mono mt-0.5">{c.id.slice(-12)}…</div>
-                </div>
-                <div className="text-right text-sm text-cosmos-muted">
-                  {c.email ?? '—'}
-                  {c.phone ? <div>{c.phone}</div> : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </>
-  )
-}
-
-function ActivityPanel(props: {
-  activities: ActivityRow[]
-  loading: boolean
-  error: boolean
-  customers: CustomerRow[]
-  leads: LeadRow[]
-  onInvalidate: () => void
-}) {
-  const [type, setType] = useState<'NOTE' | 'CALL' | 'EMAIL'>('NOTE')
-  const [subject, setSubject] = useState('')
-  const [body, setBody] = useState('')
-  const [scope, setScope] = useState<'customer' | 'lead'>('customer')
-  const [customerId, setCustomerId] = useState('')
-  const [leadId, setLeadId] = useState('')
+  const [source, setSource] = useState('WEB')
+  const [pipelineValue, setPipelineValue] = useState('')
 
   const create = useMutation({
     mutationFn: () =>
-      api.post('/activities', {
-        type,
-        subject: subject.trim() || undefined,
-        body: body.trim() || undefined,
-        ...(scope === 'customer'
-          ? { customerId: customerId || undefined }
-          : { leadId: leadId || undefined }),
+      api.post('/leads', {
+        companyName: companyName.trim(),
+        contactName: contactName.trim() || undefined,
+        email: email.trim() || undefined,
+        source: source.trim() || undefined,
+        pipelineValue: pipelineValue.trim() ? parseFloat(pipelineValue) : undefined,
       }),
-    onSuccess: () => {
-      setSubject('')
-      setBody('')
-      props.onInvalidate()
-    },
+    onSuccess: () => props.onSaved(),
   })
 
-  const custLabel = useMemo(() => new Map(props.customers.map((c) => [c.id, c.name])), [props.customers])
-  const leadLabel = useMemo(() => new Map(props.leads.map((l) => [l.id, l.companyName])), [props.leads])
-
   return (
-    <>
-      <Card>
-        <CardTitle>Log activity</CardTitle>
-        <p className="text-xs text-cosmos-muted mt-1">Requires a linked customer or lead.</p>
-        <div className="mt-4 grid sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-cosmos-muted">Type</label>
-            <select
-              className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-              value={type}
-              onChange={(e) => setType(e.target.value as typeof type)}
-            >
-              <option value="NOTE">Note</option>
-              <option value="CALL">Call</option>
-              <option value="EMAIL">Email</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-cosmos-muted">Related to</label>
-            <select
-              className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-              value={scope}
-              onChange={(e) => {
-                setScope(e.target.value as 'customer' | 'lead')
-              }}
-            >
-              <option value="customer">Customer</option>
-              <option value="lead">Lead</option>
-            </select>
-          </div>
+    <div className="fixed inset-0 z-50 flex">
+      <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
+      <div className="w-full max-w-md border-l p-6 overflow-y-auto" style={{ background: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
+        <h2 className="text-lg font-bold font-display" style={{ color: 'var(--c-heading)' }}>New lead</h2>
+        <label className="block text-xs mt-4" style={{ color: 'var(--c-text-3)' }}>Company *</label>
+        <input className="cosmos-input mt-1" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Contact name</label>
+        <input className="cosmos-input mt-1" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Email</label>
+        <input className="cosmos-input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Source</label>
+        <select className="cosmos-input mt-1" value={source} onChange={(e) => setSource(e.target.value)}>
+          {['WEB', 'REFERRAL', 'TRADE_SHOW', 'COLD_CALL', 'OTHER'].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Pipeline value</label>
+        <input className="cosmos-input mt-1" type="number" value={pipelineValue} onChange={(e) => setPipelineValue(e.target.value)} />
+        {create.error && <p className="text-sm mt-3" style={{ color: 'var(--c-danger)' }}>{errMsg(create.error)}</p>}
+        <div className="flex gap-2 mt-6">
+          <button type="button" className="btn-ghost flex-1" onClick={props.onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn-primary flex-1"
+            disabled={!companyName.trim() || create.isPending}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? 'Saving…' : 'Create lead'}
+          </button>
         </div>
-        {scope === 'customer' ? (
-          <div className="mt-3">
-            <label className="text-xs text-cosmos-muted">Customer</label>
-            <select
-              className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-            >
-              <option value="">Select…</option>
-              {props.customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="mt-3">
-            <label className="text-xs text-cosmos-muted">Lead</label>
-            <select
-              className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-              value={leadId}
-              onChange={(e) => setLeadId(e.target.value)}
-            >
-              <option value="">Select…</option>
-              {props.leads.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.companyName} ({l.status})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <input
-          className="mt-3 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-          placeholder="Subject (optional)"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-        />
-        <textarea
-          className="mt-2 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-          rows={3}
-          placeholder="Details"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-        />
-        {create.error && <p className="text-red-400 text-xs mt-2">{errMsg(create.error)}</p>}
-        <button
-          type="button"
-          disabled={
-            create.isPending ||
-            (scope === 'customer' ? !customerId : !leadId)
-          }
-          onClick={() => create.mutate()}
-          className="mt-3 h-10 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
-        >
-          {create.isPending ? 'Saving…' : 'Save activity'}
-        </button>
-      </Card>
-
-      <Card>
-        <CardTitle>Timeline</CardTitle>
-        {props.loading ? (
-          <p className="text-cosmos-muted text-sm mt-3">Loading…</p>
-        ) : props.error ? (
-          <p className="text-red-400 text-sm mt-3">Could not load activities.</p>
-        ) : props.activities.length === 0 ? (
-          <EmptyState
-            icon="🗒️"
-            title="No activities"
-            description="Log calls, emails, or notes against a customer or lead."
-          />
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {props.activities.map((a) => {
-              const rel =
-                a.customerId && custLabel.get(a.customerId)
-                  ? `Customer · ${custLabel.get(a.customerId)}`
-                  : a.leadId && leadLabel.get(a.leadId)
-                    ? `Lead · ${leadLabel.get(a.leadId)}`
-                    : '—'
-              return (
-                <li
-                  key={a.id}
-                  className="border border-cosmos-border rounded-lg p-3 text-sm"
-                >
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <StatusBadge status={a.type} />
-                    <span className="text-cosmos-muted text-xs">
-                      {new Date(a.occurredAt).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-cosmos-muted text-xs mt-2">{rel}</p>
-                  {a.subject && <p className="text-cosmos-white font-medium mt-1">{a.subject}</p>}
-                  {a.body && (
-                    <p className="text-cosmos-text text-sm mt-1 whitespace-pre-wrap">{a.body}</p>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </Card>
-    </>
+      </div>
+    </div>
   )
 }

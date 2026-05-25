@@ -1,3 +1,4 @@
+import { HttpModule } from '@nestjs/axios'
 import { Module } from '@nestjs/common'
 import { FulfillmentController } from './fulfillment.controller'
 import { FulfillmentService } from './fulfillment.service'
@@ -7,8 +8,9 @@ import { ReceivingModule } from '../receiving/receiving.module'
 import { CycleCountController } from '../cycle-count/cycle-count.controller'
 import { CycleCountService } from '../cycle-count/cycle-count.service'
 
+import { PrismaModule } from '../prisma/prisma.module'
 @Module({
-  imports: [ReceivingModule],
+  imports: [PrismaModule, ReceivingModule, HttpModule.register({ timeout: 25_000 })],
   controllers: [FulfillmentController, WmsTasksController, SyncController, CycleCountController],
   providers: [FulfillmentService, CycleCountService],
   exports: [FulfillmentService],

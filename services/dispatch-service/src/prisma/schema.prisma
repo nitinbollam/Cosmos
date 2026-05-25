@@ -23,17 +23,23 @@ enum StopStatus {
 }
 
 model DeliveryRoute {
-  id        String       @id @default(cuid())
-  tenantId  String
-  driverId  String?
-  status    RouteStatus  @default(PLANNED)
-  name      String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  stops     RouteStop[]
+  id            String       @id @default(cuid())
+  tenantId      String
+  driverId      String?
+  status        RouteStatus  @default(PLANNED)
+  name          String?
+  /// Calendar day the route is planned for (ops filter in admin).
+  scheduledFor  DateTime?
+  lastKnownLat  Float?
+  lastKnownLng  Float?
+  lastKnownAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  stops         RouteStop[]
 
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, scheduledFor])
 }
 
 model RouteStop {

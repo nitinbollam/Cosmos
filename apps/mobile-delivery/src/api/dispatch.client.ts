@@ -63,7 +63,7 @@ export const dispatchClient = {
   async updateDriverLocation(
     token?: string | null,
     tenantId?: string | null,
-    body?: { lat: number; lng: number; timestamp: string },
+    body?: { lat: number; lng: number; timestamp: string; routeId?: string },
   ) {
     const r = await client.post('/dispatch/driver/location', body, {
       headers: await optionalAuthHeaders(token, tenantId),
@@ -102,7 +102,7 @@ export const dispatchClient = {
       return this.updateDriverLocation(
         token,
         tenantId,
-        payload as { lat: number; lng: number; timestamp: string },
+        payload as { lat: number; lng: number; timestamp: string; routeId?: string },
       )
     return Promise.resolve()
   },

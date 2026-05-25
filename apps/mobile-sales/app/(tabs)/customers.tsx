@@ -5,11 +5,16 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 import { crmClient, type CustomerDto } from '../../src/api/crm.client'
+import { apiErrorMessage } from '../../src/api/apiError'
+import { C } from '../../src/theme/colors'
 
 export default function CustomersScreen() {
+  const router = useRouter()
   const [rows, setRows] = useState<CustomerDto[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -21,7 +26,7 @@ export default function CustomersScreen() {
       const data = await crmClient.listCustomers()
       setRows(data)
     } catch (e) {
-      setErr((e as Error).message ?? 'Failed to load customers')
+      setErr(apiErrorMessage(e))
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -35,7 +40,7 @@ export default function CustomersScreen() {
   if (loading && rows.length === 0) {
     return (
       <View style={s.centered}>
-        <ActivityIndicator color="#6366F1" />
+        <ActivityIndicator color={C.primary} />
       </View>
     )
   }
@@ -53,16 +58,16 @@ export default function CustomersScreen() {
               setRefreshing(true)
               void load()
             }}
-            tintColor="#6366F1"
+            tintColor={C.primary}
           />
         }
         ListEmptyComponent={<Text style={s.empty}>No customers yet.</Text>}
         renderItem={({ item }) => (
-          <View style={s.card}>
+          <TouchableOpacity style={s.card} onPress={() => router.push(`/customers/${item.id}`)}>
             <Text style={s.name}>{item.name}</Text>
             {item.email ? <Text style={s.meta}>{item.email}</Text> : null}
             {item.phone ? <Text style={s.meta}>{item.phone}</Text> : null}
-          </View>
+          </TouchableOpacity>
         )}
       />
     </View>
@@ -70,19 +75,19 @@ export default function CustomersScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0F' },
-  centered: { flex: 1, backgroundColor: '#0A0A0F', alignItems: 'center', justifyContent: 'center' },
-  err: { color: '#F87171', padding: 16, fontSize: 14 },
-  empty: { color: '#64748B', padding: 24, textAlign: 'center' },
+  container: { flex: 1, backgroundColor: C.bg },
+  centered: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
+  err: { color: C.danger, padding: 16, fontSize: 14 },
+  empty: { color: C.text3, padding: 24, textAlign: 'center' },
   card: {
     marginHorizontal: 16,
     marginBottom: 12,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: '#14141F',
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: C.border,
   },
-  name: { color: '#E2E8F0', fontSize: 17, fontWeight: '700' },
-  meta: { color: '#94A3B8', marginTop: 4, fontSize: 14 },
+  name: { color: C.text, fontSize: 17, fontWeight: '700' },
+  meta: { color: C.text2, marginTop: 4, fontSize: 14 },
 })

@@ -35,6 +35,7 @@ export class ActivitiesService {
         type: dto.type,
         subject: dto.subject,
         body: dto.body,
+        outcome: dto.outcome,
         customerId: dto.customerId,
         leadId: dto.leadId,
       },

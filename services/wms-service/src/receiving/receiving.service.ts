@@ -356,4 +356,32 @@ export class ReceivingService {
     logger.info({ sessionId, tenantId, hasDiscrepancy }, 'Receiving session completed')
     return { sessionId, status: nextStatus, hasDiscrepancy }
   }
+
+  async importItems(
+    sessionId: string,
+    tenantId: string,
+    scannedBy: string,
+    rows: Array<{
+      barcode: string
+      receivedQty: number
+      damagedQty?: number
+      batchId?: string
+      locationId?: string
+    }>,
+  ) {
+    let created = 0
+    const errors: Array<{ row: number; message: string }> = []
+    for (let index = 0; index < rows.length; index++) {
+      try {
+        await this.scanItem(sessionId, tenantId, scannedBy, rows[index])
+        created++
+      } catch (e) {
+        errors.push({
+          row: index + 2,
+          message: e instanceof Error ? e.message : 'Import row failed',
+        })
+      }
+    }
+    return { created, failed: errors.length, errors }
+  }
 }

@@ -434,6 +434,71 @@ export class InventoryService {
     })
   }
 
+  async patchStockLevel(
+    tenantId: string,
+    levelId: string,
+    patch: { reorderPoint?: number; reorderQty?: number; locationId?: string | null },
+  ) {
+    const row = await this.prisma.stockLevel.findFirst({ where: { id: levelId, tenantId } })
+    if (!row) throw new NotFoundException('Stock level not found')
+    return this.prisma.stockLevel.update({
+      where: { id: levelId },
+      data: {
+        ...(patch.reorderPoint !== undefined ? { reorderPoint: patch.reorderPoint } : {}),
+        ...(patch.reorderQty !== undefined ? { reorderQty: patch.reorderQty } : {}),
+        ...(patch.locationId !== undefined ? { locationId: patch.locationId || null } : {}),
+      },
+    })
+  }
+
+  /** Upsert non-batch (aggregated) stock row for a SKU × warehouse — same as default row on SKU create. */
+  async ensureNonBatchStockLevel(
+    tenantId: string,
+    dto: {
+      skuId: string
+      warehouseId: string
+      locationId?: string
+      reorderPoint?: number
+      reorderQty?: number
+    },
+  ) {
+    const sku = await this.prisma.sKU.findFirst({ where: { id: dto.skuId, tenantId } })
+    if (!sku) throw new NotFoundException('SKU not found')
+    const warehouse = await this.prisma.warehouse.findFirst({
+      where: { id: dto.warehouseId, tenantId },
+    })
+    if (!warehouse) throw new NotFoundException('Warehouse not found')
+
+    return this.prisma.stockLevel.upsert({
+      where: {
+        tenantId_skuId_warehouseId_batchId: {
+          tenantId,
+          skuId: dto.skuId,
+          warehouseId: dto.warehouseId,
+          batchId: '',
+        },
+      },
+      create: {
+        id: randomUUID(),
+        tenantId,
+        skuId: dto.skuId,
+        warehouseId: dto.warehouseId,
+        locationId: dto.locationId !== undefined ? dto.locationId || null : null,
+        batchId: '',
+        quantityOnHand: 0,
+        quantityReserved: 0,
+        quantityAvailable: 0,
+        reorderPoint: dto.reorderPoint ?? 0,
+        reorderQty: dto.reorderQty ?? 0,
+      },
+      update: {
+        ...(dto.reorderPoint !== undefined ? { reorderPoint: dto.reorderPoint } : {}),
+        ...(dto.reorderQty !== undefined ? { reorderQty: dto.reorderQty } : {}),
+        ...(dto.locationId !== undefined ? { locationId: dto.locationId || null } : {}),
+      },
+    })
+  }
+
   private async checkReorderPoint(
     tenantId: string,
     skuId: string,

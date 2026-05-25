@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "node ../../scripts/prisma-generate-retry.mjs src/prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema=src/prisma/schema.prisma",
-    "db:dev": "prisma migrate dev --schema=src/prisma/schema.prisma"
+    "db:dev": "prisma migrate dev --schema=src/prisma/schema.prisma",
+    "dev": "pnpm run start:dev"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.10",

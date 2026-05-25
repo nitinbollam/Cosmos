@@ -41,6 +41,7 @@ export class TenantsService {
     slug: string
     displayName: string
     plan?: 'STARTER' | 'GROWTH' | 'ENTERPRISE'
+    industry?: 'TOBACCO_VAPE' | 'PHARMA' | 'FOOD_BEVERAGE' | 'ALCOHOL' | 'GENERAL_WHOLESALE'
   }) {
     const existing = await this.prisma.tenantOrganization.findFirst({
       where: { OR: [{ id: input.id }, { slug: input.slug }] },
@@ -56,6 +57,7 @@ export class TenantsService {
           slug: input.slug,
           displayName: input.displayName,
           plan: input.plan ?? 'STARTER',
+          industry: input.industry ?? 'GENERAL_WHOLESALE',
           onboardingPhase: 'PROFILE',
           settings: {},
           metadata: {},
@@ -70,6 +72,10 @@ export class TenantsService {
       })
       return org
     })
+  }
+
+  async findById(id: string) {
+    return this.prisma.tenantOrganization.findUnique({ where: { id } })
   }
 
   async findByTenant(tenantId: string) {
@@ -88,6 +94,7 @@ export class TenantsService {
       displayName?: string
       billingEmail?: string | null
       timeZone?: string
+      industry?: 'TOBACCO_VAPE' | 'PHARMA' | 'FOOD_BEVERAGE' | 'ALCOHOL' | 'GENERAL_WHOLESALE'
       settingsPatch?: Record<string, unknown>
       metadataPatch?: Record<string, unknown>
     },
@@ -108,6 +115,7 @@ export class TenantsService {
         ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
         ...(patch.billingEmail !== undefined ? { billingEmail: patch.billingEmail ?? null } : {}),
         ...(patch.timeZone !== undefined ? { timeZone: patch.timeZone } : {}),
+        ...(patch.industry !== undefined ? { industry: patch.industry } : {}),
         ...(settingsNext !== undefined ? { settings: settingsNext } : {}),
         ...(metadataNext !== undefined ? { metadata: metadataNext } : {}),
       },
@@ -155,6 +163,43 @@ export class TenantsService {
     await this.maybeAdvancePhase(tenantId, allDone)
 
     return next
+  }
+
+  async listPendingInvites(tenantId: string) {
+    await this.ensureExists(tenantId)
+    return this.prisma.tenantInvite.findMany({
+      where: { tenantId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  async createInvite(tenantId: string, input: { email: string; role?: string }) {
+    await this.ensureExists(tenantId)
+    const email = input.email.trim().toLowerCase()
+    const pending = await this.prisma.tenantInvite.findFirst({
+      where: { tenantId, email, revokedAt: null, expiresAt: { gt: new Date() } },
+    })
+    if (pending) throw new ConflictException('An invite is already pending for this email')
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    return this.prisma.tenantInvite.create({
+      data: {
+        tenantId,
+        email,
+        role: input.role ?? 'STAFF',
+        expiresAt,
+      },
+    })
+  }
+
+  async revokeInvite(tenantId: string, inviteId: string) {
+    await this.ensureExists(tenantId)
+    const row = await this.prisma.tenantInvite.findFirst({ where: { id: inviteId, tenantId } })
+    if (!row) throw new NotFoundException('Invite not found')
+    if (row.revokedAt) return row
+    return this.prisma.tenantInvite.update({
+      where: { id: inviteId },
+      data: { revokedAt: new Date() },
+    })
   }
 
   private async ensureExists(id: string) {

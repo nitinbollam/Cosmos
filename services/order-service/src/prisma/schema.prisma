@@ -15,6 +15,7 @@ model Order {
   channel         OrderChannel
   status          OrderStatus     @default(PENDING)
   totalAmount     Decimal         @db.Decimal(12, 2)
+  amountPaid      Decimal         @default(0) @db.Decimal(12, 2)
   taxAmount       Decimal         @default(0) @db.Decimal(12, 2)
   paymentMethod   PaymentMethod
   paymentIntentId String?

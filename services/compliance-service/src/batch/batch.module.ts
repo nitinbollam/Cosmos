@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { BatchService } from './batch.service'
 
-@Module({ providers: [BatchService], exports: [BatchService] })
+import { PrismaModule } from '../prisma/prisma.module'
+@Module({ imports: [PrismaModule], providers: [BatchService], exports: [BatchService] })
 export class BatchModule {}

@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
 import { Roles, RolesGuard, TenantId } from '@cosmos/auth-middleware'
 import { LeadsService } from './leads.service'
 import { CreateLeadDto } from './dto/create-lead.dto'
 import { ConvertLeadDto } from './dto/convert-lead.dto'
+import { ImportLeadsDto } from './dto/import-leads.dto'
+import { PatchLeadDto } from './dto/patch-lead.dto'
 
 @Controller('leads')
 @UseGuards(RolesGuard)
@@ -24,7 +26,17 @@ export class LeadsController {
     return this.leads.create(tenantId, dto)
   }
 
-  @Roles('TENANT_ADMIN', 'SUPER_ADMIN')
+  @Post('import')
+  import(@TenantId() tenantId: string, @Body() dto: ImportLeadsDto) {
+    return this.leads.importBulk(tenantId, dto.rows)
+  }
+
+  @Patch(':id')
+  patch(@TenantId() tenantId: string, @Param('id') id: string, @Body() dto: PatchLeadDto) {
+    return this.leads.patch(tenantId, id, dto)
+  }
+
+  @Roles('TENANT_ADMIN', 'SUPER_ADMIN', 'MANAGER', 'SALES_REP')
   @Post(':id/convert')
   convert(@TenantId() tenantId: string, @Param('id') id: string, @Body() dto: ConvertLeadDto) {
     return this.leads.convert(tenantId, id, dto)

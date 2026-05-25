@@ -2,7 +2,7 @@ import './tracing-bootstrap'
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe, Logger } from '@nestjs/common'
-import type { NextFunction, Request, Response } from 'express'
+import { json, urlencoded, type NextFunction, type Request, type Response } from 'express'
 import { AppModule } from './app.module'
 import { ProxyService } from './proxy/proxy.service'
 import { parseProxyParts } from './proxy/parseProxyParts'
@@ -19,16 +19,26 @@ async function bootstrap() {
   const server = app.getHttpAdapter().getInstance()
   mountPrometheusMetrics(server, 'gateway-service')
 
+  // Parse JSON on the raw Express stack before the proxy reads req.body.
+  server.use(json({ limit: '2mb' }))
+  server.use(urlencoded({ extended: true }))
+
   server.use(async (req: Request, res: Response, next: NextFunction) => {
     const parsed = parseProxyParts(req.originalUrl ?? '')
     if (!parsed) return next()
     try {
       await proxyService.forwardRequest(parsed.service, parsed.restPath, req, res)
     } catch (err) {
-      logger.warn(err instanceof Error ? err.message : String(err))
+      const message =
+        err instanceof Error
+          ? err.message || err.name
+          : typeof err === 'string'
+            ? err
+            : 'proxy error'
+      logger.warn(message)
       if (!res.headersSent) {
         const status = typeof (err as { status?: number })?.status === 'number' ? (err as any).status : 502
-        res.status(status).json({ message: err instanceof Error ? err.message : 'proxy error' })
+        res.status(status).json({ message: message || 'Bad gateway' })
       }
     }
   })

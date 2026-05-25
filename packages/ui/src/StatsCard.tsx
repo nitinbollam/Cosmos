@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { Card } from './Card'
 
 export interface StatsCardProps {
   label: string
@@ -10,17 +9,19 @@ export interface StatsCardProps {
 
 export function StatsCard({ label, value, format = 'number', trend }: StatsCardProps) {
   const formatted = formatValue(value, format)
-  const trendColor = trend === undefined ? '' : trend >= 0 ? 'text-emerald-400' : 'text-red-400'
+  const trendClass = trend === undefined ? undefined : trend >= 0 ? 'bento-trend-pill bento-trend-pill--up' : 'bento-trend-pill bento-trend-pill--down'
+
   return (
-    <Card>
-      <div className="text-xs uppercase tracking-wider text-cosmos-muted">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-cosmos-white">{formatted}</div>
+    <div>
+      <div className="bento-kpi-label">{label}</div>
+      <div className="bento-kpi-value">{formatted}</div>
       {trend !== undefined && (
-        <div className={`mt-1 text-xs ${trendColor}`}>
-          {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%
+        <div className={`mt-2 inline-flex ${trendClass}`}>
+          {trend >= 0 ? '+' : ''}
+          {trend.toFixed(1)}%
         </div>
       )}
-    </Card>
+    </div>
   )
 }
 

@@ -17,7 +17,7 @@ export function LowStockAlert({ alerts }: { alerts: LowStockRow[] }) {
             <li
               key={a.skuId}
               className="flex flex-wrap items-center justify-between gap-2 text-sm border-b pb-3 last:border-0"
-              style={{ borderColor: 'var(--c-border)' }}
+              style={{ borderColor: 'var(--c-border-card)' }}
             >
               <div className="min-w-0">
                 <div style={{ color: 'var(--c-text)' }} className="font-medium truncate">

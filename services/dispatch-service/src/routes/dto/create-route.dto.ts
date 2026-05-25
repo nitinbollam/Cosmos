@@ -3,12 +3,12 @@ import {
   ArrayMinSize,
   IsArray,
   IsInt,
+  IsISO8601,
   IsObject,
   IsOptional,
   IsString,
   MaxLength,
   Min,
-  MinLength,
   ValidateNested,
 } from 'class-validator'
 
@@ -26,6 +26,11 @@ export class CreateRouteDto {
   @IsString()
   @MaxLength(256)
   name?: string
+
+  /** Start-of-day or full instant for the route’s operational date (admin list filter). */
+  @IsOptional()
+  @IsISO8601()
+  scheduledFor?: string
 
   @IsArray()
   @ArrayMinSize(1)

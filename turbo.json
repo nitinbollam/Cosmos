@@ -3,14 +3,13 @@
   "globalDependencies": [".env", ".env.local", ".env.production"],
   "globalEnv": [
     "NODE_ENV",
-    "DATABASE_URL",
     "REDIS_URL",
     "JWT_SECRET",
     "JWT_REFRESH_SECRET"
   ],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["db:generate", "^db:generate", "^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "test": {

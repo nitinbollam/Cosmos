@@ -17,6 +17,11 @@ export class CreateActivityDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
+  outcome?: string
+
+  @IsOptional()
+  @IsString()
   @MinLength(1)
   customerId?: string
 

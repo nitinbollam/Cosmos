@@ -1,5 +1,6 @@
 import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import { SkuService, CreateSkuInput } from './sku.service'
+import { ImportSkusDto } from './dto/import-skus.dto'
 
 @Controller('skus')
 export class SkuController {
@@ -57,6 +58,11 @@ export class SkuController {
   @Post()
   create(@Req() req: { user: { tenantId: string } }, @Body() body: CreateSkuInput) {
     return this.skus.create(req.user.tenantId, body)
+  }
+
+  @Post('import')
+  import(@Req() req: { user: { tenantId: string } }, @Body() body: ImportSkusDto) {
+    return this.skus.importBulk(req.user.tenantId, body.rows)
   }
 
   @Patch(':id')

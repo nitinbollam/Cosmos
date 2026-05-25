@@ -70,6 +70,16 @@ export class PaymentsController {
   @Public()
   @Get('webhook/stripe/status')
   stripeWebhookStatus() {
+    return this.stripeStatusPayload()
+  }
+
+  @Public()
+  @Get('stripe/status')
+  stripeIntegrationStatus() {
+    return this.stripeStatusPayload()
+  }
+
+  private stripeStatusPayload() {
     return {
       webhookSigningSecretConfigured: this.stripe.isWebhookSecretConfigured(),
       rotation:

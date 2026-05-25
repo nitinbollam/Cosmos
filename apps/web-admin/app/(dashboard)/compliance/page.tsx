@@ -7,6 +7,8 @@ import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
+import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
+import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
 
 type MsaStatus = 'GENERATED' | 'SUBMITTED' | 'SUBMISSION_FAILED' | 'ACCEPTED'
 
@@ -41,6 +43,7 @@ export default function CompliancePage() {
   const qc = useQueryClient()
   const [tab, setTab] = useState<'msa' | 'tax'>('msa')
   const [statusFilter, setStatusFilter] = useState<'' | MsaStatus>('')
+  const [importOpen, setImportOpen] = useState(false)
 
   const reports = useQuery<MsaReport[]>({
     queryKey: ['msa', 'reports', statusFilter],
@@ -91,6 +94,13 @@ export default function CompliancePage() {
       {tab === 'msa' && (
         <>
           <div className="flex flex-wrap gap-2 items-center">
+            <button
+              type="button"
+              className="btn-ghost text-sm"
+              onClick={() => setImportOpen((open) => !open)}
+            >
+              {importOpen ? 'Hide transaction import' : 'Import transactions (CSV/Excel)'}
+            </button>
             {MSA_FILTERS.map((f) => (
               <button
                 key={f.label}
@@ -117,6 +127,76 @@ export default function CompliancePage() {
           {generate.error && (
             <p className="text-red-400 text-sm">{String((generate.error as Error).message)}</p>
           )}
+
+          {importOpen ? (
+            <SpreadsheetImportPanel
+              title="Import MSA transactions"
+              hint="Load purchase data before generating weekly reports. Dates should be ISO format (YYYY-MM-DD)."
+              expectedColumns={[
+                'manufacturerDid',
+                'upcCode',
+                'transactionDate',
+                'quantityPurchased',
+                'cartonCount',
+                'netAmount',
+                'returnAmount',
+                'isQualifying',
+                'orderId',
+                'poId',
+              ]}
+              templateFilename="msa-transactions-import-template.csv"
+              onImport={async (rows) => {
+                const payload = rows
+                  .map((row) => {
+                    const manufacturerDid = rowValue(row, 'manufacturerDid', 'manufacturer_did')
+                    const upcCode = rowValue(row, 'upcCode', 'upc', 'upc_code')
+                    const transactionDate = rowValue(row, 'transactionDate', 'transaction_date', 'date')
+                    const quantityPurchased = rowNumber(
+                      row,
+                      'quantityPurchased',
+                      'quantity_purchased',
+                      'quantity',
+                    )
+                    const cartonCount = rowNumber(row, 'cartonCount', 'carton_count', 'cartons')
+                    const netAmount = rowNumber(row, 'netAmount', 'net_amount', 'amount')
+                    if (
+                      !manufacturerDid ||
+                      !upcCode ||
+                      !transactionDate ||
+                      quantityPurchased == null ||
+                      cartonCount == null ||
+                      netAmount == null
+                    ) {
+                      return null
+                    }
+                    const returnAmount = rowNumber(row, 'returnAmount', 'return_amount', 'returns')
+                    const qualifyingRaw = rowValue(row, 'isQualifying', 'is_qualifying', 'qualifying').toLowerCase()
+                    return {
+                      manufacturerDid,
+                      upcCode,
+                      transactionDate,
+                      quantityPurchased: Math.trunc(quantityPurchased),
+                      cartonCount: Math.trunc(cartonCount),
+                      netAmount,
+                      returnAmount,
+                      isQualifying:
+                        qualifyingRaw === 'false' || qualifyingRaw === '0' || qualifyingRaw === 'no'
+                          ? false
+                          : qualifyingRaw
+                            ? true
+                            : undefined,
+                      orderId: rowValue(row, 'orderId', 'order_id') || undefined,
+                      poId: rowValue(row, 'poId', 'po_id') || undefined,
+                    }
+                  })
+                  .filter((row): row is NonNullable<typeof row> => row != null)
+                const result = await api.post<BulkImportResult>('/msa/transactions/import', { rows: payload })
+                void qc.invalidateQueries({ queryKey: ['msa', 'reports'] })
+                void qc.invalidateQueries({ queryKey: ['tax', 'summary'] })
+                return result
+              }}
+            />
+          ) : null}
 
           <Card>
             <CardTitle>MSA reports</CardTitle>

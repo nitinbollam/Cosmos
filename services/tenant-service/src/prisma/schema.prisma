@@ -17,13 +17,29 @@ model TenantOrganization {
   settings         Json                 @default("{}")
   billingEmail     String?
   timeZone         String               @default("Etc/UTC")
+  industry         IndustryVertical     @default(GENERAL_WHOLESALE)
   suspended        Boolean              @default(false)
   metadata         Json                 @default("{}")
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   onboardingSteps  TenantOnboardingStep[]
+  invites            TenantInvite[]
 
   @@index([slug])
+}
+
+model TenantInvite {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  role      String   @default("STAFF")
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  tenant    TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, email])
 }
 
 model TenantOnboardingStep {
@@ -49,4 +65,12 @@ enum OnboardingPhase {
   PROFILE
   BILLING
   READY
+}
+
+enum IndustryVertical {
+  TOBACCO_VAPE
+  PHARMA
+  FOOD_BEVERAGE
+  ALCOHOL
+  GENERAL_WHOLESALE
 }

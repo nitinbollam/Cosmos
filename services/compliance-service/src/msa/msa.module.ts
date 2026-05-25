@@ -4,8 +4,9 @@ import { MSAEngine } from './msa.engine'
 import { MSAController } from './msa.controller'
 import { S3Service } from '../storage/s3.service'
 
+import { PrismaModule } from '../prisma/prisma.module'
 @Module({
-  imports: [HttpModule.register({ timeout: 30_000 })],
+  imports: [PrismaModule, HttpModule.register({ timeout: 30_000 })],
   controllers: [MSAController],
   providers: [MSAEngine, S3Service],
   exports: [MSAEngine, S3Service],

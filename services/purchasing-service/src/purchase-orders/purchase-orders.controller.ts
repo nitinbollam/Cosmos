@@ -4,6 +4,7 @@ import { PurchaseOrderStatus } from '../generated/prisma-client'
 import { PurchaseOrdersService } from './purchase-orders.service'
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto'
 import { ReceiveGoodsDto } from './dto/receive-goods.dto'
+import { RecordPoPaymentDto } from './dto/record-po-payment.dto'
 
 @Controller('purchase-orders')
 @UseGuards(RolesGuard)
@@ -40,5 +41,15 @@ export class PurchaseOrdersController {
   @Post(':id/receive')
   receive(@TenantId() tenantId: string, @Param('id') id: string, @Body() dto: ReceiveGoodsDto) {
     return this.orders.receiveGoods(tenantId, id, dto)
+  }
+
+  /** Partial/full supplier payment against PO line total (AP-style for finance UI). */
+  @Post(':id/payments')
+  recordPayment(@TenantId() tenantId: string, @Param('id') id: string, @Body() dto: RecordPoPaymentDto) {
+    return this.orders.recordPayment(tenantId, id, {
+      amount: dto.amount,
+      method: dto.method,
+      reference: dto.reference,
+    })
   }
 }

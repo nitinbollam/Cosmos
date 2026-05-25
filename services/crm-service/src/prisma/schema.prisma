@@ -8,12 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum LeadStatus {
-  OPEN
-  CONVERTED
-  LOST
-}
-
 enum ActivityType {
   CALL
   EMAIL
@@ -21,33 +15,52 @@ enum ActivityType {
 }
 
 model Customer {
-  id         String     @id @default(cuid())
-  tenantId   String
-  name       String
-  email      String?
-  phone      String?
-  externalRef String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  activities Activity[]
-  leads      Lead[]
+  id                   String     @id @default(cuid())
+  tenantId             String
+  name                 String
+  email                String?
+  phone                String?
+  externalRef          String?
+  customerKind         String     @default("BUSINESS")
+  firstName            String?
+  lastName             String?
+  taxId                String?
+  isLicensedTobacco    Boolean    @default(false)
+  tobaccoLicenseNumber String?
+  creditLimit          Decimal?   @db.Decimal(14, 2)
+  creditUsed           Decimal    @default(0) @db.Decimal(14, 2)
+  paymentTermsDays     Int        @default(0)
+  salesRepUserId       String?
+  primaryAddressLine1  String?
+  primaryCity          String?
+  primaryState         String?
+  primaryZip           String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  activities           Activity[]
+  leads                Lead[]
 
   @@index([tenantId])
 }
 
 model Lead {
-  id          String       @id @default(cuid())
-  tenantId    String
-  companyName String
-  email       String?
-  status      LeadStatus   @default(OPEN)
-  customerId  String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  activities  Activity[]
+  id               String   @id @default(cuid())
+  tenantId         String
+  companyName      String
+  contactName      String?
+  email            String?
+  status           String   @default("NEW")
+  source           String?
+  pipelineValue    Decimal? @db.Decimal(14, 2)
+  assignedToUserId String?
+  customerId       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  activities       Activity[]
 
   @@index([tenantId])
+  @@index([tenantId, status])
   @@index([customerId])
 }
 
@@ -57,6 +70,7 @@ model Activity {
   type       ActivityType
   subject    String?
   body       String?
+  outcome    String?
   customerId String?
   leadId     String?
   occurredAt DateTime     @default(now())

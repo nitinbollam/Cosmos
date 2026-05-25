@@ -11,6 +11,8 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="route" options={{ title: 'Route' }} />
+      <Tabs.Screen name="history" options={{ title: 'History' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   )
 }

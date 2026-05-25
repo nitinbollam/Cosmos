@@ -4,8 +4,9 @@ import { QuoteToOrderBridge } from './quote-to-order.bridge'
 import { QuotesController } from './quotes.controller'
 import { QuotesService } from './quotes.service'
 
+import { PrismaModule } from '../prisma/prisma.module'
 @Module({
-  imports: [HttpModule],
+  imports: [PrismaModule, HttpModule],
   controllers: [QuotesController],
   providers: [QuotesService, QuoteToOrderBridge],
   exports: [QuotesService],

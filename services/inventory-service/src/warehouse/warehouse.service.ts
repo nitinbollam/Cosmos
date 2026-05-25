@@ -18,13 +18,33 @@ export class WarehouseService {
 
   async create(tenantId: string, input: CreateWarehouseInput) {
     try {
-      return await this.prisma.warehouse.create({
-        data: { tenantId, name: input.name, code: input.code, address: input.address as object, isDefault: input.isDefault ?? false },
+      return await this.prisma.$transaction(async (tx) => {
+        if (input.isDefault) {
+          await tx.warehouse.updateMany({ where: { tenantId }, data: { isDefault: false } })
+        }
+        return tx.warehouse.create({
+          data: {
+            tenantId,
+            name: input.name,
+            code: input.code,
+            address: input.address as object,
+            isDefault: input.isDefault ?? false,
+          },
+        })
       })
     } catch (e) {
       if ((e as { code?: string }).code === 'P2002') throw new ConflictException('Warehouse code already exists')
       throw e
     }
+  }
+
+  async setDefault(tenantId: string, id: string) {
+    await this.findById(tenantId, id)
+    await this.prisma.$transaction([
+      this.prisma.warehouse.updateMany({ where: { tenantId }, data: { isDefault: false } }),
+      this.prisma.warehouse.update({ where: { id }, data: { isDefault: true } }),
+    ])
+    return this.findById(tenantId, id)
   }
 
   async findById(tenantId: string, id: string) {

@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query }
 import { TenantId } from '@cosmos/auth-middleware'
 import { CustomersService } from './customers.service'
 import { CreateCustomerDto } from './dto/create-customer.dto'
+import { ImportCustomersDto } from './dto/import-customers.dto'
 import { PatchCustomerDto } from './dto/patch-customer.dto'
 
 @Controller('customers')
@@ -31,6 +32,11 @@ export class CustomersController {
   @Post()
   create(@TenantId() tenantId: string, @Body() dto: CreateCustomerDto) {
     return this.customers.create(tenantId, dto)
+  }
+
+  @Post('import')
+  import(@TenantId() tenantId: string, @Body() dto: ImportCustomersDto) {
+    return this.customers.importBulk(tenantId, dto.rows)
   }
 
   @Patch(':id')

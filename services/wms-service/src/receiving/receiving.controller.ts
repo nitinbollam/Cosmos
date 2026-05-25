@@ -5,6 +5,7 @@ import { ReceivingService } from './receiving.service'
 import { StartReceivingSessionDto } from './dto/start-receiving-session.dto'
 import { ScanReceivingItemDto } from './dto/scan-receiving-item.dto'
 import { CompleteReceivingSessionDto } from './dto/complete-receiving-session.dto'
+import { ImportReceivingItemsDto } from './dto/import-receiving-items.dto'
 
 @Controller('wms/receiving')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -48,6 +49,17 @@ export class ReceivingController {
   @Get('sessions/:sessionId')
   get(@TenantId() tenantId: string, @Param('sessionId') sessionId: string) {
     return this.receiving.getSession(sessionId, tenantId)
+  }
+
+  @Roles('WAREHOUSE_STAFF', 'MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN')
+  @Post('sessions/:sessionId/import')
+  importItems(
+    @TenantId() tenantId: string,
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ImportReceivingItemsDto,
+  ) {
+    return this.receiving.importItems(sessionId, tenantId, user.userId, body.rows)
   }
 
   @Roles('WAREHOUSE_STAFF', 'MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN')

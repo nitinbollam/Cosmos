@@ -38,6 +38,7 @@ model PurchaseOrder {
   number     String
   status     PurchaseOrderStatus   @default(DRAFT)
   notes      String?
+  amountPaid Decimal               @default(0) @db.Decimal(12, 2)
   createdAt  DateTime              @default(now())
   updatedAt  DateTime              @updatedAt
   supplier   Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)

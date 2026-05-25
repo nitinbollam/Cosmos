@@ -152,6 +152,23 @@ export class OrderService {
     })
   }
 
+  async recordPayment(tenantId: string, id: string, body: { amount: number; method: string; reference?: string }) {
+    const order = await this.findById(tenantId, id)
+    const total = new Decimal(order.totalAmount)
+    const paidSoFar = new Decimal(order.amountPaid ?? 0)
+    const remaining = total.minus(paidSoFar)
+    const want = new Decimal(body.amount)
+    if (remaining.lte(0)) {
+      throw new BadRequestException('Order is already fully paid')
+    }
+    const apply = Decimal.min(want, remaining)
+    return this.prisma.order.update({
+      where: { id },
+      data: { amountPaid: paidSoFar.plus(apply) },
+      include: { lineItems: true },
+    })
+  }
+
   async cancel(tenantId: string, id: string, reason: string) {
     const order = await this.findById(tenantId, id)
     if (order.status === 'CANCELLED' || order.status === 'DELIVERED') {

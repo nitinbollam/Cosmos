@@ -51,6 +51,15 @@ export class EventBusClient {
   async publish<T>(event: BaseEvent<T>): Promise<void> {
     const queue = this.getQueue(event.type)
     await queue.add(event.type, event, { jobId: event.id })
+    await this.connection.publish(
+      `cosmos:events:${event.type}`,
+      JSON.stringify({
+        id: event.id,
+        type: event.type,
+        tenantId: event.tenantId,
+        payload: event.payload,
+      }),
+    )
     logger.info(
       { eventType: event.type, eventId: event.id, tenantId: event.tenantId, correlationId: event.correlationId },
       'event published',

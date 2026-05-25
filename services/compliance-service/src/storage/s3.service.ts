@@ -37,6 +37,20 @@ export class S3Service {
     logger.info({ key, bucket: this.bucket }, 's3 upload ok')
   }
 
+  async upload(key: string, body: Buffer, contentType = 'application/octet-stream'): Promise<string> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    )
+    const filePath = `s3://${this.bucket}/${key}`
+    logger.info({ key, bucket: this.bucket, filePath }, 's3 upload ok')
+    return filePath
+  }
+
   async getText(key: string): Promise<string> {
     const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }))
     return (await out.Body?.transformToString()) ?? ''

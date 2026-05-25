@@ -4,8 +4,9 @@ import { ReceivingService } from './receiving.service'
 import { ReceivingController } from './receiving.controller'
 import { EventBusModule } from '../events/event-bus.module'
 
+import { PrismaModule } from '../prisma/prisma.module'
 @Module({
-  imports: [HttpModule, EventBusModule],
+  imports: [PrismaModule, HttpModule, EventBusModule],
   controllers: [ReceivingController],
   providers: [ReceivingService],
   exports: [ReceivingService],

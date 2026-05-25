@@ -10,6 +10,9 @@ const FIRST: Record<string, string> = {
   activities: 'crm',
   crm: 'crm',
   orders: 'order',
+  skus: 'inventory',
+  warehouses: 'inventory',
+  inventory: 'inventory',
 }
 
 export function toGatewayProxyPath(original: string): string {

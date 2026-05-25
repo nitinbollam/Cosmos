@@ -10,7 +10,8 @@
     "test": "node ../../scripts/prisma-generate-retry.mjs src/prisma/schema.prisma && jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "db:generate": "node ../../scripts/prisma-generate-retry.mjs src/prisma/schema.prisma",
-    "db:migrate": "prisma migrate deploy --schema=src/prisma/schema.prisma"
+    "db:migrate": "prisma migrate deploy --schema=src/prisma/schema.prisma",
+    "dev": "pnpm run start:dev"
   },
   "dependencies": {
     "@nestjs/axios": "^3.0.2",

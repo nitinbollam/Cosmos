@@ -1,9 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import { InventoryService } from './inventory.service'
 import { ReceiveStockDto } from './dto/receive-stock.dto'
 import { ReserveStockDto, ReleaseReservationDto } from './dto/reserve-stock.dto'
 import { AdjustStockDto } from './dto/adjust-stock.dto'
 import { TransferStockDto } from './dto/transfer-stock.dto'
+import { PatchStockLevelDto } from './dto/patch-stock-level.dto'
+import { EnsureStockLevelDto } from './dto/ensure-stock-level.dto'
 
 @Controller('inventory')
 export class InventoryController {
@@ -68,5 +70,29 @@ export class InventoryController {
     @Query('warehouseId') warehouseId?: string,
   ) {
     return this.inventory.getStockLevels(req.user.tenantId, { skuId, warehouseId })
+  }
+
+  @Post('levels/ensure')
+  ensureLevel(@Req() req: { user: { tenantId: string } }, @Body() body: EnsureStockLevelDto) {
+    return this.inventory.ensureNonBatchStockLevel(req.user.tenantId, {
+      skuId: body.skuId,
+      warehouseId: body.warehouseId,
+      locationId: body.locationId,
+      reorderPoint: body.reorderPoint,
+      reorderQty: body.reorderQty,
+    })
+  }
+
+  @Patch('levels/:id')
+  patchLevel(
+    @Req() req: { user: { tenantId: string } },
+    @Param('id') id: string,
+    @Body() body: PatchStockLevelDto,
+  ) {
+    return this.inventory.patchStockLevel(req.user.tenantId, id, {
+      reorderPoint: body.reorderPoint,
+      reorderQty: body.reorderQty,
+      locationId: body.locationId,
+    })
   }
 }

@@ -1,10 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, formatApiReachabilityError } from '@/lib/api'
 import { EmptyState } from '@/components/cosmos/empty-state'
+import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
+import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
+import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
 
 type SkuRow = {
   id: string
@@ -30,18 +33,48 @@ type SkuPage = {
 
 type WarehouseRow = { id: string; name: string; code: string }
 
+type StockLevelRow = {
+  id: string
+  warehouseId: string
+  locationId?: string | null
+  batchId?: string | null
+  reorderPoint?: number
+  reorderQty?: number
+}
+
 type LedgerRow = {
   id: string
   warehouseId: string
+  locationId?: string | null
+  batchId?: string | null
   eventType: string
   quantityDelta: number
   quantityAfter: number
+  unitCost: string | number
+  referenceId?: string | null
+  referenceType?: string | null
   performedBy: string
   occurredAt: string
-  referenceType?: string | null
 }
 
 const UOM_OPTIONS = ['EACH', 'CASE', 'PALLET']
+
+type SavePayload = {
+  sku: Record<string, unknown>
+  editStock?: {
+    mode: 'patch' | 'ensure'
+    levelId?: string
+    warehouseId?: string
+    locationId: string
+    reorderPoint: number
+    reorderQty: number
+    skuId: string
+  }
+}
+
+function isNonBatchBatchId(batchId: string | null | undefined) {
+  return batchId == null || batchId === ''
+}
 
 export default function InventoryPage() {
   const qc = useQueryClient()
@@ -58,6 +91,7 @@ export default function InventoryPage() {
 
   const [historySkuId, setHistorySkuId] = useState<string | null>(null)
   const [adjustOpen, setAdjustOpen] = useState<SkuRow | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const [adjWarehouse, setAdjWarehouse] = useState('')
   const [adjDelta, setAdjDelta] = useState(0)
@@ -82,6 +116,8 @@ export default function InventoryPage() {
     queryFn: () => api.get<WarehouseRow[]>('/warehouses'),
   })
 
+  const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
+
   const skusQ = useQuery({
     queryKey: ['skus', debouncedSearch, category, warehouseId, inStockOnly, page],
     queryFn: async () => {
@@ -102,6 +138,12 @@ export default function InventoryPage() {
     queryFn: () => api.get<Record<string, unknown>>(`/skus/${editId}`),
   })
 
+  const editLevelsQ = useQuery({
+    queryKey: ['inventory', 'levels', editId, 'drawer'],
+    enabled: !!editId && drawer === 'edit',
+    queryFn: () => api.get<StockLevelRow[]>(`/inventory/levels?skuId=${encodeURIComponent(editId!)}`),
+  })
+
   const ledgerQ = useQuery({
     queryKey: ['inventory', 'ledger', historySkuId],
     enabled: !!historySkuId,
@@ -109,15 +151,34 @@ export default function InventoryPage() {
   })
 
   const saveMut = useMutation({
-    mutationFn: async (body: Record<string, unknown>) => {
+    mutationFn: async (payload: SavePayload) => {
+      const { sku, editStock } = payload
       if (drawer === 'edit' && editId) {
-        await api.patch(`/skus/${encodeURIComponent(editId)}`, body)
+        await api.patch(`/skus/${encodeURIComponent(editId)}`, sku)
+        if (editStock) {
+          if (editStock.mode === 'patch' && editStock.levelId) {
+            await api.patch(`/inventory/levels/${encodeURIComponent(editStock.levelId)}`, {
+              reorderPoint: editStock.reorderPoint,
+              reorderQty: editStock.reorderQty,
+              locationId: editStock.locationId.trim() || null,
+            })
+          } else if (editStock.mode === 'ensure' && editStock.warehouseId) {
+            await api.post('/inventory/levels/ensure', {
+              skuId: editStock.skuId,
+              warehouseId: editStock.warehouseId,
+              locationId: editStock.locationId.trim() || undefined,
+              reorderPoint: editStock.reorderPoint,
+              reorderQty: editStock.reorderQty,
+            })
+          }
+        }
       } else {
-        await api.post('/skus', body)
+        await api.post('/skus', sku)
       }
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['skus'] })
+      void qc.invalidateQueries({ queryKey: ['inventory', 'levels'] })
       setDrawer(null)
       setEditId(null)
     },
@@ -126,15 +187,18 @@ export default function InventoryPage() {
   const adjustMut = useMutation({
     mutationFn: async () => {
       if (!adjustOpen || !adjWarehouse) throw new Error('warehouse required')
+      const reason = adjReason.trim()
+      if (!reason) throw new Error('reason required')
       await api.post('/inventory/adjust', {
         skuId: adjustOpen.id,
         warehouseId: adjWarehouse,
         quantityDelta: adjDelta,
-        reason: adjReason || 'Manual adjustment',
+        reason,
       })
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['skus'] })
+      void qc.invalidateQueries({ queryKey: ['inventory'] })
       setAdjustOpen(null)
       setAdjDelta(0)
       setAdjReason('')
@@ -143,6 +207,8 @@ export default function InventoryPage() {
   })
 
   const totalPages = Math.max(1, Math.ceil((skusQ.data?.total ?? 0) / pageSize))
+
+  const drawerOpen = drawer === 'new' || drawer === 'edit'
 
   return (
     <div className="p-6 space-y-6">
@@ -153,17 +219,59 @@ export default function InventoryPage() {
           </h1>
           <p className="text-cosmos-text-3 text-sm mt-1">SKUs, stock positions, and adjustments</p>
         </div>
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={() => {
-            setEditId(null)
-            setDrawer('new')
-          }}
-        >
-          New SKU
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-ghost" onClick={() => setImportOpen((open) => !open)}>
+            {importOpen ? 'Hide import' : 'Import CSV/Excel'}
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              setEditId(null)
+              setDrawer('new')
+            }}
+          >
+            New SKU
+          </button>
+        </div>
       </div>
+
+      {importOpen ? (
+        <SpreadsheetImportPanel
+          title="Import SKUs"
+          expectedColumns={['code', 'name', 'category', 'cost', 'price', 'barcode', 'unitOfMeasure', 'reorderPoint', 'reorderQty']}
+          templateFilename="skus-import-template.csv"
+          onImport={async (rows) => {
+            const payload = rows
+              .map((row) => {
+                const code = rowValue(row, 'code', 'skuCode', 'sku_code')
+                const name = rowValue(row, 'name', 'description')
+                const category = rowValue(row, 'category')
+                const cost = rowNumber(row, 'cost')
+                const price = rowNumber(row, 'price')
+                if (!code || !name || !category || cost == null || price == null) return null
+                const reorderPoint = rowNumber(row, 'reorderPoint', 'reorder_point')
+                const reorderQty = rowNumber(row, 'reorderQty', 'reorder_qty')
+                return {
+                  code,
+                  name,
+                  category,
+                  cost,
+                  price,
+                  barcode: rowValue(row, 'barcode', 'upc') || undefined,
+                  unitOfMeasure: rowValue(row, 'unitOfMeasure', 'unit_of_measure', 'uom') || undefined,
+                  reorderPoint,
+                  reorderQty,
+                }
+              })
+              .filter((row): row is NonNullable<typeof row> => row != null)
+            const result = await api.post<BulkImportResult>('/skus/import', { rows: payload })
+            void qc.invalidateQueries({ queryKey: ['skus'] })
+            void qc.invalidateQueries({ queryKey: ['skus', 'categories'] })
+            return result
+          }}
+        />
+      ) : null}
 
       <div className="cosmos-card flex flex-wrap gap-4 items-end">
         <div className="min-w-[200px] flex-1">
@@ -211,8 +319,8 @@ export default function InventoryPage() {
             ))}
           </div>
         ) : skusQ.isError ? (
-          <p className="text-sm py-8" style={{ color: 'var(--c-danger)' }}>
-            {(skusQ.error as Error)?.message ?? 'Failed to load SKUs'}
+          <p className="text-sm py-8 max-w-xl" style={{ color: 'var(--c-danger)' }}>
+            {formatApiReachabilityError(skusQ.error)}
           </p>
         ) : (skusQ.data?.items ?? []).length === 0 ? (
           <EmptyState
@@ -311,11 +419,22 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {(drawer === 'new' || drawer === 'edit') && (
+      <CosmosSheet
+        open={drawerOpen}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDrawer(null)
+            setEditId(null)
+          }
+        }}
+        title={drawer === 'edit' ? 'Edit SKU' : 'New SKU'}
+      >
         <SkuDrawer
-          mode={drawer}
+          mode={drawer ?? 'new'}
+          editId={editId}
           initial={drawer === 'edit' ? editSkuQ.data : undefined}
-          loading={drawer === 'edit' && editSkuQ.isLoading}
+          stockLevels={drawer === 'edit' ? editLevelsQ.data : undefined}
+          loading={drawer === 'edit' && (editSkuQ.isLoading || editLevelsQ.isLoading)}
           warehouses={warehousesQ.data ?? []}
           saving={saveMut.isPending}
           error={saveMut.error instanceof Error ? saveMut.error.message : undefined}
@@ -323,75 +442,99 @@ export default function InventoryPage() {
             setDrawer(null)
             setEditId(null)
           }}
-          onSave={(payload) => saveMut.mutate(payload)}
+          onSave={saveMut.mutate}
         />
-      )}
+      </CosmosSheet>
 
-      {historySkuId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.65)' }}
-          onClick={() => setHistorySkuId(null)}
-        >
-          <div className="cosmos-card max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-cosmos-white font-display">Stock ledger</h3>
-              <button type="button" className="btn-ghost !py-1 !px-2" onClick={() => setHistorySkuId(null)}>
-                Close
-              </button>
-            </div>
-            {ledgerQ.isLoading ? (
-              <div className="space-y-2 py-6">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="skeleton h-10 w-full" />
+      <CosmosDialogModal
+        open={!!historySkuId}
+        onOpenChange={(o) => {
+          if (!o) setHistorySkuId(null)
+        }}
+        title="Stock ledger"
+        maxWidthClass="max-w-5xl"
+      >
+        {ledgerQ.isLoading ? (
+          <div className="space-y-2 py-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="skeleton h-10 w-full" />
+            ))}
+          </div>
+        ) : ledgerQ.isError ? (
+          <p className="text-sm py-6 max-w-xl" style={{ color: 'var(--c-danger)' }}>
+            {formatApiReachabilityError(ledgerQ.error)}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="cosmos-table text-sm">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Warehouse</th>
+                  <th>Location</th>
+                  <th>Batch</th>
+                  <th>Event</th>
+                  <th>Delta</th>
+                  <th>After</th>
+                  <th>Unit cost</th>
+                  <th>Ref</th>
+                  <th>By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(ledgerQ.data ?? []).map((e) => (
+                  <tr key={e.id}>
+                    <td className="text-cosmos-text-3 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString()}</td>
+                    <td className="font-mono text-xs">{whMap.get(e.warehouseId) ?? e.warehouseId.slice(-8)}</td>
+                    <td className="font-mono text-xs">{e.locationId ?? '—'}</td>
+                    <td className="font-mono text-xs">{e.batchId || '—'}</td>
+                    <td className="font-mono text-xs">{e.eventType}</td>
+                    <td className="font-mono" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
+                      {e.quantityDelta >= 0 ? '+' : ''}
+                      {e.quantityDelta}
+                    </td>
+                    <td className="font-mono">{e.quantityAfter}</td>
+                    <td className="font-mono text-xs">{Number(e.unitCost ?? 0).toFixed(4)}</td>
+                    <td className="font-mono text-xs max-w-[120px] truncate" title={`${e.referenceType ?? ''} ${e.referenceId ?? ''}`}>
+                      {e.referenceType ?? '—'} {e.referenceId ? e.referenceId.slice(0, 8) : ''}
+                    </td>
+                    <td className="font-mono text-xs">{e.performedBy.slice(-8)}</td>
+                  </tr>
                 ))}
-              </div>
-            ) : ledgerQ.isError ? (
-              <p className="text-sm text-red-400 py-6">{(ledgerQ.error as Error)?.message}</p>
-            ) : (
-              <div className="overflow-y-auto flex-1">
-                <table className="cosmos-table">
-                  <thead>
-                    <tr>
-                      <th>When</th>
-                      <th>Event</th>
-                      <th>Delta</th>
-                      <th>After</th>
-                      <th>By</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(ledgerQ.data ?? []).map((e) => (
-                      <tr key={e.id}>
-                        <td className="text-sm text-cosmos-text-3">{new Date(e.occurredAt).toLocaleString()}</td>
-                        <td className="font-mono text-xs">{e.eventType}</td>
-                        <td className="font-mono" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
-                          {e.quantityDelta >= 0 ? '+' : ''}
-                          {e.quantityDelta}
-                        </td>
-                        <td className="font-mono">{e.quantityAfter}</td>
-                        <td className="font-mono text-xs">{e.performedBy.slice(-8)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {(ledgerQ.data ?? []).length === 0 && (
-                  <p className="text-sm text-cosmos-text-3 py-8 text-center">No ledger entries yet.</p>
-                )}
-              </div>
+              </tbody>
+            </table>
+            {(ledgerQ.data ?? []).length === 0 && (
+              <p className="text-sm text-cosmos-text-3 py-8 text-center">No ledger entries yet.</p>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </CosmosDialogModal>
 
-      {adjustOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.65)' }}
-          onClick={() => setAdjustOpen(null)}
-        >
-          <div className="cosmos-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-2">Adjust stock</h3>
+      <CosmosDialogModal
+        open={!!adjustOpen}
+        onOpenChange={(o) => {
+          if (!o) setAdjustOpen(null)
+        }}
+        title="Adjust stock"
+        maxWidthClass="max-w-md"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn-ghost" onClick={() => setAdjustOpen(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!adjWarehouse || adjDelta === 0 || !adjReason.trim() || adjustMut.isPending}
+              onClick={() => adjustMut.mutate()}
+            >
+              Apply
+            </button>
+          </div>
+        }
+      >
+        {adjustOpen && (
+          <>
             <p className="text-sm text-cosmos-text-3 mb-4 font-mono">
               {adjustOpen.code} · {adjustOpen.name}
             </p>
@@ -412,30 +555,24 @@ export default function InventoryPage() {
               onChange={(e) => setAdjDelta(parseInt(e.target.value, 10) || 0)}
             />
             <label className="block text-sm mb-1 text-cosmos-text-2">Reason</label>
-            <input className="cosmos-input mb-4" value={adjReason} onChange={(e) => setAdjReason(e.target.value)} placeholder="Cycle count, damage, …" />
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost" onClick={() => setAdjustOpen(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={!adjWarehouse || adjDelta === 0 || adjustMut.isPending}
-                onClick={() => adjustMut.mutate()}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <input
+              className="cosmos-input"
+              value={adjReason}
+              onChange={(e) => setAdjReason(e.target.value)}
+              placeholder="Required — cycle count, damage, …"
+            />
+          </>
+        )}
+      </CosmosDialogModal>
     </div>
   )
 }
 
 function SkuDrawer({
   mode,
+  editId,
   initial,
+  stockLevels,
   loading,
   warehouses,
   saving,
@@ -444,13 +581,15 @@ function SkuDrawer({
   onSave,
 }: {
   mode: 'new' | 'edit'
+  editId: string | null
   initial?: Record<string, unknown>
+  stockLevels?: StockLevelRow[]
   loading?: boolean
   warehouses: WarehouseRow[]
   saving: boolean
   error?: string
   onClose: () => void
-  onSave: (body: Record<string, unknown>) => void
+  onSave: (p: SavePayload) => void
 }) {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
@@ -461,6 +600,8 @@ function SkuDrawer({
   const [uom, setUom] = useState('EACH')
   const [weight, setWeight] = useState('')
   const [isTobacco, setIsTobacco] = useState(false)
+  const [isRegulated, setIsRegulated] = useState(false)
+  const [manufacturerId, setManufacturerId] = useState('')
   const [manufacturerDid, setManufacturerDid] = useState('')
   const [excise, setExcise] = useState('')
   const [cost, setCost] = useState('0')
@@ -470,6 +611,29 @@ function SkuDrawer({
   const [reorderQty, setReorderQty] = useState('0')
   const [defWh, setDefWh] = useState('')
   const [defLoc, setDefLoc] = useState('')
+  const [isActive, setIsActive] = useState(true)
+
+  const applyLevelsForWarehouse = useCallback(
+    (wh: string, levels: StockLevelRow[] | undefined) => {
+      if (!levels?.length) {
+        setDefLoc('')
+        setReorderPt('0')
+        setReorderQty('0')
+        return
+      }
+      const row = levels.find((l) => l.warehouseId === wh && isNonBatchBatchId(l.batchId))
+      if (row) {
+        setDefLoc(row.locationId ?? '')
+        setReorderPt(String(row.reorderPoint ?? 0))
+        setReorderQty(String(row.reorderQty ?? 0))
+      } else {
+        setDefLoc('')
+        setReorderPt('0')
+        setReorderQty('0')
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     if (mode !== 'edit' || !initial) return
@@ -482,16 +646,30 @@ function SkuDrawer({
     setUom(String(initial.unitOfMeasure ?? 'EACH'))
     setWeight(initial.weightGrams != null ? String(initial.weightGrams) : '')
     setIsTobacco(Boolean(initial.isTobacco))
+    setIsRegulated(Boolean(initial.isRegulated))
+    setManufacturerId(String(initial.manufacturerId ?? ''))
     setManufacturerDid(String(initial.manufacturerDid ?? ''))
     setExcise(String(initial.exciseTaxCategory ?? ''))
     setCost(String(initial.cost ?? '0'))
     setPrice(String(initial.price ?? '0'))
     setMinPrice(initial.minPrice != null ? String(initial.minPrice) : '')
-    setReorderPt('0')
-    setReorderQty('0')
-    setDefWh('')
-    setDefLoc('')
+    setIsActive(initial.isActive !== false)
   }, [mode, initial])
+
+  useEffect(() => {
+    if (mode !== 'edit' || stockLevels === undefined) return
+    const nonBatch = stockLevels.filter((l) => isNonBatchBatchId(l.batchId))
+    const primary = nonBatch[0]
+    if (primary) {
+      setDefWh(primary.warehouseId)
+      applyLevelsForWarehouse(primary.warehouseId, stockLevels)
+    } else {
+      setDefWh('')
+      setDefLoc('')
+      setReorderPt('0')
+      setReorderQty('0')
+    }
+  }, [mode, stockLevels, applyLevelsForWarehouse])
 
   useEffect(() => {
     if (mode !== 'new') return
@@ -504,6 +682,8 @@ function SkuDrawer({
     setUom('EACH')
     setWeight('')
     setIsTobacco(false)
+    setIsRegulated(false)
+    setManufacturerId('')
     setManufacturerDid('')
     setExcise('')
     setCost('0')
@@ -513,7 +693,13 @@ function SkuDrawer({
     setReorderQty('0')
     setDefWh('')
     setDefLoc('')
+    setIsActive(true)
   }, [mode])
+
+  const onWarehouseSelect = (wh: string) => {
+    setDefWh(wh)
+    if (mode === 'edit' && stockLevels) applyLevelsForWarehouse(wh, stockLevels)
+  }
 
   const submit = () => {
     const body: Record<string, unknown> = {
@@ -524,16 +710,32 @@ function SkuDrawer({
       price: Number(price),
       unitOfMeasure: uom,
       isTobacco,
+      isRegulated,
     }
     if (description.trim()) body.description = description.trim()
     if (sub.trim()) body.subcategory = sub.trim()
     if (barcode.trim()) body.barcode = barcode.trim()
     if (weight.trim()) body.weightGrams = Number(weight)
+    if (manufacturerId.trim()) body.manufacturerId = manufacturerId.trim()
+    else if (mode === 'edit') body.manufacturerId = null
+
     if (isTobacco) {
       if (manufacturerDid.trim()) body.manufacturerDid = manufacturerDid.trim()
+      else if (mode === 'edit') body.manufacturerDid = null
       if (excise.trim()) body.exciseTaxCategory = excise.trim()
+      else if (mode === 'edit') body.exciseTaxCategory = null
+    } else if (mode === 'edit') {
+      body.manufacturerDid = null
+      body.exciseTaxCategory = null
     }
+
     if (minPrice.trim()) body.minPrice = Number(minPrice)
+    else if (mode === 'edit') body.minPrice = null
+
+    if (mode === 'edit') {
+      body.isActive = isActive
+    }
+
     if (mode === 'new') {
       if (defWh) {
         body.defaultWarehouseId = defWh
@@ -541,117 +743,161 @@ function SkuDrawer({
         body.reorderPoint = Number(reorderPt) || 0
         body.reorderQty = Number(reorderQty) || 0
       }
+      onSave({ sku: body })
+      return
     }
-    onSave(body)
+
+    if (!editId) return
+
+    let editStock: SavePayload['editStock'] | undefined
+    if (defWh) {
+      const row = stockLevels?.find((l) => l.warehouseId === defWh && isNonBatchBatchId(l.batchId))
+      const reorderPoint = Number(reorderPt) || 0
+      const reorderQtyN = Number(reorderQty) || 0
+      if (row) {
+        editStock = {
+          mode: 'patch',
+          levelId: row.id,
+          warehouseId: defWh,
+          locationId: defLoc,
+          reorderPoint,
+          reorderQty: reorderQtyN,
+          skuId: editId,
+        }
+      } else {
+        editStock = {
+          mode: 'ensure',
+          warehouseId: defWh,
+          locationId: defLoc,
+          reorderPoint,
+          reorderQty: reorderQtyN,
+          skuId: editId,
+        }
+      }
+    }
+
+    onSave({ sku: body, editStock })
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose}>
-      <div
-        className="w-full max-w-lg h-full overflow-y-auto cosmos-card rounded-none border-l"
-        style={{ borderRadius: 0, borderColor: 'var(--c-border)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-cosmos-white font-display mb-4">{mode === 'new' ? 'New SKU' : 'Edit SKU'}</h3>
-        {loading ? (
-          <div className="space-y-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="skeleton h-10 w-full" />
+    <>
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="skeleton h-10 w-full" />
+          ))}
+        </div>
+      ) : (
+        <>
+          {error && <p className="text-sm mb-3 text-red-400">{error}</p>}
+          <label className="text-xs text-cosmos-text-3">Code *</label>
+          <input className="cosmos-input mb-3" value={code} onChange={(e) => setCode(e.target.value)} />
+          <label className="text-xs text-cosmos-text-3">Name *</label>
+          <input className="cosmos-input mb-3" value={name} onChange={(e) => setName(e.target.value)} />
+          <label className="text-xs text-cosmos-text-3">Description</label>
+          <textarea className="cosmos-input mb-3 min-h-[72px]" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <label className="text-xs text-cosmos-text-3">Category *</label>
+          <input className="cosmos-input mb-3" value={cat} onChange={(e) => setCat(e.target.value)} placeholder="e.g. Beverages" />
+          <label className="text-xs text-cosmos-text-3">Subcategory</label>
+          <input className="cosmos-input mb-3" value={sub} onChange={(e) => setSub(e.target.value)} />
+          <label className="text-xs text-cosmos-text-3">Barcode</label>
+          <input className="cosmos-input mb-3" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+          <label className="text-xs text-cosmos-text-3">Unit of measure</label>
+          <select className="cosmos-input mb-3" value={uom} onChange={(e) => setUom(e.target.value)}>
+            {UOM_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
             ))}
+          </select>
+          <label className="text-xs text-cosmos-text-3">Weight (grams)</label>
+          <input className="cosmos-input mb-3" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
+
+          <label className="flex items-center gap-2 mb-2 cursor-pointer">
+            <input type="checkbox" checked={isTobacco} onChange={(e) => setIsTobacco(e.target.checked)} />
+            <span className="text-sm text-cosmos-text">Is tobacco</span>
+          </label>
+          <label className="flex items-center gap-2 mb-3 cursor-pointer">
+            <input type="checkbox" checked={isRegulated} onChange={(e) => setIsRegulated(e.target.checked)} />
+            <span className="text-sm text-cosmos-text">Regulated product</span>
+          </label>
+
+          {isTobacco && (
+            <>
+              <label className="text-xs text-cosmos-text-3">Manufacturer ID</label>
+              <input className="cosmos-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
+              <label className="text-xs text-cosmos-text-3">Manufacturer DID</label>
+              <input className="cosmos-input mb-3 font-mono text-sm" value={manufacturerDid} onChange={(e) => setManufacturerDid(e.target.value)} />
+              <label className="text-xs text-cosmos-text-3">Excise tax category</label>
+              <input className="cosmos-input mb-3" value={excise} onChange={(e) => setExcise(e.target.value)} />
+            </>
+          )}
+
+          {!isTobacco && (
+            <>
+              <label className="text-xs text-cosmos-text-3">Manufacturer ID (optional)</label>
+              <input className="cosmos-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
+            </>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-cosmos-text-3">Cost</label>
+              <input className="cosmos-input" type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-cosmos-text-3">Sell price</label>
+              <input className="cosmos-input" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </div>
           </div>
-        ) : (
-          <>
-            {error && <p className="text-sm mb-3 text-red-400">{error}</p>}
-            <label className="text-xs text-cosmos-text-3">Code *</label>
-            <input className="cosmos-input mb-3" value={code} onChange={(e) => setCode(e.target.value)} />
-            <label className="text-xs text-cosmos-text-3">Name *</label>
-            <input className="cosmos-input mb-3" value={name} onChange={(e) => setName(e.target.value)} />
-            <label className="text-xs text-cosmos-text-3">Description</label>
-            <textarea className="cosmos-input mb-3 min-h-[72px]" value={description} onChange={(e) => setDescription(e.target.value)} />
-            <label className="text-xs text-cosmos-text-3">Category *</label>
-            <input className="cosmos-input mb-3" value={cat} onChange={(e) => setCat(e.target.value)} placeholder="e.g. Beverages" />
-            <label className="text-xs text-cosmos-text-3">Subcategory</label>
-            <input className="cosmos-input mb-3" value={sub} onChange={(e) => setSub(e.target.value)} />
-            <label className="text-xs text-cosmos-text-3">Barcode</label>
-            <input className="cosmos-input mb-3" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-            <label className="text-xs text-cosmos-text-3">Unit of measure</label>
-            <select className="cosmos-input mb-3" value={uom} onChange={(e) => setUom(e.target.value)}>
-              {UOM_OPTIONS.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
-            <label className="text-xs text-cosmos-text-3">Weight (grams)</label>
-            <input className="cosmos-input mb-3" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
-            <label className="flex items-center gap-2 mb-3 cursor-pointer">
-              <input type="checkbox" checked={isTobacco} onChange={(e) => setIsTobacco(e.target.checked)} />
-              <span className="text-sm text-cosmos-text">Tobacco / regulated</span>
+          <label className="text-xs text-cosmos-text-3 mt-3 block">Min price</label>
+          <input className="cosmos-input mb-3" type="number" step="0.01" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+
+          <p className="text-sm text-cosmos-text-2 mt-4 mb-2">Default stocking (non-batch row)</p>
+          <label className="text-xs text-cosmos-text-3">Warehouse</label>
+          <select className="cosmos-input mb-3" value={defWh} onChange={(e) => onWarehouseSelect(e.target.value)}>
+            <option value="">—</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.code}
+              </option>
+            ))}
+          </select>
+          <label className="text-xs text-cosmos-text-3">Location label</label>
+          <input className="cosmos-input mb-3" value={defLoc} onChange={(e) => setDefLoc(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-cosmos-text-3">Reorder point</label>
+              <input className="cosmos-input" type="number" value={reorderPt} onChange={(e) => setReorderPt(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-cosmos-text-3">Reorder qty</label>
+              <input className="cosmos-input" type="number" value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} />
+            </div>
+          </div>
+
+          {mode === 'edit' && (
+            <label className="flex items-center gap-2 mt-4 cursor-pointer">
+              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+              <span className="text-sm text-cosmos-text">Active</span>
             </label>
-            {isTobacco && (
-              <>
-                <label className="text-xs text-cosmos-text-3">Manufacturer DID</label>
-                <input className="cosmos-input mb-3 font-mono text-sm" value={manufacturerDid} onChange={(e) => setManufacturerDid(e.target.value)} />
-                <label className="text-xs text-cosmos-text-3">Excise tax category</label>
-                <input className="cosmos-input mb-3" value={excise} onChange={(e) => setExcise(e.target.value)} />
-              </>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-cosmos-text-3">Cost</label>
-                <input className="cosmos-input" type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs text-cosmos-text-3">Sell price</label>
-                <input className="cosmos-input" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
-              </div>
-            </div>
-            <label className="text-xs text-cosmos-text-3 mt-3 block">Min price</label>
-            <input className="cosmos-input mb-3" type="number" step="0.01" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+          )}
 
-            {mode === 'new' && (
-              <>
-                <p className="text-sm text-cosmos-text-2 mt-4 mb-2">Default stocking location (optional)</p>
-                <label className="text-xs text-cosmos-text-3">Warehouse</label>
-                <select className="cosmos-input mb-3" value={defWh} onChange={(e) => setDefWh(e.target.value)}>
-                  <option value="">—</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.code}
-                    </option>
-                  ))}
-                </select>
-                <label className="text-xs text-cosmos-text-3">Location label</label>
-                <input className="cosmos-input mb-3" value={defLoc} onChange={(e) => setDefLoc(e.target.value)} />
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-cosmos-text-3">Reorder point</label>
-                    <input className="cosmos-input" type="number" value={reorderPt} onChange={(e) => setReorderPt(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-cosmos-text-3">Reorder qty</label>
-                    <input className="cosmos-input" type="number" value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} />
-                  </div>
-                </div>
-              </>
-            )}
-
-            <div className="flex gap-2 justify-end mt-6">
-              <button type="button" className="btn-ghost" onClick={onClose}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={saving || !code.trim() || !name.trim()}
-                onClick={() => submit()}
-              >
-                {mode === 'new' ? 'Create' : 'Save'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+          <div className="flex gap-2 justify-end mt-6">
+            <button type="button" className="btn-ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={saving || !code.trim() || !name.trim()}
+              onClick={() => submit()}
+            >
+              {mode === 'new' ? 'Create' : 'Save'}
+            </button>
+          </div>
+        </>
+      )}
+    </>
   )
 }

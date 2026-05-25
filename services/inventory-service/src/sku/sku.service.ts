@@ -230,6 +230,33 @@ export class SkuService {
     }
   }
 
+  async importBulk(tenantId: string, rows: CreateSkuInput[]) {
+    let created = 0
+    const errors: Array<{ row: number; message: string }> = []
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index]
+      const rowNum = index + 2
+      if (!row.code?.trim() || !row.name?.trim() || !row.category?.trim()) {
+        errors.push({ row: rowNum, message: 'code, name, and category are required' })
+        continue
+      }
+      if (row.cost == null || row.price == null) {
+        errors.push({ row: rowNum, message: 'cost and price are required' })
+        continue
+      }
+      try {
+        await this.create(tenantId, row)
+        created++
+      } catch (e) {
+        errors.push({
+          row: rowNum,
+          message: e instanceof Error ? e.message : 'Could not create SKU',
+        })
+      }
+    }
+    return { created, failed: errors.length, errors }
+  }
+
   async update(tenantId: string, id: string, patch: Partial<CreateSkuInput> & { isActive?: boolean }) {
     await this.findById(tenantId, id)
     try {

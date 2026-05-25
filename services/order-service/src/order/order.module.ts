@@ -5,8 +5,10 @@ import { OrderController } from './order.controller'
 import { OrderService } from './order.service'
 import { OrderSaga } from './order.saga'
 
+import { PrismaModule } from '../prisma/prisma.module'
 @Module({
   imports: [
+    PrismaModule,
     ConfigModule,
     HttpModule.register({ timeout: 10_000, maxRedirects: 2 }),
   ],

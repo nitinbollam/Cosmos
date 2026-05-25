@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: cosmos
       POSTGRES_DB: cosmos
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - cosmos-pg-data:/var/lib/postgresql/data
       - ./infra/docker/init-db.sql:/docker-entrypoint-initdb.d/00-init.sql:ro

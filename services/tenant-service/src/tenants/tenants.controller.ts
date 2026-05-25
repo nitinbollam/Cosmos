@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
 import { Roles, TenantId, RolesGuard } from '@cosmos/auth-middleware'
 import { TenantsService } from './tenants.service'
 import { PatchTenantDto } from './dto/patch-tenant.dto'
@@ -6,6 +6,7 @@ import { UpdatePlanDto } from './dto/update-plan.dto'
 import { ProvisionTenantDto } from './dto/provision-tenant.dto'
 import { PatchOnboardingStepDto } from './dto/patch-onboarding.dto'
 import { SuspendTenantDto } from './dto/suspend.dto'
+import { CreateInviteDto } from './dto/create-invite.dto'
 
 @UseGuards(RolesGuard)
 @Controller('tenants')
@@ -31,6 +32,30 @@ export class TenantsController {
       settingsPatch: dto.settingsPatch as Record<string, unknown> | undefined,
       metadataPatch: dto.metadataPatch as Record<string, unknown> | undefined,
     })
+  }
+
+  @Roles('TENANT_ADMIN', 'SUPER_ADMIN')
+  @Get('me/invites')
+  listInvites(@TenantId() tenantId: string) {
+    return this.tenants.listPendingInvites(tenantId)
+  }
+
+  @Roles('TENANT_ADMIN', 'SUPER_ADMIN')
+  @Post('me/invites')
+  createInvite(@TenantId() tenantId: string, @Body() dto: CreateInviteDto) {
+    return this.tenants.createInvite(tenantId, { email: dto.email, role: dto.role })
+  }
+
+  @Roles('TENANT_ADMIN', 'SUPER_ADMIN')
+  @Delete('me/invites/:id')
+  revokeInvite(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.tenants.revokeInvite(tenantId, id)
+  }
+
+  @Roles('TENANT_ADMIN', 'SUPER_ADMIN')
+  @Post('me/upgrade')
+  upgrade(@TenantId() tenantId: string, @Body() dto: UpdatePlanDto) {
+    return this.tenants.updatePlan(tenantId, dto.plan)
   }
 
   @Roles('TENANT_ADMIN', 'SUPER_ADMIN')

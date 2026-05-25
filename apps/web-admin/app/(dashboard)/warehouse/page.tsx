@@ -1,10 +1,14 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useMemo, useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
+import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
+import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
+import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
 
 type Tab = 'picks' | 'receiving' | 'counts'
 
@@ -52,6 +56,7 @@ type CycleRow = {
   createdBy: string
   createdAt: string
   _count: { lines: number }
+  varianceItemsCount?: number
 }
 
 type CycleDetail = Omit<CycleRow, '_count'> & {
@@ -102,11 +107,12 @@ export default function WarehousePage() {
 
   const [recvDetailId, setRecvDetailId] = useState<string | null>(null)
 
-  const [countDrawer, setCountDrawer] = useState(false)
+  const [countDrawerOpen, setCountDrawerOpen] = useState(false)
   const [countWh, setCountWh] = useState('')
   const [countType, setCountType] = useState<'FULL' | 'ABC' | 'RANDOM'>('FULL')
   const [countScheduled, setCountScheduled] = useState('')
   const [countDetailId, setCountDetailId] = useState<string | null>(null)
+  const [countLineDrafts, setCountLineDrafts] = useState<Record<string, string>>({})
 
   const warehousesQ = useQuery({
     queryKey: ['warehouses'],
@@ -240,7 +246,7 @@ export default function WarehousePage() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts'] })
-      setCountDrawer(false)
+      setCountDrawerOpen(false)
       setCountWh('')
       setCountScheduled('')
     },
@@ -258,13 +264,98 @@ export default function WarehousePage() {
 
   const approveCountMut = useMutation({
     mutationFn: async (id: string) => {
-      await api.patch(`/wms/cycle-counts/${encodeURIComponent(id)}/approve`, {})
+      await api.post(`/wms/cycle-counts/${encodeURIComponent(id)}/approve`, {})
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts'] })
       setCountDetailId(null)
     },
   })
+
+  const patchCountLineMut = useMutation({
+    mutationFn: async ({
+      countId,
+      lineId,
+      countedQty,
+    }: {
+      countId: string
+      lineId: string
+      countedQty: number
+    }) => {
+      await api.patch(`/wms/cycle-counts/${encodeURIComponent(countId)}/lines/${encodeURIComponent(lineId)}`, {
+        countedQty,
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts'] })
+      void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts', countDetailId] })
+    },
+  })
+
+  const importCountLinesMut = useMutation({
+    mutationFn: async ({ countId, rows }: { countId: string; rows: SpreadsheetRow[] }) => {
+      const payload = rows
+        .map((row) => {
+          const countedQty = rowNumber(row, 'countedQty', 'counted_qty', 'qty', 'quantity')
+          if (countedQty == null) return null
+          return {
+            skuId: rowValue(row, 'skuId', 'sku_id', 'sku') || undefined,
+            skuCode: rowValue(row, 'skuCode', 'sku_code', 'code') || undefined,
+            locationLabel: rowValue(row, 'locationLabel', 'location', 'location_label') || undefined,
+            countedQty,
+          }
+        })
+        .filter((row): row is NonNullable<typeof row> => row != null)
+      return api.post<BulkImportResult>(
+        `/wms/cycle-counts/${encodeURIComponent(countId)}/lines/import`,
+        { rows: payload },
+      )
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts'] })
+      void countDetailQ.refetch()
+    },
+  })
+
+  const importReceivingMut = useMutation({
+    mutationFn: async ({ sessionId, rows }: { sessionId: string; rows: SpreadsheetRow[] }) => {
+      const payload = rows
+        .map((row) => {
+          const barcode = rowValue(row, 'barcode', 'skuCode', 'sku_code', 'code', 'upc')
+          const receivedQty = rowNumber(row, 'receivedQty', 'received_qty', 'qty', 'quantity')
+          if (!barcode || receivedQty == null || receivedQty < 1) return null
+          const damagedQty = rowNumber(row, 'damagedQty', 'damaged_qty', 'damaged')
+          return {
+            barcode,
+            receivedQty,
+            ...(damagedQty != null ? { damagedQty } : {}),
+            ...(rowValue(row, 'batchId', 'batch_id', 'batch')
+              ? { batchId: rowValue(row, 'batchId', 'batch_id', 'batch') }
+              : {}),
+            ...(rowValue(row, 'locationId', 'location_id', 'location')
+              ? { locationId: rowValue(row, 'locationId', 'location_id', 'location') }
+              : {}),
+          }
+        })
+        .filter((row): row is NonNullable<typeof row> => row != null)
+      return api.post<BulkImportResult>(
+        `/wms/receiving/sessions/${encodeURIComponent(sessionId)}/import`,
+        { rows: payload },
+      )
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wms', 'receiving'] })
+      void recvDetailQ.refetch()
+    },
+  })
+
+  useEffect(() => {
+    const d = countDetailQ.data
+    if (!d || d.id !== countDetailId) return
+    setCountLineDrafts(
+      Object.fromEntries(d.lines.map((ln) => [ln.id, ln.countedQty != null ? String(ln.countedQty) : ''])),
+    )
+  }, [countDetailId, countDetailQ.data])
 
   const staffUsers = useMemo(
     () =>
@@ -285,6 +376,20 @@ export default function WarehousePage() {
         <p className="text-cosmos-text-3 text-sm mt-1">Pick tasks, receiving, and cycle counts</p>
       </div>
 
+      {!warehousesQ.isLoading && !warehousesQ.isError && (warehousesQ.data ?? []).length === 0 ? (
+        <div className="cosmos-card flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-cosmos-white">No warehouses configured</p>
+            <p className="text-sm text-cosmos-text-3 mt-1">
+              Receiving, cycle counts, and warehouse filters need at least one location. Add one in Settings.
+            </p>
+          </div>
+          <Link href="/settings?tab=warehouses" className="btn-primary">
+            Add warehouse
+          </Link>
+        </div>
+      ) : null}
+
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}>
         {(
           [
@@ -300,7 +405,7 @@ export default function WarehousePage() {
             className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
             style={{
               background: tab === k ? 'var(--c-primary-dim)' : 'transparent',
-              color: tab === k ? 'var(--c-white)' : 'var(--c-text-2)',
+              color: tab === k ? '#fff' : 'var(--c-text-2)',
               border: tab === k ? '1px solid var(--c-primary)' : '1px solid transparent',
             }}
           >
@@ -524,7 +629,7 @@ export default function WarehousePage() {
       {tab === 'counts' && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <button type="button" className="btn-primary" onClick={() => setCountDrawer(true)}>
+            <button type="button" className="btn-primary" onClick={() => setCountDrawerOpen(true)}>
               New count
             </button>
           </div>
@@ -545,7 +650,7 @@ export default function WarehousePage() {
                 title="No cycle counts"
                 description="Schedule wall-to-wall or sample counts to keep inventory accurate."
                 action={
-                  <button type="button" className="btn-primary mt-2" onClick={() => setCountDrawer(true)}>
+                  <button type="button" className="btn-primary mt-2" onClick={() => setCountDrawerOpen(true)}>
                     New count
                   </button>
                 }
@@ -554,11 +659,12 @@ export default function WarehousePage() {
               <table className="cosmos-table">
                 <thead>
                   <tr>
-                    <th>Count</th>
+                    <th>Count ID</th>
                     <th>Warehouse</th>
                     <th>Type</th>
                     <th>Status</th>
                     <th>Items</th>
+                    <th>Variance items</th>
                     <th>Scheduled</th>
                     <th>Created by</th>
                     <th />
@@ -567,17 +673,20 @@ export default function WarehousePage() {
                 <tbody>
                   {(countsQ.data ?? []).map((c) => (
                     <tr key={c.id}>
-                      <td className="font-mono">#{c.id.slice(-8)}</td>
+                      <td className="font-mono text-xs max-w-[140px] truncate" title={c.id}>
+                        {c.id}
+                      </td>
                       <td className="text-sm">{warehouseLabel.get(c.warehouseId) ?? c.warehouseId.slice(-6)}</td>
                       <td>{c.type}</td>
                       <td>
                         <StatusBadge status={c.status} />
                       </td>
                       <td>{c._count?.lines ?? 0}</td>
+                      <td className="font-mono text-sm">{c.varianceItemsCount ?? 0}</td>
                       <td className="text-sm" style={{ color: 'var(--c-text-3)' }}>
-                        {c.scheduledFor ? new Date(c.scheduledFor).toLocaleDateString() : '—'}
+                        {c.scheduledFor ? new Date(c.scheduledFor).toLocaleString() : '—'}
                       </td>
-                      <td className="font-mono text-xs">{c.createdBy.slice(-8)}</td>
+                      <td className="text-sm">{userLabel.get(c.createdBy) ?? c.createdBy.slice(-8)}</td>
                       <td>
                         <button type="button" className="btn-ghost !py-1.5 !px-2 !text-xs" onClick={() => setCountDetailId(c.id)}>
                           View
@@ -739,6 +848,19 @@ export default function WarehousePage() {
                 PO #{recvDetailQ.data.poId.slice(-12)}
               </p>
             )}
+            {(recvDetailQ.data.status === 'OPEN' || recvDetailQ.data.status === 'IN_PROGRESS') && (
+              <div className="mb-4">
+                <SpreadsheetImportPanel
+                  title="Import received lines"
+                  hint="Upload counted receipts instead of scanning one line at a time."
+                  expectedColumns={['barcode', 'receivedQty', 'damagedQty', 'batchId', 'locationId']}
+                  templateFilename="receiving-import-template.csv"
+                  onImport={async (rows) =>
+                    importReceivingMut.mutateAsync({ sessionId: recvDetailQ.data!.id, rows })
+                  }
+                />
+              </div>
+            )}
             <table className="cosmos-table">
               <thead>
                 <tr>
@@ -784,109 +906,62 @@ export default function WarehousePage() {
         </div>
       )}
 
-      {/* New cycle count */}
-      {countDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setCountDrawer(false)}>
-          <div className="w-full max-w-md h-full overflow-y-auto cosmos-card rounded-none" style={{ borderRadius: 0 }} onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-4">New cycle count</h3>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
-              Warehouse
-            </label>
-            <select className="cosmos-input mb-4" value={countWh} onChange={(e) => setCountWh(e.target.value)}>
-              <option value="">Select…</option>
-              {(warehousesQ.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} — {w.name}
-                </option>
-              ))}
-            </select>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
-              Type
-            </label>
-            <select className="cosmos-input mb-4" value={countType} onChange={(e) => setCountType(e.target.value as 'FULL' | 'ABC' | 'RANDOM')}>
-              <option value="FULL">FULL</option>
-              <option value="ABC">ABC</option>
-              <option value="RANDOM">RANDOM</option>
-            </select>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
-              Scheduled date (optional)
-            </label>
-            <input type="date" className="cosmos-input mb-4" value={countScheduled} onChange={(e) => setCountScheduled(e.target.value)} />
-            <button
-              type="button"
-              className="btn-primary w-full"
-              disabled={!countWh || createCountMut.isPending}
-              onClick={() => createCountMut.mutate()}
-            >
-              Create
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Cycle detail */}
-      {countDetailId && countDetailQ.data && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.65)' }}
-          onClick={() => setCountDetailId(null)}
+      <CosmosSheet open={countDrawerOpen} onOpenChange={setCountDrawerOpen} title="New cycle count">
+        <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+          Warehouse
+        </label>
+        <select className="cosmos-input mb-4" value={countWh} onChange={(e) => setCountWh(e.target.value)}>
+          <option value="">Select…</option>
+          {(warehousesQ.data ?? []).map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.code} — {w.name}
+            </option>
+          ))}
+        </select>
+        <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+          Type
+        </label>
+        <select
+          className="cosmos-input mb-4"
+          value={countType}
+          onChange={(e) => setCountType(e.target.value as 'FULL' | 'ABC' | 'RANDOM')}
         >
-          <div className="cosmos-card max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between gap-4 mb-4 flex-wrap">
-              <div>
-                <h3 className="text-lg font-semibold text-cosmos-white font-display">Cycle count #{countDetailQ.data.id.slice(-8)}</h3>
-                <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
-                  {warehouseLabel.get(countDetailQ.data.warehouseId)} · {countDetailQ.data.type}
-                </p>
-              </div>
-              <StatusBadge status={countDetailQ.data.status} />
-            </div>
-            {countDetailQ.data.lines.length === 0 ? (
-              <p className="text-sm py-6" style={{ color: 'var(--c-text-3)' }}>
-                No count lines yet. Lines are added when the team captures SKU snapshots from the floor (or via integration).
-              </p>
-            ) : (
-              <table className="cosmos-table">
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th>Location</th>
-                    <th>System</th>
-                    <th>Counted</th>
-                    <th>Variance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {countDetailQ.data.lines.map((ln) => {
-                    const counted = ln.countedQty
-                    const varc =
-                      counted == null ? '—' : counted - ln.systemQty === 0 ? '0' : String(counted - ln.systemQty)
-                    return (
-                      <tr key={ln.id}>
-                        <td className="font-mono text-sm">{ln.skuId.slice(-12)}</td>
-                        <td>{ln.locationLabel ?? '—'}</td>
-                        <td>{ln.systemQty}</td>
-                        <td>{counted ?? '—'}</td>
-                        <td
-                          className="font-mono"
-                          style={{
-                            color:
-                              varc === '—' || varc === '0'
-                                ? 'var(--c-text-2)'
-                                : Number(varc) > 0
-                                  ? 'var(--c-success)'
-                                  : 'var(--c-danger)',
-                          }}
-                        >
-                          {varc}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-            <div className="mt-4 flex flex-wrap gap-2 justify-end">
+          <option value="FULL">FULL</option>
+          <option value="ABC">ABC</option>
+          <option value="RANDOM">RANDOM</option>
+        </select>
+        <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+          Scheduled date (optional)
+        </label>
+        <input type="date" className="cosmos-input mb-4" value={countScheduled} onChange={(e) => setCountScheduled(e.target.value)} />
+        <p className="text-xs mb-4" style={{ color: 'var(--c-text-3)' }}>
+          Creates a count via POST /wms/cycle-counts. Lines are seeded from inventory levels for this warehouse when the
+          integration is configured.
+        </p>
+        <button
+          type="button"
+          className="btn-primary w-full"
+          disabled={!countWh || createCountMut.isPending}
+          onClick={() => createCountMut.mutate()}
+        >
+          Create
+        </button>
+      </CosmosSheet>
+
+      <CosmosDialogModal
+        open={!!countDetailId}
+        onOpenChange={(o) => {
+          if (!o) setCountDetailId(null)
+        }}
+        title={
+          countDetailQ.data
+            ? `Cycle count · ${countDetailQ.data.id.slice(-8)}`
+            : 'Cycle count'
+        }
+        maxWidthClass="max-w-4xl"
+        footer={
+          countDetailQ.data ? (
+            <div className="flex flex-wrap gap-2 justify-end">
               <button type="button" className="btn-ghost" onClick={() => setCountDetailId(null)}>
                 Close
               </button>
@@ -907,13 +982,122 @@ export default function WarehousePage() {
                   disabled={approveCountMut.isPending}
                   onClick={() => approveCountMut.mutate(countDetailQ.data!.id)}
                 >
-                  Approve & post
+                  Approve &amp; post
                 </button>
               )}
             </div>
+          ) : undefined
+        }
+      >
+        {countDetailQ.isLoading && countDetailId ? (
+          <div className="space-y-2 py-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="skeleton h-10 w-full" />
+            ))}
           </div>
-        </div>
-      )}
+        ) : countDetailQ.isError ? (
+          <p className="text-sm" style={{ color: 'var(--c-danger)' }}>
+            {(countDetailQ.error as Error)?.message ?? 'Failed to load count'}
+          </p>
+        ) : countDetailQ.data ? (
+          <>
+            <div className="flex justify-between gap-4 mb-4 flex-wrap">
+              <div>
+                <p className="text-sm font-mono text-cosmos-accent break-all">{countDetailQ.data.id}</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
+                  {warehouseLabel.get(countDetailQ.data.warehouseId)} · {countDetailQ.data.type}
+                </p>
+              </div>
+              <StatusBadge status={countDetailQ.data.status} />
+            </div>
+            {countDetailQ.data.status === 'IN_PROGRESS' && countDetailQ.data.lines.length > 0 ? (
+              <div className="mb-4">
+                <SpreadsheetImportPanel
+                  title="Import counted quantities"
+                  hint="Match rows by SKU id or code and optional location label."
+                  expectedColumns={['skuId', 'skuCode', 'locationLabel', 'countedQty']}
+                  templateFilename="cycle-count-import-template.csv"
+                  onImport={async (rows) =>
+                    importCountLinesMut.mutateAsync({ countId: countDetailQ.data!.id, rows })
+                  }
+                  onDone={() => void countDetailQ.refetch()}
+                />
+              </div>
+            ) : null}
+            {countDetailQ.data.lines.length === 0 ? (
+              <p className="text-sm py-6" style={{ color: 'var(--c-text-3)' }}>
+                No lines yet. Ensure INVENTORY_SERVICE_URL is set on WMS so counts seed from stock levels, or add lines via
+                API.
+              </p>
+            ) : (
+              <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
+                <table className="cosmos-table text-sm">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Location</th>
+                      <th>System qty</th>
+                      <th>Counted qty</th>
+                      <th>Variance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {countDetailQ.data.lines.map((ln) => {
+                      const inProgress = countDetailQ.data!.status === 'IN_PROGRESS'
+                      const raw = countLineDrafts[ln.id] ?? ''
+                      const countedNum = raw.trim() === '' ? null : parseInt(raw, 10)
+                      const varNum =
+                        countedNum == null || Number.isNaN(countedNum) ? null : countedNum - ln.systemQty
+                      const varDisplay = varNum == null ? '—' : String(varNum)
+                      const varNonZero = varNum != null && varNum !== 0
+                      return (
+                        <tr key={ln.id}>
+                          <td className="font-mono text-xs">{ln.skuId}</td>
+                          <td>{ln.locationLabel ?? '—'}</td>
+                          <td className="font-mono">{ln.systemQty}</td>
+                          <td className="min-w-[100px]">
+                            {inProgress ? (
+                              <input
+                                type="number"
+                                className="cosmos-input !py-1.5 !text-sm w-24"
+                                value={countLineDrafts[ln.id] ?? ''}
+                                onChange={(e) =>
+                                  setCountLineDrafts((prev) => ({ ...prev, [ln.id]: e.target.value }))
+                                }
+                                onBlur={() => {
+                                  if (!countDetailQ.data) return
+                                  const v = parseInt(countLineDrafts[ln.id] ?? '', 10)
+                                  if (Number.isNaN(v)) return
+                                  if (ln.countedQty === v) return
+                                  patchCountLineMut.mutate({
+                                    countId: countDetailQ.data.id,
+                                    lineId: ln.id,
+                                    countedQty: v,
+                                  })
+                                }}
+                              />
+                            ) : (
+                              <span className="font-mono">{ln.countedQty ?? '—'}</span>
+                            )}
+                          </td>
+                          <td
+                            className="font-mono"
+                            style={{
+                              color: varNonZero ? 'var(--c-danger)' : 'var(--c-text-2)',
+                            }}
+                          >
+                            {varDisplay}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : null}
+      </CosmosDialogModal>
     </div>
   )
 }

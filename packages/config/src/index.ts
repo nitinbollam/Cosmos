@@ -1,7 +1,11 @@
+import path from 'node:path'
+import { config as loadDotenv } from 'dotenv'
 import { z } from 'zod'
-import * as dotenv from 'dotenv'
 
-dotenv.config()
+/** Load service-local `.env` so per-service DATABASE_URL wins over monorepo root env. */
+export function preferLocalServiceEnv() {
+  loadDotenv({ path: path.resolve(process.cwd(), '.env'), override: true })
+}
 
 export const baseEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),

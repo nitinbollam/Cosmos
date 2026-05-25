@@ -3,16 +3,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_GUARD } from '@nestjs/core'
 import { PassportModule } from '@nestjs/passport'
 import { CosmosJwtStrategy, JwtAuthGuard, InternalOrJwtAuthGuard } from '@cosmos/auth-middleware'
-import { PrismaService } from './prisma/prisma.service'
+import { PrismaModule } from './prisma/prisma.module'
 import { HealthController } from './health/health.controller'
 import { SuppliersModule } from './suppliers/suppliers.module'
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module'
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PassportModule, SuppliersModule, PurchaseOrdersModule],
+  imports: [PrismaModule, ConfigModule.forRoot({ isGlobal: true }), PassportModule, SuppliersModule, PurchaseOrdersModule],
   controllers: [HealthController],
   providers: [
-    PrismaService,
     {
       provide: CosmosJwtStrategy,
       inject: [ConfigService],
@@ -22,6 +21,5 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module'
     JwtAuthGuard,
     { provide: APP_GUARD, useClass: InternalOrJwtAuthGuard },
   ],
-  exports: [PrismaService],
 })
 export class AppModule {}

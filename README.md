@@ -6,16 +6,16 @@ A monorepo containing:
 
 - **`apps/`** — web frontends (Next.js 14) and mobile apps (Expo SDK 51)
 - **`services/`** — NestJS 10 microservices (Postgres + Prisma + Redis/BullMQ)
-- **`ai/`** — Python 3.11 / FastAPI ML services (Mistral 7B LoRA, LSTM+Prophet, PaddleOCR)
-- **`packages/`** — shared TypeScript packages (event-bus, logger, config, types, auth, metrics, tracing, ui)
+- **`packages/`** — shared TypeScript packages (event-bus, logger, config, types, auth, metrics, tracing, ui, **analytics-engine**)
+- **`ai/`** — *(legacy, optional)* Python FastAPI sidecars — superseded for web-admin by **`@cosmos/analytics-engine`**
 - **`infra/`** — Docker, Kubernetes (Kustomize), Terraform (AWS EKS + RDS + Redis + S3)
 
 ## Prerequisites
 
 - Node.js >= 20
 - pnpm >= 9 (`corepack enable && corepack prepare pnpm@9.7.0 --activate`)
-- Python >= 3.11 (for AI services)
 - Docker + Docker Compose
+- (Optional) Python >= 3.11 — **only if** you still run legacy `ai/` sidecars (not required for web-admin)
 - (Optional) AWS CLI for infra
 
 ## Quickstart
@@ -34,9 +34,14 @@ cp .env.example .env
 pnpm db:generate
 pnpm db:migrate
 
-# 5. Run everything
+# 5. Run admin stack (recommended — no Python, no mobile, Turbopack HMR)
+pnpm dev:admin
+
+# Or run everything (all Nest services + mobile + storefront)
 pnpm dev
 ```
+
+Ensure root **`.env`** sets service URLs (see **`.env.example`**): gateway needs **`AUTH_SERVICE_URL`**, **`INVENTORY_SERVICE_URL`**, etc. Inventory and other admin pages call **`http://localhost:3000/api/v1`** by default (**`NEXT_PUBLIC_GATEWAY_URL`**).
 
 **Docker:** `pnpm infra:up` needs the Docker daemon (on Windows, start **Docker Desktop** first). If Compose fails with a `dockerDesktopLinuxEngine` / pipe error, the engine is not running.
 
@@ -62,13 +67,20 @@ pnpm dev
 | ledger-service | 3013 | NestJS |
 | analytics-service | 3014 | NestJS |
 | notification-service | 3015 | NestJS |
-| cosmos-llm | 8001 | FastAPI |
-| demand-forecasting | 8002 | FastAPI |
-| ocr-engine | 8003 | FastAPI |
-| cashflow-model | 8004 | FastAPI |
-| anomaly-detection | 8005 | FastAPI |
-| web-admin | 4000 | Next.js |
+| web-admin | 4000 | Next.js (Turbopack dev) |
 | web-storefront | 4001 | Next.js |
+
+**Analytics in web-admin:** cashflow forecast + anomaly detection run in **`/api/cashflow`** and **`/api/anomaly`** (TypeScript, no Python sidecar).
+
+Legacy optional sidecars (not started by `pnpm dev:admin`):
+
+| Service | Port | Stack |
+|---|---|---|
+| cosmos-llm | 8001 | FastAPI (legacy) |
+| demand-forecasting | 8002 | FastAPI (legacy) |
+| ocr-engine | 8003 | FastAPI (legacy) |
+| cashflow-model | 8004 | FastAPI (legacy — superseded by Next.js) |
+| anomaly-detection | 8005 | FastAPI (legacy — superseded by Next.js) |
 
 Each Nest service exposes **GET /metrics** (Prometheus text, via `@cosmos/metrics`) on the same port as the API, outside the `/api/v1` prefix.
 

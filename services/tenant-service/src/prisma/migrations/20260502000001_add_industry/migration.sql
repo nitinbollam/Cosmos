@@ -1,0 +1,10 @@
+CREATE TYPE "IndustryVertical" AS ENUM (
+  'TOBACCO_VAPE',
+  'PHARMA',
+  'FOOD_BEVERAGE',
+  'ALCOHOL',
+  'GENERAL_WHOLESALE'
+);
+
+ALTER TABLE "TenantOrganization"
+  ADD COLUMN "industry" "IndustryVertical" NOT NULL DEFAULT 'GENERAL_WHOLESALE';
