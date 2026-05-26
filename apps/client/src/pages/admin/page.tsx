@@ -28,6 +28,7 @@ interface Kpis {
   openOrders: number
   ordersTrend: number
   itemsPicked: number
+  itemsToPick?: number
   msaStatus: string
 }
 
@@ -164,8 +165,8 @@ export default function DashboardPage() {
 
   const kpis = kpisQ.data
   const picked = kpis?.itemsPicked ?? 0
-  const open = kpis?.openOrders ?? 0
-  const fulfillmentPct = picked + open > 0 ? (picked / (picked + open)) * 100 : 0
+  const toPick = kpis?.itemsToPick ?? 0
+  const fulfillmentPct = picked + toPick > 0 ? (picked / (picked + toPick)) * 100 : 0
   const lowStockCount = alertsQ.data?.lowStock?.length ?? 0
 
   return (
@@ -239,7 +240,7 @@ export default function DashboardPage() {
           <BentoDonut
             percent={fulfillmentPct}
             label="Pick completion"
-            sublabel={`${fmtNumber(picked)} picked · ${fmtNumber(open)} open`}
+            sublabel={`${fmtNumber(picked)} picked · ${fmtNumber(toPick)} remaining`}
           />
         </div>
 

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { useQueryParams } from '@/lib/use-query-params'
 import { Suspense, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { clearCart, readCart } from '@/lib/b2b-cart'
@@ -26,7 +27,7 @@ export default function NewQuotePage() {
 
 function NewQuoteForm() {
   const navigate = useNavigate()
-  const searchParams = useSearchParams()
+  const searchParams = useQueryParams()
   const [customerRef, setCustomerRef] = useState('PO-REFERENCE')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<QuoteLineDraft[]>([

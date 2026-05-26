@@ -190,6 +190,17 @@ export default function FinancePage() {
     return buckets
   }, [ordersQ.data])
 
+  const arSummary = useMemo(() => {
+    const rows = (ordersQ.data?.items ?? []).filter((o) => !['CANCELLED', 'FAILED'].includes(o.status))
+    let invoiced = 0
+    let collected = 0
+    for (const o of rows) {
+      invoiced += Number(o.totalAmount)
+      collected += Number(o.amountPaid ?? 0)
+    }
+    return { invoiced, collected, outstanding: Math.max(0, invoiced - collected), count: rows.length }
+  }, [ordersQ.data])
+
   const filteredInvoices = useMemo(() => {
     const rows = ordersQ.data?.items ?? []
     return rows.filter((o) => {
@@ -292,13 +303,29 @@ export default function FinancePage() {
 
       {tab === 'invoices' && (
         <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { label: 'Total invoiced', v: arSummary.invoiced, hint: `${arSummary.count} orders` },
+              { label: 'Collected', v: arSummary.collected, hint: 'Payments received' },
+              { label: 'Outstanding AR', v: arSummary.outstanding, hint: 'Unpaid balance' },
+            ].map((c) => (
+              <div key={c.label} className="cosmos-card">
+                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
+                <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{c.hint}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>
+            Aging buckets below show <strong>outstanding</strong> balance by days since issue — not total invoiced.
+          </p>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { k: 'current', label: 'Current (0–30d)', v: aging.current, color: 'var(--c-success)' },
-              { k: 'd30', label: '1–30 Days', v: aging.d30, color: 'var(--c-warning)' },
-              { k: 'd60', label: '31–60 Days', v: aging.d60, color: '#ea580c' },
-              { k: 'd90', label: '61–90 Days', v: aging.d90, color: 'var(--c-danger)' },
-              { k: 'd90p', label: '90+ Days', v: aging.d90p, color: '#b91c1c' },
+              { k: 'd30', label: '31–60 Days', v: aging.d30, color: 'var(--c-warning)' },
+              { k: 'd60', label: '61–90 Days', v: aging.d60, color: '#ea580c' },
+              { k: 'd90', label: '91–120 Days', v: aging.d90, color: 'var(--c-danger)' },
+              { k: 'd90p', label: '120+ Days', v: aging.d90p, color: '#b91c1c' },
             ].map((c) => (
               <div key={c.k} className="cosmos-card metric-accent" style={{ borderLeftColor: c.color }}>
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>

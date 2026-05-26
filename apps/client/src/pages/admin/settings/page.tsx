@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useQueryParams } from '@/lib/use-query-params'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/cosmos/empty-state'
@@ -107,7 +107,7 @@ function tabFromSearchParams(raw: string | null): TabId {
 
 export default function SettingsPage() {
   const qc = useQueryClient()
-  const searchParams = useSearchParams()
+  const searchParams = useQueryParams()
   const [tab, setTab] = useState<TabId>(() => tabFromSearchParams(searchParams.get('tab')))
 
   useEffect(() => {

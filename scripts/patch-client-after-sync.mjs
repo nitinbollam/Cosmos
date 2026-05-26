@@ -19,6 +19,15 @@ walk(clientSrc, (f) => {
   let s = fs.readFileSync(f, 'utf8')
   const orig = s
   s = s.replace(/\busePathname\b/g, 'useLocation')
+  s = s.replace(/const searchParams = useSearchParams\(\)/g, 'const searchParams = useQueryParams()')
+  s = s.replace(
+    /import \{ useSearchParams(, useNavigate)? \} from 'react-router-dom'/g,
+    (m, nav) =>
+      nav
+        ? "import { useNavigate } from 'react-router-dom'\nimport { useQueryParams } from '@/lib/use-query-params'"
+        : "import { useQueryParams } from '@/lib/use-query-params'",
+  )
+  s = s.replace(/const \[searchParams\] = useSearchParams\(\)/g, 'const searchParams = useQueryParams()')
   s = s.replace(/}, \[pathname, router\]\)/g, '}, [pathname, navigate])')
   s = s.replace(/import \{ Sidebar \} from '@src\/components\/layout\/sidebar'/g, "import { Sidebar } from '@/components/layout/sidebar'")
   if (s !== orig) fs.writeFileSync(f, s)

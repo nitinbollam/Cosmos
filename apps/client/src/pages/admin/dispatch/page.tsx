@@ -16,11 +16,12 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/cosmos/empty-state'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { api } from '@/lib/api-admin'
+import { useQueryParams } from '@/lib/use-query-params'
 
 type RouteStop = {
   id: string
@@ -79,10 +80,54 @@ function errMsg(e: unknown): string {
   return 'Request failed'
 }
 
-/** OpenStreetMap static image (no API key). Usage: https://wiki.openstreetmap.org/wiki/Static_map_images */
-function osmStaticMapUrl(lat: number, lng: number, zoom = 15) {
-  const z = Math.min(18, Math.max(3, zoom))
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${z}&size=640x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`
+/** OSM embed iframe — staticmap.openstreetmap.de is often unreachable. */
+function osmEmbedUrl(lat: number, lng: number, zoom = 14): string {
+  const scale = 360 / 2 ** zoom
+  const dLon = scale * 0.85
+  const dLat = scale * 0.5
+  const bbox = [lng - dLon, lat - dLat, lng + dLon, lat + dLat].join(',')
+  const marker = encodeURIComponent(`${lat},${lng}`)
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${marker}`
+}
+
+function coordsFromAddress(addr: unknown): { lat: number; lng: number } | null {
+  if (!addr || typeof addr !== 'object' || Array.isArray(addr)) return null
+  const o = addr as Record<string, unknown>
+  const lat = typeof o.lat === 'number' ? o.lat : typeof o.latitude === 'number' ? o.latitude : NaN
+  const lng = typeof o.lng === 'number' ? o.lng : typeof o.longitude === 'number' ? o.longitude : NaN
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  return { lat, lng }
+}
+
+function routeMapEmbedUrl(route: DeliveryRoute): string | null {
+  const points: { lat: number; lng: number }[] = []
+  if (
+    typeof route.lastKnownLat === 'number' &&
+    typeof route.lastKnownLng === 'number' &&
+    Number.isFinite(route.lastKnownLat) &&
+    Number.isFinite(route.lastKnownLng)
+  ) {
+    points.push({ lat: route.lastKnownLat, lng: route.lastKnownLng })
+  }
+  for (const stop of route.stops ?? []) {
+    const c = coordsFromAddress(stop.address)
+    if (c) points.push(c)
+  }
+  if (points.length === 0) return null
+
+  if (points.length === 1) return osmEmbedUrl(points[0].lat, points[0].lng)
+
+  const lats = points.map((p) => p.lat)
+  const lngs = points.map((p) => p.lng)
+  const pad = 0.02
+  const bbox = [
+    Math.min(...lngs) - pad,
+    Math.min(...lats) - pad,
+    Math.max(...lngs) + pad,
+    Math.max(...lats) + pad,
+  ].join(',')
+  const marker = encodeURIComponent(`${points[0].lat},${points[0].lng}`)
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${marker}`
 }
 
 export default function DispatchPage() {
@@ -98,7 +143,7 @@ export default function DispatchPage() {
 function DispatchDashboard() {
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const searchParams = useSearchParams()
+  const searchParams = useQueryParams()
   const routeFromUrl = searchParams.get('route')
 
   const [selectedDate, setSelectedDate] = useState(() => toYmd(new Date()))
@@ -116,9 +161,9 @@ function DispatchDashboard() {
       if (id) next.set('route', id)
       else next.delete('route')
       const q = next.toString()
-      navigate(q ? `/dispatch?${q}` : '/dispatch', { scroll: false })
+      navigate(q ? `/admin/dispatch?${q}` : '/admin/dispatch', { scroll: false })
     },
-    [router, searchParams],
+    [navigate, searchParams],
   )
 
   const routes = useQuery<DeliveryRoute[]>({
@@ -199,18 +244,7 @@ function DispatchDashboard() {
     return u ? userLabel(u) : selected.driverId
   }, [selected?.driverId, users.data?.items])
 
-  const mapUrl = useMemo(() => {
-    if (!selected) return null
-    if (
-      typeof selected.lastKnownLat === 'number' &&
-      typeof selected.lastKnownLng === 'number' &&
-      Number.isFinite(selected.lastKnownLat) &&
-      Number.isFinite(selected.lastKnownLng)
-    ) {
-      return osmStaticMapUrl(selected.lastKnownLat, selected.lastKnownLng)
-    }
-    return null
-  }, [selected])
+  const mapEmbedUrl = useMemo(() => (selected ? routeMapEmbedUrl(selected) : null), [selected])
 
   const locationStale = useMemo(() => {
     if (!selected?.lastKnownAt) return true
@@ -325,27 +359,26 @@ function DispatchDashboard() {
             </div>
 
             <div className="border-b border-cosmos-border bg-cosmos-surface-2/40 shrink-0">
-              {mapUrl ? (
+              {mapEmbedUrl ? (
                 <div className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={mapUrl}
-                    alt="Map centered on last driver position"
-                    className="w-full h-[200px] md:h-[240px] object-cover block"
+                  <iframe
+                    title="Route map"
+                    src={mapEmbedUrl}
+                    className="w-full h-[200px] md:h-[260px] border-0 block"
                     loading="lazy"
-                    referrerPolicy="no-referrer"
+                    referrerPolicy="no-referrer-when-downgrade"
                   />
                   <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px] text-white/90 bg-black/50">
-                    ©&nbsp;
+                    ©{' '}
                     <a
-                      to="https://www.openstreetmap.org/copyright"
+                      href="https://www.openstreetmap.org/copyright"
                       target="_blank"
                       rel="noreferrer"
                       className="underline"
                     >
                       OpenStreetMap
                     </a>{' '}
-                    contributors · Static map via openstreetmap.de
+                    contributors
                   </div>
                 </div>
               ) : (
@@ -363,13 +396,13 @@ function DispatchDashboard() {
                     referrerPolicy="no-referrer-when-downgrade"
                   />
                   <p className="text-[10px] mt-1">
-                    <a to="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-cosmos-primary underline">
+                    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-cosmos-primary underline">
                       © OpenStreetMap
                     </a>
                   </p>
                 </div>
               )}
-              {mapUrl && selected.lastKnownAt && (
+              {mapEmbedUrl && selected.lastKnownAt && (
                 <p className={`text-xs px-3 py-1 ${locationStale ? 'text-amber-400' : 'text-cosmos-muted'}`}>
                   Last position: {new Date(selected.lastKnownAt).toLocaleString()}
                   {locationStale ? ' · may be stale' : ''}
