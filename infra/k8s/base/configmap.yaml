@@ -6,17 +6,5 @@ metadata:
 data:
   NODE_ENV: "production"
   LOG_LEVEL: "info"
-  # Set COSMOS_OTEL_ENABLED to "true" and point OTLP at your collector / sidecar when rolling out traces.
+  NEXT_PUBLIC_GATEWAY_URL: "/api/v1"
   COSMOS_OTEL_ENABLED: "false"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.cosmos.svc.cluster.local:4317"
-  AUTH_SERVICE_URL: "http://auth-service.cosmos.svc.cluster.local:3001"
-  TENANT_SERVICE_URL: "http://tenant-service.cosmos.svc.cluster.local:3002"
-  INVENTORY_SERVICE_URL: "http://inventory-service.cosmos.svc.cluster.local:3003"
-  WMS_SERVICE_URL: "http://wms-service.cosmos.svc.cluster.local:3004"
-  ORDER_SERVICE_URL: "http://order-service.cosmos.svc.cluster.local:3005"
-  PURCHASING_SERVICE_URL: "http://purchasing-service.cosmos.svc.cluster.local:3006"
-  COMPLIANCE_SERVICE_URL: "http://compliance-service.cosmos.svc.cluster.local:3007"
-  PAYMENT_SERVICE_URL: "http://payment-service.cosmos.svc.cluster.local:3012"
-  LLM_SERVICE_URL: "http://cosmos-llm.cosmos.svc.cluster.local:8001"
-  FORECASTING_SERVICE_URL: "http://demand-forecasting.cosmos.svc.cluster.local:8002"
-  OCR_SERVICE_URL: "http://ocr-engine.cosmos.svc.cluster.local:8003"

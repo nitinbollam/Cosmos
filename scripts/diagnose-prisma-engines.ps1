@@ -6,7 +6,7 @@
 .DESCRIPTION
   On Windows, EPERM during prisma generate usually means another Node process still has
   query_engine-windows.dll.node loaded. Stop dev servers, Jest watchers, and IDE-run
-  scripts that import @prisma/client, then re-run generate or pnpm prod:preflight.
+  scripts that import @prisma/client, then re-run generate or npm run prod:preflight.
 
 .EXAMPLE
   pwsh scripts/diagnose-prisma-engines.ps1
@@ -57,5 +57,5 @@ foreach ($f in $files | Sort-Object FullName) {
 
 Write-Host ''
 Write-Host 'If any path is LOCKED: stop Node processes using that service (dev servers, tests),'
-Write-Host 'or close processes holding the DLL, then retry prisma generate / pnpm prod:preflight.'
+Write-Host 'or close processes holding the DLL, then retry prisma generate / npm run prod:preflight.'
 Write-Host 'To list Node processes: Get-Process node | Select-Object Id, Path'

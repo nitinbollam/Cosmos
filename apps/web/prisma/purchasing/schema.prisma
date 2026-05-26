@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-purchasing"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("PURCHASING_DATABASE_URL")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  PARTIALLY_RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  tenantId       String
+  code           String
+  name           String
+  email          String?
+  phone          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model PurchaseOrder {
+  id         String                @id @default(cuid())
+  tenantId   String
+  supplierId String
+  number     String
+  status     PurchaseOrderStatus   @default(DRAFT)
+  notes      String?
+  amountPaid Decimal               @default(0)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  supplier   Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines      PurchaseOrderLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([supplierId])
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  lineNo          Int
+  skuCode         String?
+  description     String
+  qtyOrdered      Int
+  qtyReceived     Int           @default(0)
+  unitCost        Decimal?     
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseOrderId, lineNo])
+  @@index([purchaseOrderId])
+}
+

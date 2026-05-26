@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-payment"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("PAYMENT_DATABASE_URL")
+}
+
+model PaymentIntent {
+  id              String        @id @default(cuid())
+  tenantId        String
+  orderId         String
+  amount          Decimal      
+  currency        String        @default("USD")
+  paymentMethod   String
+  status          PaymentStatus @default(PENDING)
+  stripeIntentId  String?       @unique
+  customerId      String
+  capturedAmount  Decimal?     
+  refundedAmount  Decimal       @default(0)
+  failureReason   String?
+  correlationId   String
+  metadata        Json          
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([tenantId, orderId])
+  @@index([tenantId, status])
+}
+
+model LedgerEntry {
+  id            String      @id @default(cuid())
+  tenantId      String
+  entryGroupId  String
+  accountCode   String
+  accountType   AccountType
+  debit         Decimal    
+  credit        Decimal    
+  description   String
+  referenceId   String?
+  referenceType String?
+  correlationId String
+  createdAt     DateTime    @default(now())
+
+  @@index([tenantId, entryGroupId])
+  @@index([tenantId, accountCode])
+  @@index([tenantId, createdAt])
+}
+
+model PaymentIdempotency {
+  id        String   @id
+  tenantId  String
+  status    Int
+  body      Json
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  VOIDED
+  REFUNDED
+  FAILED
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}

@@ -1,0 +1,23 @@
+/* Shop inherits global theme — layout helpers only */
+
+.cosmos-shop .cosmos-card {
+  background: var(--c-surface);
+  border: var(--border-width) solid var(--c-border);
+  border-radius: var(--bento-radius);
+  padding: 20px;
+  box-shadow: none;
+}
+
+.cosmos-shop .btn-primary {
+  box-shadow: none;
+}
+
+.cosmos-shop .btn-primary:hover {
+  box-shadow: none;
+}
+
+.cosmos-shop-page {
+  max-width: 960px;
+  margin: 40px auto;
+  padding: 0 20px;
+}

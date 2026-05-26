@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-analytics"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("ANALYTICS_DATABASE_URL")
+}
+
+model DailyKpiSnapshot {
+  id          String   @id @default(cuid())
+  tenantId    String
+  date        DateTime
+  ordersCount Int
+  revenue     Decimal 
+  skusActive  Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+}

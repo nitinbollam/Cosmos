@@ -1,0 +1,19 @@
+{
+  "name": "@cosmos/web-gateway-client",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "node ../../scripts/eslint-soft.mjs",
+    "test": "echo 'no tests'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "axios": "^1.7.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3"
+  }
+}

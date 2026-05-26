@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-notification"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("NOTIFICATION_DATABASE_URL")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model NotificationRequest {
+  id             String              @id @default(cuid())
+  tenantId       String
+  idempotencyKey String?
+  channel        NotificationChannel
+  recipient      String
+  templateKey    String
+  payload        Json                
+  status         NotificationStatus  @default(PENDING)
+  errorMessage   String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([tenantId])
+  @@unique([tenantId, idempotencyKey])
+}

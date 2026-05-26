@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-storefront"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("STOREFRONT_DATABASE_URL")
+}
+
+enum QuoteStatus {
+  OPEN
+  SUBMITTED
+  EXPIRED
+}
+
+model B2BQuote {
+  id                 String      @id @default(cuid())
+  tenantId           String
+  customerRef        String
+  status             QuoteStatus @default(OPEN)
+  notes              String?
+  convertedOrderId   String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  lines              QuoteLine[]
+
+  @@index([tenantId, status])
+  @@index([convertedOrderId])
+}
+
+model QuoteLine {
+  id          String   @id @default(cuid())
+  quoteId     String
+  lineNo      Int
+  skuCode     String?
+  description String
+  qty         Int
+  unitPrice   Decimal 
+  quote       B2BQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, lineNo])
+  @@index([quoteId])
+}

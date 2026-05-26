@@ -1,0 +1,31 @@
+{
+  "name": "@cosmos/web",
+  "description": "Cosmos API layer — Prisma + lib/server (served by @cosmos/client Vite server)",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run db:generate",
+    "dev": "echo 'Use npm run dev from repo root (@cosmos/client Vite server)'",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'no tests'",
+    "db:generate": "prisma generate --schema prisma/auth/schema.prisma && prisma generate --schema prisma/tenant/schema.prisma && prisma generate --schema prisma/inventory/schema.prisma && prisma generate --schema prisma/order/schema.prisma && prisma generate --schema prisma/crm/schema.prisma && prisma generate --schema prisma/storefront/schema.prisma && prisma generate --schema prisma/wms/schema.prisma && prisma generate --schema prisma/dispatch/schema.prisma && prisma generate --schema prisma/purchasing/schema.prisma && prisma generate --schema prisma/payment/schema.prisma && prisma generate --schema prisma/compliance/schema.prisma && prisma generate --schema prisma/notification/schema.prisma && prisma generate --schema prisma/ledger/schema.prisma && prisma generate --schema prisma/analytics/schema.prisma"
+  },
+  "dependencies": {
+    "@cosmos/analytics-engine": "*",
+    "@cosmos/types": "*",
+    "@prisma/client": "^6.9.0",
+    "bcrypt": "^5.1.1",
+    "date-fns": "^3.6.0",
+    "jose": "^5.9.3",
+    "stripe": "^16.5.0",
+    "tsconfig-paths": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/node": "^20.14.10",
+    "eslint": "^9.39.4",
+    "prisma": "^6.9.0",
+    "typescript": "^5.5.3"
+  }
+}

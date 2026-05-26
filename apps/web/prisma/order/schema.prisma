@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-order"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("ORDER_DATABASE_URL")
+}
+
+model Order {
+  id              String          @id @default(cuid())
+  tenantId        String
+  customerId      String
+  channel         OrderChannel
+  status          OrderStatus     @default(PENDING)
+  totalAmount     Decimal        
+  amountPaid      Decimal         @default(0)
+  taxAmount       Decimal         @default(0)
+  paymentMethod   PaymentMethod
+  paymentIntentId String?
+  salesRepId      String?
+  priority        OrderPriority   @default(NORMAL)
+  failureReason   String?
+  notes           String?
+  shippingAddress Json?
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  lineItems       OrderLineItem[]
+  saga            OrderSaga?
+
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, createdAt])
+}
+
+model OrderLineItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  skuId       String
+  warehouseId String
+  quantity    Int
+  unitPrice   Decimal 
+  taxAmount   Decimal  @default(0)
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([skuId])
+}
+
+model OrderSaga {
+  id              String     @id @default(cuid())
+  orderId         String     @unique
+  tenantId        String
+  status          SagaStatus
+  correlationId   String
+  completedSteps Json 
+  compensations   Json       
+  failureReason   String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  order           Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  FAILED
+  RETURNED
+}
+
+enum OrderChannel {
+  POS
+  B2B_PORTAL
+  SALES_REP
+  API
+}
+
+enum PaymentMethod {
+  CARD
+  ACH
+  CHECK
+  CASH
+  NET_TERMS
+}
+
+enum OrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum SagaStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  COMPENSATING
+  FAILED
+}

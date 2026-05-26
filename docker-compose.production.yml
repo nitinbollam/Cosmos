@@ -1,13 +1,5 @@
 version: "3.9"
 
-x-nest-base: &nest-base
-  restart: unless-stopped
-  networks: [cosmos-net]
-  depends_on:
-    postgres: { condition: service_healthy }
-    redis: { condition: service_healthy }
-  env_file: [.env.production]
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -19,7 +11,7 @@ services:
       POSTGRES_DB: cosmos
     volumes:
       - cosmos-pg-data:/var/lib/postgresql/data
-      - ./infra/docker/init-db.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ./infra/sql/init-databases.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cosmos -d cosmos"]
       interval: 5s
@@ -38,210 +30,36 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    ports: ["6379:6379"]
 
-  minio:
-    image: minio/minio:latest
+  web:
     restart: unless-stopped
     networks: [cosmos-net]
-    command: server /data --console-address ":9001"
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file: [.env.production]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes: [cosmos-minio-data:/data]
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    ports: ["9000:9000", "9001:9001"]
-
-  auth-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/auth-service/Dockerfile }
-    environment:
-      SERVICE_NAME: auth-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_auth
-    ports: ["3001:3001"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/v1/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  tenant-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/tenant-service/Dockerfile }
-    environment:
-      SERVICE_NAME: tenant-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_tenant
-    ports: ["3002:3002"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/api/v1/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  inventory-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/inventory-service/Dockerfile }
-    environment:
-      SERVICE_NAME: inventory-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_inventory
-    ports: ["3003:3003"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/api/v1/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  wms-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/wms-service/Dockerfile }
-    environment:
-      SERVICE_NAME: wms-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_wms
-    ports: ["3004:3004"]
-
-  order-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/order-service/Dockerfile }
-    environment:
-      SERVICE_NAME: order-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_order
-    ports: ["3005:3005"]
-
-  purchasing-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/purchasing-service/Dockerfile }
-    environment:
-      SERVICE_NAME: purchasing-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_purchasing
-    ports: ["3006:3006"]
-
-  compliance-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/compliance-service/Dockerfile }
-    environment:
-      SERVICE_NAME: compliance-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_compliance
-    ports: ["3007:3007"]
-
-  storefront-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/storefront-service/Dockerfile }
-    environment:
-      SERVICE_NAME: storefront-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_storefront
-    ports: ["3008:3008"]
-
-  pos-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/pos-service/Dockerfile }
-    environment:
-      SERVICE_NAME: pos-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_pos
-    ports: ["3009:3009"]
-
-  crm-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/crm-service/Dockerfile }
-    environment:
-      SERVICE_NAME: crm-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_crm
-    ports: ["3010:3010"]
-
-  dispatch-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/dispatch-service/Dockerfile }
-    environment:
-      SERVICE_NAME: dispatch-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_dispatch
-    ports: ["3011:3011"]
-
-  payment-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/payment-service/Dockerfile }
-    environment:
-      SERVICE_NAME: payment-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_payment
-    ports: ["3012:3012"]
-
-  ledger-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/ledger-service/Dockerfile }
-    environment:
-      SERVICE_NAME: ledger-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_ledger
-    ports: ["3013:3013"]
-
-  analytics-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/analytics-service/Dockerfile }
-    environment:
-      SERVICE_NAME: analytics-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_analytics
-    ports: ["3014:3014"]
-
-  notification-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/notification-service/Dockerfile }
-    environment:
-      SERVICE_NAME: notification-service
-      DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_notification
-    ports: ["3015:3015"]
-
-  gateway-service:
-    <<: *nest-base
-    build: { context: ., dockerfile: services/gateway-service/Dockerfile }
-    environment:
-      SERVICE_NAME: gateway-service
-      AUTH_SERVICE_URL: http://auth-service:3001
-      TENANT_SERVICE_URL: http://tenant-service:3002
-      INVENTORY_SERVICE_URL: http://inventory-service:3003
-      WMS_SERVICE_URL: http://wms-service:3004
-      ORDER_SERVICE_URL: http://order-service:3005
-      PURCHASING_SERVICE_URL: http://purchasing-service:3006
-      COMPLIANCE_SERVICE_URL: http://compliance-service:3007
-      STOREFRONT_SERVICE_URL: http://storefront-service:3008
-      POS_SERVICE_URL: http://pos-service:3009
-      CRM_SERVICE_URL: http://crm-service:3010
-      DISPATCH_SERVICE_URL: http://dispatch-service:3011
-      PAYMENT_SERVICE_URL: http://payment-service:3012
-      LEDGER_SERVICE_URL: http://ledger-service:3013
-      ANALYTICS_SERVICE_URL: http://analytics-service:3014
-      NOTIFICATION_SERVICE_URL: http://notification-service:3015
-    ports: ["3000:3000"]
+      PORT: "4000"
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_GATEWAY_URL: /api/v1
+      AUTH_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_auth
+      TENANT_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_tenant
+      INVENTORY_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_inventory
+      ORDER_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_order
+      CRM_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_crm
+      STOREFRONT_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_storefront
+      PURCHASING_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_purchasing
+      PAYMENT_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_payment
+      WMS_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_wms
+      DISPATCH_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_dispatch
+      COMPLIANCE_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_compliance
+      LEDGER_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_ledger
+      NOTIFICATION_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_notification
+      ANALYTICS_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_analytics
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    ports: ["4000:4000"]
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
-      auth-service: { condition: service_healthy }
-      tenant-service: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/v1/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  web-admin:
-    restart: unless-stopped
-    networks: [cosmos-net]
-    build: { context: ., dockerfile: apps/web-admin/Dockerfile }
-    environment:
-      NEXT_PUBLIC_GATEWAY_URL: http://gateway-service:3000/api/v1
-    ports: ["4000:3000"]
-    depends_on:
-      gateway-service: { condition: service_healthy }
-
-  web-storefront:
-    restart: unless-stopped
-    networks: [cosmos-net]
-    build: { context: ., dockerfile: apps/web-storefront/Dockerfile }
-    environment:
-      NEXT_PUBLIC_GATEWAY_URL: http://gateway-service:3000/api/v1
-    ports: ["4001:3000"]
-    depends_on:
-      gateway-service: { condition: service_healthy }
 
 networks:
   cosmos-net:
@@ -250,4 +68,3 @@ networks:
 volumes:
   cosmos-pg-data:
   cosmos-redis-data:
-  cosmos-minio-data:
