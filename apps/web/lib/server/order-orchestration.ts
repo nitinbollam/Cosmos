@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb, paymentDb } from './db'
-import { computeSalesTax } from './compliance-tax'
 import {
   applyCreditUsed,
   assertCreditAvailable,

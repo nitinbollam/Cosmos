@@ -28,6 +28,9 @@ export default function CheckoutPage() {
 
   const stripePromise = useMemo(() => (stripePublishable ? loadStripe(stripePublishable) : null), [])
 
+  const taxAmount = useMemo(() => +(cartSubtotal * 0.07).toFixed(2), [cartSubtotal])
+  const orderTotal = cartSubtotal + taxAmount
+
   const [step, setStep] = useState(1)
   const [customer, setCustomer] = useState<CustomerRow | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -85,7 +88,7 @@ export default function CheckoutPage() {
     setSubmitting(true)
     setErr(null)
     try {
-      const order = await api.post<{ id: string }>(
+      const order = await api.post<{ id: string; totalAmount: string | number }>(
         '/orders',
         {
           customerId: cid,
@@ -111,7 +114,7 @@ export default function CheckoutPage() {
           '/payments/authorize',
           {
             orderId: order.id,
-            amount: cartSubtotal,
+            amount: Number(order.totalAmount),
             currency: 'usd',
             paymentMethod: 'CARD',
             customerId: cid,
@@ -207,6 +210,8 @@ export default function CheckoutPage() {
           payment={payment}
           setPayment={setPayment}
           cartSubtotal={cartSubtotal}
+          taxAmount={taxAmount}
+          orderTotal={orderTotal}
           showStripe={showStripe}
           stripeConfigured={!!stripePublishable}
           stripePromise={stripePromise}
@@ -236,7 +241,10 @@ export default function CheckoutPage() {
               <span style={{ color: 'var(--c-success)', fontSize: 13 }}> — card on file</span>
             ) : null}
           </p>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18 }}>${cartSubtotal.toFixed(2)}</p>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18 }}>${orderTotal.toFixed(2)}</p>
+          <p style={{ fontSize: 13, color: 'var(--c-text-3)' }}>
+            Subtotal ${cartSubtotal.toFixed(2)} · Tax ${taxAmount.toFixed(2)}
+          </p>
           <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
             <button type="button" className="btn-ghost" onClick={() => setStep(2)}>
               Back
@@ -255,6 +263,8 @@ function PaymentStep2({
   payment,
   setPayment,
   cartSubtotal,
+  taxAmount,
+  orderTotal,
   showStripe,
   stripeConfigured,
   stripePromise,
@@ -266,6 +276,8 @@ function PaymentStep2({
   payment: PaymentMethod
   setPayment: (p: PaymentMethod) => void
   cartSubtotal: number
+  taxAmount: number
+  orderTotal: number
   showStripe: boolean
   stripeConfigured: boolean
   stripePromise: Promise<Stripe | null> | null
@@ -302,7 +314,8 @@ function PaymentStep2({
         </>
       ) : null}
       <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 12 }}>
-        Total due: <strong style={{ fontFamily: 'var(--font-mono)' }}>${cartSubtotal.toFixed(2)}</strong>
+        Subtotal ${cartSubtotal.toFixed(2)} · Tax ${taxAmount.toFixed(2)} · Total due{' '}
+        <strong style={{ fontFamily: 'var(--font-mono)' }}>${orderTotal.toFixed(2)}</strong>
       </p>
       <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
         <button type="button" className="btn-ghost" onClick={onBack}>

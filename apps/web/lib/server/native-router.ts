@@ -18,7 +18,7 @@ import * as notifications from './notifications'
 import * as ledger from './ledger'
 import * as analytics from './analytics'
 import * as webhooks from './webhooks'
-import { ApiError, requireSession, toJsonError } from './session'
+import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError } from './session'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -237,9 +237,21 @@ async function routeInventory(method: string, seg: string[], req: Request): Prom
 }
 
 async function routeOrders(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
   const url = new URL(req.url)
+  const adminAction =
+    seg.length === 3 &&
+    method === 'POST' &&
+    (seg[2] === 'confirm' || seg[2] === 'fulfill' || seg[2] === 'cancel' || seg[2] === 'payments')
+  const session = adminAction ? await requireRole(req, ADMIN_ROLES) : await requireSession(req)
 
+  if (seg.length === 1 && method === 'POST') {
+    const body = (await req.json()) as orders.CreateOrderInput
+    const order = await orders.createOrder(session.tenantId, body)
+    return Response.json(order, { status: 201 })
+  }
+  if (seg.length === 2 && method === 'GET') {
+    return Response.json(await orders.findOrderById(session.tenantId, seg[1]))
+  }
   if (seg.length === 1 && method === 'GET') {
     return Response.json(
       await orders.listOrders(session.tenantId, +(url.searchParams.get('page') ?? 1), +(url.searchParams.get('pageSize') ?? 20), {
@@ -251,14 +263,6 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
         customerId: url.searchParams.get('customerId') ?? undefined,
       }),
     )
-  }
-  if (seg.length === 1 && method === 'POST') {
-    const body = (await req.json()) as orders.CreateOrderInput
-    const order = await orders.createOrder(session.tenantId, body)
-    return Response.json(order, { status: 201 })
-  }
-  if (seg.length === 2 && method === 'GET') {
-    return Response.json(await orders.findOrderById(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'confirm' && method === 'POST') {
     return Response.json(await orders.confirmOrder(session.tenantId, seg[1]))
@@ -383,7 +387,8 @@ async function routeQuotes(method: string, seg: string[], req: Request): Promise
 }
 
 async function routePurchaseOrders(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = isRead ? await requireSession(req) : await requireRole(req, ADMIN_ROLES)
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -485,7 +490,7 @@ async function routeSuppliers(method: string, seg: string[], req: Request): Prom
 }
 
 async function routeFulfillment(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, OPS_ROLES)
 
   if (seg[1] === 'tasks' && seg.length === 2 && method === 'POST') {
     const body = (await req.json()) as wmsFulfillment.CreateFulfillmentTaskInput
@@ -515,7 +520,8 @@ async function routeFulfillment(method: string, seg: string[], req: Request): Pr
 }
 
 async function routeWms(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = isRead ? await requireSession(req) : await requireRole(req, OPS_ROLES)
   const url = new URL(req.url)
 
   if (seg[1] === 'tasks') {
@@ -645,6 +651,7 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
       return Response.json(await wmsCycleCount.submitCycleCountForApproval(session.tenantId, seg[2]))
     }
     if (seg.length === 4 && seg[3] === 'approve' && (method === 'POST' || method === 'PATCH')) {
+      assertRole(session, ADMIN_ROLES)
       return Response.json(
         await wmsCycleCount.approveCycleCount(session.tenantId, seg[2], session.userId),
       )
@@ -697,7 +704,7 @@ async function routeRoutes(method: string, seg: string[], req: Request): Promise
 }
 
 async function routeDispatchMobile(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, DRIVER_ROLES)
 
   if (seg[1] === 'driver' && seg[2] === 'location' && method === 'POST') {
     const body = (await req.json()) as Parameters<typeof dispatch.recordDriverLocation>[2]

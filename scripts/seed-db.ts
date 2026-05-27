@@ -664,7 +664,14 @@ async function seedDispatch(tenantId: string, driverId: string) {
               id: 'seed_stop_2',
               sequence: 2,
               status: 'EN_ROUTE',
-              address: { line1: '88 Main St', city: 'Plano', state: 'TX', postalCode: '75024', customer: 'Beta Smoke Shop' },
+              address: {
+                line1: '88 Main St',
+                city: 'Plano',
+                state: 'TX',
+                postalCode: '75024',
+                customer: 'Beta Smoke Shop',
+                orderId: ID.orderShipped,
+              },
             },
             {
               id: 'seed_stop_3',

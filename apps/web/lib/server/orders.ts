@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import { computeSalesTax } from './compliance-tax'
-import { assertCreditAvailable, netTermsExposure, releaseCreditUsed } from './credit-limit'
+import { assertCreditAvailable, releaseCreditUsed } from './credit-limit'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
 
@@ -140,11 +140,18 @@ export async function recordOrderPayment(
   const want = new Prisma.Decimal(body.amount)
   if (remaining.lte(0)) throw new ApiError(400, 'Order is already fully paid')
   const apply = Prisma.Decimal.min(want, remaining)
-  return orderDb.order.update({
+
+  const updated = await orderDb.order.update({
     where: { id },
     data: { amountPaid: paidSoFar.plus(apply) },
     include: { lineItems: true },
   })
+
+  if (order.paymentMethod === 'NET_TERMS') {
+    await releaseCreditUsed(tenantId, order.customerId, Number(apply)).catch(() => undefined)
+  }
+
+  return updated
 }
 
 export async function cancelOrder(tenantId: string, id: string, reason: string) {
