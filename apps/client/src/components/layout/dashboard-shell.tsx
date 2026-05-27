@@ -1,12 +1,15 @@
 import { Link } from 'react-router-dom'
 import { useLocation } from 'react-router-dom'
 import { useState } from 'react'
+import { ThemeSwitch } from '@/components/cosmos/theme-switch'
+import { titleFromAdminPath } from '@/components/layout/sidebar-nav.config'
 import { Sidebar } from '@/components/layout/sidebar'
 
 function titleFromPath(path: string) {
+  if (path.startsWith('/admin')) return titleFromAdminPath(path)
   const parts = path.split('/').filter(Boolean)
-  const seg = parts[0] === 'admin' ? (parts[1] ?? '') : (parts[0] ?? '')
-  if (!seg || seg === 'admin') return 'Overview'
+  const seg = parts[0] ?? ''
+  if (!seg) return 'Cosmos'
   return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
 }
 
@@ -24,6 +27,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <h1 className="cosmos-admin-header-title">{titleFromPath(pathname)}</h1>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeSwitch compact />
             <Link to="/admin/notifications" className="cosmos-icon-btn" title="Alerts" aria-label="Notifications">
               ···
             </Link>

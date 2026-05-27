@@ -365,7 +365,7 @@
   justify-content: space-between;
   padding: 0 28px;
   border-bottom: var(--border-width) solid var(--c-border);
-  background: var(--c-bg);
+  background: var(--c-bg-elevated);
 }
 
 .cosmos-admin-header-label {
@@ -380,7 +380,7 @@
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--c-heading);
+  color: var(--c-on-dark);
 }
 
 .cosmos-icon-btn {
@@ -390,19 +390,19 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--bento-radius-sm);
-  background: var(--c-surface);
+  background: var(--c-header-icon-bg);
   border: var(--border-width) solid var(--c-border);
-  color: var(--c-text);
+  color: var(--c-header-icon-fg);
   font-weight: 700;
   text-decoration: none;
 }
 
 .cosmos-icon-btn:hover {
-  background: var(--c-surface-2);
+  background: var(--c-nav-icon-bg);
 }
 
 .cosmos-sidebar {
-  background: var(--c-bg);
+  background: var(--c-bg-elevated);
   border-right: var(--border-width) solid var(--c-border);
 }
 
@@ -415,20 +415,21 @@
   border-radius: var(--bento-radius-sm);
   margin-bottom: 4px;
   text-decoration: none;
-  color: var(--c-text);
+  color: var(--c-nav-fg);
   font-weight: 500;
   border: var(--border-width) solid transparent;
   transition: background 0.12s;
 }
 
 .cosmos-nav-link:hover {
-  background: var(--c-surface);
+  background: var(--c-nav-icon-bg);
   border-color: var(--c-border);
 }
 
 .cosmos-nav-link--active {
-  background: var(--c-surface);
+  background: var(--c-nav-active-bg);
   border-color: var(--c-border);
+  color: var(--c-nav-active-fg);
   font-weight: 700;
 }
 
@@ -442,9 +443,9 @@
   border-radius: var(--bento-radius-sm);
   font-size: 10px;
   font-weight: 700;
-  background: var(--c-bg);
+  background: var(--c-nav-icon-bg);
   border: 1px solid var(--c-border);
-  color: var(--c-text);
+  color: var(--c-nav-icon-fg);
 }
 
 .cosmos-nav-link--active .cosmos-nav-short {

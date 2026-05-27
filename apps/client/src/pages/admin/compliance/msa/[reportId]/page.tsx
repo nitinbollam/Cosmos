@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
+import { useState } from 'react'
 import { Card, CardTitle } from '@cosmos/ui'
+import { adminApiClient } from '@/lib/api-admin'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 
@@ -27,6 +29,29 @@ export default function MsaReportDetailPage() {
   const params = useParams()
   const reportId =
     typeof params.reportId === 'string' ? params.reportId : params.reportId?.[0] ?? ''
+  const [downloading, setDownloading] = useState(false)
+
+  async function downloadTob() {
+    if (!reportId) return
+    setDownloading(true)
+    try {
+      const res = await adminApiClient.get(`/msa/reports/${encodeURIComponent(reportId)}/download`, {
+        responseType: 'blob',
+      })
+      const blob = res.data as Blob
+      const disposition = String(res.headers['content-disposition'] ?? '')
+      const match = disposition.match(/filename=\"?([^\";]+)/i)
+      const fileName = match?.[1] ?? `${reportId}.tob`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const q = useQuery<MsaReport | null>({
     queryKey: ['msa', 'report', reportId],
@@ -57,10 +82,16 @@ export default function MsaReportDetailPage() {
             <div>
               <h1 className="text-2xl font-bold text-cosmos-white">MSA report</h1>
               <p className="font-mono text-xs text-cosmos-muted mt-1">{q.data.id}</p>
+              <p className="text-sm text-cosmos-muted mt-2">
+                Fixed-width <span className="font-mono">.tob</span> export (HID / BID / SID / PUR / TOT)
+              </p>
               <div className="mt-2">
                 <StatusBadge status={q.data.status} />
               </div>
             </div>
+            <button type="button" className="btn-primary" disabled={downloading} onClick={() => void downloadTob()}>
+              {downloading ? 'Preparing…' : 'Download .tob'}
+            </button>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">

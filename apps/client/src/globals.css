@@ -10,9 +10,38 @@ html,
 body {
   margin: 0;
   background-color: var(--c-bg);
-  color: var(--c-text);
+  color: var(--c-on-dark);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+}
+
+.theme-switch {
+  background: var(--c-theme-switch-bg);
+}
+
+.theme-switch-btn {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.theme-switch.skeleton {
+  background: var(--c-theme-switch-bg);
+  opacity: 0.5;
+}
+
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-border) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--c-border);
+  border-radius: 999px;
 }
 
 a {

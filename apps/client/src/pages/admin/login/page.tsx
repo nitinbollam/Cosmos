@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ThemeSwitch } from '@/components/cosmos/theme-switch'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
 import { axiosErr } from '@/lib/axios-error'
 
@@ -28,7 +29,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--c-bg)' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ background: 'var(--c-bg)' }}>
+      <div className="w-full max-w-sm flex justify-end">
+        <ThemeSwitch />
+      </div>
       <form onSubmit={submit} className="bento-cell bento-tone-white w-full max-w-sm space-y-4">
         <div>
           <p className="bento-kpi-label">Cosmos</p>

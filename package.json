@@ -18,7 +18,7 @@
     "build": "node scripts/workspace-run.mjs build",
     "test": "node scripts/workspace-run.mjs test",
     "lint": "node scripts/workspace-run.mjs lint",
-    "dev": "node scripts/prepare-dev-env.mjs && node scripts/generate-all-prisma.mjs && npm run dev -w @cosmos/client",
+    "dev": "npm run dev -w @cosmos/client",
     "dev:client": "npm run dev -w @cosmos/client",
     "dev:web": "npm run dev",
     "sync:client": "node scripts/sync-client-from-web.mjs",

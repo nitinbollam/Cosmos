@@ -69,7 +69,9 @@ export default function CompliancePage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-cosmos-white">Compliance</h1>
-          <p className="text-cosmos-muted text-sm mt-1">MSA reporting and tax exposure from compliance data.</p>
+          <p className="text-cosmos-muted text-sm mt-1">
+            MSA reporting exports fixed-width <span className="font-mono">.tob</span> files (HID / BID / SID / PUR / TOT) for manufacturer submission.
+          </p>
         </div>
         <div className="flex rounded-lg border border-cosmos-border overflow-hidden">
           <button

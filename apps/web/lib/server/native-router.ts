@@ -706,6 +706,15 @@ async function routeMsa(method: string, seg: string[], req: Request): Promise<Re
   if (seg.length === 3 && seg[1] === 'reports' && method === 'GET') {
     return Response.json(await complianceMsa.getReport(session.tenantId, seg[2]))
   }
+  if (seg.length === 4 && seg[1] === 'reports' && seg[3] === 'download' && method === 'GET') {
+    const { fileName, content } = await complianceMsa.readReportFile(session.tenantId, seg[2])
+    return new Response(content, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${fileName.replace(/"/g, '')}"`,
+      },
+    })
+  }
   if (seg.length === 3 && seg[1] === 'reports' && seg[2] === 'generate' && method === 'POST') {
     const offset = url.searchParams.get('weekOffset')
     const weekOffset = offset ? parseInt(offset, 10) : 0
