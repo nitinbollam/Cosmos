@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { CosmosLogo } from '@/components/cosmos-logo'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
 import { axiosErr } from '@/lib/axios-error'
 
@@ -30,8 +31,11 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--c-bg)' }}>
       <form onSubmit={submit} className="bento-cell bento-tone-white w-full max-w-sm space-y-4">
+        <div className="flex justify-center pb-2">
+          <CosmosLogo size="lg" />
+        </div>
         <div>
-          <p className="bento-kpi-label">Cosmos</p>
+          <p className="bento-kpi-label">Admin</p>
           <h1 className="bento-hero-title mt-2" style={{ fontSize: '1.5rem' }}>
             Sign in
           </h1>

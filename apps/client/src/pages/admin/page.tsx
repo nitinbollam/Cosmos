@@ -54,7 +54,7 @@ interface CashflowResponse {
 }
 
 const CHART_GRID = 'rgba(113, 97, 239, 0.16)'
-const CHART_AXIS = '#7A728F'
+const CHART_AXIS = '#5F5775'
 const CHART_LINE = '#7161EF'
 const CHART_FILL = '#957FEF'
 
@@ -173,10 +173,10 @@ export default function DashboardPage() {
     <div className="bento-page space-y-5">
       <div className="flex items-end justify-between gap-4 flex-wrap px-1">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.16em] font-semibold" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          <p className="text-[11px] uppercase tracking-[0.16em] font-semibold" style={{ color: 'var(--c-text-3)' }}>
             Dashboard
           </p>
-          <h2 className="text-2xl font-bold tracking-tight mt-1" style={{ color: 'var(--c-on-dark)' }}>
+          <h2 className="text-2xl font-bold tracking-tight mt-1" style={{ color: 'var(--c-heading)' }}>
             Good to see you
           </h2>
         </div>
@@ -314,6 +314,8 @@ export default function DashboardPage() {
                       color: 'var(--c-heading)',
                       boxShadow: 'var(--shadow-card)',
                     }}
+                    labelStyle={{ color: 'var(--c-text-2)' }}
+                    itemStyle={{ color: 'var(--c-heading)' }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
                   />
                   <Area type="monotone" dataKey="revenue" stroke={CHART_LINE} fill="url(#revFill)" strokeWidth={2.5} />

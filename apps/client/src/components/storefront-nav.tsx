@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
+import { CosmosLogo } from '@/components/cosmos-logo'
 import { STOREFRONT_AUTH_EVENT, emitStorefrontAuthChanged } from '@/lib/auth-events'
 import { B2B_CART_KEY, cartTotalLines, readCart } from '@/lib/b2b-cart'
 
@@ -44,8 +45,8 @@ export function StorefrontNav() {
   return (
     <header className="cosmos-shop-header">
       <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
-        <Link to="/admin" className="cosmos-shop-link" style={{ fontWeight: 700 }}>
-          Cosmos B2B
+        <Link to="/admin" style={{ textDecoration: 'none' }}>
+          <CosmosLogo size="sm" />
         </Link>
         <Link to="/catalog" className="cosmos-shop-link">
           Catalog

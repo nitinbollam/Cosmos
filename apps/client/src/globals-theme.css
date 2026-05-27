@@ -17,9 +17,10 @@
   --c-ink: #2d2640;
   --c-heading: #2d2640;
   --c-text: #3d3654;
-  --c-text-2: #5c5478;
-  --c-text-3: #7a728f;
+  --c-text-2: #504868;
+  --c-text-3: #5f5775;
   --c-on-dark: #ffffff;
+  --c-on-primary: #ffffff;
 
   --c-border: rgba(113, 97, 239, 0.28);
   --c-border-card: rgba(113, 97, 239, 0.38);

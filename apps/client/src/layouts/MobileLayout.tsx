@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import { CosmosLogo } from '@/components/cosmos-logo'
 import { RequireMobileAuth } from '@/components/auth/require-mobile-auth'
 
 const TABS = [
@@ -22,25 +23,37 @@ export function MobileLayout() {
 }
 
 function MobileShell() {
+  const { pathname } = useLocation()
+
   return (
     <div className="cosmos-mobile">
       <header className="cosmos-mobile-header">
-        <Link to="/" className="cosmos-shop-link" style={{ fontSize: 13 }}>
+        <Link to="/" className="cosmos-mobile-back">
           ← Hub
         </Link>
-        <span style={{ fontWeight: 700, flex: 1, fontFamily: 'var(--font-display)' }}>Cosmos Mobile</span>
-        <Link to="/m/login" className="cosmos-shop-link" style={{ fontSize: 13 }}>
+        <Link to="/m/warehouse" className="cosmos-mobile-brand" title="Cosmos Mobile">
+          <CosmosLogo variant="mark" size="sm" />
+          <span>Mobile</span>
+        </Link>
+        <Link to="/m/login" className="cosmos-mobile-back">
           Sign in
         </Link>
       </header>
       <nav className="cosmos-mobile-nav">
-        {TABS.map((t) => (
-          <Link key={t.href} to={t.href} className="cosmos-mobile-tab">
-            {t.label}
-          </Link>
-        ))}
+        {TABS.map((t) => {
+          const active = pathname === t.href || pathname.startsWith(`${t.href}/`)
+          return (
+            <Link
+              key={t.href}
+              to={t.href}
+              className={`cosmos-mobile-tab${active ? ' cosmos-mobile-tab--active' : ''}`}
+            >
+              {t.label}
+            </Link>
+          )
+        })}
       </nav>
-      <main style={{ padding: 16 }}>
+      <main className="cosmos-mobile-main">
         <Outlet />
       </main>
     </div>

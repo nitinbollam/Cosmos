@@ -54,7 +54,7 @@ export default function WarehouseMobilePage() {
         <strong>Receiving</strong>
         <p style={{ margin: '6px 0 0', opacity: 0.7, fontSize: 13 }}>Start or continue a receiving session</p>
       </Link>
-      {err && <p style={{ color: '#f87171', fontSize: 13 }}>{err}</p>}
+      {err && <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p>}
       {loading && <p style={{ opacity: 0.6 }}>Loading…</p>}
       {!loading &&
         tasks.map((t) => (

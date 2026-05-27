@@ -137,7 +137,7 @@ export default function MsaReportDetailPage() {
                 {q.data.submissionError && (
                   <div>
                     <dt className="text-red-400">Error</dt>
-                    <dd className="text-red-300 text-xs mt-1 whitespace-pre-wrap">{q.data.submissionError}</dd>
+                    <dd className="text-xs mt-1 whitespace-pre-wrap" style={{ color: 'var(--c-danger)' }}>{q.data.submissionError}</dd>
                   </div>
                 )}
               </dl>

@@ -410,7 +410,7 @@ export default function WarehousePage() {
             className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
             style={{
               background: tab === k ? 'var(--c-primary-dim)' : 'transparent',
-              color: tab === k ? '#fff' : 'var(--c-text-2)',
+              color: tab === k ? 'var(--c-primary)' : 'var(--c-text-2)',
               border: tab === k ? '1px solid var(--c-primary)' : '1px solid transparent',
             }}
           >

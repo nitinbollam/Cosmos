@@ -208,7 +208,12 @@ export default function FulfillmentTaskDetailPage() {
                   type="button"
                   disabled={pickAllMut.isPending}
                   onClick={() => void pickAllMut.mutateAsync()}
-                  className="h-9 px-3 rounded-md bg-violet-900/60 border border-violet-700/70 text-violet-100 text-xs disabled:opacity-40 hover:bg-violet-800/70"
+                  className="h-9 px-3 rounded-md text-xs font-semibold disabled:opacity-40"
+                  style={{
+                    background: 'var(--c-primary-dim)',
+                    color: 'var(--c-primary)',
+                    border: '1px solid var(--c-accent)',
+                  }}
                 >
                   {pickAllMut.isPending ? 'Picking…' : 'Pick all'}
                 </button>
@@ -222,7 +227,12 @@ export default function FulfillmentTaskDetailPage() {
                     : 'Every line must be PICKED or SHORT (update picks via mobile / sync first)'
                 }
                 onClick={() => void packReq.mutateAsync()}
-                className="h-9 px-3 rounded-md bg-emerald-900/60 border border-emerald-700/70 text-emerald-100 text-xs disabled:opacity-40 hover:bg-emerald-800/70"
+                className="h-9 px-3 rounded-md text-xs font-semibold disabled:opacity-40"
+                style={{
+                  background: 'var(--c-success-soft)',
+                  color: 'var(--c-success)',
+                  border: '1px solid var(--c-success)',
+                }}
               >
                 {packReq.isPending ? 'Packing…' : 'Pack'}
               </button>
@@ -231,7 +241,12 @@ export default function FulfillmentTaskDetailPage() {
                 disabled={dispatchReq.isPending || t.status !== 'PACKED'}
                 title="Requires PACKED"
                 onClick={() => void dispatchReq.mutateAsync()}
-                className="h-9 px-3 rounded-md bg-sky-900/60 border border-sky-700/70 text-sky-100 text-xs disabled:opacity-40 hover:bg-sky-800/70"
+                className="h-9 px-3 rounded-md text-xs font-semibold disabled:opacity-40"
+                style={{
+                  background: 'var(--c-accent-dim)',
+                  color: 'var(--c-primary)',
+                  border: '1px solid var(--c-accent)',
+                }}
               >
                 {dispatchReq.isPending ? 'Dispatching…' : 'Dispatch'}
               </button>
@@ -244,7 +259,7 @@ export default function FulfillmentTaskDetailPage() {
               <p className="text-xs text-red-400 mt-2">{errMsg(pickAllMut.error)}</p>
             ) : null}
             {!packingReady && ['PENDING', 'PICKING'].includes(t.status) ? (
-              <p className="text-xs text-amber-300/90 mt-2">
+              <p className="text-xs mt-2" style={{ color: 'var(--c-warning)' }}>
                 Confirm picks on each line (or use Pick all / mobile warehouse) before packing.
               </p>
             ) : null}

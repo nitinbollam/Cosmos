@@ -42,7 +42,7 @@ export default function OrderConfirmationPage() {
       >
         ✓
       </div>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 32, color: 'var(--c-white)' }}>Order Confirmed</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 32, color: 'var(--c-heading)' }}>Order Confirmed</h1>
       {err ? <p style={{ color: 'var(--c-danger)' }}>{err}</p> : null}
       {order ? (
         <>

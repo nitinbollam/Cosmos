@@ -22,6 +22,7 @@
     "@dnd-kit/utilities": "3",
     "@fontsource/dm-sans": "^5.2.5",
     "@fontsource/jetbrains-mono": "^5.2.5",
+    "@fontsource/mochiy-pop-one": "^5.2.8",
     "@fontsource/plus-jakarta-sans": "^5.2.5",
     "@fontsource/syne": "^5.2.5",
     "@hookform/resolvers": "^3.9.0",

@@ -87,7 +87,7 @@ export default function WarehouseTaskPage() {
         ← Tasks
       </Link>
       <h1 style={{ fontFamily: 'var(--font-syne)' }}>Task {id?.slice(-8)}</h1>
-      {err && <p style={{ color: '#f87171', fontSize: 13 }}>{err}</p>}
+      {err && <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p>}
       {task && (
         <>
           <div className="cosmos-mobile-card">
@@ -105,7 +105,7 @@ export default function WarehouseTaskPage() {
               </button>
             )}
             {allDone && (
-              <p style={{ margin: '12px 0 0', fontSize: 13, color: '#86efac' }}>
+              <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--c-success)' }}>
                 All lines picked — ready for pack in admin.
               </p>
             )}

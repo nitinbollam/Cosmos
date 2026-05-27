@@ -161,7 +161,7 @@ export default function CheckoutPage() {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-white)' }}>Checkout</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-heading)' }}>Checkout</h1>
       <div style={{ display: 'flex', gap: 12, marginTop: 20, marginBottom: 32 }}>
         {[1, 2, 3].map((s) => (
           <div key={s} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -171,7 +171,7 @@ export default function CheckoutPage() {
                 height: 28,
                 borderRadius: '50%',
                 background: step >= s ? 'var(--c-primary)' : 'var(--c-surface-2)',
-                color: '#fff',
+                color: step >= s ? 'var(--c-on-primary)' : 'var(--c-text-2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

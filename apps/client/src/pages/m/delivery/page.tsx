@@ -53,7 +53,7 @@ export default function DeliveryMobilePage() {
       <button type="button" className="btn-ghost" onClick={() => void load()} style={{ marginBottom: 12 }}>
         Refresh
       </button>
-      {err && <p style={{ color: '#f87171', fontSize: 13 }}>{err}</p>}
+      {err && <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p>}
       {routes.map((r) => (
         <Link
           key={r.id}

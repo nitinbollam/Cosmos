@@ -56,7 +56,7 @@ export default function MobileLoginPage() {
           </div>
           <input className="cosmos-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <input className="cosmos-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          {err ? <p style={{ color: '#f87171', fontSize: 13 }}>{err}</p> : null}
+          {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p> : null}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? 'Signing in…' : 'Continue'}
           </button>

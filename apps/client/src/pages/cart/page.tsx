@@ -32,7 +32,7 @@ export default function CartPage() {
   return (
     <div style={{ padding: 24, display: 'flex', gap: 24, flexWrap: 'wrap', maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ flex: '2 1 400px' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-white)', marginBottom: 20 }}>Cart</h1>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-heading)', marginBottom: 20 }}>Cart</h1>
         <table className="cosmos-table">
           <thead>
             <tr>

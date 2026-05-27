@@ -1,4 +1,4 @@
-import Image from '@/components/cosmos-img'
+import { CosmosLogo } from '@/components/cosmos-logo'
 import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { useCartStore } from '@/stores/cart.store'
@@ -10,7 +10,8 @@ export function ShopHeader() {
   const count = useCartStore((s) => s.count())
   const [tenantLabel, setTenantLabel] = useState('Your business')
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const refreshAuth = useCallback(() => {
     const token = typeof window !== 'undefined' ? window.localStorage.getItem('cosmos.accessToken') : null
@@ -33,6 +34,11 @@ export function ShopHeader() {
     }
   }, [refreshAuth])
 
+  useEffect(() => {
+    document.body.classList.toggle('cosmos-shop-menu-open', navOpen)
+    return () => document.body.classList.remove('cosmos-shop-menu-open')
+  }, [navOpen])
+
   function logout() {
     window.localStorage.removeItem('cosmos.accessToken')
     window.localStorage.removeItem('cosmos.refreshToken')
@@ -43,68 +49,74 @@ export function ShopHeader() {
 
   return (
     <header className="cosmos-shop-header">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <Link to="/catalog" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <Image src="/cosmos-logo.png" alt="Cosmos" width={40} height={40} style={{ height: 40, width: 'auto' }} priority />
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-heading)', fontSize: 14 }}>
-            {tenantLabel}
-          </span>
+      <div className="cosmos-shop-header-row">
+        <button
+          type="button"
+          className="cosmos-shop-menu-btn"
+          aria-label={navOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen((o) => !o)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+            {navOpen ? (
+              <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            ) : (
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            )}
+          </svg>
+        </button>
+        <Link to="/catalog" className="cosmos-shop-brand">
+          <CosmosLogo variant="mark" size="sm" />
+          <span className="cosmos-shop-brand-label">{tenantLabel}</span>
         </Link>
-        <nav style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <Link to="/catalog" className="cosmos-shop-link">
+        <nav className={`cosmos-shop-nav${navOpen ? ' cosmos-shop-nav--open' : ''}`}>
+          <Link to="/catalog" className="cosmos-shop-link" onClick={() => setNavOpen(false)}>
             Catalog
           </Link>
-          <Link to="/orders" className="cosmos-shop-link">
+          <Link to="/orders" className="cosmos-shop-link" onClick={() => setNavOpen(false)}>
             Orders
           </Link>
-          <Link to="/quotes" className="cosmos-shop-link">
+          <Link to="/quotes" className="cosmos-shop-link" onClick={() => setNavOpen(false)}>
             Quotes
           </Link>
         </nav>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <Link to="/cart" className="cosmos-shop-link" style={{ position: 'relative' }}>
+      <div className="cosmos-shop-header-actions">
+        <Link to="/cart" className="cosmos-shop-link cosmos-shop-cart-link">
           Cart
-          {count > 0 ? (
-            <span
-              style={{
-                marginLeft: 6,
-                background: 'var(--c-primary)',
-                color: 'var(--c-primary-fg)',
-                borderRadius: 999,
-                padding: '2px 8px',
-                fontSize: 11,
-                border: '1px solid var(--c-border)',
-              }}
-            >
-              {count}
-            </span>
-          ) : null}
+          {count > 0 ? <span className="cosmos-shop-cart-badge">{count}</span> : null}
         </Link>
         {userEmail ? (
-          <div style={{ position: 'relative' }}>
-            <button type="button" className="btn-ghost !py-2 !px-3" onClick={() => setMenuOpen((o) => !o)} style={{ fontSize: 13 }}>
+          <div className="cosmos-shop-user-menu">
+            <button
+              type="button"
+              className="btn-ghost cosmos-shop-user-btn"
+              onClick={() => setUserMenuOpen((o) => !o)}
+            >
               {userEmail}
             </button>
-            {menuOpen ? (
-              <div className="cosmos-card !p-0 mt-2 absolute right-0 z-50 min-w-[180px]">
-                <button
-                  type="button"
-                  className="w-full text-left px-4 py-3 text-sm"
-                  style={{ color: 'var(--c-danger)', background: 'none', border: 'none', cursor: 'pointer' }}
-                  onClick={() => logout()}
-                >
+            {userMenuOpen ? (
+              <div className="cosmos-card cosmos-shop-user-dropdown">
+                <button type="button" className="cosmos-shop-signout" onClick={() => logout()}>
                   Sign out
                 </button>
               </div>
             ) : null}
           </div>
         ) : (
-          <Link to="/login" className="btn-primary !no-underline inline-block text-center" style={{ fontSize: 13 }}>
+          <Link to="/login" className="btn-primary cosmos-shop-signin">
             Sign in
           </Link>
         )}
       </div>
+      {navOpen ? (
+        <button
+          type="button"
+          className="cosmos-shop-nav-backdrop"
+          aria-label="Close menu"
+          onClick={() => setNavOpen(false)}
+        />
+      ) : null}
     </header>
   )
 }

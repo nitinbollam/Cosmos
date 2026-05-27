@@ -147,7 +147,7 @@ export default function CatalogPage() {
           background: 'var(--c-surface)',
         }}
       >
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 14, color: 'var(--c-white)', margin: '0 0 16px' }}>Filters</h2>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 14, color: 'var(--c-heading)', margin: '0 0 16px' }}>Filters</h2>
         <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginBottom: 8 }}>Category</label>
         <select
           className="cosmos-input"

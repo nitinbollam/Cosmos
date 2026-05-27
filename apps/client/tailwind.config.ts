@@ -22,7 +22,7 @@ const config: Config = {
           danger: '#DC2626',
           foreground: '#2D2640',
           white: '#2D2640',
-          muted: '#7A728F',
+          muted: '#5F5775',
           text: '#3D3654',
           'text-2': '#5C5478',
           'text-3': '#7A728F',

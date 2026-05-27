@@ -136,7 +136,8 @@ export default function PurchaseOrderDetailPage() {
                     if (!confirm('Cancel this purchase order?')) return
                     cancelPo.mutate()
                   }}
-                  className="h-9 px-4 rounded-md border border-red-500/50 text-red-300 text-sm disabled:opacity-40"
+                  className="h-9 px-4 rounded-md border text-sm disabled:opacity-40"
+                  style={{ borderColor: 'var(--c-danger)', color: 'var(--c-danger)' }}
                 >
                   {cancelPo.isPending ? 'Cancelling…' : 'Cancel PO'}
                 </button>

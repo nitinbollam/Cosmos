@@ -8,7 +8,7 @@ import { MobileLayout } from '@/layouts/MobileLayout'
 function page(importFn: () => Promise<{ default: ComponentType }>) {
   const Lazy = lazy(importFn)
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading…</div>}>
+    <Suspense fallback={<div className="p-8 text-center" style={{ color: 'var(--c-text-3)' }}>Loading…</div>}>
       <Lazy />
     </Suspense>
   )

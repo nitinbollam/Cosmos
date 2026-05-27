@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { CosmosLogo } from '@/components/cosmos-logo'
 import { Sidebar } from '@/components/layout/sidebar'
 
 function titleFromPath(path: string) {
@@ -12,25 +13,77 @@ function titleFromPath(path: string) {
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const pathname = useLocation().pathname ?? '/'
 
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    document.body.classList.toggle('cosmos-nav-open', mobileNavOpen)
+    return () => document.body.classList.remove('cosmos-nav-open')
+  }, [mobileNavOpen])
+
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--c-bg)' }}>
-      <Sidebar collapsed={collapsed} onToggleCollapsed={() => setCollapsed((c) => !c)} />
-      <div className="flex-1 flex flex-col min-w-0">
+    <div className="cosmos-admin-shell">
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="cosmos-sidebar-backdrop"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+
+      <Sidebar
+        collapsed={collapsed}
+        onToggleCollapsed={() => setCollapsed((c) => !c)}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
+      />
+
+      <div className="cosmos-admin-main">
         <header className="cosmos-admin-header">
-          <div>
-            <p className="cosmos-admin-header-label">Cosmos Admin</p>
-            <h1 className="cosmos-admin-header-title">{titleFromPath(pathname)}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link to="/admin/notifications" className="cosmos-icon-btn" title="Alerts" aria-label="Notifications">
-              ···
+          <div className="cosmos-admin-header-start">
+            <button
+              type="button"
+              className="cosmos-mobile-menu-btn"
+              aria-label="Open navigation menu"
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+            <Link to="/admin" className="cosmos-admin-header-logo" title="Cosmos">
+              <CosmosLogo variant="mark" size="sm" />
             </Link>
-            <div className="cosmos-icon-btn text-xs">A</div>
+            <div className="cosmos-admin-header-titles">
+              <p className="cosmos-admin-header-label">Cosmos Admin</p>
+              <h1 className="cosmos-admin-header-title">{titleFromPath(pathname)}</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link to="/admin/notifications" className="cosmos-icon-btn" title="Alerts" aria-label="Notifications">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M12 3a5 5 0 0 0-5 5v3.5L5 14.5V16h14v-1.5l-2-3V8a5 5 0 0 0-5-5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              </svg>
+            </Link>
+            <div className="cosmos-icon-btn cosmos-avatar-btn" aria-hidden>
+              A
+            </div>
           </div>
         </header>
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="cosmos-admin-content">{children}</main>
       </div>
     </div>
   )

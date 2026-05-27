@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 @layer utilities {
-  .text-cosmos-white {
+  .text-cosmos-white,
+  .text-cosmos-heading {
     color: var(--c-heading) !important;
   }
 
@@ -19,6 +20,58 @@
   .text-cosmos-text-3 {
     color: var(--c-text-3) !important;
   }
+
+  .text-on-primary {
+    color: var(--c-on-primary) !important;
+  }
+
+  /* Remap legacy Tailwind palette classes for the light theme */
+  .text-red-400,
+  .text-red-300 {
+    color: var(--c-danger) !important;
+  }
+
+  .text-amber-400,
+  .text-amber-300,
+  .text-amber-300\/90 {
+    color: var(--c-warning) !important;
+  }
+
+  .text-emerald-400 {
+    color: var(--c-success) !important;
+  }
+}
+
+/* Readable defaults inside admin surfaces */
+.cosmos-admin-content,
+.p-6,
+.page-shell,
+.bento-page {
+  color: var(--c-text);
+}
+
+.cosmos-admin-content :is(h1, h2, h3, h4, h5, h6),
+.p-6 :is(h1, h2, h3, h4, h5, h6):not([class*='text-white']),
+.page-shell :is(h1, h2, h3, h4, h5, h6),
+.bento-page :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--c-heading);
+}
+
+.cosmos-admin-content label,
+.p-6 label {
+  color: var(--c-text-2);
+}
+
+.cosmos-input,
+select.cosmos-input,
+.cosmos-input option {
+  color: var(--c-text);
+  background: var(--c-surface);
+}
+
+select.cosmos-input option {
+  background: var(--c-surface);
+  color: var(--c-text);
 }
 
 .page-shell {
@@ -357,15 +410,34 @@
 }
 
 /* Admin shell */
+.cosmos-admin-shell {
+  min-height: 100vh;
+  display: flex;
+  background: var(--c-bg);
+}
+
+.cosmos-admin-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cosmos-admin-content {
+  flex: 1;
+  overflow: auto;
+  background: var(--c-bg);
+}
+
 .cosmos-admin-header {
-  height: 72px;
+  height: 80px;
   shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 28px;
   border-bottom: var(--border-width) solid var(--c-border);
-  background: var(--c-bg);
+  background: var(--c-surface);
 }
 
 .cosmos-admin-header-label {
@@ -401,9 +473,109 @@
   background: var(--c-surface-2);
 }
 
+.cosmos-avatar-btn {
+  background: var(--c-primary-dim);
+  color: var(--c-primary);
+  border-color: var(--c-accent);
+}
+
 .cosmos-sidebar {
-  background: var(--c-bg);
+  --sidebar-width: 240px;
+  width: var(--sidebar-width);
+  shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-surface);
   border-right: var(--border-width) solid var(--c-border);
+  box-shadow: 2px 0 12px rgba(45, 38, 64, 0.04);
+}
+
+.cosmos-sidebar--collapsed {
+  --sidebar-width: 72px;
+}
+
+.cosmos-sidebar-brand {
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  padding: 20px 16px;
+  border-bottom: var(--border-width) solid var(--c-border);
+  overflow: visible;
+  gap: 12px;
+}
+
+.cosmos-sidebar-brand-link {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  text-decoration: none;
+  overflow: visible;
+}
+
+.cosmos-sidebar--collapsed .cosmos-sidebar-brand {
+  justify-content: center;
+  padding-inline: 10px;
+}
+
+.cosmos-sidebar-nav {
+  flex: 1;
+  padding: 12px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.cosmos-sidebar-foot {
+  padding: 12px 10px 14px;
+  border-top: var(--border-width) solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cosmos-sidebar-shop {
+  display: block;
+  padding: 8px 12px;
+  border-radius: var(--bento-radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-2);
+  text-decoration: none;
+  border: var(--border-width) solid var(--c-border);
+  background: var(--c-surface-2);
+  transition: background 0.12s, color 0.12s;
+}
+
+.cosmos-sidebar-shop:hover {
+  background: var(--c-surface-3);
+  color: var(--c-primary);
+}
+
+.cosmos-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border);
+  background: var(--c-surface-2);
+  color: var(--c-text-2);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.cosmos-sidebar-toggle:hover {
+  background: var(--c-surface-3);
+  color: var(--c-heading);
+}
+
+.cosmos-sidebar--collapsed .cosmos-sidebar-toggle {
+  padding-inline: 0;
 }
 
 .cosmos-nav-link {
@@ -418,38 +590,253 @@
   color: var(--c-text);
   font-weight: 500;
   border: var(--border-width) solid transparent;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
 .cosmos-nav-link:hover {
-  background: var(--c-surface);
+  background: var(--c-surface-2);
   border-color: var(--c-border);
+  color: var(--c-heading);
 }
 
 .cosmos-nav-link--active {
   background: var(--c-primary-dim);
-  border-color: var(--c-accent);
+  border-color: rgba(113, 97, 239, 0.35);
   color: var(--c-heading);
-  font-weight: 700;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--c-primary);
 }
 
-.cosmos-nav-short {
+.cosmos-sidebar--collapsed .cosmos-nav-link {
+  justify-content: center;
+  padding-inline: 0;
+  gap: 0;
+}
+
+.cosmos-sidebar--collapsed .cosmos-nav-link--active {
+  box-shadow: none;
+  border-color: var(--c-accent);
+}
+
+.cosmos-nav-icon-wrap {
   display: inline-flex;
-  height: 32px;
-  width: 32px;
-  shrink: 0;
   align-items: center;
   justify-content: center;
+  width: 32px;
+  height: 32px;
+  shrink: 0;
   border-radius: var(--bento-radius-sm);
-  font-size: 10px;
-  font-weight: 700;
-  background: var(--c-bg);
+  color: var(--c-text-2);
+  background: var(--c-surface-2);
   border: 1px solid var(--c-border);
-  color: var(--c-text);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.cosmos-nav-link--active .cosmos-nav-short {
+.cosmos-nav-link:hover .cosmos-nav-icon-wrap {
+  color: var(--c-primary);
+  border-color: rgba(113, 97, 239, 0.4);
+}
+
+.cosmos-nav-link--active .cosmos-nav-icon-wrap {
+  background: var(--c-surface);
+  color: var(--c-primary);
+  border-color: var(--c-accent);
+}
+
+.cosmos-nav-icon {
+  display: block;
+}
+
+.cosmos-nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Admin header + mobile nav */
+.cosmos-admin-header-start {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cosmos-admin-header-titles {
+  min-width: 0;
+}
+
+.cosmos-admin-header-logo {
+  display: none;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.cosmos-mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border);
   background: var(--c-surface-2);
+  color: var(--c-text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cosmos-mobile-menu-btn:hover {
+  background: var(--c-surface-3);
+  color: var(--c-heading);
+}
+
+.cosmos-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgba(45, 38, 64, 0.45);
+  cursor: pointer;
+}
+
+.cosmos-sidebar-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border);
+  background: var(--c-surface-2);
+  color: var(--c-text-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cosmos-sidebar-close:hover {
+  background: var(--c-surface-3);
+  color: var(--c-heading);
+}
+
+body.cosmos-nav-open {
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .cosmos-admin-shell {
+    flex-direction: column;
+  }
+
+  .cosmos-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    width: min(288px, 88vw);
+    max-width: 288px;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    box-shadow: 8px 0 32px rgba(45, 38, 64, 0.18);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .cosmos-sidebar--mobile-open {
+    transform: translateX(0);
+  }
+
+  .cosmos-sidebar-backdrop {
+    display: block;
+  }
+
+  .cosmos-sidebar-close {
+    display: inline-flex;
+  }
+
+  .cosmos-sidebar-brand {
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 72px;
+    padding: 16px;
+  }
+
+  .cosmos-sidebar-toggle--desktop {
+    display: none;
+  }
+
+  .cosmos-nav-link {
+    min-height: 44px;
+    padding: 12px;
+  }
+
+  .cosmos-nav-icon-wrap {
+    width: 36px;
+    height: 36px;
+  }
+
+  .cosmos-mobile-menu-btn {
+    display: inline-flex;
+  }
+
+  .cosmos-admin-header-logo {
+    display: inline-flex;
+  }
+
+  .cosmos-admin-header {
+    height: auto;
+    min-height: 64px;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    gap: 12px;
+  }
+
+  .cosmos-admin-header-label {
+    font-size: 10px;
+  }
+
+  .cosmos-admin-header-title {
+    font-size: 1.05rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cosmos-admin-content {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .cosmos-admin-content .bento-page,
+  .cosmos-admin-content .page-shell,
+  .cosmos-admin-content .p-6 {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .cosmos-icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .bento-kpi-value {
+    font-size: 24px;
+  }
+
+  .cosmos-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (min-width: 768px) {
+  .cosmos-sidebar-backdrop {
+    display: none !important;
+  }
 }
 
 .cosmos-shop-header {

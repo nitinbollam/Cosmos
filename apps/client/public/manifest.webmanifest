@@ -19,7 +19,7 @@
       "type": "image/png"
     },
     {
-      "src": "/cosmos-logo.png",
+      "src": "/cosmos-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

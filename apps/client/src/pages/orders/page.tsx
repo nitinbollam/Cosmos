@@ -56,7 +56,7 @@ export default function StorefrontOrdersPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-white)' }}>Your orders</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-heading)' }}>Your orders</h1>
       <p style={{ color: 'var(--c-text-3)', marginTop: 8, fontSize: 14 }}>B2B portal orders for your customer record.</p>
       {loading ? <p style={{ marginTop: 24, color: 'var(--c-text-3)' }}>Loading…</p> : null}
       {unauthorized ? (

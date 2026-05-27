@@ -519,7 +519,14 @@ export default function FinancePage() {
                       <XAxis dataKey="label" tick={{ fill: 'var(--c-text-3)', fontSize: 10 }} />
                       <YAxis tick={{ fill: 'var(--c-text-3)', fontSize: 10 }} tickFormatter={(v) => money(v)} />
                       <Tooltip
-                        contentStyle={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)', borderRadius: 8 }}
+                        contentStyle={{
+                          background: 'var(--c-surface-2)',
+                          border: '1px solid var(--c-border)',
+                          borderRadius: 8,
+                          color: 'var(--c-heading)',
+                        }}
+                        labelStyle={{ color: 'var(--c-text-2)' }}
+                        itemStyle={{ color: 'var(--c-heading)' }}
                         formatter={(v: number) => [money(v), 'Closing']}
                       />
                       <Area type="monotone" dataKey="closing" stroke="var(--c-primary)" fill="url(#cfPos)" strokeWidth={2} />

@@ -1,4 +1,4 @@
-import Image from '@/components/cosmos-img'
+import { CosmosLogo } from '@/components/cosmos-logo'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/lib/api'
@@ -49,7 +49,9 @@ export default function LoginPage() {
     <main className="cosmos-auth-page">
       <div className="cosmos-card cosmos-auth-card">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Image src="/cosmos-logo.png" alt="" width={120} height={60} style={{ height: 60, width: 'auto' }} priority />
+          <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
+            <CosmosLogo size="lg" />
+          </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 28, color: 'var(--c-heading)', margin: '16px 0 0' }}>
             Welcome back
           </h1>
