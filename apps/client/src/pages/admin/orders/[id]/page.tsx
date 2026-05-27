@@ -11,6 +11,7 @@ type LineItem = {
   skuId: string
   warehouseId?: string
   quantity: number
+  returnedQty?: number
   unitPrice: string | number
   taxAmount?: string | number
 }
@@ -83,6 +84,9 @@ export default function OrderDetailPage() {
 
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('Cancelled from admin')
+  const [returnOpen, setReturnOpen] = useState(false)
+  const [returnReason, setReturnReason] = useState('Customer return')
+  const [returnQtys, setReturnQtys] = useState<Record<string, number>>({})
 
   const orderQ = useQuery({
     queryKey: ['order', id],
@@ -130,6 +134,33 @@ export default function OrderDetailPage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['wms', 'tasks', 'order', id] })
       void qc.invalidateQueries({ queryKey: ['order', id] })
+    },
+  })
+
+  const invoiceQ = useQuery({
+    queryKey: ['order-invoice', id],
+    queryFn: () => api.get<{ invoiceNumber: string; id: string; displayStatus: string }>(`/orders/${encodeURIComponent(id)}/invoice`),
+    enabled: Boolean(id) && ['SHIPPED', 'DELIVERED', 'RETURNED'].includes(orderQ.data?.status ?? ''),
+    retry: false,
+  })
+
+  const returnMut = useMutation({
+    mutationFn: () => {
+      const lines = Object.entries(returnQtys)
+        .filter(([, qty]) => qty > 0)
+        .map(([lineItemId, quantity]) => ({ lineItemId, quantity }))
+      return api.post(`/orders/${encodeURIComponent(id)}/returns`, {
+        reason: returnReason.trim() || undefined,
+        lines,
+        restock: true,
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['order', id] })
+      void qc.invalidateQueries({ queryKey: ['order-invoice', id] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
+      setReturnOpen(false)
+      setReturnQtys({})
     },
   })
 
@@ -194,8 +225,31 @@ export default function OrderDetailPage() {
                   Start fulfillment
                 </button>
               )}
+              {['SHIPPED', 'DELIVERED'].includes(data.status) && (
+                <button type="button" className="btn-ghost !text-sm" onClick={() => {
+                  const init: Record<string, number> = {}
+                  for (const li of data.lineItems ?? []) {
+                    const remaining = li.quantity - (li.returnedQty ?? 0)
+                    if (remaining > 0) init[li.id] = remaining
+                  }
+                  setReturnQtys(init)
+                  setReturnOpen(true)
+                }}>
+                  Process return
+                </button>
+              )}
             </div>
           </div>
+
+          {invoiceQ.data && (
+            <div className="cosmos-card flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-cosmos-text-3 uppercase tracking-wider">Invoice</p>
+                <p className="font-mono text-cosmos-white">{invoiceQ.data.invoiceNumber}</p>
+              </div>
+              <StatusBadge status={invoiceQ.data.displayStatus} />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="cosmos-card">
@@ -256,6 +310,7 @@ export default function OrderDetailPage() {
                 <tr>
                   <th>SKU</th>
                   <th>Qty</th>
+                  <th>Returned</th>
                   <th>Unit</th>
                   <th>Total</th>
                 </tr>
@@ -267,6 +322,7 @@ export default function OrderDetailPage() {
                     <tr key={li.id}>
                       <td className="font-mono text-xs">{li.skuId.slice(-14)}</td>
                       <td>{li.quantity}</td>
+                      <td>{li.returnedQty ?? 0}</td>
                       <td className="font-mono">${Number(li.unitPrice).toFixed(2)}</td>
                       <td className="font-mono">${lt.toFixed(2)}</td>
                     </tr>
@@ -355,6 +411,62 @@ export default function OrderDetailPage() {
                 onClick={() => cancelMut.mutate()}
               >
                 Cancel order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {returnOpen && data && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.65)' }}
+          onClick={() => setReturnOpen(false)}
+        >
+          <div className="cosmos-card max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-3">Process return (RMA)</h3>
+            <p className="text-xs text-cosmos-text-3 mb-4">Restocks inventory and issues a credit memo against the invoice.</p>
+            <label className="text-xs text-cosmos-text-3">Reason</label>
+            <input className="cosmos-input mb-4" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+            <ul className="space-y-3">
+              {(data.lineItems ?? []).map((li) => {
+                const remaining = li.quantity - (li.returnedQty ?? 0)
+                if (remaining <= 0) return null
+                return (
+                  <li key={li.id} className="flex items-center gap-3 text-sm">
+                    <span className="font-mono text-xs flex-1 truncate">{li.skuId.slice(-12)}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={remaining}
+                      className="cosmos-input w-20"
+                      value={returnQtys[li.id] ?? 0}
+                      onChange={(e) =>
+                        setReturnQtys((prev) => ({
+                          ...prev,
+                          [li.id]: Math.min(remaining, Math.max(0, Number(e.target.value) || 0)),
+                        }))
+                      }
+                    />
+                    <span className="text-cosmos-text-3 text-xs">/ {remaining}</span>
+                  </li>
+                )
+              })}
+            </ul>
+            {returnMut.isError && (
+              <p className="text-red-400 text-sm mt-3">{(returnMut.error as Error)?.message ?? 'Return failed'}</p>
+            )}
+            <div className="flex gap-2 justify-end mt-6">
+              <button type="button" className="btn-ghost" onClick={() => setReturnOpen(false)}>
+                Back
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={returnMut.isPending || !Object.values(returnQtys).some((q) => q > 0)}
+                onClick={() => returnMut.mutate()}
+              >
+                {returnMut.isPending ? 'Processing…' : 'Submit return'}
               </button>
             </div>
           </div>

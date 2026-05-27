@@ -201,14 +201,14 @@
 }
 
 .bento-link {
-  color: var(--c-ink);
+  color: var(--c-primary);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 .bento-link:hover {
-  color: var(--c-text-2);
+  color: var(--c-accent);
 }
 
 .bento-metric {
@@ -218,15 +218,15 @@
 .btn-primary {
   background: var(--c-primary);
   color: var(--c-primary-fg);
-  border: var(--border-width) solid var(--c-border);
+  border: var(--border-width) solid var(--c-primary-hover);
   border-radius: var(--bento-radius-sm);
   padding: 10px 18px;
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  transition: background 0.12s;
-  box-shadow: none;
+  transition: background 0.12s, box-shadow 0.12s;
+  box-shadow: var(--shadow-card);
 }
 
 .btn-primary:hover {
@@ -276,7 +276,7 @@
   padding: 12px;
   font-size: 14px;
   color: var(--c-text);
-  border-bottom: 1px solid rgba(26, 32, 44, 0.12);
+  border-bottom: 1px solid var(--c-border);
 }
 
 .cosmos-table tr:hover td {
@@ -310,7 +310,7 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--bento-radius-sm);
-  border: 1px solid rgba(26, 32, 44, 0.08);
+  border: 1px solid var(--c-border);
 }
 
 @keyframes shimmer {
@@ -427,8 +427,9 @@
 }
 
 .cosmos-nav-link--active {
-  background: var(--c-surface);
-  border-color: var(--c-border);
+  background: var(--c-primary-dim);
+  border-color: var(--c-accent);
+  color: var(--c-heading);
   font-weight: 700;
 }
 
@@ -470,5 +471,5 @@
 }
 
 .cosmos-shop-link:hover {
-  color: var(--c-text-2);
+  color: var(--c-primary);
 }

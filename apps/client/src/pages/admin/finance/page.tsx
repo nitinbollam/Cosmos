@@ -15,17 +15,22 @@ import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 
-type OrderRow = {
+type InvoiceRow = {
   id: string
+  orderId: string
+  invoiceNumber: string
   customerId: string
   status: string
+  displayStatus: string
   totalAmount: string | number
-  amountPaid?: string | number
-  createdAt: string
-  paymentMethod: string
+  amountPaid: string | number
+  amountCredited?: string | number
+  balance: number
+  issuedAt: string
+  order?: { status: string; paymentMethod: string }
 }
 
-type OrderList = { items: OrderRow[]; total: number }
+type InvoiceList = { items: InvoiceRow[]; total: number }
 
 type PoRow = {
   id: string
@@ -64,23 +69,6 @@ function money(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
-function orderBalance(o: OrderRow): number {
-  const t = Number(o.totalAmount)
-  const p = Number(o.amountPaid ?? 0)
-  return Math.max(0, t - p)
-}
-
-function invoiceStatus(o: OrderRow): string {
-  const b = orderBalance(o)
-  const t = Number(o.totalAmount)
-  if (o.status === 'CANCELLED' || o.status === 'FAILED') return o.status
-  if (b <= 0.01) return 'PAID'
-  if (Number(o.amountPaid ?? 0) > 0) return 'PARTIALLY_PAID'
-  const days = (Date.now() - new Date(o.createdAt).getTime()) / (86400 * 1000)
-  if (days > 30 && o.paymentMethod === 'NET_TERMS') return 'OVERDUE'
-  return 'ISSUED'
-}
-
 function poTotal(po: PoRow): number {
   return po.lines.reduce((s, l) => {
     const c = l.unitCost != null ? Number(l.unitCost) : 0
@@ -111,14 +99,14 @@ export default function FinancePage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [cfHorizon, setCfHorizon] = useState<30 | 60 | 90>(30)
 
-  const [payOrder, setPayOrder] = useState<OrderRow | null>(null)
+  const [payOrder, setPayOrder] = useState<InvoiceRow | null>(null)
   const [payPo, setPayPo] = useState<PoRow | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
 
-  const ordersQ = useQuery({
-    queryKey: ['finance', 'orders-ar'],
-    queryFn: () => api.get<OrderList>('/orders?page=1&pageSize=200'),
+  const invoicesQ = useQuery({
+    queryKey: ['finance', 'invoices-ar'],
+    queryFn: () => api.get<InvoiceList>('/invoices?page=1&pageSize=200'),
     enabled: tab === 'invoices',
   })
 
@@ -175,13 +163,13 @@ export default function FinancePage() {
   })
 
   const aging = useMemo(() => {
-    const rows = ordersQ.data?.items ?? []
-    const open = rows.filter((o) => orderBalance(o) > 0.01 && !['CANCELLED', 'FAILED'].includes(o.status))
+    const rows = invoicesQ.data?.items ?? []
+    const open = rows.filter((inv) => inv.balance > 0.01 && inv.order?.status !== 'CANCELLED')
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
     const now = Date.now()
-    for (const o of open) {
-      const days = (now - new Date(o.createdAt).getTime()) / (86400 * 1000)
-      const b = orderBalance(o)
+    for (const inv of open) {
+      const days = (now - new Date(inv.issuedAt).getTime()) / (86400 * 1000)
+      const b = inv.balance
       if (days <= 30) buckets.current += b
       else if (days <= 60) buckets.d30 += b
       else if (days <= 90) buckets.d60 += b
@@ -189,27 +177,33 @@ export default function FinancePage() {
       else buckets.d90p += b
     }
     return buckets
-  }, [ordersQ.data])
+  }, [invoicesQ.data])
 
   const arSummary = useMemo(() => {
-    const rows = (ordersQ.data?.items ?? []).filter((o) => !['CANCELLED', 'FAILED'].includes(o.status))
+    const rows = (invoicesQ.data?.items ?? []).filter((inv) => inv.order?.status !== 'CANCELLED')
     let invoiced = 0
     let collected = 0
-    for (const o of rows) {
-      invoiced += Number(o.totalAmount)
-      collected += Number(o.amountPaid ?? 0)
+    for (const inv of rows) {
+      invoiced += Number(inv.totalAmount) + Number(inv.amountCredited ?? 0)
+      collected += Number(inv.amountPaid ?? 0)
     }
-    return { invoiced, collected, outstanding: Math.max(0, invoiced - collected), count: rows.length }
-  }, [ordersQ.data])
+    return {
+      invoiced,
+      collected,
+      outstanding: rows.reduce((s, inv) => s + inv.balance, 0),
+      count: rows.length,
+    }
+  }, [invoicesQ.data])
 
   const filteredInvoices = useMemo(() => {
-    const rows = ordersQ.data?.items ?? []
-    return rows.filter((o) => {
-      const st = invoiceStatus(o)
-      if (invFilter === 'ALL') return !['CANCELLED', 'FAILED'].includes(o.status)
+    const rows = invoicesQ.data?.items ?? []
+    return rows.filter((inv) => {
+      const st = inv.displayStatus
+      if (invFilter === 'ALL') return inv.order?.status !== 'CANCELLED'
+      if (invFilter === 'FAILED') return inv.order?.status === 'FAILED'
       return st === invFilter
     })
-  }, [ordersQ.data, invFilter])
+  }, [invoicesQ.data, invFilter])
 
   const filteredBills = useMemo(() => {
     const rows = posQ.data ?? []
@@ -223,13 +217,13 @@ export default function FinancePage() {
   const payOrderMut = useMutation({
     mutationFn: async () => {
       if (!payOrder) return
-      await api.post(`/orders/${payOrder.id}/payments`, {
+      await api.post(`/orders/${payOrder.orderId}/payments`, {
         amount: parseFloat(payAmount),
         method: payMethod,
       })
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['finance', 'orders-ar'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
       setPayOrder(null)
       setPayAmount('')
     },
@@ -285,7 +279,7 @@ export default function FinancePage() {
           Finance
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
-          AR (orders), AP (purchase orders), trial balance, and cash outlook
+          AR (invoices), AP (purchase orders), trial balance, and cash outlook
         </p>
       </div>
 
@@ -306,7 +300,7 @@ export default function FinancePage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Total invoiced', v: arSummary.invoiced, hint: `${arSummary.count} orders` },
+              { label: 'Total invoiced', v: arSummary.invoiced, hint: `${arSummary.count} invoices` },
               { label: 'Collected', v: arSummary.collected, hint: 'Payments received' },
               { label: 'Outstanding AR', v: arSummary.outstanding, hint: 'Unpaid balance' },
             ].map((c) => (
@@ -342,14 +336,15 @@ export default function FinancePage() {
             ))}
           </div>
           <div className="cosmos-card overflow-x-auto">
-            {ordersQ.isLoading ? <div className="skeleton h-40 w-full" /> : ordersQ.isError ? (
-              <p style={{ color: 'var(--c-danger)' }}>Could not load orders</p>
+            {invoicesQ.isLoading ? <div className="skeleton h-40 w-full" /> : invoicesQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>Could not load invoices</p>
             ) : filteredInvoices.length === 0 ? (
-              <EmptyState icon="📄" title="No invoices" description="Orders with an outstanding balance appear here." />
+              <EmptyState icon="📄" title="No invoices" description="Invoices are issued when orders ship." />
             ) : (
               <table className="cosmos-table">
                 <thead>
                   <tr>
+                    <th>Invoice</th>
                     <th>Order</th>
                     <th>Customer</th>
                     <th>Issue</th>
@@ -361,23 +356,24 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInvoices.map((o) => (
-                    <tr key={o.id}>
-                      <td className="font-mono text-xs">{o.id.slice(0, 12)}…</td>
-                      <td>{o.customerId.slice(0, 12)}…</td>
-                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(o.createdAt).toLocaleDateString()}</td>
-                      <td className="font-mono">{money(Number(o.totalAmount))}</td>
-                      <td className="font-mono">{money(Number(o.amountPaid ?? 0))}</td>
-                      <td className="font-mono">{money(orderBalance(o))}</td>
-                      <td><StatusBadge status={invoiceStatus(o)} /></td>
+                  {filteredInvoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td className="font-mono text-xs">{inv.invoiceNumber}</td>
+                      <td className="font-mono text-xs">{inv.orderId.slice(0, 12)}…</td>
+                      <td>{inv.customerId.slice(0, 12)}…</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(inv.issuedAt).toLocaleDateString()}</td>
+                      <td className="font-mono">{money(Number(inv.totalAmount))}</td>
+                      <td className="font-mono">{money(Number(inv.amountPaid ?? 0))}</td>
+                      <td className="font-mono">{money(inv.balance)}</td>
+                      <td><StatusBadge status={inv.displayStatus} /></td>
                       <td className="space-x-2">
-                        {orderBalance(o) > 0.01 && !['CANCELLED', 'FAILED'].includes(o.status) && (
+                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && (
                           <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
-                            setPayOrder(o)
-                            setPayAmount(String(orderBalance(o).toFixed(2)))
+                            setPayOrder(inv)
+                            setPayAmount(String(inv.balance.toFixed(2)))
                           }}>Record payment</button>
                         )}
-                        <Link to={adminPath(`/orders/${o.id}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
+                        <Link to={adminPath(`/orders/${inv.orderId}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
                       </td>
                     </tr>
                   ))}

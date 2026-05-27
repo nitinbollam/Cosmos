@@ -17,7 +17,9 @@ export default function NewQuotePage() {
   return (
     <Suspense
       fallback={
-        <main style={{ maxWidth: 720, margin: '40px auto', padding: '0 20px', color: '#94a3b8' }}>Loading…</main>
+        <main className="cosmos-shop-page" style={{ color: 'var(--c-text-3)' }}>
+          Loading…
+        </main>
       }
     >
       <NewQuoteForm />
@@ -28,13 +30,22 @@ export default function NewQuotePage() {
 function NewQuoteForm() {
   const navigate = useNavigate()
   const searchParams = useQueryParams()
-  const [customerRef, setCustomerRef] = useState('PO-REFERENCE')
+  const [customerRef, setCustomerRef] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<QuoteLineDraft[]>([
     { lineNo: 1, skuCode: '', description: 'Item', qty: '1', unitPrice: '0' },
   ])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    void api
+      .get<{ customerId: string | null; customerName: string | null }>('/auth/me')
+      .then((me) => {
+        if (me.customerId) setCustomerRef(me.customerId)
+      })
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     if (searchParams.get('from') !== 'cart') return
@@ -77,69 +88,40 @@ function NewQuoteForm() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: '40px auto', padding: '0 20px', color: '#f8fafc' }}>
-      <Link to="/quotes" style={{ color: '#93c5fd', fontSize: 13 }}>
+    <main className="cosmos-shop-page" style={{ color: 'var(--c-text)' }}>
+      <Link to="/quotes" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← All quotes
       </Link>
-      <h1 style={{ marginTop: 20 }}>New quote</h1>
-      <p style={{ color: '#94a3b8', fontSize: 14 }}>
-        Sends <span style={{ fontFamily: 'monospace' }}>POST /quotes</span> through the gateway. Use{' '}
-        <Link to="/catalog" style={{ color: '#93c5fd' }}>
+      <h1 style={{ marginTop: 20, color: 'var(--c-heading)' }}>New quote</h1>
+      <p className="cosmos-shop-muted" style={{ fontSize: 14 }}>
+        Use{' '}
+        <Link to="/catalog" className="cosmos-shop-link-accent">
           Catalog
         </Link>{' '}
         +{' '}
-        <Link to="/cart" style={{ color: '#93c5fd' }}>
+        <Link to="/cart" className="cosmos-shop-link-accent">
           Cart
         </Link>{' '}
-        to pre-fill lines. Admin submit-to-order{' '}
-        <strong style={{ color: '#cbd5f5' }}>requires a SKU code on every line.</strong>
+        to pre-fill lines. Submit-to-order <strong style={{ color: 'var(--c-text)' }}>requires a SKU code on every line.</strong>
       </p>
-      {err ? <p style={{ color: '#fca5a5', marginTop: 12 }}>{err}</p> : null}
+      {err ? <p className="cosmos-shop-error" style={{ marginTop: 12 }}>{err}</p> : null}
       <label style={{ display: 'block', marginTop: 20, fontSize: 13 }}>
-        Customer ref / PO #
-        <input
-          style={{ width: '100%', marginTop: 6, padding: 10, borderRadius: 8, border: '1px solid #334155', background: '#0d0d16', color: '#e2e8f0' }}
-          value={customerRef}
-          onChange={(e) => setCustomerRef(e.target.value)}
-        />
+        Customer account
+        <input readOnly className="cosmos-shop-field cosmos-shop-field--mono cosmos-shop-field--readonly" value={customerRef} />
       </label>
       <label style={{ display: 'block', marginTop: 16, fontSize: 13 }}>
         Notes
-        <textarea
-          rows={3}
-          style={{
-            width: '100%',
-            marginTop: 6,
-            padding: 10,
-            borderRadius: 8,
-            border: '1px solid #334155',
-            background: '#0d0d16',
-            color: '#e2e8f0',
-            resize: 'vertical',
-          }}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
+        <textarea rows={3} className="cosmos-shop-field" style={{ resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </label>
       <div style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 15 }}>Lines</h2>
+        <h2 style={{ fontSize: 15, color: 'var(--c-heading)' }}>Lines</h2>
         {lines.map((l, idx) => (
-          <div
-            key={l.lineNo}
-            style={{
-              border: '1px solid #1f2740',
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 10,
-              display: 'grid',
-              gap: 8,
-            }}
-          >
-            <span style={{ color: '#94a3b8', fontSize: 12 }}>
+          <div key={l.lineNo} className="cosmos-shop-line-card">
+            <span className="cosmos-shop-muted" style={{ fontSize: 12 }}>
               Line #{l.lineNo}
               <button
                 type="button"
-                style={{ marginLeft: 12, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}
+                style={{ marginLeft: 12, color: 'var(--c-danger)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}
                 onClick={() => setLines(lines.filter((_, i) => i !== idx).map((x, i) => ({ ...x, lineNo: i + 1 })))}
                 disabled={lines.length <= 1}
               >
@@ -148,7 +130,8 @@ function NewQuoteForm() {
             </span>
             <input
               placeholder="SKU (optional)"
-              style={{ padding: 8, borderRadius: 6, border: '1px solid #334155', background: '#0d0d16', color: '#e2e8f0', fontFamily: 'monospace', fontSize: 13 }}
+              className="cosmos-shop-field cosmos-shop-field--mono"
+              style={{ marginTop: 0, padding: 8 }}
               value={l.skuCode}
               onChange={(e) => {
                 const next = [...lines]
@@ -158,7 +141,8 @@ function NewQuoteForm() {
             />
             <input
               placeholder="Description"
-              style={{ padding: 8, borderRadius: 6, border: '1px solid #334155', background: '#0d0d16', color: '#e2e8f0' }}
+              className="cosmos-shop-field"
+              style={{ marginTop: 0, padding: 8 }}
               value={l.description}
               onChange={(e) => {
                 const next = [...lines]
@@ -171,7 +155,8 @@ function NewQuoteForm() {
                 type="number"
                 min={1}
                 placeholder="Qty"
-                style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #334155', background: '#0d0d16', color: '#e2e8f0' }}
+                className="cosmos-shop-field"
+                style={{ flex: 1, marginTop: 0, padding: 8 }}
                 value={l.qty}
                 onChange={(e) => {
                   const next = [...lines]
@@ -183,7 +168,8 @@ function NewQuoteForm() {
                 type="number"
                 step="0.01"
                 placeholder="Unit price"
-                style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #334155', background: '#0d0d16', color: '#e2e8f0' }}
+                className="cosmos-shop-field"
+                style={{ flex: 1, marginTop: 0, padding: 8 }}
                 value={l.unitPrice}
                 onChange={(e) => {
                   const next = [...lines]
@@ -196,7 +182,7 @@ function NewQuoteForm() {
         ))}
         <button
           type="button"
-          style={{ marginTop: 12, fontSize: 13, padding: '6px 12px', borderRadius: 8, border: '1px dashed #475569', background: 'transparent', color: '#93c5fd', cursor: 'pointer' }}
+          className="cosmos-shop-btn-dashed"
           onClick={() =>
             setLines([...lines, { lineNo: lines.length + 1, skuCode: '', description: '', qty: '1', unitPrice: '0' }])
           }
@@ -204,20 +190,7 @@ function NewQuoteForm() {
           + Line
         </button>
       </div>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void submit()}
-        style={{
-          marginTop: 28,
-          padding: '12px 22px',
-          borderRadius: 10,
-          border: '1px solid #334155',
-          background: '#1e293b',
-          color: '#e2e8f0',
-          cursor: busy ? 'wait' : 'pointer',
-        }}
-      >
+      <button type="button" disabled={busy} onClick={() => void submit()} className="btn-primary" style={{ marginTop: 28 }}>
         {busy ? 'Creating…' : 'Create draft quote'}
       </button>
     </main>

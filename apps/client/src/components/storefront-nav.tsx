@@ -34,8 +34,6 @@ export function StorefrontNav() {
     }
   }, [refreshCart, refreshAuth])
 
-  const linkStyle = { color: '#a5b4fc', textDecoration: 'none' as const, fontSize: 14 }
-
   function logout() {
     window.localStorage.removeItem('cosmos.accessToken')
     window.localStorage.removeItem('cosmos.refreshToken')
@@ -44,59 +42,36 @@ export function StorefrontNav() {
   }
 
   return (
-    <header
-      style={{
-        borderBottom: '1px solid #1f2740',
-        background: '#0a0a12',
-        padding: '12px 22px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 16,
-        justifyContent: 'space-between',
-      }}
-    >
+    <header className="cosmos-shop-header">
       <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
-        <Link to="/admin" style={{ ...linkStyle, fontWeight: 700, color: '#e2e8f0' }}>
+        <Link to="/admin" className="cosmos-shop-link" style={{ fontWeight: 700 }}>
           Cosmos B2B
         </Link>
-        <Link to="/catalog" style={linkStyle}>
+        <Link to="/catalog" className="cosmos-shop-link">
           Catalog
         </Link>
-        <Link to="/cart" style={linkStyle}>
+        <Link to="/cart" className="cosmos-shop-link">
           Cart{cartCount > 0 ? ` (${cartCount})` : ''}
         </Link>
-        <Link to="/quotes" style={linkStyle}>
+        <Link to="/quotes" className="cosmos-shop-link">
           Quotes
         </Link>
-        <Link to="/quotes/new" style={linkStyle}>
+        <Link to="/quotes/new" className="cosmos-shop-link">
           New quote
         </Link>
         {hasToken ? (
-          <Link to="/orders" style={linkStyle}>
+          <Link to="/orders" className="cosmos-shop-link">
             Orders
           </Link>
         ) : null}
       </nav>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {hasToken ? (
-          <button
-            type="button"
-            onClick={() => logout()}
-            style={{
-              background: 'transparent',
-              border: '1px solid #334155',
-              borderRadius: 8,
-              color: '#94a3b8',
-              fontSize: 13,
-              padding: '6px 12px',
-              cursor: 'pointer',
-            }}
-          >
+          <button type="button" onClick={() => logout()} className="btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }}>
             Sign out
           </button>
         ) : (
-          <Link to="/admin/login" style={{ ...linkStyle, fontSize: 13 }}>
+          <Link to="/admin/login" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
             Sign in
           </Link>
         )}

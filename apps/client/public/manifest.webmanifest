@@ -4,8 +4,8 @@
   "description": "Cosmos ERP — admin, B2B shop, and mobile warehouse/delivery/sales",
   "start_url": "/m/warehouse",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#6366f1",
+  "background_color": "#DEC0F1",
+  "theme_color": "#7161EF",
   "orientation": "portrait-primary",
   "icons": [
     {

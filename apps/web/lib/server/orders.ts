@@ -6,6 +6,7 @@ import { getTenantSalesTaxRate } from './tenant-tax'
 import { assertCreditAvailable, releaseCreditUsed } from './credit-limit'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
+import { syncInvoiceFromOrder } from './invoices'
 
 export type CreateOrderInput = {
   customerId: string
@@ -188,6 +189,8 @@ export async function recordOrderPayment(
   if (order.paymentMethod === 'NET_TERMS') {
     await releaseCreditUsed(tenantId, order.customerId, Number(apply)).catch(() => undefined)
   }
+
+  await syncInvoiceFromOrder(tenantId, id).catch(() => undefined)
 
   return updated
 }

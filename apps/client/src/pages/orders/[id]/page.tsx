@@ -88,15 +88,15 @@ export default function StorefrontOrderDetailPage() {
   const o = order
 
   return (
-    <main style={{ maxWidth: 900, margin: '40px auto', padding: '0 20px', color: '#f8fafc' }}>
-      <Link to="/orders" style={{ color: '#93c5fd', fontSize: 13 }}>
+    <main className="cosmos-shop-page-main">
+      <Link to="/orders" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← All orders
       </Link>
-      {loading ? <p style={{ marginTop: 24, color: '#94a3b8' }}>Loading…</p> : null}
+      {loading ? <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
       {err ? (
-        <p style={{ marginTop: 24, color: '#fca5a5' }}>
+        <p className="cosmos-shop-error" style={{ marginTop: 24 }}>
           {err}{' '}
-          <Link to="/login" style={{ color: '#93c5fd' }}>
+          <Link to="/login" className="cosmos-shop-link-accent">
             Sign in
           </Link>
         </p>
@@ -104,16 +104,16 @@ export default function StorefrontOrderDetailPage() {
       {o ? (
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-            <h1 style={{ fontSize: 22, margin: 0 }}>Order · {o.id.slice(0, 12)}…</h1>
-            <div style={{ fontSize: 13, color: '#94a3b8' }}>
+            <h1 style={{ fontSize: 22, margin: 0, color: 'var(--c-heading)' }}>Order · {o.id.slice(0, 12)}…</h1>
+            <div style={{ fontSize: 13 }}>
               <a
-                  href={storefrontAdminHref(`/orders/${encodeURIComponent(o.id)}`)}
-                  style={{ color: '#a78bfa' }}
-                  target={ADMIN_BASE ? '_blank' : undefined}
-                  rel={ADMIN_BASE ? 'noreferrer' : undefined}
-                >
-                  Open in Cosmos Admin
-                </a>
+                href={storefrontAdminHref(`/orders/${encodeURIComponent(o.id)}`)}
+                className="cosmos-shop-link-accent"
+                target={ADMIN_BASE ? '_blank' : undefined}
+                rel={ADMIN_BASE ? 'noreferrer' : undefined}
+              >
+                Open in Cosmos Admin
+              </a>
             </div>
           </div>
           <p style={{ color: 'var(--c-text-3)', marginTop: 10, fontSize: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -121,65 +121,39 @@ export default function StorefrontOrderDetailPage() {
             {o.createdAt ? ` · ${new Date(o.createdAt).toLocaleString()}` : ''}
           </p>
           {o.notes ? (
-            <p style={{ marginTop: 12, whiteSpace: 'pre-wrap', color: '#cbd5e1', fontSize: 14 }}>{o.notes}</p>
+            <p className="cosmos-shop-subtle" style={{ marginTop: 12, whiteSpace: 'pre-wrap', fontSize: 14 }}>
+              {o.notes}
+            </p>
           ) : null}
           <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             {o.status === 'PENDING' ? (
-              <button
-                type="button"
-                disabled={actionBusy}
-                onClick={() => void confirm()}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 8,
-                  background: '#059669',
-                  color: '#fff',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
+              <button type="button" disabled={actionBusy} onClick={() => void confirm()} className="btn-primary">
                 {actionBusy ? '…' : 'Confirm order'}
               </button>
             ) : null}
             {o.status !== 'CANCELLED' && o.status !== 'DELIVERED' ? (
-              <button
-                type="button"
-                disabled={actionBusy}
-                onClick={() => void cancel()}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 8,
-                  background: 'transparent',
-                  color: '#fca5a5',
-                  border: '1px solid #7f1d1d',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                }}
-              >
+              <button type="button" disabled={actionBusy} onClick={() => void cancel()} className="btn-ghost" style={{ color: 'var(--c-danger)', borderColor: 'var(--c-danger)' }}>
                 Request cancel
               </button>
             ) : null}
           </div>
-          <h2 style={{ fontSize: 16, marginTop: 28, color: '#e2e8f0' }}>Line items</h2>
-          <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse', fontSize: 13 }}>
+          <h2 style={{ fontSize: 16, marginTop: 28, color: 'var(--c-heading)' }}>Line items</h2>
+          <table className="cosmos-shop-table">
             <thead>
-              <tr style={{ borderBottom: '1px solid #334155', color: '#94a3b8', textAlign: 'left' }}>
-                <th style={{ padding: '8px 6px' }}>SKU</th>
-                <th style={{ padding: '8px 6px' }}>Qty</th>
-                <th style={{ padding: '8px 6px' }}>Unit</th>
-                <th style={{ padding: '8px 6px' }}>WH</th>
+              <tr>
+                <th>SKU</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>WH</th>
               </tr>
             </thead>
             <tbody>
               {o.lineItems.map((li) => (
-                <tr key={li.id} style={{ borderBottom: '1px solid #1e293b' }}>
-                  <td style={{ padding: '8px 6px', fontFamily: 'monospace', fontSize: 11 }}>{li.skuId}</td>
-                  <td style={{ padding: '8px 6px' }}>{li.quantity}</td>
-                  <td style={{ padding: '8px 6px' }}>${Number(li.unitPrice).toFixed(4)}</td>
-                  <td style={{ padding: '8px 6px', fontFamily: 'monospace', fontSize: 11 }}>
-                    {li.warehouseId.slice(0, 8)}…
-                  </td>
+                <tr key={li.id}>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{li.skuId}</td>
+                  <td>{li.quantity}</td>
+                  <td>${Number(li.unitPrice).toFixed(4)}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{li.warehouseId.slice(0, 8)}…</td>
                 </tr>
               ))}
             </tbody>

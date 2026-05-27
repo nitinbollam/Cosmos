@@ -53,10 +53,10 @@ interface CashflowResponse {
   warnings: string[]
 }
 
-const CHART_GRID = '#e2e8f0'
-const CHART_AXIS = '#94a3b8'
-const CHART_LINE = '#6366f1'
-const CHART_FILL = '#6366f1'
+const CHART_GRID = 'rgba(113, 97, 239, 0.16)'
+const CHART_AXIS = '#7A728F'
+const CHART_LINE = '#7161EF'
+const CHART_FILL = '#957FEF'
 
 function sumNetWeeks(forecast: CashflowBucket[], weeks: number): number {
   let s = 0
@@ -308,11 +308,11 @@ export default function DashboardPage() {
                   />
                   <Tooltip
                     contentStyle={{
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--c-surface)',
+                      border: '1px solid var(--c-border-card)',
                       borderRadius: 12,
-                      color: '#0f172a',
-                      boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+                      color: 'var(--c-heading)',
+                      boxShadow: 'var(--shadow-card)',
                     }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
                   />

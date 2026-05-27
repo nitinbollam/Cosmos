@@ -83,7 +83,7 @@ export default function WarehouseTaskPage() {
 
   return (
     <div>
-      <Link to="/m/warehouse" style={{ color: '#94a3b8', fontSize: 13 }}>
+      <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← Tasks
       </Link>
       <h1 style={{ fontFamily: 'var(--font-syne)' }}>Task {id?.slice(-8)}</h1>

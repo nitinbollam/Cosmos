@@ -13,6 +13,7 @@ import * as payments from './payments'
 import { canTransitionOrderStatus, fulfillmentTaskStatusToOrderStatus, type OrderStatus } from './order-status'
 import { ApiError } from './session'
 import * as wmsFulfillment from './wms-fulfillment'
+import { issueInvoiceForOrder } from './invoices'
 
 function parseCompletedSteps(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []
@@ -185,6 +186,7 @@ export async function onFulfillmentPacked(tenantId: string, orderId: string) {
 
 export async function onFulfillmentDispatched(tenantId: string, orderId: string) {
   await transitionOrderStatus(tenantId, orderId, 'SHIPPED')
+  await issueInvoiceForOrder(tenantId, orderId).catch(() => undefined)
 }
 
 export async function onDeliveryStopDelivered(tenantId: string, orderId: string) {

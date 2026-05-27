@@ -14,7 +14,7 @@ export function BentoTrendPill({ value }: { value: number }) {
 
 export function BentoSparkline({
   points,
-  color = '#6366f1',
+  color = 'var(--c-primary)',
   height = 44,
 }: {
   points: number[]
@@ -62,13 +62,13 @@ export function BentoDonut({
     <div className="flex flex-col items-center justify-center text-center h-full min-h-[170px]">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--c-chart-grid)" strokeWidth={stroke} />
           <circle
             cx={size / 2}
             cy={size / 2}
             r={r}
             fill="none"
-            stroke="#6366f1"
+            stroke="var(--c-primary)"
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={c}
@@ -149,7 +149,7 @@ export function BentoHeroCard({
 
 export function BentoAvatarStack({ labels }: { labels: string[] }) {
   const shown = labels.slice(0, 4)
-  const fills = ['#eef2ff', '#f1f5f9', '#e2e8f0', '#f8fafc']
+  const fills = ['#EFD9CE', '#DEC0F1', '#B79CED', '#F3E4F8']
   return (
     <div className="flex items-center gap-3 mt-4">
       <div className="flex -space-x-2">

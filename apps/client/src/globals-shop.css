@@ -1,23 +1,155 @@
-/* Shop inherits global theme — layout helpers only */
+/* Shop inherits global theme — layout + B2B portal helpers */
 
 .cosmos-shop .cosmos-card {
   background: var(--c-surface);
-  border: var(--border-width) solid var(--c-border);
+  border: var(--border-width) solid var(--c-border-card);
   border-radius: var(--bento-radius);
   padding: 20px;
-  box-shadow: none;
+  box-shadow: var(--shadow-card);
 }
 
 .cosmos-shop .btn-primary {
-  box-shadow: none;
-}
-
-.cosmos-shop .btn-primary:hover {
-  box-shadow: none;
+  box-shadow: var(--shadow-card);
 }
 
 .cosmos-shop-page {
   max-width: 960px;
   margin: 40px auto;
   padding: 0 20px;
+}
+
+.cosmos-shop-page-main {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 20px;
+  color: var(--c-text);
+}
+
+.cosmos-shop-link-accent {
+  color: var(--c-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.cosmos-shop-link-accent:hover {
+  color: var(--c-accent);
+}
+
+.cosmos-shop-muted {
+  color: var(--c-text-3);
+}
+
+.cosmos-shop-subtle {
+  color: var(--c-text-2);
+}
+
+.cosmos-shop-error {
+  color: var(--c-danger);
+}
+
+.cosmos-shop-list-card {
+  border: var(--border-width) solid var(--c-border-card);
+  border-radius: var(--bento-radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  background: var(--c-surface);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  box-shadow: var(--shadow-card);
+}
+
+.cosmos-shop-inset {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: var(--bento-radius-sm);
+  background: var(--c-surface-2);
+  border: var(--border-width) solid var(--c-border);
+}
+
+.cosmos-shop-line-card {
+  border: var(--border-width) solid var(--c-border);
+  border-radius: var(--bento-radius-sm);
+  padding: 12px;
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  background: var(--c-surface);
+}
+
+.cosmos-shop-field {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border-card);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.cosmos-shop-field:focus {
+  outline: none;
+  background: var(--c-surface-2);
+  border-color: var(--c-accent);
+}
+
+.cosmos-shop-field--mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.cosmos-shop-field--readonly {
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+}
+
+.cosmos-shop-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.cosmos-shop-table th {
+  text-align: left;
+  color: var(--c-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 4px;
+  border-bottom: var(--border-width) solid var(--c-border);
+}
+
+.cosmos-shop-table td {
+  padding: 10px 4px;
+  border-top: var(--border-width) solid var(--c-border);
+  color: var(--c-text);
+}
+
+.cosmos-shop-btn-secondary {
+  margin-top: 28px;
+  padding: 12px 22px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border-card);
+  background: var(--c-surface);
+  color: var(--c-text);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cosmos-shop-btn-secondary:hover {
+  background: var(--c-surface-2);
+}
+
+.cosmos-shop-btn-dashed {
+  margin-top: 12px;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: var(--bento-radius-sm);
+  border: 1px dashed var(--c-accent);
+  background: transparent;
+  color: var(--c-primary);
+  cursor: pointer;
 }

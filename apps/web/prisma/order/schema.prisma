@@ -30,6 +30,7 @@ model Order {
   updatedAt       DateTime        @updatedAt
   lineItems       OrderLineItem[]
   saga            OrderSaga?
+  invoice         Invoice?
 
   @@index([tenantId, status])
   @@index([tenantId, customerId])
@@ -42,6 +43,7 @@ model OrderLineItem {
   skuId       String
   warehouseId String
   quantity    Int
+  returnedQty Int      @default(0)
   unitPrice   Decimal 
   taxAmount   Decimal  @default(0)
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -106,4 +108,57 @@ enum SagaStatus {
   COMPLETED
   COMPENSATING
   FAILED
+}
+
+enum InvoiceStatus {
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+  CREDITED
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  tenantId       String
+  orderId        String        @unique
+  invoiceNumber  String
+  customerId     String
+  status         InvoiceStatus @default(ISSUED)
+  subtotal       Decimal
+  taxAmount      Decimal
+  totalAmount    Decimal
+  amountPaid     Decimal       @default(0)
+  amountCredited Decimal       @default(0)
+  issuedAt       DateTime      @default(now())
+  dueAt          DateTime?
+  journalEntryId String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  creditMemos    CreditMemo[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+  @@index([tenantId, issuedAt])
+}
+
+model CreditMemo {
+  id             String   @id @default(cuid())
+  tenantId       String
+  orderId        String
+  invoiceId      String
+  memoNumber     String
+  customerId     String
+  totalAmount    Decimal
+  reason         String?
+  lines          Json
+  journalEntryId String?
+  createdAt      DateTime @default(now())
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, memoNumber])
+  @@index([tenantId, orderId])
+  @@index([tenantId, invoiceId])
 }

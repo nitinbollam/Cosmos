@@ -64,7 +64,7 @@ export default function DeliveryRoutePage() {
 
   return (
     <div>
-      <Link to="/m/delivery" style={{ color: '#94a3b8', fontSize: 13 }}>
+      <Link to="/m/delivery" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← Routes
       </Link>
       <h1 style={{ fontFamily: 'var(--font-syne)' }}>Route {id?.slice(-8)}</h1>

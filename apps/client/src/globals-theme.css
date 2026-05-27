@@ -1,44 +1,58 @@
-/* Cosmos minimal theme — pastel cyan + cream cards, dark borders */
+/* Cosmos theme — Powder Petal · Mauve · Wisteria · Soft Periwinkle · Medium Slate Blue */
 :root {
-  --c-bg: #aee2e6;
-  --c-bg-elevated: #aee2e6;
-  --c-surface: #fff5e1;
-  --c-surface-muted: #fff5e1;
-  --c-surface-blush: #fff0d4;
-  --c-surface-2: #fff0d4;
-  --c-surface-3: #ffe8c2;
-  --c-ink: #1a202c;
-  --c-heading: #1a202c;
-  --c-text: #1a202c;
-  --c-text-2: #718096;
-  --c-text-3: #718096;
-  --c-on-dark: #1a202c;
-  --c-border: #1a202c;
-  --c-border-card: #1a202c;
-  --c-primary: #1a202c;
-  --c-primary-hover: #2d3748;
-  --c-primary-fg: #fff5e1;
-  --c-primary-dim: rgba(26, 32, 44, 0.06);
-  --c-accent: #1a202c;
-  --c-accent-soft: #fff5e1;
-  --c-accent-dim: rgba(26, 32, 44, 0.08);
+  --palette-powder-petal: #efd9ce;
+  --palette-mauve: #dec0f1;
+  --palette-wisteria: #b79ced;
+  --palette-soft-periwinkle: #957fef;
+  --palette-medium-slate-blue: #7161ef;
+
+  --c-bg: var(--palette-mauve);
+  --c-bg-elevated: var(--palette-mauve);
+  --c-surface: var(--palette-powder-petal);
+  --c-surface-muted: var(--palette-powder-petal);
+  --c-surface-blush: #f3e4f8;
+  --c-surface-2: #f3e4f8;
+  --c-surface-3: #e8d4f5;
+
+  --c-ink: #2d2640;
+  --c-heading: #2d2640;
+  --c-text: #3d3654;
+  --c-text-2: #5c5478;
+  --c-text-3: #7a728f;
+  --c-on-dark: #ffffff;
+
+  --c-border: rgba(113, 97, 239, 0.28);
+  --c-border-card: rgba(113, 97, 239, 0.38);
+
+  --c-primary: var(--palette-medium-slate-blue);
+  --c-primary-hover: #5b4bd6;
+  --c-primary-fg: #ffffff;
+  --c-primary-dim: rgba(113, 97, 239, 0.14);
+
+  --c-accent: var(--palette-soft-periwinkle);
+  --c-accent-soft: var(--palette-mauve);
+  --c-accent-dim: rgba(149, 127, 239, 0.18);
+
   --c-success: #059669;
-  --c-success-soft: #fff5e1;
+  --c-success-soft: #ecfdf5;
   --c-warning: #d97706;
-  --c-warning-soft: #fff5e1;
+  --c-warning-soft: #fffbeb;
   --c-danger: #dc2626;
-  --c-danger-soft: #fff5e1;
-  --c-white: #1a202c;
-  --c-chart-grid: rgba(26, 32, 44, 0.12);
-  --c-chart-line: #1a202c;
+  --c-danger-soft: #fef2f2;
+
+  --c-white: var(--c-heading);
+  --c-chart-grid: rgba(113, 97, 239, 0.16);
+  --c-chart-line: var(--palette-medium-slate-blue);
+
   --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --bento-gap: 16px;
-  --bento-radius: 8px;
-  --bento-radius-sm: 6px;
-  --shadow-card: none;
-  --border-width: 1.5px;
+  --bento-radius: 10px;
+  --bento-radius-sm: 8px;
+  --shadow-card: 0 1px 3px rgba(45, 38, 64, 0.06);
+  --border-width: 1px;
+
   --cosmos-bg: var(--c-bg);
   --cosmos-surface: var(--c-surface);
   --cosmos-surface-2: var(--c-surface-2);

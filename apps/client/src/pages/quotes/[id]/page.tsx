@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { storefrontAdminHref } from '@/lib/admin-path'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 
@@ -26,7 +26,6 @@ type QuoteDetail = {
 const ADMIN_BASE = import.meta.env.VITE_WEB_ADMIN_ORIGIN?.replace(/\/$/, '') ?? ''
 
 export default function QuoteDetailPage() {
-  const navigate = useNavigate()
   const params = useParams<{ id: string }>()
   const id = params?.id ?? ''
   const [q, setQ] = useState<QuoteDetail | null>(null)
@@ -52,7 +51,8 @@ export default function QuoteDetailPage() {
     setErr(null)
     try {
       await api.post(`/quotes/${id}/submit`, {})
-      await load()} catch (e: unknown) {
+      await load()
+    } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
           ? String((e as { message?: unknown }).message)
@@ -64,66 +64,54 @@ export default function QuoteDetailPage() {
   }
 
   return (
-    <main style={{ maxWidth: 900, margin: '40px auto', padding: '0 20px', color: '#f8fafc' }}>
+    <main className="cosmos-shop-page-main">
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <Link to="/quotes" style={{ color: '#93c5fd', fontSize: 13 }}>
+        <Link to="/quotes" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
           ← All quotes
         </Link>
-        <Link to="/login" style={{ color: '#93c5fd', fontSize: 13 }}>
+        <Link to="/login" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
           Re-authenticate →
         </Link>
       </div>
-      {err ? <p style={{ color: '#fca5a5', marginTop: 16 }}>{err}</p> : null}
-      {!q && !err ? <p style={{ marginTop: 24, color: '#94a3b8' }}>Loading…</p> : null}
+      {err ? <p className="cosmos-shop-error" style={{ marginTop: 16 }}>{err}</p> : null}
+      {!q && !err ? <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
       {q ? (
         <div style={{ marginTop: 24 }}>
-          <h1 style={{ fontSize: 22 }}>Quote · {q.id.slice(0, 12)}…</h1>
-          <p style={{ color: '#94a3b8', marginTop: 8 }}>
-            <strong>{q.customerRef}</strong> · {q.status}
+          <h1 style={{ fontSize: 22, color: 'var(--c-heading)' }}>Quote · {q.id.slice(0, 12)}…</h1>
+          <p className="cosmos-shop-muted" style={{ marginTop: 8 }}>
+            <strong style={{ color: 'var(--c-text)' }}>{q.customerRef}</strong> · {q.status}
             {q.createdAt ? ` · ${new Date(q.createdAt).toLocaleString()}` : ''}
           </p>
           {q.notes ? (
-            <p style={{ marginTop: 12, fontSize: 14, whiteSpace: 'pre-wrap', color: '#cbd5f5' }}>
+            <p className="cosmos-shop-subtle" style={{ marginTop: 12, fontSize: 14, whiteSpace: 'pre-wrap' }}>
               {q.notes}
             </p>
           ) : null}
           {q.convertedOrderId ? (
-            <p style={{ marginTop: 16, padding: 12, borderRadius: 10, background: '#0f172a', border: '1px solid #334155' }}>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>Order created · </span>
-              <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{q.convertedOrderId}</span>
+            <p className="cosmos-shop-inset">
+              <span className="cosmos-shop-muted" style={{ fontSize: 12 }}>Order created · </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{q.convertedOrderId}</span>{' '}
               <a
-                    href={storefrontAdminHref(`/orders/${encodeURIComponent(q.convertedOrderId)}`)}
-                    style={{ color: '#93c5fd', fontSize: 13 }}
-                    target={ADMIN_BASE ? '_blank' : undefined}
-                    rel={ADMIN_BASE ? 'noreferrer' : undefined}
-                  >
-                    Open in Admin →
-                  </a>
+                href={storefrontAdminHref(`/orders/${encodeURIComponent(q.convertedOrderId)}`)}
+                className="cosmos-shop-link-accent"
+                style={{ fontSize: 13 }}
+                target={ADMIN_BASE ? '_blank' : undefined}
+                rel={ADMIN_BASE ? 'noreferrer' : undefined}
+              >
+                Open in Admin →
+              </a>
             </p>
           ) : null}
           {q.status === 'OPEN' ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void submit()}
-              style={{
-                marginTop: 20,
-                padding: '10px 18px',
-                borderRadius: 10,
-                border: '1px solid #334155',
-                background: '#1e293b',
-                color: '#e2e8f0',
-                cursor: busy ? 'wait' : 'pointer',
-              }}
-            >
+            <button type="button" disabled={busy} onClick={() => void submit()} className="btn-primary" style={{ marginTop: 20 }}>
               {busy ? 'Submitting…' : 'Submit quote (admin)'}
             </button>
           ) : null}
-          <h2 style={{ fontSize: 16, marginTop: 28, marginBottom: 12 }}>Lines</h2>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <h2 style={{ fontSize: 16, marginTop: 28, marginBottom: 12, color: 'var(--c-heading)' }}>Lines</h2>
+          <table className="cosmos-shop-table">
             <thead>
-              <tr style={{ textAlign: 'left', color: '#94a3b8' }}>
-                <th style={{ padding: '8px 0' }}>#</th>
+              <tr>
+                <th>#</th>
                 <th>SKU</th>
                 <th>Desc</th>
                 <th>Qty</th>
@@ -132,9 +120,9 @@ export default function QuoteDetailPage() {
             </thead>
             <tbody>
               {q.lines.map((ln) => (
-                <tr key={ln.id} style={{ borderTop: '1px solid #1f2740' }}>
-                  <td style={{ padding: '10px 0' }}>{ln.lineNo}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{ln.skuCode ?? '—'}</td>
+                <tr key={ln.id}>
+                  <td>{ln.lineNo}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{ln.skuCode ?? '—'}</td>
                   <td>{ln.description}</td>
                   <td>{ln.qty}</td>
                   <td>${Number(ln.unitPrice).toFixed(2)}</td>

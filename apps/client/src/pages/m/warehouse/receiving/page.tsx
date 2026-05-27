@@ -48,7 +48,7 @@ export default function ReceivingMobilePage() {
   return (
     <div>
       <OfflineBanner />
-      <Link to="/m/warehouse" style={{ color: '#94a3b8', fontSize: 13 }}>
+      <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← Tasks
       </Link>
       <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem' }}>Receiving</h1>

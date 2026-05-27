@@ -42,6 +42,8 @@ const ID = {
   orderProcessing: 'seed_ord_processing',
   orderShipped: 'seed_ord_shipped',
   orderDelivered: 'seed_ord_delivered',
+  invoiceShipped: 'seed_inv_shipped',
+  invoiceDelivered: 'seed_inv_delivered',
   fulfillProcessing: 'seed_ff_processing',
   fulfillShipped: 'seed_ff_shipped',
   receiveSession: 'seed_recv_open',
@@ -436,6 +438,64 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
               unitPrice: new D(l.price),
             })),
           },
+        },
+      })
+    }
+  } finally {
+    await prisma.$disconnect()
+  }
+}
+
+async function seedInvoices(tenantId: string, customerAcmeId: string) {
+  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-order')>('ORDER_DATABASE_URL', 'cosmos_order', './generated/prisma-order')
+  const prisma = new mod.PrismaClient()
+  const D = mod.Prisma.Decimal
+  const specs = [
+    {
+      id: ID.invoiceShipped,
+      orderId: ID.orderShipped,
+      invoiceNumber: 'INV-ORD_SHIP',
+      total: 72,
+      paid: 72,
+      status: 'PAID' as const,
+      daysAgo: 3,
+    },
+    {
+      id: ID.invoiceDelivered,
+      orderId: ID.orderDelivered,
+      invoiceNumber: 'INV-ORD_DELV',
+      total: 124.95,
+      paid: 124.95,
+      status: 'PAID' as const,
+      daysAgo: 7,
+    },
+  ]
+
+  try {
+    for (const inv of specs) {
+      const issuedAt = new Date(Date.now() - inv.daysAgo * 864e5)
+      const dueAt = new Date(issuedAt)
+      dueAt.setDate(dueAt.getDate() + 30)
+      await prisma.invoice.upsert({
+        where: { orderId: inv.orderId },
+        update: {
+          status: inv.status,
+          amountPaid: new D(inv.paid),
+          totalAmount: new D(inv.total),
+        },
+        create: {
+          id: inv.id,
+          tenantId,
+          orderId: inv.orderId,
+          invoiceNumber: inv.invoiceNumber,
+          customerId: customerAcmeId,
+          status: inv.status,
+          subtotal: new D(inv.total),
+          taxAmount: new D(0),
+          totalAmount: new D(inv.total),
+          amountPaid: new D(inv.paid),
+          issuedAt,
+          dueAt,
         },
       })
     }
@@ -891,6 +951,7 @@ async function main() {
   }
 
   await seedOrders(tenantId, ctx)
+  await seedInvoices(tenantId, ID.customerAcme)
   await seedQuotes(tenantId)
   await seedPurchasing(tenantId)
   await seedWms(tenantId, ctx)

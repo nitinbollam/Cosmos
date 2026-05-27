@@ -3,6 +3,7 @@ import * as users from './users'
 import * as inv from './inventory'
 import * as crm from './crm'
 import * as orders from './orders'
+import * as invoices from './invoices'
 import * as orderOrchestration from './order-orchestration'
 import * as quotes from './quotes'
 import * as wmsFulfillment from './wms-fulfillment'
@@ -34,6 +35,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'warehouses') return await routeWarehouses(m, seg, req)
     if (seg[0] === 'inventory') return await routeInventory(m, seg, req)
     if (seg[0] === 'orders') return await routeOrders(m, seg, req)
+    if (seg[0] === 'invoices') return await routeInvoices(m, seg, req)
     if (seg[0] === 'customers') return await routeCustomers(m, seg, req)
     if (seg[0] === 'leads') return await routeLeads(m, seg, req)
     if (seg[0] === 'activities') return await routeActivities(m, seg, req)
@@ -243,7 +245,11 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
   const adminAction =
     seg.length === 3 &&
     method === 'POST' &&
-    (seg[2] === 'confirm' || seg[2] === 'fulfill' || seg[2] === 'cancel' || seg[2] === 'payments')
+    (seg[2] === 'confirm' ||
+      seg[2] === 'fulfill' ||
+      seg[2] === 'cancel' ||
+      seg[2] === 'payments' ||
+      seg[2] === 'returns')
   const session = adminAction ? await requireRole(req, ADMIN_ROLES) : await requireSession(req)
   const buyerCustomerId = isPortalBuyer(session.role)
     ? await requirePortalCustomerId(session)
@@ -286,6 +292,15 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
     const body = (await req.json()) as { reason?: string }
     if (!body.reason) throw new ApiError(400, 'reason is required')
     return Response.json(await orders.cancelOrder(session.tenantId, seg[1], body.reason))
+  }
+  if (seg.length === 3 && seg[2] === 'invoice' && method === 'GET') {
+    return Response.json(await invoices.getInvoiceByOrderId(session.tenantId, seg[1], buyerOpts))
+  }
+  if (seg.length === 3 && seg[2] === 'returns' && method === 'POST') {
+    const body = (await req.json()) as Omit<invoices.ApplyCreditMemoInput, 'orderId'>
+    return Response.json(
+      await invoices.applyCreditMemo(session.tenantId, { ...body, orderId: seg[1] }, session.userId),
+    )
   }
   if (seg.length === 3 && seg[2] === 'payments' && method === 'POST') {
     const body = (await req.json()) as { amount: number; method: string; reference?: string }
@@ -384,26 +399,60 @@ async function routeActivities(method: string, seg: string[], req: Request): Pro
   throw new ApiError(404, 'Activity route not found')
 }
 
+async function routeInvoices(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requireSession(req)
+  const url = new URL(req.url)
+  const buyerCustomerId = isPortalBuyer(session.role)
+    ? await requirePortalCustomerId(session)
+    : undefined
+  const buyerOpts = buyerCustomerId ? { buyerCustomerId } : undefined
+
+  if (seg.length === 1 && method === 'GET') {
+    return Response.json(
+      await invoices.listInvoices(
+        session.tenantId,
+        +(url.searchParams.get('page') ?? 1),
+        +(url.searchParams.get('pageSize') ?? 50),
+        {
+          status: url.searchParams.get('status') ?? undefined,
+          customerId: buyerCustomerId ? undefined : url.searchParams.get('customerId') ?? undefined,
+        },
+        buyerOpts,
+      ),
+    )
+  }
+  if (seg.length === 2 && method === 'GET') {
+    return Response.json(await invoices.getInvoice(session.tenantId, seg[1], buyerOpts))
+  }
+  throw new ApiError(404, 'Invoice route not found')
+}
+
 async function routeQuotes(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   const url = new URL(req.url)
+  const buyerCustomerId = isPortalBuyer(session.role)
+    ? await requirePortalCustomerId(session)
+    : undefined
+  const buyerOpts = buyerCustomerId ? { buyerCustomerId } : undefined
 
   if (seg.length === 1 && method === 'GET') {
     const status = url.searchParams.get('status') ?? undefined
-    return Response.json(await quotes.listQuotes(session.tenantId, status))
+    return Response.json(await quotes.listQuotes(session.tenantId, status, buyerOpts))
   }
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as Parameters<typeof quotes.createQuote>[1]
-    return Response.json(await quotes.createQuote(session.tenantId, body), { status: 201 })
+    return Response.json(await quotes.createQuote(session.tenantId, body, buyerOpts), { status: 201 })
   }
   if (seg.length === 2 && method === 'GET') {
-    return Response.json(await quotes.getQuote(session.tenantId, seg[1]))
+    return Response.json(await quotes.getQuote(session.tenantId, seg[1], buyerOpts))
   }
   if (seg.length === 3 && seg[2] === 'submit' && method === 'POST') {
     const byEmail = session.email
       ? await crm.findCustomerByEmail(session.tenantId, session.email)
       : null
-    return Response.json(await quotes.submitQuote(session.tenantId, seg[1], byEmail?.id))
+    return Response.json(
+      await quotes.submitQuote(session.tenantId, seg[1], byEmail?.id, buyerOpts),
+    )
   }
   throw new ApiError(404, 'Quote route not found')
 }

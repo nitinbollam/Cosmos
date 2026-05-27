@@ -148,7 +148,7 @@ a {
 
 .cosmos-shop th,
 .cosmos-shop td {
-  border-bottom: 1px solid rgba(26, 32, 44, 0.15);
+  border-bottom: 1px solid var(--c-border);
 }
 
 .cosmos-auth-page {
