@@ -1,0 +1,42 @@
+import * as crm from './crm'
+import { ADMIN_ROLES, ApiError, type SessionUser } from './session'
+
+/** B2B portal buyers — not warehouse, driver, or admin staff. */
+export const PORTAL_BUYER_ROLES = ['STAFF', 'VIEWER'] as const
+
+export function isPortalBuyer(role: string): boolean {
+  return (PORTAL_BUYER_ROLES as readonly string[]).includes(role)
+}
+
+export function isAdminStaff(role: string): boolean {
+  return (ADMIN_ROLES as readonly string[]).includes(role)
+}
+
+export async function resolvePortalCustomerId(tenantId: string, email: string): Promise<string | null> {
+  const customer = await crm.findCustomerByEmail(tenantId, email.trim())
+  return customer?.id ?? null
+}
+
+export async function requirePortalCustomerId(session: SessionUser): Promise<string> {
+  const customerId = await resolvePortalCustomerId(session.tenantId, session.email)
+  if (!customerId) {
+    throw new ApiError(
+      403,
+      'No customer account is linked to this user. Ask your administrator to add a CRM customer with your email.',
+    )
+  }
+  return customerId
+}
+
+export async function getAuthProfile(session: SessionUser) {
+  const customer = await crm.findCustomerByEmail(session.tenantId, session.email)
+  return {
+    userId: session.userId,
+    email: session.email,
+    role: session.role,
+    tenantId: session.tenantId,
+    customerId: customer?.id ?? null,
+    customerName: customer?.name ?? null,
+    isPortalBuyer: isPortalBuyer(session.role),
+  }
+}

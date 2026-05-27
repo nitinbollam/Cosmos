@@ -28,7 +28,8 @@ export default function CheckoutPage() {
 
   const stripePromise = useMemo(() => (stripePublishable ? loadStripe(stripePublishable) : null), [])
 
-  const taxAmount = useMemo(() => +(cartSubtotal * 0.07).toFixed(2), [cartSubtotal])
+  const [taxRate, setTaxRate] = useState(0.07)
+  const taxAmount = useMemo(() => +(cartSubtotal * taxRate).toFixed(2), [cartSubtotal, taxRate])
   const orderTotal = cartSubtotal + taxAmount
 
   const [step, setStep] = useState(1)
@@ -47,15 +48,18 @@ export default function CheckoutPage() {
   const [cardPaymentMethodId, setCardPaymentMethodId] = useState<string | null>(null)
 
   const loadCustomer = useCallback(async () => {
-    const cid = getB2bCustomerId()
-    if (!cid) {
+    if (!getB2bCustomerId()) {
       navigate('/login')
       return
     }
     try {
-      const c = await api.get<CustomerRow>(`/customers/${encodeURIComponent(cid)}`)
+      const [c, tax] = await Promise.all([
+        api.get<CustomerRow>('/customers/me'),
+        api.get<{ salesTaxRate: number }>('/tax/settings'),
+      ])
       setCustomer(c)
       setCompany(c.name)
+      setTaxRate(tax.salesTaxRate)
     } catch (e: unknown) {
       setErr(axiosErr(e))
     }
@@ -101,6 +105,14 @@ export default function CheckoutPage() {
             unitPrice: i.unitPrice,
           })),
           notes: `Ship to: ${company}, ${line1}${line2 ? `, ${line2}` : ''}, ${city}, ${state} ${zip}`,
+          shippingAddress: {
+            company,
+            line1,
+            line2: line2 || undefined,
+            city,
+            state,
+            postalCode: zip,
+          },
         },
         { 'Idempotency-Key': idempotencyKey.current },
       )

@@ -1,7 +1,9 @@
 import { Prisma, RouteStatus, StopStatus } from '@/generated/prisma-dispatch'
 import { dispatchDb } from './db'
 import { orderIdFromStopAddress } from './dispatch-order'
+import * as crm from './crm'
 import * as orderOrchestration from './order-orchestration'
+import { orderDb } from './db'
 import { ApiError } from './session'
 
 export function listRoutes(tenantId: string, date?: string) {
@@ -60,6 +62,67 @@ export async function createRoute(
       },
     },
     include: { stops: { orderBy: { sequence: 'asc' } } },
+  })
+}
+
+function addressFromOrder(
+  order: {
+    id: string
+    customerId: string
+    shippingAddress: unknown
+    notes: string | null
+  },
+  customerName?: string,
+): Record<string, unknown> {
+  if (order.shippingAddress && typeof order.shippingAddress === 'object' && !Array.isArray(order.shippingAddress)) {
+    return {
+      ...(order.shippingAddress as Record<string, unknown>),
+      orderId: order.id,
+      customer: customerName,
+    }
+  }
+  return {
+    orderId: order.id,
+    customer: customerName ?? order.customerId,
+    line1: order.notes?.slice(0, 120) || 'Delivery address on file',
+  }
+}
+
+export async function createRouteFromOrders(
+  tenantId: string,
+  dto: { orderIds: string[]; name?: string; scheduledFor?: string },
+) {
+  const ids = [...new Set(dto.orderIds.map((id) => id.trim()).filter(Boolean))]
+  if (ids.length === 0) throw new ApiError(400, 'orderIds required')
+
+  const orders = await orderDb.order.findMany({
+    where: { tenantId, id: { in: ids }, status: 'SHIPPED' },
+  })
+  if (orders.length !== ids.length) {
+    throw new ApiError(400, 'All orders must exist and be in SHIPPED status')
+  }
+
+  const customerNames = new Map<string, string>()
+  for (const o of orders) {
+    if (!customerNames.has(o.customerId)) {
+      try {
+        const c = await crm.getCustomer(tenantId, o.customerId)
+        customerNames.set(o.customerId, c.name)
+      } catch {
+        customerNames.set(o.customerId, o.customerId)
+      }
+    }
+  }
+
+  const stops = orders.map((o, i) => ({
+    sequence: i + 1,
+    address: addressFromOrder(o, customerNames.get(o.customerId)),
+  }))
+
+  return createRoute(tenantId, {
+    name: dto.name ?? `Delivery · ${orders.length} stop(s)`,
+    scheduledFor: dto.scheduledFor,
+    stops,
   })
 }
 

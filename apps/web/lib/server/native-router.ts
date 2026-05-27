@@ -18,6 +18,8 @@ import * as notifications from './notifications'
 import * as ledger from './ledger'
 import * as analytics from './analytics'
 import * as webhooks from './webhooks'
+import { getAuthProfile, isPortalBuyer, requirePortalCustomerId } from './buyer-context'
+import { getTenantTaxSettings } from './tenant-tax'
 import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError } from './session'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
@@ -243,25 +245,35 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
     method === 'POST' &&
     (seg[2] === 'confirm' || seg[2] === 'fulfill' || seg[2] === 'cancel' || seg[2] === 'payments')
   const session = adminAction ? await requireRole(req, ADMIN_ROLES) : await requireSession(req)
+  const buyerCustomerId = isPortalBuyer(session.role)
+    ? await requirePortalCustomerId(session)
+    : undefined
+  const buyerOpts = buyerCustomerId ? { buyerCustomerId } : undefined
 
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as orders.CreateOrderInput
-    const order = await orders.createOrder(session.tenantId, body)
+    const order = await orders.createOrder(session.tenantId, body, buyerOpts)
     return Response.json(order, { status: 201 })
   }
   if (seg.length === 2 && method === 'GET') {
-    return Response.json(await orders.findOrderById(session.tenantId, seg[1]))
+    return Response.json(await orders.findOrderById(session.tenantId, seg[1], buyerOpts))
   }
   if (seg.length === 1 && method === 'GET') {
     return Response.json(
-      await orders.listOrders(session.tenantId, +(url.searchParams.get('page') ?? 1), +(url.searchParams.get('pageSize') ?? 20), {
-        status: url.searchParams.get('status') ?? undefined,
-        channel: url.searchParams.get('channel') ?? undefined,
-        search: url.searchParams.get('search') ?? url.searchParams.get('q') ?? undefined,
-        fromIso: url.searchParams.get('from') ?? undefined,
-        toIso: url.searchParams.get('to') ?? undefined,
-        customerId: url.searchParams.get('customerId') ?? undefined,
-      }),
+      await orders.listOrders(
+        session.tenantId,
+        +(url.searchParams.get('page') ?? 1),
+        +(url.searchParams.get('pageSize') ?? 20),
+        {
+          status: url.searchParams.get('status') ?? undefined,
+          channel: url.searchParams.get('channel') ?? undefined,
+          search: url.searchParams.get('search') ?? url.searchParams.get('q') ?? undefined,
+          fromIso: url.searchParams.get('from') ?? undefined,
+          toIso: url.searchParams.get('to') ?? undefined,
+          customerId: buyerCustomerId ? undefined : url.searchParams.get('customerId') ?? undefined,
+        },
+        buyerOpts,
+      ),
     )
   }
   if (seg.length === 3 && seg[2] === 'confirm' && method === 'POST') {
@@ -284,6 +296,16 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
 
 async function routeCustomers(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+
+  if (seg[1] === 'me' && seg.length === 2 && method === 'GET') {
+    const profile = await getAuthProfile(session)
+    if (!profile.customerId) throw new ApiError(404, 'No customer linked to this account')
+    return Response.json(await crm.getCustomer(session.tenantId, profile.customerId))
+  }
+
+  if (isPortalBuyer(session.role)) {
+    throw new ApiError(403, 'Forbidden')
+  }
 
   if (seg[1] === 'lookup' && method === 'GET') {
     const ref = new URL(req.url).searchParams.get('externalRef')
@@ -669,9 +691,25 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
 }
 
 async function routeRoutes(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = isRead ? await requireSession(req) : await requireRole(req, ADMIN_ROLES)
   const url = new URL(req.url)
 
+  if (seg.length === 2 && seg[1] === 'shipped-orders' && method === 'GET') {
+    return Response.json(await orders.listShippedOrdersForDispatch(session.tenantId))
+  }
+  if (seg.length === 2 && seg[1] === 'from-orders' && method === 'POST') {
+    const body = (await req.json()) as { orderIds?: string[]; name?: string; scheduledFor?: string }
+    if (!body.orderIds?.length) throw new ApiError(400, 'orderIds required')
+    return Response.json(
+      await dispatch.createRouteFromOrders(session.tenantId, {
+        orderIds: body.orderIds,
+        name: body.name,
+        scheduledFor: body.scheduledFor,
+      }),
+      { status: 201 },
+    )
+  }
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await dispatch.listRoutes(session.tenantId, url.searchParams.get('date') ?? undefined))
   }
@@ -761,6 +799,9 @@ async function routeMsa(method: string, seg: string[], req: Request): Promise<Re
 async function routeTax(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
 
+  if (seg.length === 2 && seg[1] === 'settings' && method === 'GET') {
+    return Response.json(await getTenantTaxSettings(session.tenantId))
+  }
   if (seg.length === 2 && seg[1] === 'summary' && method === 'GET') {
     return Response.json(await complianceTax.taxSummary(session.tenantId))
   }

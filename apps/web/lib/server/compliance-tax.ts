@@ -1,4 +1,5 @@
 import { complianceDb } from './db'
+import { getTenantSalesTaxRate } from './tenant-tax'
 
 export async function taxSummary(tenantId: string) {
   const liabilities = await complianceDb.mSATransaction.aggregate({
@@ -24,9 +25,10 @@ export function computeSalesTax(subtotal: number, rate = DEFAULT_TAX_RATE): numb
   return +(subtotal * rate).toFixed(2)
 }
 
-/** Stub: computes 7% tax without event bus (matches legacy Nest behavior). */
-export async function recordTax(_tenantId: string, body: RecordTaxInput) {
+/** Stub: computes tenant sales tax without event bus (matches legacy Nest behavior). */
+export async function recordTax(tenantId: string, body: RecordTaxInput) {
   const total = body.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
-  const taxAmount = computeSalesTax(total)
+  const rate = await getTenantSalesTaxRate(tenantId)
+  const taxAmount = computeSalesTax(total, rate)
   return { recorded: true, taxAmount }
 }

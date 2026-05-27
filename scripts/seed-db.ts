@@ -142,21 +142,22 @@ async function seedTenantOrg(tenantId: string) {
         displayName: 'Cosmos Demo Distributors',
         slug: DEMO_SLUG,
         plan: 'GROWTH',
-        industry: 'TOBACCO_VAPE',
+        industry: 'GENERAL_WHOLESALE',
         billingEmail: ADMIN_EMAIL,
         timeZone: 'America/Chicago',
         onboardingPhase: 'READY',
+        settings: { currency: 'USD', salesTaxRate: 0.07 },
       },
       create: {
         id: tenantId,
         slug: DEMO_SLUG,
         displayName: 'Cosmos Demo Distributors',
         plan: 'GROWTH',
-        industry: 'TOBACCO_VAPE',
+        industry: 'GENERAL_WHOLESALE',
         billingEmail: ADMIN_EMAIL,
         timeZone: 'America/Chicago',
         onboardingPhase: 'READY',
-        settings: { currency: 'USD' },
+        settings: { currency: 'USD', salesTaxRate: 0.07 },
         metadata: { seeded: true },
       },
     })
@@ -233,8 +234,8 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
     })
 
     const skus = [
-      { id: ID.skuVapePod, code: 'VAP-POD-001', name: 'Mint Vape Pod 5pk', category: 'Vape', price: 24.99, cost: 12.5, isTobacco: true, qty: 420, reorder: 50 },
-      { id: ID.skuVapeMod, code: 'VAP-MOD-010', name: 'Pro Mod Kit', category: 'Vape', price: 89.99, cost: 45, isTobacco: true, qty: 85, reorder: 20 },
+      { id: ID.skuVapePod, code: 'VAP-POD-001', name: 'Premium Widget 5pk', category: 'General Merchandise', price: 24.99, cost: 12.5, qty: 420, reorder: 50 },
+      { id: ID.skuVapeMod, code: 'VAP-MOD-010', name: 'Pro Tool Kit', category: 'Tools & Equipment', price: 89.99, cost: 45, qty: 85, reorder: 20 },
       { id: ID.skuEnergy, code: 'BEV-ENG-200', name: 'Energy Drink Case (24)', category: 'Beverages', price: 36, cost: 22, qty: 200, reorder: 40 },
       { id: ID.skuSnack, code: 'SNK-CHP-050', name: 'Spicy Chips Box', category: 'Snacks', price: 18.5, cost: 9, qty: 310, reorder: 60 },
       { id: ID.skuLowStock, code: 'ACC-CBL-USB', name: 'USB-C Cable 3ft', category: 'Accessories', price: 8.99, cost: 3.2, qty: 8, reorder: 25 },
@@ -251,7 +252,7 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
           price: new D(s.price),
           cost: new D(s.cost),
           isActive: true,
-          isTobacco: s.isTobacco ?? false,
+          isTobacco: false,
         },
         create: {
           id: s.id,
@@ -262,7 +263,7 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
           category: s.category,
           cost: new D(s.cost),
           price: new D(s.price),
-          isTobacco: s.isTobacco ?? false,
+          isTobacco: false,
           imageUrls: [],
           attributes: { demo: true },
         },
@@ -332,7 +333,7 @@ async function seedCrm(tenantId: string, adminId: string) {
       create: {
         id: ID.customerBeta,
         tenantId,
-        name: 'Beta Smoke Shop',
+        name: 'Beta Convenience LLC',
         email: 'orders@betasmoke.example',
         phone: '+1-972-555-0199',
         customerKind: 'BUSINESS',
@@ -368,7 +369,7 @@ async function seedCrm(tenantId: string, adminId: string) {
         tenantId,
         type: 'CALL',
         subject: 'Quarterly reorder check-in',
-        body: 'Acme confirmed interest in new vape pod line.',
+        body: 'Acme confirmed interest in expanding their seasonal product line.',
         outcome: 'POSITIVE',
         customerId: ID.customerAcme,
         occurredAt: new Date(Date.now() - 2 * 864e5),
@@ -463,7 +464,7 @@ async function seedQuotes(tenantId: string) {
         notes: 'Demo quote — convert to order from /quotes',
         lines: {
           create: [
-            { id: 'seed_quote_line_1', lineNo: 1, skuCode: 'VAP-POD-001', description: 'Mint Vape Pod 5pk', qty: 20, unitPrice: new D(22.5) },
+            { id: 'seed_quote_line_1', lineNo: 1, skuCode: 'VAP-POD-001', description: 'Premium Widget 5pk', qty: 20, unitPrice: new D(22.5) },
             { id: 'seed_quote_line_2', lineNo: 2, skuCode: 'BEV-ENG-200', description: 'Energy Drink Case', qty: 10, unitPrice: new D(34) },
           ],
         },
@@ -485,8 +486,8 @@ async function seedPurchasing(tenantId: string) {
   try {
     await prisma.supplier.upsert({
       where: { tenantId_code: { tenantId, code: 'PAC-VAP' } },
-      update: { id: ID.supplierPacific },
-      create: { id: ID.supplierPacific, tenantId, code: 'PAC-VAP', name: 'Pacific Vape Supply', email: 'orders@pacificvape.example', phone: '+1-503-555-0142' },
+      update: { id: ID.supplierPacific, name: 'Pacific Supply Co.' },
+      create: { id: ID.supplierPacific, tenantId, code: 'PAC-VAP', name: 'Pacific Supply Co.', email: 'orders@pacificsupply.example', phone: '+1-503-555-0142' },
     })
 
     await prisma.purchaseOrder.upsert({
@@ -498,11 +499,11 @@ async function seedPurchasing(tenantId: string) {
         supplierId: ID.supplierPacific,
         number: 'PO-1001',
         status: 'SUBMITTED',
-        notes: 'Restock vape pods — receive at /m/warehouse/receiving',
+        notes: 'Restock widgets — receive at /m/warehouse/receiving',
         lines: {
           create: [
-            { id: 'seed_po_line_1', lineNo: 1, skuCode: 'VAP-POD-001', description: 'Mint Vape Pod 5pk', qtyOrdered: 200, unitCost: new D(11.5) },
-            { id: 'seed_po_line_2', lineNo: 2, skuCode: 'VAP-MOD-010', description: 'Pro Mod Kit', qtyOrdered: 40, unitCost: new D(42) },
+            { id: 'seed_po_line_1', lineNo: 1, skuCode: 'VAP-POD-001', description: 'Premium Widget 5pk', qtyOrdered: 200, unitCost: new D(11.5) },
+            { id: 'seed_po_line_2', lineNo: 2, skuCode: 'VAP-MOD-010', description: 'Pro Tool Kit', qtyOrdered: 40, unitCost: new D(42) },
           ],
         },
       },

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import { computeSalesTax } from './compliance-tax'
+import { getTenantSalesTaxRate } from './tenant-tax'
 import { assertCreditAvailable, releaseCreditUsed } from './credit-limit'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
@@ -13,26 +14,38 @@ export type CreateOrderInput = {
   salesRepId?: string
   priority?: string
   notes?: string
+  shippingAddress?: Record<string, unknown>
   lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; unitPrice: number }>
 }
 
-export async function createOrder(tenantId: string, dto: CreateOrderInput) {
+export async function createOrder(
+  tenantId: string,
+  dto: CreateOrderInput,
+  opts?: { buyerCustomerId?: string },
+) {
   const subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
-  const taxAmount = computeSalesTax(subtotal)
+  const taxRate = await getTenantSalesTaxRate(tenantId)
+  const taxAmount = computeSalesTax(subtotal, taxRate)
   const totalAmount = subtotal + taxAmount
   const correlationId = randomUUID()
 
-  await assertCreditAvailable(tenantId, dto.customerId, totalAmount, dto.paymentMethod)
+  const customerId = opts?.buyerCustomerId ?? dto.customerId
+  if (opts?.buyerCustomerId && dto.customerId !== opts.buyerCustomerId) {
+    throw new ApiError(403, 'Cannot place orders for another customer')
+  }
+
+  await assertCreditAvailable(tenantId, customerId, totalAmount, dto.paymentMethod)
 
   const order = await orderDb.order.create({
     data: {
       tenantId,
-      customerId: dto.customerId,
+      customerId,
       channel: dto.channel as never,
       paymentMethod: dto.paymentMethod as never,
       salesRepId: dto.salesRepId,
       priority: (dto.priority ?? 'NORMAL') as never,
       notes: dto.notes,
+      shippingAddress: dto.shippingAddress as never,
       taxAmount: new Prisma.Decimal(taxAmount),
       totalAmount: new Prisma.Decimal(totalAmount),
       lineItems: {
@@ -63,10 +76,15 @@ export async function listOrders(
     toIso?: string
     customerId?: string
   },
+  opts?: { buyerCustomerId?: string },
 ) {
   const where: Prisma.OrderWhereInput = { tenantId }
 
-  if (filters?.customerId?.trim()) where.customerId = filters.customerId.trim()
+  if (opts?.buyerCustomerId) {
+    where.customerId = opts.buyerCustomerId
+  } else if (filters?.customerId?.trim()) {
+    where.customerId = filters.customerId.trim()
+  }
   if (filters?.channel && filters.channel !== 'ALL') where.channel = filters.channel as never
 
   const from = filters?.fromIso ? new Date(filters.fromIso) : null
@@ -105,12 +123,15 @@ export async function listOrders(
   return { items, total, page, pageSize, hasMore: page * pageSize < total }
 }
 
-export async function findOrderById(tenantId: string, id: string) {
+export async function findOrderById(tenantId: string, id: string, opts?: { buyerCustomerId?: string }) {
   const order = await orderDb.order.findFirst({
     where: { id, tenantId },
     include: { lineItems: true, saga: true },
   })
   if (!order) throw new ApiError(404, 'Order not found')
+  if (opts?.buyerCustomerId && order.customerId !== opts.buyerCustomerId) {
+    throw new ApiError(404, 'Order not found')
+  }
   return order
 }
 
@@ -126,6 +147,23 @@ export async function fulfillOrder(tenantId: string, id: string) {
   const correlationId = order.saga?.correlationId ?? randomUUID()
   await runOrderFulfillmentPipeline(id, tenantId, correlationId)
   return findOrderById(tenantId, id)
+}
+
+export async function listShippedOrdersForDispatch(tenantId: string) {
+  return orderDb.order.findMany({
+    where: { tenantId, status: 'SHIPPED' },
+    orderBy: { updatedAt: 'desc' },
+    take: 100,
+    select: {
+      id: true,
+      customerId: true,
+      status: true,
+      totalAmount: true,
+      shippingAddress: true,
+      notes: true,
+      updatedAt: true,
+    },
+  })
 }
 
 export async function recordOrderPayment(

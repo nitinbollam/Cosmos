@@ -4,12 +4,15 @@ import { useState } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
-import { parseJwtPayload } from '@/lib/jwt'
 import { setB2bSession } from '@/lib/session'
 
 type LoginRes = { accessToken: string; refreshToken: string }
 
-type CustomerRow = { id: string; name: string; email?: string | null }
+type AuthMe = {
+  tenantId: string
+  customerId: string | null
+  customerName: string | null
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -24,17 +27,8 @@ export default function LoginPage() {
       window.localStorage.setItem('cosmos.accessToken', r.accessToken)
       window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
 
-      const payload = parseJwtPayload(r.accessToken)
-      const tenantId = typeof payload?.tenantId === 'string' ? payload.tenantId : null
-      const jwtMail = typeof payload?.email === 'string' ? payload.email.toLowerCase() : email.toLowerCase()
-      if (!tenantId) {
-        setErr('Token missing tenant. Contact support.')
-        return
-      }
-
-      const customers = await api.get<CustomerRow[]>('/customers')
-      const match = customers.find((c) => c.email?.toLowerCase() === jwtMail)
-      if (!match) {
+      const me = await api.get<AuthMe>('/auth/me')
+      if (!me.customerId) {
         setErr(
           'No CRM customer record matches your email. Ask your tenant admin to create a customer with this address.',
         )
@@ -43,7 +37,7 @@ export default function LoginPage() {
         return
       }
 
-      setB2bSession(tenantId, match.id)
+      setB2bSession(me.tenantId, me.customerId)
       emitStorefrontAuthChanged()
       window.location.href = '/catalog'
     } catch (e: unknown) {

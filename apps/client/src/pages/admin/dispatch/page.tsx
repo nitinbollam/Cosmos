@@ -706,31 +706,73 @@ function CreateRouteDrawer(props: {
   onClose: () => void
   onCreated: () => void
 }) {
+  const [mode, setMode] = useState<'manual' | 'orders'>('orders')
   const [name, setName] = useState('')
   const [stopLines, setStopLines] = useState([{ address: '' }])
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const shippedOrders = useQuery<
+    Array<{
+      id: string
+      customerId: string
+      status: string
+      totalAmount: string | number
+      shippingAddress: unknown
+      notes: string | null
+    }>
+  >({
+    queryKey: ['dispatch-shipped-orders'],
+    queryFn: () => api.get('/routes/shipped-orders'),
+    enabled: mode === 'orders',
+  })
+
+  function formatShippedAddress(addr: unknown, notes: string | null): string {
+    if (addr && typeof addr === 'object' && !Array.isArray(addr)) {
+      const o = addr as Record<string, unknown>
+      const parts = [o.line1, o.city, o.state, o.postalCode].filter((x) => typeof x === 'string' && x.trim())
+      if (parts.length) return parts.join(', ')
+    }
+    return notes?.slice(0, 80) || 'Address on file'
+  }
+
+  function toggleOrder(id: string) {
+    setSelectedOrderIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
   async function submit() {
     setError(null)
-    const stops = stopLines
-      .map((l, i) => ({
-        sequence: i + 1,
-        address: { line1: l.address.trim() } as Record<string, unknown>,
-      }))
-      .filter((s) => Object.keys(s.address).length && (s.address.line1 as string).length > 0)
-    if (stops.length === 0) {
-      setError('Add at least one stop with an address.')
-      return
-    }
     const scheduled = new Date(`${props.scheduledDate}T12:00:00`)
     setBusy(true)
     try {
-      await api.post('/routes', {
-        name: name.trim() || undefined,
-        scheduledFor: scheduled.toISOString(),
-        stops,
-      })
+      if (mode === 'orders') {
+        if (selectedOrderIds.length === 0) {
+          setError('Select at least one shipped order.')
+          return
+        }
+        await api.post('/routes/from-orders', {
+          name: name.trim() || undefined,
+          scheduledFor: scheduled.toISOString(),
+          orderIds: selectedOrderIds,
+        })
+      } else {
+        const stops = stopLines
+          .map((l, i) => ({
+            sequence: i + 1,
+            address: { line1: l.address.trim() } as Record<string, unknown>,
+          }))
+          .filter((s) => Object.keys(s.address).length && (s.address.line1 as string).length > 0)
+        if (stops.length === 0) {
+          setError('Add at least one stop with an address.')
+          return
+        }
+        await api.post('/routes', {
+          name: name.trim() || undefined,
+          scheduledFor: scheduled.toISOString(),
+          stops,
+        })
+      }
       props.onCreated()
     } catch (e) {
       setError(errMsg(e))
@@ -747,6 +789,22 @@ function CreateRouteDrawer(props: {
         <p className="text-xs text-cosmos-muted mt-1">
           Scheduled for sidebar date ({props.scheduledDate}). Stops are ordered; drag after save on the main view.
         </p>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            className={`flex-1 h-9 rounded-md text-sm ${mode === 'orders' ? 'bg-cosmos-primary text-white' : 'border border-cosmos-border text-cosmos-text'}`}
+            onClick={() => setMode('orders')}
+          >
+            From shipped orders
+          </button>
+          <button
+            type="button"
+            className={`flex-1 h-9 rounded-md text-sm ${mode === 'manual' ? 'bg-cosmos-primary text-white' : 'border border-cosmos-border text-cosmos-text'}`}
+            onClick={() => setMode('manual')}
+          >
+            Manual stops
+          </button>
+        </div>
         <label className="block mt-4 text-xs text-cosmos-muted">Name (optional)</label>
         <input
           className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
@@ -754,29 +812,64 @@ function CreateRouteDrawer(props: {
           onChange={(e) => setName(e.target.value)}
           placeholder="Monday downtown"
         />
-        <p className="text-xs text-cosmos-muted mt-4">Stops</p>
-        {stopLines.map((ln, idx) => (
-          <div key={idx} className="mt-2 flex gap-2">
-            <span className="w-6 text-cosmos-muted text-sm pt-2">{idx + 1}.</span>
-            <input
-              className="flex-1 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-              placeholder="Address line"
-              value={ln.address}
-              onChange={(e) => {
-                const next = [...stopLines]
-                next[idx] = { address: e.target.value }
-                setStopLines(next)
-              }}
-            />
-          </div>
-        ))}
-        <button
-          type="button"
-          className="mt-2 text-xs text-cosmos-primary"
-          onClick={() => setStopLines((s) => [...s, { address: '' }])}
-        >
-          + Add stop
-        </button>
+        {mode === 'orders' ? (
+          <>
+            <p className="text-xs text-cosmos-muted mt-4">Shipped orders ready for delivery</p>
+            {shippedOrders.isLoading ? (
+              <p className="text-cosmos-muted text-sm mt-2">Loading orders…</p>
+            ) : (shippedOrders.data?.length ?? 0) === 0 ? (
+              <p className="text-cosmos-muted text-sm mt-2">No shipped orders available.</p>
+            ) : (
+              <ul className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                {(shippedOrders.data ?? []).map((o) => (
+                  <li key={o.id}>
+                    <label className="flex items-start gap-2 rounded-md border border-cosmos-border px-3 py-2 text-sm cursor-pointer hover:bg-cosmos-surface-2">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={selectedOrderIds.includes(o.id)}
+                        onChange={() => toggleOrder(o.id)}
+                      />
+                      <span className="min-w-0">
+                        <span className="font-mono text-xs text-cosmos-muted block truncate">{o.id}</span>
+                        <span className="text-cosmos-text block truncate">
+                          {formatShippedAddress(o.shippingAddress, o.notes)}
+                        </span>
+                        <span className="text-cosmos-muted text-xs">${Number(o.totalAmount).toFixed(2)}</span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-cosmos-muted mt-4">Stops</p>
+            {stopLines.map((ln, idx) => (
+              <div key={idx} className="mt-2 flex gap-2">
+                <span className="w-6 text-cosmos-muted text-sm pt-2">{idx + 1}.</span>
+                <input
+                  className="flex-1 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+                  placeholder="Address line"
+                  value={ln.address}
+                  onChange={(e) => {
+                    const next = [...stopLines]
+                    next[idx] = { address: e.target.value }
+                    setStopLines(next)
+                  }}
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              className="mt-2 text-xs text-cosmos-primary"
+              onClick={() => setStopLines((s) => [...s, { address: '' }])}
+            >
+              + Add stop
+            </button>
+          </>
+        )}
         {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
         <div className="mt-6 flex gap-2">
           <button

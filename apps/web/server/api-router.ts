@@ -1,9 +1,10 @@
 import { detectSeriesAnomalies, forecastCashFlow, type DetectRequest, type ForecastRequest } from '@cosmos/analytics-engine'
 import { jwtVerify } from 'jose'
 import { loginUser, logoutUser, refreshUserTokens, registerUser } from '../lib/server/auth'
+import { getAuthProfile } from '../lib/server/buyer-context'
 import { jwtSecret } from '../lib/server/env'
 import { handleNativeApi } from '../lib/server/native-router'
-import { ApiError, toJsonError } from '../lib/server/session'
+import { ApiError, requireSession, toJsonError } from '../lib/server/session'
 
 function json(data: unknown, status = 200): Response {
   return Response.json(data, { status })
@@ -128,6 +129,15 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       return json(await refreshUserTokens(body.userId, body.refreshToken))
     } catch {
       return json({ message: 'Access denied' }, 403)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/me' && req.method === 'GET') {
+    try {
+      const session = await requireSession(req)
+      return json(await getAuthProfile(session))
+    } catch (e) {
+      return toJsonError(e)
     }
   }
 
