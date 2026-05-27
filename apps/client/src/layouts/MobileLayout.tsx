@@ -1,4 +1,5 @@
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
+import { RequireMobileAuth } from '@/components/auth/require-mobile-auth'
 
 const TABS = [
   { href: '/m/warehouse', label: 'Warehouse' },
@@ -7,6 +8,20 @@ const TABS = [
 ] as const
 
 export function MobileLayout() {
+  const { pathname } = useLocation()
+
+  if (pathname === '/m/login' || pathname.startsWith('/m/login/')) {
+    return <Outlet />
+  }
+
+  return (
+    <RequireMobileAuth>
+      <MobileShell />
+    </RequireMobileAuth>
+  )
+}
+
+function MobileShell() {
   return (
     <div className="cosmos-mobile">
       <header className="cosmos-mobile-header">
@@ -14,7 +29,7 @@ export function MobileLayout() {
           ← Hub
         </Link>
         <span style={{ fontWeight: 700, flex: 1, fontFamily: 'var(--font-display)' }}>Cosmos Mobile</span>
-        <Link to="/admin/login" className="cosmos-shop-link" style={{ fontSize: 13 }}>
+        <Link to="/m/login" className="cosmos-shop-link" style={{ fontSize: 13 }}>
           Sign in
         </Link>
       </header>

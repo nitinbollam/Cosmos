@@ -471,10 +471,25 @@ export function ledgerForSku(tenantId: string, skuId: string, limit = 100) {
 
 export async function adjustStock(
   tenantId: string,
-  dto: { skuId: string; warehouseId: string; quantityDelta: number; reason?: string; batchId?: string },
+  dto: {
+    skuId: string
+    warehouseId: string
+    quantityDelta: number
+    reason?: string
+    batchId?: string
+    locationId?: string | null
+    referenceId?: string
+    referenceType?: string
+    correlationId?: string
+  },
   performedBy: string,
 ) {
+  if (!Number.isFinite(dto.quantityDelta) || dto.quantityDelta === 0) {
+    throw new ApiError(400, 'quantityDelta must be a non-zero number')
+  }
+
   const batchKey = dto.batchId ?? ''
+  const correlationId = dto.correlationId ?? randomUUID()
   return inventoryDb.$transaction(async (tx) => {
     const level = await tx.stockLevel.findFirst({
       where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
@@ -482,11 +497,16 @@ export async function adjustStock(
     if (!level) throw new ApiError(404, 'Stock level not found')
     const newOnHand = level.quantityOnHand + dto.quantityDelta
     if (newOnHand < 0) throw new ApiError(400, 'Adjustment would drive stock negative')
+    if (newOnHand < level.quantityReserved) {
+      throw new ApiError(400, 'Adjustment would leave less on hand than reserved quantity')
+    }
+
     const updatedLevel = await tx.stockLevel.update({
       where: { id: level.id },
       data: {
         quantityOnHand: newOnHand,
         quantityAvailable: { increment: dto.quantityDelta },
+        ...(dto.locationId !== undefined ? { locationId: dto.locationId || null } : {}),
       },
     })
     await tx.stockLedgerEntry.create({
@@ -495,14 +515,16 @@ export async function adjustStock(
         tenantId,
         skuId: dto.skuId,
         warehouseId: dto.warehouseId,
+        locationId: dto.locationId ?? level.locationId,
         batchId: batchKey,
         eventType: 'STOCK_ADJUSTED',
         quantityDelta: dto.quantityDelta,
         quantityAfter: newOnHand,
         unitCost: new Prisma.Decimal(0),
-        referenceType: 'ADJUSTMENT',
+        referenceId: dto.referenceId,
+        referenceType: dto.referenceType ?? 'ADJUSTMENT',
         performedBy,
-        correlationId: randomUUID(),
+        correlationId,
       },
     })
     return updatedLevel
@@ -635,6 +657,15 @@ export async function releaseReservation(tenantId: string, reservationId: string
       },
     }),
   ])
+}
+
+export async function releaseReservationsForOrder(tenantId: string, orderId: string): Promise<void> {
+  const rows = await inventoryDb.stockReservation.findMany({
+    where: { tenantId, orderId, status: 'ACTIVE' },
+  })
+  for (const row of rows) {
+    await releaseReservation(tenantId, row.id)
+  }
 }
 
 export async function lowStockAlerts(tenantId: string) {

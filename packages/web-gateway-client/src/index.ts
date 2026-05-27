@@ -13,14 +13,11 @@ export type CreateGatewayApiOptions = {
 
 export function resolveGatewayBaseUrl(override?: string): string {
   if (override) return override
-  try {
-    const env = (import.meta as ImportMeta & { env?: { VITE_GATEWAY_URL?: string } }).env
-    if (env?.VITE_GATEWAY_URL) return env.VITE_GATEWAY_URL
-  } catch {
-    /* not a Vite bundle */
-  }
   if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_GATEWAY_URL) {
     return process.env.NEXT_PUBLIC_GATEWAY_URL
+  }
+  if (typeof process !== 'undefined' && process.env.VITE_GATEWAY_URL) {
+    return process.env.VITE_GATEWAY_URL
   }
   return DEFAULT_GATEWAY_PATH
 }

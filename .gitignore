@@ -11,6 +11,7 @@ out/
 .expo/
 apps/web/public/
 apps/client/public/assets/
+apps/client/public/index.html
 *.tsbuildinfo
 
 # env

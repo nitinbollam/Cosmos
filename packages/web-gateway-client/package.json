@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "node ../../scripts/eslint-soft.mjs",
-    "test": "echo 'no tests'",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

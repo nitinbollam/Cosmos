@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 
 type LineItem = {
@@ -125,21 +126,7 @@ export default function OrderDetailPage() {
   })
 
   const fulfillMut = useMutation({
-    mutationFn: async () => {
-      const o = orderQ.data
-      if (!o?.lineItems?.length) throw new Error('No line items')
-      const correlationId =
-        typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `corr-${Date.now()}`
-      await api.post('/fulfillment/tasks', {
-        orderId: o.id,
-        correlationId,
-        lineItems: o.lineItems.map((li) => ({
-          skuId: li.skuId,
-          warehouseId: li.warehouseId ?? '',
-          quantity: li.quantity,
-        })),
-      })
-    },
+    mutationFn: () => api.post(`/orders/${encodeURIComponent(id)}/fulfill`, {}),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['wms', 'tasks', 'order', id] })
       void qc.invalidateQueries({ queryKey: ['order', id] })
@@ -159,7 +146,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
-      <Link to="/orders" className="text-sm text-cosmos-accent hover:underline">
+      <Link to={adminPath('/orders')} className="text-sm text-cosmos-accent hover:underline">
         ← Orders
       </Link>
 
@@ -189,7 +176,7 @@ export default function OrderDetailPage() {
             <div className="flex flex-wrap gap-2">
               {data.status === 'PENDING' && (
                 <button type="button" className="btn-primary !text-sm" disabled={confirmMut.isPending} onClick={() => confirmMut.mutate()}>
-                  Confirm
+                  Confirm & fulfill
                 </button>
               )}
               {(data.status === 'PENDING' || data.status === 'CONFIRMED') && (
@@ -202,9 +189,9 @@ export default function OrderDetailPage() {
                   Cancel
                 </button>
               )}
-              {data.status === 'CONFIRMED' && !task && (
+              {(data.status === 'CONFIRMED' || data.status === 'PROCESSING') && !task && (
                 <button type="button" className="btn-primary !text-sm" disabled={fulfillMut.isPending} onClick={() => fulfillMut.mutate()}>
-                  Create shipment
+                  Start fulfillment
                 </button>
               )}
             </div>
@@ -251,7 +238,7 @@ export default function OrderDetailPage() {
               </dl>
               {data.paymentIntentId && (
                 <a
-                  to={`https://dashboard.stripe.com/payments/${encodeURIComponent(data.paymentIntentId)}`}
+                  href={`https://dashboard.stripe.com/payments/${encodeURIComponent(data.paymentIntentId)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-block mt-3 text-sm text-cosmos-accent hover:underline"
@@ -309,7 +296,7 @@ export default function OrderDetailPage() {
               <div className="flex flex-wrap items-center gap-3 mb-3">
                 <StatusBadge status={task.status} />
                 <span className="text-sm text-cosmos-text-2">{task.warehouseCode}</span>
-                <Link to={`/fulfillment/${encodeURIComponent(task.id)}`} className="text-sm text-cosmos-accent hover:underline">
+                <Link to={adminPath(`/fulfillment/${encodeURIComponent(task.id)}`)} className="text-sm text-cosmos-accent hover:underline">
                   Open pick task →
                 </Link>
               </div>

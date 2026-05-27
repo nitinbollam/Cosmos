@@ -94,6 +94,7 @@ const router = createBrowserRouter([
         path: '/m',
         element: <MobileLayout />,
         children: [
+          { path: 'login', element: page(() => import('@/pages/m/login/page')) },
           { path: 'warehouse', element: page(() => import('@/pages/m/warehouse/page')) },
           {
             path: 'warehouse/receiving',

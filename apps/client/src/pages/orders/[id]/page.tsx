@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { storefrontAdminHref } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/status-badge'
 import { useParams } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
@@ -105,18 +106,14 @@ export default function StorefrontOrderDetailPage() {
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
             <h1 style={{ fontSize: 22, margin: 0 }}>Order · {o.id.slice(0, 12)}…</h1>
             <div style={{ fontSize: 13, color: '#94a3b8' }}>
-              {ADMIN_BASE ? (
-                <a
-                  to={`${ADMIN_BASE}/orders/${encodeURIComponent(o.id)}`}
+              <a
+                  href={storefrontAdminHref(`/orders/${encodeURIComponent(o.id)}`)}
                   style={{ color: '#a78bfa' }}
-                  target="_blank"
-                  rel="noreferrer"
+                  target={ADMIN_BASE ? '_blank' : undefined}
+                  rel={ADMIN_BASE ? 'noreferrer' : undefined}
                 >
                   Open in Cosmos Admin
                 </a>
-              ) : (
-                <span>Set NEXT_PUBLIC_WEB_ADMIN_ORIGIN for admin deep link.</span>
-              )}
             </div>
           </div>
           <p style={{ color: 'var(--c-text-3)', marginTop: 10, fontSize: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

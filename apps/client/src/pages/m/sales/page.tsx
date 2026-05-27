@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '@/lib/api-admin'
+import { api } from '@/lib/api-mobile'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
 import { axiosErr } from '@/lib/axios-error'
 

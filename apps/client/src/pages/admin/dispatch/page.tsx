@@ -161,7 +161,7 @@ function DispatchDashboard() {
       if (id) next.set('route', id)
       else next.delete('route')
       const q = next.toString()
-      navigate(q ? `/admin/dispatch?${q}` : '/admin/dispatch', { scroll: false })
+      navigate(q ? `/admin/dispatch?${q}` : '/admin/dispatch', { replace: true })
     },
     [navigate, searchParams],
   )

@@ -3,6 +3,7 @@ import * as users from './users'
 import * as inv from './inventory'
 import * as crm from './crm'
 import * as orders from './orders'
+import * as orderOrchestration from './order-orchestration'
 import * as quotes from './quotes'
 import * as wmsFulfillment from './wms-fulfillment'
 import * as wmsReceiving from './wms-receiving'
@@ -262,6 +263,9 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
   if (seg.length === 3 && seg[2] === 'confirm' && method === 'POST') {
     return Response.json(await orders.confirmOrder(session.tenantId, seg[1]))
   }
+  if (seg.length === 3 && seg[2] === 'fulfill' && method === 'POST') {
+    return Response.json(await orders.fulfillOrder(session.tenantId, seg[1]))
+  }
   if (seg.length === 3 && seg[2] === 'cancel' && method === 'POST') {
     const body = (await req.json()) as { reason?: string }
     if (!body.reason) throw new ApiError(400, 'reason is required')
@@ -400,7 +404,7 @@ async function routePurchaseOrders(method: string, seg: string[], req: Request):
   }
   if (seg.length === 3 && seg[2] === 'receive' && method === 'POST') {
     const body = (await req.json()) as purchasing.ReceiveGoodsInput
-    return Response.json(await purchasing.receiveGoods(session.tenantId, seg[1], body))
+    return Response.json(await purchasing.receiveGoods(session.tenantId, seg[1], body, session.userId))
   }
   if (seg.length === 3 && seg[2] === 'payments' && method === 'POST') {
     const body = (await req.json()) as purchasing.RecordPoPaymentInput
@@ -498,10 +502,14 @@ async function routeFulfillment(method: string, seg: string[], req: Request): Pr
     )
   }
   if (seg[1] === 'tasks' && seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
-    return Response.json(await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2]))
+    const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
+    await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch(() => undefined)
+    return Response.json(result)
   }
   if (seg[1] === 'tasks' && seg.length === 4 && seg[3] === 'dispatch' && method === 'POST') {
-    return Response.json(await wmsFulfillment.markFulfillmentDispatched(session.tenantId, seg[2]))
+    const result = await wmsFulfillment.markFulfillmentDispatched(session.tenantId, seg[2])
+    await orderOrchestration.onFulfillmentDispatched(session.tenantId, result.orderId).catch(() => undefined)
+    return Response.json(result)
   }
   throw new ApiError(404, 'Fulfillment route not found')
 }
@@ -528,6 +536,15 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
       const body = (await req.json()) as { userId?: string | null }
       return Response.json(
         await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], body.userId ?? null),
+      )
+    }
+    if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
+      return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2]))
+    }
+    if (seg.length === 5 && seg[3] === 'pick-lines' && method === 'PATCH') {
+      const body = (await req.json()) as wmsFulfillment.ConfirmPickLineInput
+      return Response.json(
+        await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], body),
       )
     }
   }
@@ -628,7 +645,9 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
       return Response.json(await wmsCycleCount.submitCycleCountForApproval(session.tenantId, seg[2]))
     }
     if (seg.length === 4 && seg[3] === 'approve' && (method === 'POST' || method === 'PATCH')) {
-      return Response.json(await wmsCycleCount.approveCycleCount(session.tenantId, seg[2]))
+      return Response.json(
+        await wmsCycleCount.approveCycleCount(session.tenantId, seg[2], session.userId),
+      )
     }
     if (seg.length === 5 && seg[3] === 'lines' && method === 'PATCH') {
       const body = (await req.json()) as { countedQty?: number }

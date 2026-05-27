@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '@/lib/api-admin'
+import { api } from '@/lib/api-mobile'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
 import { enqueueAction } from '@/lib/offline-queue'
 import { axiosErr } from '@/lib/axios-error'
@@ -23,7 +23,7 @@ export default function WarehouseMobilePage() {
     setLoading(true)
     setErr(null)
     try {
-      const data = await api.get<Task[]>('/wms/tasks?status=PENDING')
+      const data = await api.get<Task[]>('/wms/tasks')
       setTasks(Array.isArray(data) ? data : [])
     } catch (e) {
       if (!navigator.onLine) {

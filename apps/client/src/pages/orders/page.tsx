@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { storefrontAdminHref } from '@/lib/admin-path'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { isUnauthorized } from '@/lib/axios-error'
@@ -109,14 +110,15 @@ export default function StorefrontOrdersPage() {
                     <Link to={`/orders/${encodeURIComponent(o.id)}`} style={{ color: 'var(--c-accent)', fontSize: 13 }}>
                       View
                     </Link>
-                    {ADMIN_BASE ? (
-                      <>
-                        {' · '}
-                        <a to={`${ADMIN_BASE}/orders/${encodeURIComponent(o.id)}`} style={{ color: 'var(--c-primary)', fontSize: 13 }} target="_blank" rel="noreferrer">
-                          Admin
-                        </a>
-                      </>
-                    ) : null}
+                    {' · '}
+                    <a
+                      href={storefrontAdminHref(`/orders/${encodeURIComponent(o.id)}`)}
+                      style={{ color: 'var(--c-primary)', fontSize: 13 }}
+                      target={ADMIN_BASE ? '_blank' : undefined}
+                      rel={ADMIN_BASE ? 'noreferrer' : undefined}
+                    >
+                      Admin
+                    </a>
                   </td>
                 </tr>
               ))}

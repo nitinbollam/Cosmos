@@ -1,5 +1,6 @@
 import { NotificationChannel, NotificationStatus, Prisma } from '@/generated/prisma-notification'
 import { notificationDb } from './db'
+import { deliverNotification } from './notification-provider'
 
 export type SendNotificationInput = {
   channel: NotificationChannel
@@ -28,16 +29,43 @@ async function enqueue(tenantId: string, dto: SendNotificationInput, idempotency
   })
 }
 
-async function deliverRecord(id: string) {
-  return notificationDb.notificationRequest.update({
-    where: { id },
-    data: { status: NotificationStatus.SENT, errorMessage: null },
-  })
+async function deliverRecord(
+  tenantId: string,
+  id: string,
+  dto: SendNotificationInput,
+) {
+  try {
+    const result = await deliverNotification({
+      tenantId,
+      channel: dto.channel,
+      recipient: dto.recipient,
+      templateKey: dto.templateKey,
+      payload: dto.payload ?? {},
+    })
+    return notificationDb.notificationRequest.update({
+      where: { id },
+      data: {
+        status: NotificationStatus.SENT,
+        errorMessage: null,
+        payload: {
+          ...(dto.payload ?? {}),
+          _delivery: { provider: result.provider, subject: result.subject },
+        } as Prisma.InputJsonValue,
+      },
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'delivery failed'
+    return notificationDb.notificationRequest.update({
+      where: { id },
+      data: { status: NotificationStatus.FAILED, errorMessage: msg },
+    })
+  }
 }
 
 export async function send(tenantId: string, dto: SendNotificationInput, idempotencyKey?: string) {
   const row = await enqueue(tenantId, dto, idempotencyKey)
-  return deliverRecord(row.id)
+  if (row.status === NotificationStatus.SENT) return row
+  return deliverRecord(tenantId, row.id, dto)
 }
 
 export function list(tenantId: string) {

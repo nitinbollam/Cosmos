@@ -13,6 +13,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
@@ -288,7 +289,7 @@ function CustomersSection(props: {
                 return (
                   <tr key={c.id}>
                     <td>
-                      <Link to={`/crm/customers/${c.id}`} className="font-semibold" style={{ color: 'var(--c-text)' }}>
+                      <Link to={adminPath(`/crm/customers/${c.id}`)} className="font-semibold" style={{ color: 'var(--c-text)' }}>
                         {c.name}
                       </Link>
                       {c.customerKind === 'INDIVIDUAL' ? (
@@ -320,7 +321,7 @@ function CustomersSection(props: {
                       {rep ? userLabel(rep) : '—'}
                     </td>
                     <td>
-                      <Link to={`/crm/customers/${c.id}`} style={{ color: 'var(--c-accent)' }} className="text-sm font-semibold">
+                      <Link to={adminPath(`/crm/customers/${c.id}`)} style={{ color: 'var(--c-accent)' }} className="text-sm font-semibold">
                         View
                       </Link>
                     </td>
@@ -775,7 +776,7 @@ function LeadKanbanCard({
           <StatusBadge status={lead.status} />
           {lead.customer ? (
             <Link
-              to={`/crm/customers/${lead.customer.id}`}
+              to={adminPath(`/crm/customers/${lead.customer.id}`)}
               className="text-xs"
               style={{ color: 'var(--c-accent)' }}
               onPointerDown={(e) => e.stopPropagation()}

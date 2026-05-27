@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { EmptyState } from '@/components/cosmos/empty-state'
 import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
 import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
@@ -352,7 +353,7 @@ export default function InventoryPage() {
                 {(skusQ.data?.items ?? []).map((s) => (
                   <tr key={s.id} className={s.isActive === false ? 'opacity-50' : ''}>
                     <td className="font-mono text-xs">
-                      <Link to={`/inventory/${encodeURIComponent(s.id)}`} className="text-cosmos-accent hover:underline">
+                      <Link to={adminPath(`/inventory/${encodeURIComponent(s.id)}`)} className="text-cosmos-accent hover:underline">
                         {s.code}
                       </Link>
                     </td>

@@ -45,6 +45,22 @@ export class ApiError extends Error {
   }
 }
 
+export const ADMIN_ROLES = ['SUPER_ADMIN', 'TENANT_ADMIN', 'MANAGER', 'ACCOUNTANT'] as const
+export const OPS_ROLES = [...ADMIN_ROLES, 'WAREHOUSE_STAFF'] as const
+export const DRIVER_ROLES = [...ADMIN_ROLES, 'DRIVER'] as const
+
+export function assertRole(session: SessionUser, allowed: readonly string[]) {
+  if (!allowed.includes(session.role)) {
+    throw new ApiError(403, 'Forbidden')
+  }
+}
+
+export async function requireRole(req: Request, allowed: readonly string[]): Promise<SessionUser> {
+  const session = await requireSession(req)
+  assertRole(session, allowed)
+  return session
+}
+
 export function toJsonError(e: unknown): Response {
   if (e instanceof ApiError) {
     return Response.json({ message: e.message }, { status: e.status })

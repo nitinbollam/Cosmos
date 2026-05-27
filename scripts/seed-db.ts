@@ -10,8 +10,9 @@ import { createRequire } from 'node:module'
 const ROOT = path.resolve(__dirname, '..')
 const WEB = path.join(ROOT, 'apps/web')
 const requireWeb = createRequire(path.join(WEB, 'package.json'))
-const { sqliteDatabaseUrl } = createRequire(__filename)('./db-urls.mjs') as {
+const { sqliteDatabaseUrl, DB_BY_SCHEMA } = createRequire(__filename)('./db-urls.mjs') as {
   sqliteDatabaseUrl: (dbName: string, dataDir?: string) => string
+  DB_BY_SCHEMA: Record<string, string>
 }
 const bcrypt = requireWeb('bcrypt') as typeof import('bcrypt')
 
@@ -45,6 +46,7 @@ const ID = {
   fulfillShipped: 'seed_ff_shipped',
   receiveSession: 'seed_recv_open',
   cycleCount: 'seed_cycle_draft',
+  cycleCountPending: 'seed_cycle_pending',
   routeToday: 'seed_route_today',
   msaTenant: 'seed_msa_tenant',
   msaReport: 'seed_msa_report',
@@ -383,11 +385,16 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
   const D = mod.Prisma.Decimal
 
   const specs = [
-    { id: ID.orderPending, status: 'PENDING' as const, total: 249.9, paid: 0, channel: 'B2B_PORTAL' as const, lines: [{ sku: ID.skuVapeMod, qty: 2, price: 89.99 }, { sku: ID.skuAccessory, qty: 1, price: 45 }] },
-    { id: ID.orderProcessing, status: 'PROCESSING' as const, total: 174.93, paid: 174.93, channel: 'B2B_PORTAL' as const, lines: [{ sku: ID.skuVapePod, qty: 5, price: 24.99 }, { sku: ID.skuEnergy, qty: 2, price: 36 }] },
-    { id: ID.orderShipped, status: 'SHIPPED' as const, total: 72, paid: 72, channel: 'SALES_REP' as const, lines: [{ sku: ID.skuEnergy, qty: 2, price: 36 }] },
-    { id: ID.orderDelivered, status: 'DELIVERED' as const, total: 124.95, paid: 124.95, channel: 'B2B_PORTAL' as const, lines: [{ sku: ID.skuVapePod, qty: 5, price: 24.99 }] },
+    { id: ID.orderPending, status: 'PENDING' as const, total: 249.9, paid: 0, daysAgo: 0, channel: 'B2B_PORTAL' as const, lines: [{ sku: ID.skuVapeMod, qty: 2, price: 89.99 }, { sku: ID.skuAccessory, qty: 1, price: 45 }] },
+    { id: ID.orderProcessing, status: 'PROCESSING' as const, total: 174.93, paid: 174.93, daysAgo: 1, channel: 'B2B_PORTAL' as const, lines: [{ sku: ID.skuVapePod, qty: 5, price: 24.99 }, { sku: ID.skuEnergy, qty: 2, price: 36 }] },
+    { id: ID.orderShipped, status: 'SHIPPED' as const, total: 72, paid: 72, daysAgo: 3, channel: 'SALES_REP' as const, lines: [{ sku: ID.skuEnergy, qty: 2, price: 36 }] },
+    { id: ID.orderDelivered, status: 'DELIVERED' as const, total: 124.95, paid: 124.95, daysAgo: 7, channel: 'B2B_PORTAL' as const, lines: [{ sku: ID.skuVapePod, qty: 5, price: 24.99 }] },
   ]
+
+  const orderCreatedAt = (daysAgo: number) => {
+    const now = new Date()
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysAgo, 15, 0, 0))
+  }
 
   try {
     for (const o of specs) {
@@ -400,6 +407,7 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
             totalAmount: new D(o.total),
             amountPaid: new D(o.paid),
             paymentMethod: o.paid > 0 ? 'CARD' : 'NET_TERMS',
+            createdAt: orderCreatedAt(o.daysAgo),
           },
         })
         continue
@@ -416,6 +424,7 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
           taxAmount: new D(0),
           paymentMethod: o.paid > 0 ? 'CARD' : 'NET_TERMS',
           salesRepId: ctx.adminId,
+          createdAt: orderCreatedAt(o.daysAgo),
           shippingAddress: { line1: '500 Commerce St', city: 'Fort Worth', state: 'TX', postalCode: '76102' },
           lineItems: {
             create: o.lines.map((l, i) => ({
@@ -579,19 +588,38 @@ async function seedWms(tenantId: string, ctx: Pick<SeedCtx, 'warehouseId' | 'adm
 
     await prisma.cycleCount.upsert({
       where: { id: ID.cycleCount },
-      update: { status: 'DRAFT' },
+      update: { status: 'IN_PROGRESS' },
       create: {
         id: ID.cycleCount,
         tenantId,
         warehouseId: ctx.warehouseId,
         type: 'ABC',
-        status: 'DRAFT',
+        status: 'IN_PROGRESS',
         scheduledFor: new Date(Date.now() + 864e5),
         createdBy: ctx.adminId,
         lines: {
           create: [
-            { id: 'seed_cc_line_1', skuId: ID.skuLowStock, locationLabel: 'A-01-02', systemQty: 8 },
-            { id: 'seed_cc_line_2', skuId: ID.skuAccessory, locationLabel: 'B-02-01', systemQty: 64 },
+            { id: 'seed_cc_line_1', skuId: ID.skuLowStock, locationLabel: 'A-01-02', systemQty: 8, countedQty: null },
+            { id: 'seed_cc_line_2', skuId: ID.skuAccessory, locationLabel: 'B-02-01', systemQty: 64, countedQty: null },
+          ],
+        },
+      },
+    })
+
+    await prisma.cycleCount.upsert({
+      where: { id: ID.cycleCountPending },
+      update: { status: 'PENDING_APPROVAL' },
+      create: {
+        id: ID.cycleCountPending,
+        tenantId,
+        warehouseId: ctx.warehouseId,
+        type: 'RANDOM',
+        status: 'PENDING_APPROVAL',
+        createdBy: ctx.adminId,
+        lines: {
+          create: [
+            { id: 'seed_cc_pending_1', skuId: ID.skuLowStock, locationLabel: 'A-01-02', systemQty: 8, countedQty: 10 },
+            { id: 'seed_cc_pending_2', skuId: ID.skuAccessory, locationLabel: 'B-02-01', systemQty: 64, countedQty: 64 },
           ],
         },
       },
@@ -826,32 +854,17 @@ async function seedNotifications(tenantId: string) {
   }
 }
 
-async function seedAnalyticsKpis(tenantId: string) {
-  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-analytics')>(
-    'ANALYTICS_DATABASE_URL',
-    'cosmos_analytics',
-    './generated/prisma-analytics',
-  )
-  const prisma = new mod.PrismaClient()
-  const D = mod.Prisma.Decimal
-  try {
-    const today = new Date()
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - i))
-      const ordersCount = 8 + (i % 5) * 3
-      const revenue = 3800 + i * 280 + (i % 3) * 150
-      await prisma.dailyKpiSnapshot.upsert({
-        where: { tenantId_date: { tenantId, date: d } },
-        update: { ordersCount, revenue: new D(revenue), skusActive: 6 },
-        create: { tenantId, date: d, ordersCount, revenue: new D(revenue), skusActive: 6 },
-      })
-    }
-  } finally {
-    await prisma.$disconnect()
+async function bootstrapWebEnv() {
+  const dataDir = process.env.COSMOS_DATA_DIR ?? '.data'
+  for (const [schema, dbName] of Object.entries(DB_BY_SCHEMA)) {
+    const key = `${schema.toUpperCase()}_DATABASE_URL`
+    if (!process.env[key]) process.env[key] = sqliteDatabaseUrl(dbName, dataDir)
   }
+  if (!process.env.JWT_SECRET) process.env.JWT_SECRET = 'dev-seed-jwt-secret-min-32-chars-long'
 }
 
 async function main() {
+  await bootstrapWebEnv()
   const { tenantId, adminId, driverId } = await seedAuth()
   await seedTenantOrg(tenantId)
   const { warehouseId, warehouseEastId, skuIds } = await seedInventory(tenantId)
@@ -878,11 +891,10 @@ async function main() {
   await seedLedger(tenantId)
   await seedPayments(tenantId)
   await seedNotifications(tenantId)
-  await seedAnalyticsKpis(tenantId)
 
   await import('../apps/web/server/register-paths.mjs')
-  const { syncTodaySnapshotFromOrders } = await import('../apps/web/lib/server/analytics.ts')
-  await syncTodaySnapshotFromOrders(tenantId)
+  const { syncSnapshotsFromOrders } = await import('../apps/web/lib/server/analytics.ts')
+  await syncSnapshotsFromOrders(tenantId, 30)
 
   const summary = {
     tenantId,

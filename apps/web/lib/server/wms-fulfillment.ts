@@ -1,6 +1,20 @@
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
+import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
+
+export type ConfirmPickLineInput = {
+  pickedQty: number
+  markShort?: boolean
+}
+
+export { derivePickLineStatus } from './pick-line-status'
+
+function assertTaskPickable(status: FulfillmentTaskStatus) {
+  if (status === 'CANCELLED' || status === 'PACKED' || status === 'DISPATCHED') {
+    throw new ApiError(400, `Cannot pick for task in status ${status}`)
+  }
+}
 
 export type CreateFulfillmentTaskInput = {
   orderId: string
@@ -162,6 +176,81 @@ export async function listFulfillmentTasks(
       status: p.status,
     })),
   }))
+}
+
+export async function confirmPickLine(
+  tenantId: string,
+  taskId: string,
+  lineId: string,
+  dto: ConfirmPickLineInput,
+) {
+  const pickedQty = Math.floor(Number(dto.pickedQty))
+  if (!Number.isFinite(pickedQty) || pickedQty < 0) {
+    throw new ApiError(400, 'pickedQty must be a non-negative integer')
+  }
+
+  const task = await wmsDb.fulfillmentTask.findFirst({
+    where: { id: taskId, tenantId },
+    include: { pickLines: true },
+  })
+  if (!task) throw new ApiError(404, 'Task not found')
+  assertTaskPickable(task.status)
+
+  const line = task.pickLines.find((p) => p.id === lineId)
+  if (!line) throw new ApiError(404, 'Pick line not found')
+  if (pickedQty > line.quantity) {
+    throw new ApiError(400, `pickedQty cannot exceed ordered quantity (${line.quantity})`)
+  }
+
+  const status = derivePickLineStatus(line.quantity, pickedQty, dto.markShort)
+  if (pickedQty > 0 && pickedQty < line.quantity && !dto.markShort) {
+    throw new ApiError(400, 'Partial pick requires markShort: true or pick full quantity')
+  }
+
+  await wmsDb.pickLine.update({
+    where: { id: lineId },
+    data: { pickedQty, status },
+  })
+
+  const nextTaskStatus: FulfillmentTaskStatus =
+    task.status === 'PENDING' && pickedQty > 0 ? 'PICKING' : task.status
+
+  if (nextTaskStatus !== task.status) {
+    await wmsDb.fulfillmentTask.update({
+      where: { id: taskId },
+      data: { status: nextTaskStatus },
+    })
+  }
+
+  return getFulfillmentTask(tenantId, taskId)
+}
+
+export async function confirmAllPickLines(tenantId: string, taskId: string) {
+  const task = await wmsDb.fulfillmentTask.findFirst({
+    where: { id: taskId, tenantId },
+    include: { pickLines: true },
+  })
+  if (!task) throw new ApiError(404, 'Task not found')
+  assertTaskPickable(task.status)
+  if (task.pickLines.length === 0) throw new ApiError(400, 'Task has no pick lines')
+
+  await wmsDb.$transaction(
+    task.pickLines.map((line) =>
+      wmsDb.pickLine.update({
+        where: { id: line.id },
+        data: { pickedQty: line.quantity, status: 'PICKED' },
+      }),
+    ),
+  )
+
+  if (task.status !== 'PICKING') {
+    await wmsDb.fulfillmentTask.update({
+      where: { id: taskId },
+      data: { status: 'PICKING' },
+    })
+  }
+
+  return getFulfillmentTask(tenantId, taskId)
 }
 
 export async function assignFulfillmentTask(tenantId: string, taskId: string, userId: string | null) {

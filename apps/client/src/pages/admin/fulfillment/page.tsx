@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 
@@ -160,7 +161,7 @@ export default function FulfillmentTasksPage() {
                   <tr key={t.id} className="border-b border-cosmos-border/60 hover:bg-cosmos-surface-2/40">
                     <td className="py-2 pr-4">
                       <Link
-                        to={`/fulfillment/${encodeURIComponent(t.id)}`}
+                        to={adminPath(`/fulfillment/${encodeURIComponent(t.id)}`)}
                         className="font-mono text-xs text-cosmos-primary hover:underline"
                       >
                         {t.id.slice(0, 10)}…
@@ -168,7 +169,7 @@ export default function FulfillmentTasksPage() {
                     </td>
                     <td className="py-2 pr-4">
                       <Link
-                        to={`/orders/${encodeURIComponent(t.orderId)}`}
+                        to={adminPath(`/orders/${encodeURIComponent(t.orderId)}`)}
                         className="font-mono text-xs text-cosmos-muted hover:text-cosmos-primary"
                       >
                         {t.orderId.slice(0, 12)}…

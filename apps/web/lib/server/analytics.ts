@@ -54,9 +54,22 @@ async function rollupDaySnapshot(tenantId: string, day: Date) {
   })
 }
 
+/** Days of order history rolled into KPI snapshots on dashboard/chart load. */
+export const SNAPSHOT_SYNC_DAYS = 30
+
 /** Refresh today's snapshot from live orders so KPI charts stay current. */
 export async function syncTodaySnapshotFromOrders(tenantId: string) {
   return rollupDaySnapshot(tenantId, new Date())
+}
+
+/** Sync recent daily snapshots from live order totals (includes today). */
+export async function syncRecentSnapshotsFromOrders(tenantId: string, days = SNAPSHOT_SYNC_DAYS) {
+  const today = utcDayStart(new Date())
+  const rows = []
+  for (let i = 0; i < days; i++) {
+    rows.push(await rollupDaySnapshot(tenantId, addUtcDays(today, -i)))
+  }
+  return rows
 }
 
 async function orderDayMetrics(tenantId: string, day: Date) {
@@ -117,7 +130,7 @@ async function latestMsaStatus(tenantId: string): Promise<string> {
 }
 
 export async function listSnapshots(tenantId: string) {
-  await syncTodaySnapshotFromOrders(tenantId)
+  await syncRecentSnapshotsFromOrders(tenantId)
   return analyticsDb.dailyKpiSnapshot.findMany({
     where: { tenantId },
     orderBy: { date: 'desc' },
@@ -127,7 +140,7 @@ export async function listSnapshots(tenantId: string) {
 
 /** Dashboard KPIs from live orders, WMS picks, and compliance — not estimates. */
 export async function dashboardKpis(tenantId: string) {
-  await syncTodaySnapshotFromOrders(tenantId)
+  await syncRecentSnapshotsFromOrders(tenantId)
 
   const today = new Date()
   const yesterday = addUtcDays(today, -1)
@@ -195,11 +208,6 @@ export async function upsertSnapshot(
 }
 
 /** Rebuild snapshots for the last N UTC days from order history. */
-export async function syncSnapshotsFromOrders(tenantId: string, days = 14) {
-  const today = utcDayStart(new Date())
-  const rows = []
-  for (let i = 0; i < days; i++) {
-    rows.push(await rollupDaySnapshot(tenantId, addUtcDays(today, -i)))
-  }
-  return rows
+export async function syncSnapshotsFromOrders(tenantId: string, days = SNAPSHOT_SYNC_DAYS) {
+  return syncRecentSnapshotsFromOrders(tenantId, days)
 }

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { api } from '@/lib/api-admin'
+import { api } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
 
 type Stop = { id: string; sequence: number; status: string; address?: string }

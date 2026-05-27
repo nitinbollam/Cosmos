@@ -13,7 +13,7 @@ type CustomerRow = { id: string; name: string; email?: string | null; phone?: st
 
 type PaymentMethod = 'NET_TERMS' | 'CARD' | 'CASH' | 'CHECK' | 'ACH'
 
-const stripePublishable = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''
+const stripePublishable = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
 
 export default function CheckoutPage() {
   const navigate = useNavigate()
@@ -56,7 +56,7 @@ export default function CheckoutPage() {
     } catch (e: unknown) {
       setErr(axiosErr(e))
     }
-  }, [router])
+  }, [navigate])
 
   useEffect(() => {
     void loadCustomer()
@@ -74,7 +74,7 @@ export default function CheckoutPage() {
     }
     if (payment === 'CARD') {
       if (!stripePublishable) {
-        setErr('Set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY for card checkout.')
+        setErr('Set VITE_STRIPE_PUBLISHABLE_KEY for card checkout.')
         return
       }
       if (!cardPaymentMethodId) {
@@ -292,7 +292,7 @@ function PaymentStep2({
       {showStripe ? (
         <>
           {!stripeConfigured ? (
-            <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.</p>
+            <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>Missing VITE_STRIPE_PUBLISHABLE_KEY.</p>
           ) : (
             <StorefrontCardCapture onPaymentMethodId={(id) => setCardPaymentMethodId(id)} />
           )}

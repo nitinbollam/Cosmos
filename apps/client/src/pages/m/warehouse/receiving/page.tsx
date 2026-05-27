@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '@/lib/api-admin'
+import { api } from '@/lib/api-mobile'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
 import { enqueueAction } from '@/lib/offline-queue'
 import { axiosErr } from '@/lib/axios-error'

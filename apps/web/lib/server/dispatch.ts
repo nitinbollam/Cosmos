@@ -1,5 +1,7 @@
 import { Prisma, RouteStatus, StopStatus } from '@/generated/prisma-dispatch'
 import { dispatchDb } from './db'
+import { orderIdFromStopAddress } from './dispatch-order'
+import * as orderOrchestration from './order-orchestration'
 import { ApiError } from './session'
 
 export function listRoutes(tenantId: string, date?: string) {
@@ -136,6 +138,12 @@ export async function markStopDelivered(
     where: { id: stopId },
     data: { status: StopStatus.DELIVERED },
   })
+
+  const orderId = orderIdFromStopAddress(stop.address)
+  if (orderId) {
+    await orderOrchestration.onDeliveryStopDelivered(tenantId, orderId).catch(() => undefined)
+  }
+
   const stops = await dispatchDb.routeStop.findMany({ where: { routeId } })
   const allDelivered = stops.every((s) => s.status === StopStatus.DELIVERED)
   if (allDelivered) {

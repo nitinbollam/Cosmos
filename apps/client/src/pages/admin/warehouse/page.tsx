@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useMemo, useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
@@ -261,11 +262,17 @@ export default function WarehousePage() {
   })
 
   const approveCountMut = useMutation({
-    mutationFn: async (id: string) => {
-      await api.post(`/wms/cycle-counts/${encodeURIComponent(id)}/approve`, {})
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      api.post<{ adjustmentsPosted?: number; skipped?: number }>(
+        `/wms/cycle-counts/${encodeURIComponent(id)}/approve`,
+        {},
+      ),
+    onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts'] })
+      void qc.invalidateQueries({ queryKey: ['inventory'] })
+      if (typeof res.adjustmentsPosted === 'number') {
+        alert(`Cycle count posted — ${res.adjustmentsPosted} stock adjustment(s) applied.`)
+      }
       setCountDetailId(null)
     },
   })
@@ -382,7 +389,7 @@ export default function WarehousePage() {
               Receiving, cycle counts, and warehouse filters need at least one location. Add one in Settings.
             </p>
           </div>
-          <Link to="/settings?tab=warehouses" className="btn-primary">
+          <Link to={adminPath('/settings?tab=warehouses')} className="btn-primary">
             Add warehouse
           </Link>
         </div>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { storefrontAdminHref } from '@/lib/admin-path'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
@@ -90,23 +91,14 @@ export default function QuoteDetailPage() {
             <p style={{ marginTop: 16, padding: 12, borderRadius: 10, background: '#0f172a', border: '1px solid #334155' }}>
               <span style={{ fontSize: 12, color: '#94a3b8' }}>Order created · </span>
               <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{q.convertedOrderId}</span>
-              {ADMIN_BASE ? (
-                <>
-                  {' '}
-                  <a
-                    to={`${ADMIN_BASE}/orders/${encodeURIComponent(q.convertedOrderId)}`}
+              <a
+                    href={storefrontAdminHref(`/orders/${encodeURIComponent(q.convertedOrderId)}`)}
                     style={{ color: '#93c5fd', fontSize: 13 }}
-                    target="_blank"
-                    rel="noreferrer"
+                    target={ADMIN_BASE ? '_blank' : undefined}
+                    rel={ADMIN_BASE ? 'noreferrer' : undefined}
                   >
                     Open in Admin →
                   </a>
-                </>
-              ) : (
-                <span style={{ marginLeft: 8, fontSize: 12, color: '#64748b' }}>
-                  Set NEXT_PUBLIC_WEB_ADMIN_ORIGIN to deep-link Cosmos Admin orders.
-                </span>
-              )}
             </p>
           ) : null}
           {q.status === 'OPEN' ? (

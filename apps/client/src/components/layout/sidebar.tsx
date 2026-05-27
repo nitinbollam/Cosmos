@@ -6,6 +6,7 @@ export const SIDEBAR_NAV: { href: string; label: string; short: string }[] = [
   { href: '/admin', label: 'Dashboard', short: 'Db' },
   { href: '/admin/inventory', label: 'Inventory', short: 'In' },
   { href: '/admin/orders', label: 'Orders', short: 'Or' },
+  { href: '/admin/fulfillment', label: 'Fulfillment', short: 'Fl' },
   { href: '/admin/warehouse', label: 'Warehouse', short: 'Wh' },
   { href: '/admin/purchasing', label: 'Purchasing', short: 'Po' },
   { href: '/admin/compliance', label: 'Compliance', short: 'Co' },

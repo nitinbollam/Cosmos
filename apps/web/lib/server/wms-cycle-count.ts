@@ -1,6 +1,8 @@
 import type { CycleCountType } from '@/generated/prisma-wms'
+import { randomUUID } from 'node:crypto'
 import { wmsDb } from './db'
 import * as inv from './inventory'
+import { computeCycleCountDelta, cycleCountLineNeedsAdjustment } from './cycle-count-adjust'
 import { ApiError } from './session'
 
 type InvLevelRow = {
@@ -186,6 +188,13 @@ export async function submitCycleCountForApproval(tenantId: string, id: string) 
   if (row.status !== 'DRAFT' && row.status !== 'IN_PROGRESS') {
     throw new ApiError(400, 'Count must be draft or in progress to submit')
   }
+  if (row.lines.length === 0) {
+    throw new ApiError(400, 'Cannot submit a count with no lines')
+  }
+  const missing = row.lines.filter((l) => l.countedQty == null)
+  if (missing.length > 0) {
+    throw new ApiError(400, `All lines must have counted quantities (${missing.length} missing)`)
+  }
   return wmsDb.cycleCount.update({
     where: { id: row.id },
     data: { status: 'PENDING_APPROVAL' },
@@ -193,14 +202,74 @@ export async function submitCycleCountForApproval(tenantId: string, id: string) 
   })
 }
 
-export async function approveCycleCount(tenantId: string, id: string) {
+export async function approveCycleCount(tenantId: string, id: string, performedBy: string) {
   const row = await getCycleCount(tenantId, id)
+  if (row.status === 'COMPLETED') {
+    return {
+      count: row,
+      adjustmentsPosted: 0,
+      skipped: row.lines.length,
+      errors: [] as string[],
+    }
+  }
   if (row.status !== 'PENDING_APPROVAL') {
     throw new ApiError(400, 'Only counts pending approval can be posted')
   }
-  return wmsDb.cycleCount.update({
+  if (row.lines.length === 0) {
+    throw new ApiError(400, 'Cannot approve a count with no lines')
+  }
+
+  const missing = row.lines.filter((l) => l.countedQty == null)
+  if (missing.length > 0) {
+    throw new ApiError(400, `All lines must have counted quantities (${missing.length} missing)`)
+  }
+
+  const correlationId = randomUUID()
+  let adjustmentsPosted = 0
+  let skipped = 0
+  const errors: string[] = []
+
+  for (const line of row.lines) {
+    const countedQty = line.countedQty!
+    if (!cycleCountLineNeedsAdjustment(line.systemQty, countedQty)) {
+      skipped++
+      continue
+    }
+
+    const quantityDelta = computeCycleCountDelta(line.systemQty, countedQty)
+    try {
+      await inv.adjustStock(
+        tenantId,
+        {
+          skuId: line.skuId,
+          warehouseId: row.warehouseId,
+          quantityDelta,
+          batchId: '',
+          locationId: line.locationLabel,
+          referenceId: row.id,
+          referenceType: 'CYCLE_COUNT',
+          correlationId,
+          reason: `Cycle count ${row.id}`,
+        },
+        performedBy,
+      )
+      adjustmentsPosted++
+    } catch (e) {
+      errors.push(
+        `${line.skuId.slice(-8)}: ${e instanceof Error ? e.message : 'adjustment failed'}`,
+      )
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new ApiError(400, `Could not post all adjustments: ${errors.join('; ')}`)
+  }
+
+  const count = await wmsDb.cycleCount.update({
     where: { id: row.id },
     data: { status: 'COMPLETED' },
     include: { lines: true },
   })
+
+  return { count, adjustmentsPosted, skipped, errors }
 }

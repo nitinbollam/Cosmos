@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 
 type TaskDetail = {
@@ -69,6 +70,26 @@ export default function FulfillmentTaskDetailPage() {
     },
   })
 
+  const pickLineMut = useMutation({
+    mutationFn: (args: { lineId: string; pickedQty: number; markShort?: boolean }) =>
+      api.patch<TaskDetail>(
+        `/wms/tasks/${encodeURIComponent(taskId)}/pick-lines/${encodeURIComponent(args.lineId)}`,
+        { pickedQty: args.pickedQty, markShort: args.markShort },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wms', 'task', taskId] })
+      void qc.invalidateQueries({ queryKey: ['wms', 'tasks'] })
+    },
+  })
+
+  const pickAllMut = useMutation({
+    mutationFn: () => api.post(`/wms/tasks/${encodeURIComponent(taskId)}/pick-all`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wms', 'task', taskId] })
+      void qc.invalidateQueries({ queryKey: ['wms', 'tasks'] })
+    },
+  })
+
   const packReq = useMutation({
     mutationKey: ['wms', 'pack', taskId],
     mutationFn: () =>
@@ -105,6 +126,7 @@ export default function FulfillmentTaskDetailPage() {
     t &&
     t.pickItems.length > 0 &&
     t.pickItems.every((p) => p.status === 'PICKED' || p.status === 'SHORT')
+  const canPick = t && !['CANCELLED', 'PACKED', 'DISPATCHED'].includes(t.status)
 
   return (
     <div className="p-6 space-y-4">
@@ -131,7 +153,7 @@ export default function FulfillmentTaskDetailPage() {
               <div>
                 Order{' '}
                 <Link
-                  to={`/orders/${encodeURIComponent(t.orderId)}`}
+                  to={adminPath(`/orders/${encodeURIComponent(t.orderId)}`)}
                   className="font-mono text-cosmos-primary hover:underline"
                 >
                   {t.orderId}
@@ -181,6 +203,16 @@ export default function FulfillmentTaskDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-2 mt-4">
+              {canPick && !packingReady ? (
+                <button
+                  type="button"
+                  disabled={pickAllMut.isPending}
+                  onClick={() => void pickAllMut.mutateAsync()}
+                  className="h-9 px-3 rounded-md bg-violet-900/60 border border-violet-700/70 text-violet-100 text-xs disabled:opacity-40 hover:bg-violet-800/70"
+                >
+                  {pickAllMut.isPending ? 'Picking…' : 'Pick all'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={packReq.isPending || t.status === 'PACKED' || t.status === 'DISPATCHED'}
@@ -208,9 +240,12 @@ export default function FulfillmentTaskDetailPage() {
             {dispatchReq.error ? (
               <p className="text-xs text-red-400 mt-2">{errMsg(dispatchReq.error)}</p>
             ) : null}
+            {pickAllMut.error ? (
+              <p className="text-xs text-red-400 mt-2">{errMsg(pickAllMut.error)}</p>
+            ) : null}
             {!packingReady && ['PENDING', 'PICKING'].includes(t.status) ? (
               <p className="text-xs text-amber-300/90 mt-2">
-                Pack is disabled until all pick lines reach PICKED or SHORT (typically via warehouse handheld).
+                Confirm picks on each line (or use Pick all / mobile warehouse) before packing.
               </p>
             ) : null}
           </Card>
@@ -226,6 +261,7 @@ export default function FulfillmentTaskDetailPage() {
                     <th className="pb-2 pr-3 font-medium">Qty</th>
                     <th className="pb-2 pr-3 font-medium">Picked</th>
                     <th className="pb-2 font-medium">Status</th>
+                    {canPick ? <th className="pb-2 font-medium">Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -235,9 +271,30 @@ export default function FulfillmentTaskDetailPage() {
                       <td className="py-2 pr-3 font-mono text-[11px] text-cosmos-text">{p.skuId}</td>
                       <td className="py-2 pr-3">{p.quantity}</td>
                       <td className="py-2 pr-3">{p.pickedQty}</td>
-                      <td className="py-2">
+                      <td className="py-2 pr-3">
                         <StatusBadge status={p.status} />
                       </td>
+                      {canPick ? (
+                        <td className="py-2">
+                          {p.status === 'PICKED' || p.status === 'SHORT' ? (
+                            <span className="text-xs text-cosmos-muted">Done</span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={pickLineMut.isPending}
+                              onClick={() =>
+                                void pickLineMut.mutateAsync({
+                                  lineId: p.id,
+                                  pickedQty: p.quantity,
+                                })
+                              }
+                              className="h-7 px-2 rounded bg-cosmos-surface-2 border border-cosmos-border text-xs hover:bg-cosmos-surface disabled:opacity-40"
+                            >
+                              Pick {p.quantity}
+                            </button>
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 
 type Customer = {
@@ -236,7 +237,7 @@ export default function CrmCustomerDetailPage() {
                       <td>{new Date(o.createdAt).toLocaleDateString()}</td>
                       <td className="font-mono">{money(Number(o.totalAmount))}</td>
                       <td><StatusBadge status={o.status} /></td>
-                      <td><Link to={`/orders/${o.id}`} style={{ color: 'var(--c-accent)' }} className="text-sm">View</Link></td>
+                      <td><Link to={adminPath(`/orders/${o.id}`)} style={{ color: 'var(--c-accent)' }} className="text-sm">View</Link></td>
                     </tr>
                   ))}
                 </tbody>

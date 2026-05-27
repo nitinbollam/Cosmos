@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { CardTitle } from '@cosmos/ui'
+import { adminPath } from '@/lib/admin-path'
 
 export type LowStockRow = { skuId: string; name: string; available: number; reorderPoint?: number }
 
@@ -29,7 +30,7 @@ export function LowStockAlert({ alerts }: { alerts: LowStockRow[] }) {
                 </div>
               </div>
               <Link
-                to={`/purchasing?skuId=${encodeURIComponent(a.skuId)}`}
+                to={adminPath(`/purchasing?skuId=${encodeURIComponent(a.skuId)}`)}
                 className="btn-primary !py-2 !px-3 !text-xs shrink-0 whitespace-nowrap"
               >
                 Create PO

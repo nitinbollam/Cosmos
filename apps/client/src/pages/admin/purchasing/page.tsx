@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 
@@ -181,7 +182,7 @@ export default function PurchasingPage() {
                           {new Date(po.createdAt).toLocaleDateString()}
                         </td>
                         <td className="py-2">
-                          <Link to={`/purchasing/${po.id}`} className="text-cosmos-primary text-xs">
+                          <Link to={adminPath(`/purchasing/${po.id}`)} className="text-cosmos-primary text-xs">
                             View
                           </Link>
                         </td>

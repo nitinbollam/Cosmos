@@ -1,5 +1,6 @@
+import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '@/lib/api-admin'
+import { api } from '@/lib/api-mobile'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
 import { enqueueAction } from '@/lib/offline-queue'
 import { axiosErr } from '@/lib/axios-error'
@@ -54,7 +55,7 @@ export default function DeliveryMobilePage() {
       </button>
       {err && <p style={{ color: '#f87171', fontSize: 13 }}>{err}</p>}
       {routes.map((r) => (
-        <a
+        <Link
           key={r.id}
           to={`/m/delivery/route/${r.id}`}
           className="cosmos-mobile-card"
@@ -64,7 +65,7 @@ export default function DeliveryMobilePage() {
           <p style={{ margin: '6px 0 0', fontSize: 13, opacity: 0.7 }}>
             {r.status} · {(r.stops ?? []).length} stops
           </p>
-        </a>
+        </Link>
       ))}
       {routes.length === 0 && !err && <p style={{ opacity: 0.6 }}>No active routes</p>}
     </div>

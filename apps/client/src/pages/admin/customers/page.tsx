@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { useState } from 'react'
 
 type Customer = {
@@ -83,7 +84,7 @@ export default function CustomersPage() {
               <li key={c.id} className="py-3 flex justify-between gap-4">
                 <div>
                   <Link
-                    to={`/customers/${c.id}`}
+                    to={adminPath(`/customers/${c.id}`)}
                     className="text-cosmos-white font-medium hover:text-cosmos-primary"
                   >
                     {c.name}

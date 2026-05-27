@@ -92,6 +92,15 @@ const clientEnv = [
 fs.writeFileSync(clientEnvPath, `${clientEnv}\n`)
 console.log('[env] apps/client/.env')
 
+spawnSync(process.execPath, [path.join(root, 'scripts', 'clean-client-public.mjs')], {
+  cwd: root,
+  stdio: 'inherit',
+})
+spawnSync(process.execPath, [path.join(root, 'scripts', 'generate-favicons.mjs')], {
+  cwd: root,
+  stdio: 'inherit',
+})
+
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const ae = spawnSync(npm, ['run', 'build', '-w', '@cosmos/analytics-engine'], {
   cwd: root,

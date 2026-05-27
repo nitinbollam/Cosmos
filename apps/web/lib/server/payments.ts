@@ -3,6 +3,7 @@ import { Prisma } from '@/generated/prisma-payment'
 import { paymentDb } from './db'
 import { ApiError } from './session'
 import * as stripe from './stripe'
+import { applyCapturedPayment, linkPaymentIntent } from './order-payment-sync'
 
 export type AuthorizeInput = {
   orderId: string
@@ -42,6 +43,7 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
       where: { id: intent.id },
       data: { status: 'AUTHORIZED' },
     })
+    await linkPaymentIntent(tenantId, dto.orderId, updated.id)
     return { paymentIntentId: updated.id, status: updated.status }
   }
 
@@ -66,6 +68,8 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
     where: { id: intent.id },
     data: { status: 'AUTHORIZED', stripeIntentId: result.paymentIntentId },
   })
+
+  await linkPaymentIntent(tenantId, dto.orderId, updated.id)
 
   return {
     paymentIntentId: updated.id,
@@ -180,6 +184,8 @@ export async function capture(tenantId: string, paymentIntentId: string, correla
   })
 
   await recordSale(tenantId, Number(intent.amount), 0, intent.orderId, correlationId)
+  await applyCapturedPayment(tenantId, intent.orderId, Number(intent.amount))
+  await linkPaymentIntent(tenantId, intent.orderId, paymentIntentId)
   return { paymentIntentId: updated.id, status: updated.status }
 }
 

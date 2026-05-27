@@ -19,7 +19,7 @@ export default function LoginPage() {
       window.localStorage.setItem('cosmos.accessToken', r.accessToken)
       window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
       const next = new URLSearchParams(window.location.search).get('next')
-      navigate(next?.startsWith('/') ? next : '/')
+      navigate(next?.startsWith('/') ? next : '/admin')
     } catch (e) {
       setErr(formatApiReachabilityError(e) || axiosErr(e))
     } finally {

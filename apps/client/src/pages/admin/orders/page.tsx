@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 
@@ -195,7 +196,7 @@ export default function OrdersPage() {
                 {rows.map((o) => (
                   <tr key={o.id}>
                     <td className="font-mono text-sm">
-                      <Link to={`/orders/${encodeURIComponent(o.id)}`} className="text-cosmos-accent hover:underline">
+                      <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="text-cosmos-accent hover:underline">
                         #{o.id.slice(-10)}
                       </Link>
                     </td>
@@ -210,7 +211,7 @@ export default function OrdersPage() {
                     <td className="font-mono">${Number(o.totalAmount).toFixed(2)}</td>
                     <td className="text-sm text-cosmos-text-3">{new Date(o.createdAt).toLocaleString()}</td>
                     <td className="whitespace-nowrap">
-                      <Link to={`/orders/${encodeURIComponent(o.id)}`} className="btn-ghost !py-1 !px-2 !text-xs mr-1 inline-block">
+                      <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="btn-ghost !py-1 !px-2 !text-xs mr-1 inline-block">
                         View
                       </Link>
                       {(o.status === 'PENDING' || o.status === 'CONFIRMED') && (

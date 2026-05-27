@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
@@ -239,7 +240,7 @@ export default function CompliancePage() {
                         </td>
                         <td className="py-2">
                           <Link
-                            to={`/compliance/msa/${r.id}`}
+                            to={adminPath(`/compliance/msa/${r.id}`)}
                             className="text-cosmos-primary text-xs whitespace-nowrap"
                           >
                             View

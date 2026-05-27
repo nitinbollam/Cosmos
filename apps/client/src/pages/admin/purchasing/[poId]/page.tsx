@@ -208,8 +208,7 @@ export default function PurchaseOrderDetailPage() {
               </table>
             </div>
             <p className="mt-3 text-xs text-cosmos-muted">
-              Recording a receipt updates the PO in purchasing. Lines with a SKU code also post stock to the
-              selected warehouse via inventory (after the PO receive succeeds).
+              Recording a receipt updates PO quantities and posts stock to the selected warehouse in one step.
             </p>
           </Card>
 
@@ -241,19 +240,11 @@ function ReceiveDrawer(props: {
 }) {
   const lines = props.po.lines ?? []
   const [warehouseId, setWarehouseId] = useState(props.warehouses[0]?.id ?? '')
-  const [defaultUnitCost, setDefaultUnitCost] = useState(0)
   const [qtyByLine, setQtyByLine] = useState<Record<string, number>>(() =>
     Object.fromEntries(lines.map((l) => [l.id, 0])),
   )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const lineUnitCost = (l: PoLine) => {
-    const u = l.unitCost
-    if (u === null || u === undefined) return defaultUnitCost
-    const n = typeof u === 'string' ? parseFloat(u) : Number(u)
-    return Number.isFinite(n) ? n : defaultUnitCost
-  }
 
   useEffect(() => {
     if (!warehouseId && props.warehouses[0]?.id) setWarehouseId(props.warehouses[0].id)
@@ -274,33 +265,14 @@ function ReceiveDrawer(props: {
     }
     setBusy(true)
     try {
-      await api.post(`/purchase-orders/${encodeURIComponent(props.po.id)}/receive`, { lines: increments })
+      const res = await api.post<{ inventoryErrors?: string[] }>(
+        `/purchase-orders/${encodeURIComponent(props.po.id)}/receive`,
+        { warehouseId, lines: increments },
+      )
 
-      const invFailures: string[] = []
-      for (const l of lines) {
-        const q = Math.max(0, Math.floor(qtyByLine[l.id] ?? 0))
-        if (q <= 0) continue
-        const code = l.skuCode?.trim()
-        if (!code) continue
-        try {
-          const sku = await api.get<{ id: string }>(`/skus/lookup/by-code?code=${encodeURIComponent(code)}`)
-          await api.post('/inventory/receive', {
-            skuId: sku.id,
-            warehouseId,
-            quantity: q,
-            unitCost: lineUnitCost(l),
-            supplierId: props.po.supplier?.id,
-            poId: props.po.id,
-          })
-        } catch (e) {
-          invFailures.push(`${code}: ${axiosMessage(e)}`)
-        }
-      }
-
-      if (invFailures.length) {
+      if (res.inventoryErrors?.length) {
         alert(
-          'Purchase order receipt saved. Some inventory postings failed — fix SKUs or stock levels:\n\n' +
-            invFailures.join('\n'),
+          'Purchase order receipt saved. Some inventory postings failed:\n\n' + res.inventoryErrors.join('\n'),
         )
       }
       props.onDone()
@@ -335,16 +307,6 @@ function ReceiveDrawer(props: {
             ))
           )}
         </select>
-
-        <label className="block mt-4 text-xs text-cosmos-muted">Default unit cost (when line has no cost)</label>
-        <input
-          type="number"
-          min={0}
-          step="0.01"
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
-          value={defaultUnitCost}
-          onChange={(e) => setDefaultUnitCost(Number(e.target.value) || 0)}
-        />
 
         <div className="mt-4 space-y-3 max-h-[50vh] overflow-y-auto pr-1">
           {lines.map((l) => {

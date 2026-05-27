@@ -1,1 +1,0 @@
-const n="cosmos.offlineQueue";function r(){if(typeof window>"u")return[];try{const e=localStorage.getItem(n);return e?JSON.parse(e):[]}catch{return[]}}function c(e,o){const t=r();t.push({id:crypto.randomUUID(),type:e,payload:o,createdAt:new Date().toISOString()}),localStorage.setItem(n,JSON.stringify(t))}export{c as e};

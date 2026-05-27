@@ -27,7 +27,7 @@ export default function NotificationsPage() {
       <div>
         <h1 className="text-2xl font-bold text-cosmos-white">Notifications</h1>
         <p className="text-cosmos-muted text-sm mt-1">
-          Recent notification requests logged by notification-service (email/SMS/push queue).
+          Delivery log for email/SMS/push — console in dev, optional webhook via NOTIFICATION_WEBHOOK_URL.
         </p>
       </div>
 

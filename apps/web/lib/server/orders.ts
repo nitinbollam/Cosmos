@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
+import { computeSalesTax } from './compliance-tax'
+import { assertCreditAvailable, netTermsExposure, releaseCreditUsed } from './credit-limit'
 import { ApiError } from './session'
-import { runOrderSaga } from './order-saga'
+import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
 
 export type CreateOrderInput = {
   customerId: string
@@ -15,8 +17,12 @@ export type CreateOrderInput = {
 }
 
 export async function createOrder(tenantId: string, dto: CreateOrderInput) {
-  const totalAmount = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
+  const subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
+  const taxAmount = computeSalesTax(subtotal)
+  const totalAmount = subtotal + taxAmount
   const correlationId = randomUUID()
+
+  await assertCreditAvailable(tenantId, dto.customerId, totalAmount, dto.paymentMethod)
 
   const order = await orderDb.order.create({
     data: {
@@ -27,6 +33,7 @@ export async function createOrder(tenantId: string, dto: CreateOrderInput) {
       salesRepId: dto.salesRepId,
       priority: (dto.priority ?? 'NORMAL') as never,
       notes: dto.notes,
+      taxAmount: new Prisma.Decimal(taxAmount),
       totalAmount: new Prisma.Decimal(totalAmount),
       lineItems: {
         create: dto.lineItems.map((li) => ({
@@ -40,7 +47,7 @@ export async function createOrder(tenantId: string, dto: CreateOrderInput) {
     include: { lineItems: true },
   })
 
-  void runOrderSaga(order.id, tenantId, correlationId).catch(() => undefined)
+  void runOrderFulfillmentPipeline(order.id, tenantId, correlationId).catch(() => undefined)
   return order
 }
 
@@ -108,14 +115,17 @@ export async function findOrderById(tenantId: string, id: string) {
 }
 
 export async function confirmOrder(tenantId: string, id: string) {
+  return fulfillOrder(tenantId, id)
+}
+
+export async function fulfillOrder(tenantId: string, id: string) {
   const order = await findOrderById(tenantId, id)
-  if (order.status !== 'PENDING') {
-    throw new ApiError(400, `Order cannot be confirmed from status ${order.status}`)
+  if (!['PENDING', 'CONFIRMED', 'PROCESSING'].includes(order.status)) {
+    throw new ApiError(400, `Order cannot be fulfilled from status ${order.status}`)
   }
-  return orderDb.order.update({
-    where: { id },
-    data: { status: 'CONFIRMED', confirmedAt: new Date() },
-  })
+  const correlationId = order.saga?.correlationId ?? randomUUID()
+  await runOrderFulfillmentPipeline(id, tenantId, correlationId)
+  return findOrderById(tenantId, id)
 }
 
 export async function recordOrderPayment(
@@ -138,10 +148,5 @@ export async function recordOrderPayment(
 }
 
 export async function cancelOrder(tenantId: string, id: string, reason: string) {
-  const order = await findOrderById(tenantId, id)
-  if (order.status === 'CANCELLED' || order.status === 'DELIVERED') return order
-  return orderDb.order.update({
-    where: { id },
-    data: { status: 'CANCELLED', cancelledAt: new Date(), failureReason: reason },
-  })
+  return cancelOrderWithCompensation(tenantId, id, reason)
 }

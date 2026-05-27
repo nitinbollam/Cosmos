@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 
@@ -376,7 +377,7 @@ export default function FinancePage() {
                             setPayAmount(String(orderBalance(o).toFixed(2)))
                           }}>Record payment</button>
                         )}
-                        <Link to={`/orders/${o.id}`} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
+                        <Link to={adminPath(`/orders/${o.id}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
                       </td>
                     </tr>
                   ))}
@@ -430,7 +431,7 @@ export default function FinancePage() {
                             setPayAmount(String(poBalance(po).toFixed(2)))
                           }}>Mark paid</button>
                         )}
-                        <Link to={`/purchasing/${po.id}`} style={{ color: 'var(--c-accent)' }}>View PO</Link>
+                        <Link to={adminPath(`/purchasing/${po.id}`)} style={{ color: 'var(--c-accent)' }}>View PO</Link>
                       </td>
                     </tr>
                   ))}

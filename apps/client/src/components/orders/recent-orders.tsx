@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
 
@@ -90,7 +91,7 @@ export function RecentOrders() {
                     {new Date(o.createdAt).toLocaleString()}
                   </td>
                   <td>
-                    <Link to={`/orders/${encodeURIComponent(o.id)}`} className="btn-ghost !py-1.5 !px-3 !text-xs">
+                    <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="btn-ghost !py-1.5 !px-3 !text-xs">
                       View
                     </Link>
                   </td>
