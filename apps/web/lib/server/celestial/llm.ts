@@ -90,6 +90,218 @@ export async function completeChat(messages: ChatMessage[]): Promise<LlmResponse
   }
 }
 
+export async function* streamChat(messages: ChatMessage[]): AsyncGenerator<string, LlmResponse> {
+  const provider = resolveProvider()
+  const model = defaultModel(provider)
+
+  switch (provider) {
+    case 'openrouter':
+      return yield* streamOpenAiCompatible(messages, {
+        provider: 'openrouter',
+        model,
+        url:
+          process.env.OPENROUTER_API_URL?.trim() || 'https://openrouter.ai/api/v1/chat/completions',
+        apiKey: process.env.OPENROUTER_API_KEY!,
+        headers: {
+          'HTTP-Referer': process.env.COSMOS_CLIENT_ORIGIN?.trim() || 'http://localhost:4000',
+          'X-Title': 'Cosmos Celestial',
+        },
+      })
+    case 'groq':
+      return yield* streamOpenAiCompatible(messages, {
+        provider: 'groq',
+        model,
+        url: 'https://api.groq.com/openai/v1/chat/completions',
+        apiKey: process.env.GROQ_API_KEY!,
+      })
+    case 'gemini':
+      return yield* streamGemini(messages, model)
+    case 'ollama':
+      return yield* streamOllama(messages, model)
+    default: {
+      const mock = mockComplete(messages, model)
+      return yield* simulateStream(mock.content, mock)
+    }
+  }
+}
+
+async function* simulateStream(content: string, result: LlmResponse): AsyncGenerator<string, LlmResponse> {
+  const parts = content.match(/\S+\s*|\s+/g) ?? [content]
+  for (const part of parts) {
+    yield part
+    await new Promise((r) => setTimeout(r, 16))
+  }
+  return result
+}
+
+async function* streamOpenAiCompatible(
+  messages: ChatMessage[],
+  cfg: { provider: string; model: string; url: string; apiKey: string; headers?: Record<string, string> },
+): AsyncGenerator<string, LlmResponse> {
+  const res = await fetch(cfg.url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.apiKey}`,
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...cfg.headers,
+    },
+    body: JSON.stringify({
+      model: cfg.model,
+      messages,
+      temperature: 0.3,
+      max_tokens: 800,
+      stream: true,
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`${cfg.provider} error (${res.status}): ${text.slice(0, 300)}`)
+  }
+  if (!res.body) throw new Error(`${cfg.provider} returned empty stream`)
+
+  let content = ''
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const payload = trimmed.slice(5).trim()
+      if (!payload || payload === '[DONE]') continue
+      try {
+        const json = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: string } }>
+        }
+        const delta = json.choices?.[0]?.delta?.content
+        if (delta) {
+          content += delta
+          yield delta
+        }
+      } catch {
+        // ignore malformed SSE chunks
+      }
+    }
+  }
+
+  const trimmed = content.trim()
+  if (!trimmed) throw new Error(`${cfg.provider} returned empty response`)
+  return { content: trimmed, provider: cfg.provider, model: cfg.model }
+}
+
+async function* streamGemini(messages: ChatMessage[], model: string): AsyncGenerator<string, LlmResponse> {
+  const key = process.env.GEMINI_API_KEY!.trim()
+  const system = messages.find((m) => m.role === 'system')?.content ?? ''
+  const convo = messages.filter((m) => m.role !== 'system')
+  const contents = convo.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${key}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+      contents,
+      generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`gemini error (${res.status}): ${text.slice(0, 300)}`)
+  }
+  if (!res.body) throw new Error('gemini returned empty stream')
+
+  let content = ''
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const payload = trimmed.slice(5).trim()
+      if (!payload) continue
+      try {
+        const json = JSON.parse(payload) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+        }
+        const delta = json.candidates?.[0]?.content?.parts?.[0]?.text
+        if (delta) {
+          content += delta
+          yield delta
+        }
+      } catch {
+        // ignore malformed SSE chunks
+      }
+    }
+  }
+
+  const trimmed = content.trim()
+  if (!trimmed) throw new Error('gemini returned empty response')
+  return { content: trimmed, provider: 'gemini', model }
+}
+
+async function* streamOllama(messages: ChatMessage[], model: string): AsyncGenerator<string, LlmResponse> {
+  const base = (process.env.CELESTIAL_OLLAMA_URL ?? process.env.OLLAMA_HOST ?? 'http://127.0.0.1:11434').replace(/\/$/, '')
+  const res = await fetch(`${base}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages, stream: true, options: { temperature: 0.3 } }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`ollama error (${res.status}): ${text.slice(0, 300)}`)
+  }
+  if (!res.body) throw new Error('ollama returned empty stream')
+
+  let content = ''
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        const json = JSON.parse(trimmed) as { message?: { content?: string } }
+        const delta = json.message?.content
+        if (delta) {
+          content += delta
+          yield delta
+        }
+      } catch {
+        // ignore malformed JSON lines
+      }
+    }
+  }
+
+  const trimmed = content.trim()
+  if (!trimmed) throw new Error('ollama returned empty response')
+  return { content: trimmed, provider: 'ollama', model }
+}
+
 async function callOpenAiCompatible(
   messages: ChatMessage[],
   cfg: { provider: string; model: string; url: string; apiKey: string; headers?: Record<string, string> },
@@ -190,6 +402,19 @@ function mockComplete(messages: ChatMessage[], model: string): LlmResponse {
   } else if (toolBlock.includes('global_search') || toolBlock.includes('list_low_stock')) {
     lines.push('I ran an admin search across Cosmos records.')
     lines.push('Use the linked admin pages for full detail.')
+  } else if (toolBlock.includes('list_warehouses')) {
+    lines.push('Here are your active warehouses in Cosmos:')
+    const names = toolBlock.match(/"name":\s*"([^"]+)"/g)
+    const codes = toolBlock.match(/"code":\s*"([^"]+)"/g)
+    if (names?.length) {
+      lines.push(
+        ...names.slice(0, 8).map((n, i) => {
+          const code = codes?.[i]?.split('"')[3]
+          return code ? `- **${n.split('"')[3]}** (\`${code}\`)` : `- **${n.split('"')[3]}**`
+        }),
+      )
+    }
+    lines.push('Open **Warehouse** in admin for pick tasks, waves, and bins.')
   } else {
     lines.push(`I'm Celestial, your Cosmos assistant.`)
     lines.push(`You asked: "${lastUser.slice(0, 120)}"`)

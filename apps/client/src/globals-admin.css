@@ -429,6 +429,12 @@ select.cosmos-input option {
   background: var(--c-bg);
 }
 
+.cosmos-admin-content:has(.celestial-page) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .cosmos-admin-header {
   height: 80px;
   shrink: 0;

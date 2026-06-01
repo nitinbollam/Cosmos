@@ -10,6 +10,7 @@ function titleFromPath(path: string) {
   const parts = path.split('/').filter(Boolean)
   const seg = parts[0] === 'admin' ? (parts[1] ?? '') : (parts[0] ?? '')
   if (!seg || seg === 'admin') return 'Overview'
+  if (seg === 'celestial') return 'Celestial'
   return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
 }
 
@@ -88,7 +89,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="cosmos-admin-content">{children}</main>
       </div>
-      <CelestialChat surface="admin" />
+      {!pathname.startsWith('/admin/celestial') ? <CelestialChat surface="admin" variant="floating" /> : null}
     </div>
   )
 }

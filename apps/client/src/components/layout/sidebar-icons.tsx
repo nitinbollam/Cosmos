@@ -11,6 +11,7 @@ type SidebarIconName =
   | 'crm'
   | 'dispatch'
   | 'finance'
+  | 'celestial'
   | 'settings'
 
 export function SidebarIcon({ name }: { name: SidebarIconName }) {
@@ -100,6 +101,13 @@ const icons: Record<SidebarIconName, ReactNode> = {
       <path d="M4 19V5" {...stroke} />
       <path d="M4 19h16" {...stroke} />
       <path d="M8 15l3-4 3 2 4-6" {...stroke} />
+    </>
+  ),
+  celestial: (
+    <>
+      <path d="M12 3 13.5 8.5 19 10l-5.5 1.5L12 17l-1.5-5.5 7-1.5-5.5-1.5L12 3Z" {...stroke} />
+      <path d="M5 5l.9 2.1L8 8l-2.1.9L5 11l-.9-2.1L2 8l2.1-.9L5 5Z" {...stroke} />
+      <path d="M18 16l.7 1.6 1.7.7-1.7.7-.7 1.6-.7-1.6-1.7-.7 1.7-.7.7-1.6Z" {...stroke} />
     </>
   ),
   settings: (

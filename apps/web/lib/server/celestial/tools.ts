@@ -14,6 +14,7 @@ export type ToolContext = {
   orderId?: string
   quoteId?: string
   searchTerm?: string
+  orderStatus?: string
 }
 
 export type ToolResult = {
@@ -33,12 +34,14 @@ export async function runTools(names: CelestialToolName[], ctx: ToolContext): Pr
 
 async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolResult | null> {
   const { session } = ctx
-  const buyerOpts = ctx.customerId ? { buyerCustomerId: ctx.customerId } : undefined
   const isBuyer = isPortalBuyer(session.role)
+  const buyerOpts = isBuyer && ctx.customerId ? { buyerCustomerId: ctx.customerId } : undefined
 
   switch (name) {
     case 'get_my_orders': {
-      const page = await orders.listOrders(session.tenantId, 1, 8, {}, buyerOpts)
+      const filters: { status?: string } = {}
+      if (ctx.orderStatus) filters.status = ctx.orderStatus
+      const page = await orders.listOrders(session.tenantId, 1, 10, filters, buyerOpts)
       const links = page.items.map((o) => ({
         label: `Order …${o.id.slice(-8)} (${o.status})`,
         href: isBuyer ? `/orders/${o.id}` : `/admin/orders/${o.id}`,
@@ -160,6 +163,25 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
         links: low.map((s) => ({ label: s.code, href: `/admin/inventory/${s.id}` })),
       }
     }
+    case 'list_warehouses': {
+      const rows = await inv.listWarehouses(session.tenantId)
+      const active = rows.filter((w) => w.isActive)
+      return {
+        name,
+        data: active.map((w) => ({
+          id: w.id,
+          name: w.name,
+          code: w.code,
+          isDefault: w.isDefault,
+          address: formatWarehouseAddress(w.address),
+          city: formatWarehouseCity(w.address),
+        })),
+        links: [
+          { label: 'Warehouse ops', href: '/admin/warehouse' },
+          { label: 'Manage warehouses', href: '/admin/settings?tab=warehouses' },
+        ],
+      }
+    }
     default:
       return null
   }
@@ -170,4 +192,23 @@ export function formatToolResultsForPrompt(results: ToolResult[]): string {
   return results
     .map((r) => `Tool: ${r.name}\n${JSON.stringify(r.data, null, 2)}`)
     .join('\n\n')
+}
+
+function formatWarehouseCity(address: unknown): string | null {
+  if (!address || typeof address !== 'object' || Array.isArray(address)) return null
+  const city = (address as Record<string, unknown>).city
+  const state = (address as Record<string, unknown>).state
+  if (typeof city === 'string' && typeof state === 'string') return `${city}, ${state}`
+  if (typeof city === 'string') return city
+  return null
+}
+
+function formatWarehouseAddress(address: unknown): string | null {
+  if (!address || typeof address !== 'object' || Array.isArray(address)) return null
+  const o = address as Record<string, unknown>
+  const line1 = typeof o.line1 === 'string' ? o.line1 : ''
+  const city = typeof o.city === 'string' ? o.city : ''
+  const state = typeof o.state === 'string' ? o.state : ''
+  const parts = [line1, [city, state].filter(Boolean).join(', ')].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : null
 }

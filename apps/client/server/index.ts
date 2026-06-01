@@ -30,8 +30,20 @@ async function sendWebResponse(res: express.Response, response: Response) {
     if (key.toLowerCase() === 'transfer-encoding') return
     res.setHeader(key, value)
   })
-  const body = Buffer.from(await response.arrayBuffer())
-  res.end(body)
+  if (!response.body) {
+    res.end()
+    return
+  }
+  const reader = response.body.getReader()
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      res.write(Buffer.from(value))
+    }
+  } finally {
+    res.end()
+  }
 }
 
 async function main() {
@@ -51,9 +63,18 @@ async function main() {
       for await (const chunk of req) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
       }
+      const headers = new Headers()
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (value == null) continue
+        if (Array.isArray(value)) {
+          for (const v of value) headers.append(key, v)
+        } else {
+          headers.set(key, value)
+        }
+      }
       const init: RequestInit = {
         method: req.method,
-        headers: req.headers as HeadersInit,
+        headers,
       }
       if (chunks.length > 0) init.body = Buffer.concat(chunks)
       const response = await handleApiRequest(new Request(url, init))

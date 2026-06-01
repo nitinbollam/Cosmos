@@ -94,6 +94,7 @@ const router = createBrowserRouter([
           },
           { path: 'settings', element: page(() => import('@/pages/admin/settings/page')) },
           { path: 'pos', element: page(() => import('@/pages/admin/pos/page')) },
+          { path: 'celestial', element: page(() => import('@/pages/admin/celestial/page')) },
           { path: 'warehouse', element: page(() => import('@/pages/admin/warehouse/page')) },
         ],
       },

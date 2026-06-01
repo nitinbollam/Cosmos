@@ -2,6 +2,8 @@
 
 Comprehensive reference for the Cosmos ERP/distribution platform: what the product does today, what was added in recent development, and how to run it locally.
 
+> **Celestial AI knowledge base:** LLM-optimized documentation lives in [`docs/celestial/`](docs/celestial/) (indexed automatically by Celestial RAG). This file is the full human + machine reference; celestial docs use Q&A-friendly sections with keywords, workflows, and FAQ.
+
 ---
 
 ## Table of contents
@@ -419,11 +421,12 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — RAG on `PLATFORM_FEATURES.md`, intent-based tools, LLM providers |
+| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — RAG on `docs/celestial/*.md` + `PLATFORM_FEATURES.md`, intent-based tools, LLM providers |
 | **15.2 Chat API** | `POST /celestial/chat`, `GET /celestial/status` · gated by `celestial` feature flag |
 | **15.3 Buyer + admin UI** | Floating ✦ Celestial panel on shop and admin layouts with contextual page hints |
 | **15.4 Tooling** | Live data: orders, invoices, catalog, quotes (buyer); global search + low stock (admin) |
 | **15.5 Conversation store** | `CelestialConversation` / `CelestialMessage` in analytics DB · audit `celestial.chat` events |
+| **15.6 Streaming UI** | `POST /celestial/chat/stream` (SSE) · Markdown + syntax-highlighted code in chat panel |
 
 **LLM env vars:** `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, or `CELESTIAL_PROVIDER=ollama`. Runs in **mock mode** without keys (tool-backed answers).
 

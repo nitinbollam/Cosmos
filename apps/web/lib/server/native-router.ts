@@ -1402,7 +1402,19 @@ async function routeCelestial(method: string, seg: string[], req: Request): Prom
   }
   if (seg.length === 2 && seg[1] === 'chat' && method === 'POST') {
     const body = (await req.json()) as celestial.CelestialChatInput
+    const accept = req.headers.get('accept') ?? ''
+    const streamRequested =
+      accept.includes('text/event-stream') ||
+      accept.includes('application/x-ndjson') ||
+      req.headers.get('x-celestial-stream') === '1'
+    if (streamRequested) {
+      return celestial.chatStream(session, body)
+    }
     return Response.json(await celestial.chat(session, body))
+  }
+  if (seg.length === 3 && seg[1] === 'chat' && seg[2] === 'stream' && method === 'POST') {
+    const body = (await req.json()) as celestial.CelestialChatInput
+    return celestial.chatStream(session, body)
   }
   throw new ApiError(404, 'Celestial route not found')
 }

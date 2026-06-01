@@ -16,6 +16,7 @@ export const SIDEBAR_NAV: { href: string; label: string; icon: SidebarIconName }
   { href: '/admin/dispatch', label: 'Dispatch', icon: 'dispatch' },
   { href: '/admin/finance', label: 'Finance', icon: 'finance' },
   { href: '/admin/pos', label: 'POS', icon: 'orders' },
+  { href: '/admin/celestial', label: 'Celestial', icon: 'celestial' },
   { href: '/admin/settings', label: 'Settings', icon: 'settings' },
 ]
 
