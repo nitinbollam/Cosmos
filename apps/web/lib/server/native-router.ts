@@ -31,8 +31,11 @@ import * as wavePicking from './wave-picking'
 import * as binLocations from './bin-locations'
 import * as barcodeLabels from './barcode-labels'
 import * as pos from './pos'
+import * as posReceipt from './pos-receipt'
 import * as featureFlags from './feature-flags'
-import { getAuthProfile, isPortalBuyer, requirePortalCustomerId } from './buyer-context'
+import * as customerNotificationPrefs from './customer-notification-prefs'
+import { getNotificationProviderStatus } from './notification-provider-status'
+import { getAuthProfile, isPortalBuyer, isAdminStaff, requirePortalCustomerId } from './buyer-context'
 import { getTenantTaxSettings } from './tenant-tax'
 import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError } from './session'
 
@@ -375,6 +378,21 @@ async function routeCustomers(method: string, seg: string[], req: Request): Prom
     const profile = await getAuthProfile(session)
     if (!profile.customerId) throw new ApiError(404, 'No customer linked to this account')
     return Response.json(await crm.getCustomer(session.tenantId, profile.customerId))
+  }
+
+  if (seg[1] === 'me' && seg[2] === 'notification-prefs' && seg.length === 3 && method === 'GET') {
+    if (!isPortalBuyer(session.role)) throw new ApiError(403, 'Forbidden')
+    const customerId = await requirePortalCustomerId(session)
+    return Response.json(await customerNotificationPrefs.getCustomerNotificationPrefs(session.tenantId, customerId))
+  }
+
+  if (seg[1] === 'me' && seg[2] === 'notification-prefs' && seg.length === 3 && method === 'PATCH') {
+    if (!isPortalBuyer(session.role)) throw new ApiError(403, 'Forbidden')
+    const customerId = await requirePortalCustomerId(session)
+    const body = (await req.json()) as Partial<customerNotificationPrefs.CustomerNotificationPrefs>
+    return Response.json(
+      await customerNotificationPrefs.patchCustomerNotificationPrefs(session.tenantId, customerId, body),
+    )
   }
 
   if (seg[1] === 'me' && seg[2] === 'prices' && seg.length === 3 && method === 'GET') {
@@ -1053,18 +1071,24 @@ async function routeNotifications(method: string, seg: string[], req: Request): 
     const status = url.searchParams.get('status') ?? undefined
     const channel = url.searchParams.get('channel') ?? undefined
     const event = url.searchParams.get('event') ?? undefined
-    const rows = await notifications.list(session.tenantId)
-    const filtered = rows.filter((r) => {
-      if (status && r.status !== status) return false
-      if (channel && r.channel !== channel) return false
-      if (event && r.templateKey !== event) return false
-      return true
-    })
-    return Response.json(filtered)
+    const recipient = url.searchParams.get('recipient') ?? undefined
+    return Response.json(
+      await notifications.list(session.tenantId, { status, channel, event, recipient }),
+    )
+  }
+  if (seg.length === 3 && seg[1] === 'providers' && seg[2] === 'status' && method === 'GET') {
+    await requireRole(req, ADMIN_ROLES)
+    return Response.json(getNotificationProviderStatus())
   }
   if (seg.length === 2 && seg[1] === 'retry' && method === 'POST') {
     const body = (await req.json()) as { id?: string }
     if (!body.id) throw new ApiError(400, 'id required')
+    if (!isAdminStaff(session.role)) {
+      const rows = await notifications.list(session.tenantId, { recipient: session.email })
+      if (!rows.some((r) => r.id === body.id)) {
+        throw new ApiError(403, 'You can only retry notifications sent to your email')
+      }
+    }
     return Response.json(await notifications.retry(session.tenantId, body.id))
   }
   if (seg.length === 2 && seg[1] === 'send' && method === 'POST') {
@@ -1262,6 +1286,9 @@ async function routePickWaves(method: string, seg: string[], req: Request): Prom
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await wavePicking.listPickWaves(session.tenantId, url.searchParams.get('warehouseId') ?? undefined))
   }
+  if (seg.length === 2 && method === 'GET') {
+    return Response.json(await wavePicking.getPickWaveDetail(session.tenantId, seg[1]))
+  }
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as { warehouseId: string; taskIds: string[] }
     return Response.json(
@@ -1330,13 +1357,17 @@ async function routePos(method: string, seg: string[], req: Request): Promise<Re
     const body = (await req.json()) as Parameters<typeof pos.createPosOrder>[1]
     return Response.json(await pos.createPosOrder(session.tenantId, body, session.userId), { status: 201 })
   }
+  if (seg.length === 4 && seg[1] === 'orders' && seg[3] === 'receipt' && method === 'GET') {
+    const html = await posReceipt.buildPosReceiptHtml(session.tenantId, seg[2])
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+  }
   throw new ApiError(404, 'POS route not found')
 }
 
 async function routeFeatures(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   if (seg.length === 1 && method === 'GET') {
-    return Response.json(await featureFlags.getTenantFeatures(session.tenantId))
+    return Response.json(await featureFlags.getTenantFeaturesDetail(session.tenantId))
   }
   throw new ApiError(404, 'Features route not found')
 }

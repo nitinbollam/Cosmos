@@ -15,13 +15,32 @@ const PLAN_DEFAULTS: Record<string, TenantFeatures> = {
   ENTERPRISE: { quotes: true, contractPricing: true, pos: true, wavePicking: true, splitShipments: true, advancedTax: true },
 }
 
-export async function getTenantFeatures(tenantId: string): Promise<TenantFeatures> {
+export type TenantFeaturesDetail = {
+  plan: string
+  defaults: TenantFeatures
+  overrides: TenantFeatures
+  effective: TenantFeatures
+}
+
+export async function getTenantFeaturesDetail(tenantId: string): Promise<TenantFeaturesDetail> {
   const org = await tenantDb.tenantOrganization.findUnique({ where: { id: tenantId } })
-  if (!org) return PLAN_DEFAULTS.STARTER
+  if (!org) {
+    return {
+      plan: 'STARTER',
+      defaults: PLAN_DEFAULTS.STARTER,
+      overrides: {},
+      effective: PLAN_DEFAULTS.STARTER,
+    }
+  }
   const settings = (org.settings ?? {}) as Record<string, unknown>
   const overrides = (settings.features ?? {}) as TenantFeatures
-  const planDefaults = PLAN_DEFAULTS[org.plan] ?? PLAN_DEFAULTS.STARTER
-  return { ...planDefaults, ...overrides }
+  const defaults = PLAN_DEFAULTS[org.plan] ?? PLAN_DEFAULTS.STARTER
+  return { plan: org.plan, defaults, overrides, effective: { ...defaults, ...overrides } }
+}
+
+export async function getTenantFeatures(tenantId: string): Promise<TenantFeatures> {
+  const detail = await getTenantFeaturesDetail(tenantId)
+  return detail.effective
 }
 
 export async function assertFeature(tenantId: string, feature: keyof TenantFeatures) {

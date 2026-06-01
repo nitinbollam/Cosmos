@@ -59,6 +59,13 @@ export default function AccountPage() {
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
   const [zip, setZip] = useState('')
+  const [notifPrefs, setNotifPrefs] = useState({
+    emailEnabled: true,
+    smsEnabled: false,
+    orderUpdates: true,
+    invoiceAlerts: true,
+  })
+  const [prefsSaved, setPrefsSaved] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -71,6 +78,10 @@ export default function AccountPage() {
       setCity(c.primaryCity ?? '')
       setState(c.primaryState ?? '')
       setZip(c.primaryZip ?? '')
+      const prefs = await api
+        .get<typeof notifPrefs>('/customers/me/notification-prefs')
+        .catch(() => ({ emailEnabled: true, smsEnabled: false, orderUpdates: true, invoiceAlerts: true }))
+      setNotifPrefs(prefs)
       const customerId = getB2bCustomerId()
       if (customerId) {
         const [tpls, methods] = await Promise.all([
@@ -96,6 +107,21 @@ export default function AccountPage() {
     const used = profile?.creditUsed != null ? Number(profile.creditUsed) : 0
     return { limit, used, available: Math.max(0, limit - used) }
   }, [profile])
+
+  async function saveNotificationPrefs() {
+    setBusy(true)
+    setErr(null)
+    setPrefsSaved(false)
+    try {
+      const updated = await api.patch<typeof notifPrefs>('/customers/me/notification-prefs', notifPrefs)
+      setNotifPrefs(updated)
+      setPrefsSaved(true)
+    } catch (e: unknown) {
+      setErr(axiosErr(e))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function save() {
     setBusy(true)
@@ -267,6 +293,42 @@ export default function AccountPage() {
             </div>
             <button type="button" className="btn-primary" style={{ marginTop: 16 }} disabled={busy} onClick={() => void save()}>
               {busy ? 'Saving…' : 'Save profile'}
+            </button>
+          </div>
+
+          <div className="cosmos-card" style={{ padding: 16 }}>
+            <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Notification preferences</h2>
+            <p className="cosmos-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
+              Control email and SMS alerts for orders and invoices. SMS requires a phone number on your profile.
+            </p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {(
+                [
+                  ['emailEnabled', 'Email notifications'],
+                  ['smsEnabled', 'SMS notifications (requires phone)'],
+                  ['orderUpdates', 'Order confirmations & shipping'],
+                  ['invoiceAlerts', 'Invoices & payment receipts'],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs[key]}
+                    onChange={(e) => setNotifPrefs((p) => ({ ...p, [key]: e.target.checked }))}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {prefsSaved ? <p style={{ color: 'var(--c-success)', marginTop: 12, fontSize: 13 }}>Preferences saved.</p> : null}
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ marginTop: 16 }}
+              disabled={busy}
+              onClick={() => void saveNotificationPrefs()}
+            >
+              {busy ? 'Saving…' : 'Save notification preferences'}
             </button>
           </div>
 

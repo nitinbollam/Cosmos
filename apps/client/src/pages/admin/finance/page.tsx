@@ -46,6 +46,10 @@ type BillRow = {
   billNumber: string
   purchaseOrderId?: string | null
   displayStatus: string
+  matchStatus?: string
+  matchNotes?: string | null
+  poTotal?: string | number | null
+  receivedTotal?: string | number | null
   totalAmount: string | number
   amountPaid: string | number
   balance: number
@@ -135,6 +139,7 @@ export default function FinancePage() {
 
   const [payOrder, setPayOrder] = useState<InvoiceRow | null>(null)
   const [payBill, setPayBill] = useState<BillRow | null>(null)
+  const [matchBill, setMatchBill] = useState<BillRow | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
 
@@ -255,6 +260,9 @@ export default function FinancePage() {
     const rows = billsQ.data ?? []
     return rows.filter((bill) => {
       if (apFilter === 'ALL') return bill.balance > 0.01 || Number(bill.amountPaid ?? 0) > 0
+      if (apFilter === 'MATCHED' || apFilter === 'EXCEPTION' || apFilter === 'PENDING') {
+        return (bill.matchStatus ?? 'PENDING') === apFilter
+      }
       return bill.displayStatus === apFilter
     })
   }, [billsQ.data, apFilter])
@@ -294,6 +302,14 @@ export default function FinancePage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['finance', 'bank-summary'] })
       void qc.invalidateQueries({ queryKey: ['finance', 'bank-unreconciled'] })
+    },
+  })
+
+  const matchBillMut = useMutation({
+    mutationFn: (billId: string) => api.post<BillRow>(`/bills/${encodeURIComponent(billId)}/match`, {}),
+    onSuccess: (updated) => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
+      setMatchBill(updated)
     },
   })
 
@@ -448,9 +464,9 @@ export default function FinancePage() {
       {tab === 'bills' && (
         <>
           <div className="flex flex-wrap gap-2">
-            {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'VOIDED'].map((s) => (
+            {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'MATCHED', 'EXCEPTION', 'PENDING'].map((s) => (
               <button key={s} type="button" className={apFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setApFilter(s)}>
-                {s}
+                {s.replace(/_/g, ' ')}
               </button>
             ))}
           </div>
@@ -471,6 +487,7 @@ export default function FinancePage() {
                     <th>Paid</th>
                     <th>Balance</th>
                     <th>Status</th>
+                    <th>3-way match</th>
                     <th />
                   </tr>
                 </thead>
@@ -485,7 +502,20 @@ export default function FinancePage() {
                       <td className="font-mono">{money(Number(bill.amountPaid ?? 0))}</td>
                       <td className="font-mono">{money(bill.balance)}</td>
                       <td><StatusBadge status={bill.displayStatus} /></td>
-                      <td className="space-x-2">
+                      <td>
+                        {bill.purchaseOrderId ? (
+                          <button
+                            type="button"
+                            className="btn-ghost !py-0.5 !px-1.5 !text-xs"
+                            onClick={() => setMatchBill(bill)}
+                          >
+                            <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
+                          </button>
+                        ) : (
+                          <span className="text-xs text-cosmos-text-3">—</span>
+                        )}
+                      </td>
+                      <td className="space-x-2 whitespace-nowrap">
                         {bill.balance > 0.01 && (
                           <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
                             setPayBill(bill)
@@ -693,6 +723,65 @@ export default function FinancePage() {
           </div>
         </div>
       )}
+
+      {matchBill ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setMatchBill(null)}>
+          <div className="cosmos-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start gap-3">
+              <div>
+                <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)', margin: 0 }}>3-way match</h3>
+                <p className="font-mono text-sm mt-1" style={{ color: 'var(--c-accent)' }}>{matchBill.billNumber}</p>
+              </div>
+              <StatusBadge status={matchBill.matchStatus ?? 'PENDING'} />
+            </div>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>PO total</dt>
+                <dd className="font-mono">{matchBill.poTotal != null ? money(Number(matchBill.poTotal)) : '—'}</dd>
+              </div>
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>Received total</dt>
+                <dd className="font-mono">{matchBill.receivedTotal != null ? money(Number(matchBill.receivedTotal)) : '—'}</dd>
+              </div>
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>Bill total</dt>
+                <dd className="font-mono">{money(Number(matchBill.totalAmount))}</dd>
+              </div>
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>Balance due</dt>
+                <dd className="font-mono">{money(matchBill.balance)}</dd>
+              </div>
+            </dl>
+            {matchBill.matchNotes ? (
+              <p className="text-sm rounded-lg p-3" style={{ background: 'var(--c-surface-2)', color: 'var(--c-warning)' }}>
+                {matchBill.matchNotes}
+              </p>
+            ) : matchBill.matchStatus === 'MATCHED' ? (
+              <p className="text-sm" style={{ color: 'var(--c-success)' }}>Bill quantities and amounts match received goods on the PO.</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2 justify-end">
+              {matchBill.purchaseOrderId ? (
+                <Link to={adminPath(`/purchasing/${matchBill.purchaseOrderId}`)} className="btn-ghost !text-sm">
+                  View PO
+                </Link>
+              ) : null}
+              <button type="button" className="btn-ghost" onClick={() => setMatchBill(null)}>
+                Close
+              </button>
+              {matchBill.purchaseOrderId ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={matchBillMut.isPending}
+                  onClick={() => matchBillMut.mutate(matchBill.id)}
+                >
+                  {matchBillMut.isPending ? 'Running…' : 'Re-run match'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

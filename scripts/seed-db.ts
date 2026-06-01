@@ -34,6 +34,7 @@ const ID = {
   skuAccessory: 'seed_sku_accessory',
   customerAcme: 'seed_cust_acme',
   customerBeta: 'seed_cust_beta',
+  customerWalkIn: 'seed_cust_walkin',
   leadCorner: 'seed_lead_corner',
   supplierPacific: 'seed_sup_pacific',
   po1001: 'seed_po_1001',
@@ -251,6 +252,12 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
       },
     })
 
+    await prisma.binLocation.upsert({
+      where: { tenantId_warehouseId_code: { tenantId, warehouseId: ID.whMain, code: 'A-01-01' } },
+      update: { id: ID.binA1, isActive: true },
+      create: { id: ID.binA1, tenantId, warehouseId: ID.whMain, code: 'A-01-01', aisle: 'A', zone: 'PICK' },
+    })
+
     const skus = [
       { id: ID.skuVapePod, code: 'VAP-POD-001', name: 'Premium Widget 5pk', category: 'General Merchandise', price: 24.99, cost: 12.5, qty: 420, reorder: 50 },
       { id: ID.skuVapeMod, code: 'VAP-MOD-010', name: 'Pro Tool Kit', category: 'Tools & Equipment', price: 89.99, cost: 45, qty: 85, reorder: 20 },
@@ -298,6 +305,8 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
           quantityReserved: 0,
           reorderPoint: s.reorder,
           reorderQty: s.reorder * 2,
+          locationId:
+            s.id === ID.skuVapePod || s.id === ID.skuEnergy || s.id === ID.skuSnack ? ID.binA1 : null,
         },
         create: {
           tenantId,
@@ -309,6 +318,8 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
           quantityReserved: 0,
           reorderPoint: s.reorder,
           reorderQty: s.reorder * 2,
+          locationId:
+            s.id === ID.skuVapePod || s.id === ID.skuEnergy || s.id === ID.skuSnack ? ID.binA1 : null,
         },
       })
     }
@@ -326,13 +337,13 @@ async function seedCrm(tenantId: string, adminId: string) {
   try {
     await prisma.customer.upsert({
       where: { id: ID.customerAcme },
-      update: { name: 'Acme Retail Group', email: BUYER_EMAIL, creditLimit: new D(50000), paymentTermsDays: 30 },
+      update: { name: 'Acme Retail Group', email: BUYER_EMAIL, phone: '+1-214-555-0101', creditLimit: new D(50000), paymentTermsDays: 30 },
       create: {
         id: ID.customerAcme,
         tenantId,
         name: 'Acme Retail Group',
         email: BUYER_EMAIL,
-        phone: '+1-214-555-0100',
+        phone: '+1-214-555-0101',
         customerKind: 'BUSINESS',
         creditLimit: new D(50000),
         creditUsed: new D(1250),
@@ -361,6 +372,20 @@ async function seedCrm(tenantId: string, adminId: string) {
         primaryCity: 'Plano',
         primaryState: 'TX',
         primaryZip: '75024',
+      },
+    })
+
+    await prisma.customer.upsert({
+      where: { id: ID.customerWalkIn },
+      update: { name: 'Walk-in Customer' },
+      create: {
+        id: ID.customerWalkIn,
+        tenantId,
+        name: 'Walk-in Customer',
+        email: 'walkin@cosmos.local',
+        customerKind: 'INDIVIDUAL',
+        creditLimit: new D(0),
+        paymentTermsDays: 0,
       },
     })
 
@@ -1211,6 +1236,39 @@ async function seedNotifications(tenantId: string) {
     './generated/prisma-notification',
   )
   const prisma = new mod.PrismaClient()
+  const buyerRows = [
+    {
+      id: 'seed_notif_buyer_order',
+      idempotencyKey: 'seed-buyer-order-created',
+      templateKey: 'order.created',
+      payload: { orderId: ID.orderProcessing, total: '248.50', customerName: 'Acme Retail Group' },
+    },
+    {
+      id: 'seed_notif_buyer_shipped',
+      idempotencyKey: 'seed-buyer-order-shipped',
+      templateKey: 'order.shipped',
+      payload: { orderId: ID.orderShipped, customerName: 'Acme Retail Group' },
+    },
+    {
+      id: 'seed_notif_buyer_invoice',
+      idempotencyKey: 'seed-buyer-invoice',
+      templateKey: 'invoice.issued',
+      payload: {
+        invoiceId: ID.invoiceShipped,
+        orderId: ID.orderShipped,
+        invoiceNumber: 'INV-10042',
+        total: '312.00',
+        dueAt: '2026-06-15',
+        customerName: 'Acme Retail Group',
+      },
+    },
+    {
+      id: 'seed_notif_buyer_payment',
+      idempotencyKey: 'seed-buyer-payment',
+      templateKey: 'payment.received',
+      payload: { orderId: ID.orderDelivered, amount: '124.95', invoiceNumber: 'INV-10043', customerName: 'Acme Retail Group' },
+    },
+  ] as const
   try {
     await prisma.notificationRequest.upsert({
       where: { tenantId_idempotencyKey: { tenantId, idempotencyKey: 'seed-low-stock' } },
@@ -1226,8 +1284,79 @@ async function seedNotifications(tenantId: string) {
         status: 'SENT',
       },
     })
+    for (const row of buyerRows) {
+      await prisma.notificationRequest.upsert({
+        where: { tenantId_idempotencyKey: { tenantId, idempotencyKey: row.idempotencyKey } },
+        update: { status: 'SENT' },
+        create: {
+          id: row.id,
+          tenantId,
+          idempotencyKey: row.idempotencyKey,
+          channel: 'EMAIL',
+          recipient: BUYER_EMAIL,
+          templateKey: row.templateKey,
+          payload: row.payload,
+          status: 'SENT',
+        },
+      })
+    }
+    await prisma.notificationRequest.upsert({
+      where: { tenantId_idempotencyKey: { tenantId, idempotencyKey: 'seed-buyer-failed' } },
+      update: { status: 'FAILED', errorMessage: 'Demo delivery failure — tap Retry in buyer inbox' },
+      create: {
+        id: 'seed_notif_buyer_failed',
+        tenantId,
+        idempotencyKey: 'seed-buyer-failed',
+        channel: 'EMAIL',
+        recipient: BUYER_EMAIL,
+        templateKey: 'order.shipped',
+        payload: { orderId: ID.orderShipped, customerName: 'Acme Retail Group' },
+        status: 'FAILED',
+        errorMessage: 'Demo delivery failure — tap Retry in buyer inbox',
+      },
+    })
+    await prisma.notificationRequest.upsert({
+      where: { tenantId_idempotencyKey: { tenantId, idempotencyKey: 'seed-buyer-sms' } },
+      update: { status: 'SENT' },
+      create: {
+        id: 'seed_notif_buyer_sms',
+        tenantId,
+        idempotencyKey: 'seed-buyer-sms',
+        channel: 'SMS',
+        recipient: '+1-214-555-0101',
+        templateKey: 'order.shipped',
+        payload: { orderId: ID.orderShipped, customerName: 'Acme Retail Group' },
+        status: 'SENT',
+      },
+    })
   } finally {
     await prisma.$disconnect()
+  }
+
+  const tenantMod = loadPrisma<typeof import('../apps/web/generated/prisma-tenant')>(
+    'TENANT_DATABASE_URL',
+    'cosmos_tenant',
+    './generated/prisma-tenant',
+  )
+  const tenant = new tenantMod.PrismaClient()
+  try {
+    const org = await tenant.tenantOrganization.findUnique({ where: { id: tenantId } })
+    if (org) {
+      const settings = {
+        ...((org.settings as Record<string, unknown>) ?? {}),
+        customerNotificationPrefs: {
+          [ID.customerAcme]: {
+            emailEnabled: true,
+            smsEnabled: true,
+            orderUpdates: true,
+            invoiceAlerts: true,
+          },
+        },
+      }
+      await tenant.tenantOrganization.update({ where: { id: tenantId }, data: { settings } })
+    }
+  } finally {
+    await tenant.$disconnect()
   }
 }
 

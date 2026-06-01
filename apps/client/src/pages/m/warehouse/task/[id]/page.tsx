@@ -10,6 +10,7 @@ type PickItem = {
   quantity: number
   pickedQty: number
   status: string
+  binCode?: string
 }
 
 type TaskDetail = {
@@ -119,6 +120,12 @@ export default function WarehouseTaskPage() {
               </div>
               <p style={{ margin: '8px 0 0', fontSize: 13, opacity: 0.75 }}>
                 Need {li.quantity} · Picked {li.pickedQty}
+                {li.binCode ? (
+                  <>
+                    {' '}
+                    · Bin <strong style={{ color: 'var(--c-accent)' }}>{li.binCode}</strong>
+                  </>
+                ) : null}
               </p>
               {canPick && !lineDone(li.status) && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>

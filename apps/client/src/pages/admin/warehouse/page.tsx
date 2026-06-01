@@ -133,6 +133,7 @@ export default function WarehousePage() {
   const [waveWarehouseId, setWaveWarehouseId] = useState<string>('')
   const [waveDrawerOpen, setWaveDrawerOpen] = useState(false)
   const [waveTaskSelection, setWaveTaskSelection] = useState<Set<string>>(new Set())
+  const [wavePathId, setWavePathId] = useState<string | null>(null)
 
   const [binWarehouseId, setBinWarehouseId] = useState<string>('')
   const [binCode, setBinCode] = useState('')
@@ -240,6 +241,23 @@ export default function WarehousePage() {
       q.set('warehouseId', waveWarehouseId)
       return api.get<PickTask[]>(`/wms/tasks?${q.toString()}`)
     },
+  })
+
+  const wavePathQ = useQuery({
+    queryKey: ['pick-wave-detail', wavePathId],
+    enabled: !!wavePathId,
+    queryFn: () =>
+      api.get<{
+        pickPath: Array<{
+          lineId: string
+          taskId: string
+          orderId: string
+          skuId: string
+          binCode?: string
+          quantity: number
+          status: string
+        }>
+      }>(`/pick-waves/${encodeURIComponent(wavePathId!)}`),
   })
 
   const binsQ = useQuery({
@@ -746,6 +764,13 @@ export default function WarehousePage() {
                       </td>
                       <td>
                         <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="btn-ghost !py-1.5 !px-2 !text-xs"
+                            onClick={() => setWavePathId((cur) => (cur === w.id ? null : w.id))}
+                          >
+                            {wavePathId === w.id ? 'Hide path' : 'Pick path'}
+                          </button>
                           {w.status === 'OPEN' ? (
                             <button
                               type="button"
@@ -773,6 +798,35 @@ export default function WarehousePage() {
                 </tbody>
               </table>
             )}
+            {wavePathId && wavePathQ.data?.pickPath?.length ? (
+              <div className="cosmos-card mt-4">
+                <h3 className="text-sm font-semibold text-cosmos-white mb-3">
+                  Bin pick path · wave #{wavePathId.slice(-8)}
+                </h3>
+                <table className="cosmos-table text-sm">
+                  <thead>
+                    <tr>
+                      <th>Bin</th>
+                      <th>SKU</th>
+                      <th>Qty</th>
+                      <th>Order</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wavePathQ.data.pickPath.map((line) => (
+                      <tr key={line.lineId}>
+                        <td className="font-mono text-cosmos-accent">{line.binCode ?? '—'}</td>
+                        <td className="font-mono text-xs">…{line.skuId.slice(-6)}</td>
+                        <td>{line.quantity}</td>
+                        <td className="font-mono text-xs">…{line.orderId.slice(-6)}</td>
+                        <td>{line.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

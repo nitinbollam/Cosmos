@@ -1,6 +1,7 @@
 import { NotificationChannel } from '@/generated/prisma-notification'
 import * as crm from './crm'
 import * as notifications from './notifications'
+import { shouldSendCustomerNotification } from './customer-notification-prefs'
 
 async function customerContact(tenantId: string, customerId: string) {
   try {
@@ -19,6 +20,9 @@ export async function notifyOrderCreated(
 ) {
   const contact = await customerContact(tenantId, customerId)
   if (!contact.email) return
+  if (!(await shouldSendCustomerNotification(tenantId, customerId, 'order.created', NotificationChannel.EMAIL))) {
+    return
+  }
   void notifications
     .send(
       tenantId,
@@ -36,6 +40,9 @@ export async function notifyOrderCreated(
 export async function notifyOrderShipped(tenantId: string, orderId: string, customerId: string) {
   const contact = await customerContact(tenantId, customerId)
   if (!contact.email) return
+  if (!(await shouldSendCustomerNotification(tenantId, customerId, 'order.shipped', NotificationChannel.EMAIL))) {
+    return
+  }
   void notifications
     .send(
       tenantId,
@@ -61,6 +68,9 @@ export async function notifyInvoiceIssued(
 ) {
   const contact = await customerContact(tenantId, customerId)
   if (!contact.email) return
+  if (!(await shouldSendCustomerNotification(tenantId, customerId, 'invoice.issued', NotificationChannel.EMAIL))) {
+    return
+  }
   void notifications
     .send(
       tenantId,
@@ -91,6 +101,9 @@ export async function notifyPaymentReceived(
 ) {
   const contact = await customerContact(tenantId, customerId)
   if (!contact.email) return
+  if (!(await shouldSendCustomerNotification(tenantId, customerId, 'payment.received', NotificationChannel.EMAIL))) {
+    return
+  }
   void notifications
     .send(
       tenantId,

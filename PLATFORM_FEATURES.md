@@ -380,6 +380,41 @@ Summary of major work completed in the current development cycle.
 
 **Key files:** `scripts/seed-db.ts`, `apps/client/src/pages/admin/orders/[id]/page.tsx`, `apps/client/src/pages/admin/crm/customers/[id]/page.tsx`, `apps/client/src/pages/quotes/[id]/page.tsx`, `apps/client/src/pages/admin/settings/page.tsx`.
 
+### Tier 12 — AP match, labels & mobile waves
+
+| Item | What was added |
+|------|----------------|
+| **12.1 3-way AP match UI** | Finance → Bills: match status column, filters, detail modal, re-run match |
+| **12.2 Barcode label print** | SKU detail: print qty + opens printable HTML label (`GET /skus/:id/label`) |
+| **12.3 Mobile wave picking** | `/m/warehouse` Waves tab + wave detail with start/complete and task links |
+| **12.4 Seed polish** | Demo vendor bill MATCHED; seed pick wave for mobile warehouse demo |
+
+**Key files:** `apps/client/src/pages/admin/finance/page.tsx`, `apps/client/src/pages/admin/inventory/[skuId]/page.tsx`, `apps/client/src/pages/m/warehouse/`.
+
+### Tier 13 — Feature flags, buyer inbox, bin picking & POS checkout
+
+| Item | What was added |
+|------|----------------|
+| **13.1 Feature flags UI** | Settings → Features tab: view plan defaults, toggle overrides via `PATCH /tenants/me` |
+| **13.2 Buyer notification inbox** | Shop `/notifications` filtered by signed-in buyer email; seed order/invoice/payment messages |
+| **13.3 Bin-directed picking** | Pick tasks include `binCode` from stock level locations; shown on mobile pick lines |
+| **13.4 POS checkout UI** | Admin POS: register + customer + SKU cart + cash/card/check checkout |
+| **13.5 Seed polish** | Bin A-01-01 on demo SKUs; walk-in customer; buyer notification rows |
+
+**Key files:** `apps/client/src/pages/admin/settings/page.tsx`, `apps/client/src/pages/notifications/page.tsx`, `apps/web/lib/server/pick-bin-resolver.ts`, `apps/client/src/pages/admin/pos/page.tsx`, `scripts/seed-db.ts`.
+
+### Tier 14 — Providers, prefs, bin path & receipts
+
+| Item | What was added |
+|------|----------------|
+| **14.1 Notification providers UI** | Settings → Integrations: SendGrid/Twilio/webhook status via `GET /notifications/providers/status` |
+| **14.2 Buyer notification prefs** | Account page toggles email/SMS/order/invoice alerts · `GET/PATCH /customers/me/notification-prefs` |
+| **14.3 Wave bin pick path** | `GET /pick-waves/:id` returns `pickPath` sorted by bin · admin warehouse + mobile wave detail |
+| **14.4 POS receipt print** | `GET /pos/orders/:id/receipt` HTML · Print receipt button after POS checkout |
+| **14.5 Buyer retry + seed** | Failed notification retry in buyer inbox · demo SMS row and buyer prefs in seed |
+
+**Key files:** `apps/web/lib/server/notification-provider-status.ts`, `apps/web/lib/server/customer-notification-prefs.ts`, `apps/web/lib/server/wave-picking.ts`, `apps/web/lib/server/pos-receipt.ts`, `apps/client/src/pages/account/page.tsx`.
+
 ### Tier 5 — Deferred (not yet implemented)
 
 - ~~GL auto-posting from all operational events~~ → **Tier 5.1 done** (ship/invoice, payment, receive, AP pay)
@@ -493,4 +528,4 @@ Documented in `MISSING.md` and backlog:
 
 ---
 
-*Last updated: May 2026 — reflects Tier 11 fulfillment/pricing/compliance UI and current monorepo layout.*
+*Last updated: May 2026 — reflects Tier 14 notification providers, buyer prefs, bin pick path, and POS receipts.*

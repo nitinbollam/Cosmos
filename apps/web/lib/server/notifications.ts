@@ -68,9 +68,16 @@ export async function send(tenantId: string, dto: SendNotificationInput, idempot
   return deliverRecord(tenantId, row.id, dto)
 }
 
-export function list(tenantId: string) {
+export function list(tenantId: string, filters?: { recipient?: string; status?: string; channel?: string; event?: string }) {
+  const recipient = filters?.recipient?.trim()
   return notificationDb.notificationRequest.findMany({
-    where: { tenantId },
+    where: {
+      tenantId,
+      ...(recipient ? { recipient } : {}),
+      ...(filters?.status ? { status: filters.status as NotificationStatus } : {}),
+      ...(filters?.channel ? { channel: filters.channel as NotificationChannel } : {}),
+      ...(filters?.event ? { templateKey: filters.event } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     take: 200,
   })

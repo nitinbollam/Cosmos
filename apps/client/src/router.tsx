@@ -39,6 +39,7 @@ const router = createBrowserRouter([
           { path: '/invoices', element: page(() => import('@/pages/invoices/page')) },
           { path: '/invoices/:id', element: page(() => import('@/pages/invoices/[id]/page')) },
           { path: '/account', element: page(() => import('@/pages/account/page')) },
+          { path: '/notifications', element: page(() => import('@/pages/notifications/page')) },
         ],
       },
       {
@@ -109,6 +110,10 @@ const router = createBrowserRouter([
           {
             path: 'warehouse/task/:id',
             element: page(() => import('@/pages/m/warehouse/task/[id]/page')),
+          },
+          {
+            path: 'warehouse/waves/:id',
+            element: page(() => import('@/pages/m/warehouse/waves/[id]/page')),
           },
           { path: 'delivery', element: page(() => import('@/pages/m/delivery/page')) },
           {

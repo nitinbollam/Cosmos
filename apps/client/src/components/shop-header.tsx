@@ -91,6 +91,9 @@ export function ShopHeader() {
           <Link to="/quotes" className={navClass('/quotes')} onClick={() => setNavOpen(false)}>
             Quotes
           </Link>
+          <Link to="/notifications" className={navClass('/notifications')} onClick={() => setNavOpen(false)}>
+            Notifications
+          </Link>
         </nav>
       </div>
       <div className="cosmos-shop-header-actions">

@@ -48,9 +48,15 @@ export async function patchTenant(
   },
 ) {
   const org = await ensureExists(tenantId)
-  const settingsNext = patch.settingsPatch
-    ? deepMerge((org.settings as Prisma.JsonObject) ?? {}, patch.settingsPatch)
-    : undefined
+  let settingsNext: Prisma.JsonObject | undefined
+  if (patch.settingsPatch) {
+    const base = ((org.settings as Prisma.JsonObject) ?? {}) as Prisma.JsonObject
+    const { features, ...rest } = patch.settingsPatch
+    settingsNext = deepMerge(base, rest)
+    if (features !== undefined) {
+      settingsNext = { ...settingsNext, features: features as Prisma.JsonValue }
+    }
+  }
   const metadataNext = patch.metadataPatch
     ? deepMerge((org.metadata as Prisma.JsonObject) ?? {}, patch.metadataPatch)
     : undefined

@@ -68,7 +68,15 @@ type StripeStatus = {
   rotation: string
 }
 
-type TabId = 'company' | 'users' | 'warehouses' | 'integrations' | 'billing' | 'audit'
+type NotificationProviderStatus = {
+  email: { provider: string; configured: boolean; fromEmail: string }
+  sms: { provider: string; configured: boolean; fromNumberMasked: string | null }
+  webhook: { configured: boolean }
+  activeFallback: string
+  setupNote: string
+}
+
+type TabId = 'company' | 'users' | 'warehouses' | 'integrations' | 'billing' | 'features' | 'audit'
 
 const STEP_LABELS: Record<string, string> = {
   ORG_PROFILE: 'Organization profile',
@@ -98,7 +106,7 @@ function errMsg(e: unknown): string {
   return 'Request failed'
 }
 
-const TAB_IDS: TabId[] = ['company', 'users', 'warehouses', 'integrations', 'billing', 'audit']
+const TAB_IDS: TabId[] = ['company', 'users', 'warehouses', 'integrations', 'billing', 'features', 'audit']
 
 function tabFromSearchParams(raw: string | null): TabId {
   if (raw && TAB_IDS.includes(raw as TabId)) return raw as TabId
@@ -131,6 +139,7 @@ export default function SettingsPage() {
             ['warehouses', 'Warehouses'],
             ['integrations', 'Integrations'],
             ['billing', 'Billing'],
+            ['features', 'Features'],
             ['audit', 'Audit log'],
           ] as const
         ).map(([id, label]) => (
@@ -152,6 +161,7 @@ export default function SettingsPage() {
       {tab === 'warehouses' && <WarehousesTab />}
       {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'billing' && <BillingTab />}
+      {tab === 'features' && <FeaturesTab />}
       {tab === 'audit' && <AuditTab />}
     </div>
   )
@@ -690,6 +700,11 @@ function IntegrationsTab() {
     queryFn: () => api.get('/payments/stripe/status'),
   })
 
+  const notifProvidersQ = useQuery<NotificationProviderStatus>({
+    queryKey: ['notification-providers'],
+    queryFn: () => api.get('/notifications/providers/status'),
+  })
+
   const saveMsaMut = useMutation({
     mutationFn: () =>
       api.post('/msa/config', {
@@ -772,6 +787,50 @@ function IntegrationsTab() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="cosmos-card">
+        <h3 className="text-cosmos-white font-semibold font-display mb-3">Notification delivery</h3>
+        <p className="text-cosmos-text-3 text-sm mb-4">GET /notifications/providers/status — env-driven SendGrid, Twilio, or webhook</p>
+        {notifProvidersQ.isLoading ? (
+          <div className="skeleton h-20 w-full" />
+        ) : notifProvidersQ.isError ? (
+          <p className="text-sm text-red-400">{errMsg(notifProvidersQ.error)}</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
+              <p className="text-sm text-cosmos-white font-medium">Email</p>
+              <p className="text-xs text-cosmos-text-3 mt-2">
+                Provider: <span className="font-mono text-cosmos-accent">{notifProvidersQ.data?.email.provider}</span>
+              </p>
+              <p className="text-xs text-cosmos-text-3 mt-1">
+                Configured:{' '}
+                <strong className={notifProvidersQ.data?.email.configured ? 'text-emerald-400' : 'text-amber-400'}>
+                  {notifProvidersQ.data?.email.configured ? 'yes' : 'console fallback'}
+                </strong>
+              </p>
+              <p className="text-xs text-cosmos-text-3 mt-1">From: {notifProvidersQ.data?.email.fromEmail}</p>
+            </div>
+            <div className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
+              <p className="text-sm text-cosmos-white font-medium">SMS</p>
+              <p className="text-xs text-cosmos-text-3 mt-2">
+                Provider: <span className="font-mono text-cosmos-accent">{notifProvidersQ.data?.sms.provider}</span>
+              </p>
+              <p className="text-xs text-cosmos-text-3 mt-1">
+                Configured:{' '}
+                <strong className={notifProvidersQ.data?.sms.configured ? 'text-emerald-400' : 'text-amber-400'}>
+                  {notifProvidersQ.data?.sms.configured ? 'yes' : 'console fallback'}
+                </strong>
+              </p>
+              <p className="text-xs text-cosmos-text-3 mt-1">
+                From: {notifProvidersQ.data?.sms.fromNumberMasked ?? '—'}
+              </p>
+            </div>
+          </div>
+        )}
+        {notifProvidersQ.data ? (
+          <p className="text-xs text-cosmos-text-3 mt-4 whitespace-pre-wrap">{notifProvidersQ.data.setupNote}</p>
+        ) : null}
       </div>
 
       <div className="cosmos-card">
@@ -914,6 +973,124 @@ function BillingTab() {
         })}
       </div>
       {upgradeMut.error && <p className="text-red-400 text-sm">{errMsg(upgradeMut.error)}</p>}
+    </div>
+  )
+}
+
+type TenantFeatures = {
+  pos?: boolean
+  quotes?: boolean
+  contractPricing?: boolean
+  wavePicking?: boolean
+  splitShipments?: boolean
+  advancedTax?: boolean
+}
+
+type FeaturesDetail = {
+  plan: string
+  defaults: TenantFeatures
+  overrides: TenantFeatures
+  effective: TenantFeatures
+}
+
+const FEATURE_META: Array<{ key: keyof TenantFeatures; label: string; blurb: string }> = [
+  { key: 'pos', label: 'Point of sale', blurb: 'In-store registers and POS checkout' },
+  { key: 'quotes', label: 'Quotes', blurb: 'Buyer quote requests and counter-offers' },
+  { key: 'contractPricing', label: 'Contract pricing', blurb: 'Customer-specific price lists and volume tiers' },
+  { key: 'wavePicking', label: 'Wave picking', blurb: 'Batch pick waves in warehouse' },
+  { key: 'splitShipments', label: 'Split shipments', blurb: 'Multiple packages per order with tracking' },
+  { key: 'advancedTax', label: 'Advanced tax', blurb: 'Extended sales tax engine' },
+]
+
+function buildFeatureOverrides(defaults: TenantFeatures, toggles: TenantFeatures): TenantFeatures {
+  const overrides: TenantFeatures = {}
+  for (const { key } of FEATURE_META) {
+    if (toggles[key] !== defaults[key]) overrides[key] = toggles[key]
+  }
+  return overrides
+}
+
+function FeaturesTab() {
+  const qc = useQueryClient()
+  const detailQ = useQuery<FeaturesDetail>({
+    queryKey: ['tenant-features'],
+    queryFn: () => api.get('/features'),
+  })
+  const [toggles, setToggles] = useState<TenantFeatures>({})
+
+  useEffect(() => {
+    if (detailQ.data?.effective) setToggles(detailQ.data.effective)
+  }, [detailQ.data])
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const defaults = detailQ.data?.defaults ?? {}
+      return api.patch('/tenants/me', {
+        settingsPatch: { features: buildFeatureOverrides(defaults, toggles) },
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tenant-features'] })
+    },
+  })
+
+  const plan = detailQ.data?.plan ?? '—'
+  const overrides = detailQ.data?.overrides ?? {}
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-cosmos-white font-semibold font-display">Feature flags</h2>
+        <p className="text-cosmos-text-3 text-sm mt-1">
+          Plan defaults for <span className="font-mono text-cosmos-accent">{plan}</span> · overrides saved via PATCH /tenants/me
+        </p>
+      </div>
+
+      <div className="cosmos-card space-y-4">
+        {detailQ.isLoading ? (
+          <div className="skeleton h-32 w-full" />
+        ) : detailQ.isError ? (
+          <p className="text-sm text-red-400">{errMsg(detailQ.error)}</p>
+        ) : (
+          FEATURE_META.map(({ key, label, blurb }) => {
+            const planDefault = detailQ.data?.defaults[key] ?? false
+            const overridden = overrides[key] !== undefined
+            return (
+              <div
+                key={key}
+                className="flex flex-wrap items-start justify-between gap-3 border-b pb-4 last:border-0 last:pb-0"
+                style={{ borderColor: 'var(--c-border)' }}
+              >
+                <div>
+                  <p className="text-cosmos-white font-medium">{label}</p>
+                  <p className="text-xs text-cosmos-text-3 mt-1">{blurb}</p>
+                  <p className="text-xs text-cosmos-text-3 mt-1">
+                    Plan default: {planDefault ? 'On' : 'Off'}
+                    {overridden ? <span className="text-cosmos-accent ml-2">· overridden</span> : null}
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(toggles[key])}
+                    onChange={(e) => setToggles((prev) => ({ ...prev, [key]: e.target.checked }))}
+                  />
+                  <span className="text-sm text-cosmos-text">{toggles[key] ? 'Enabled' : 'Disabled'}</span>
+                </label>
+              </div>
+            )
+          })
+        )}
+        {saveMut.error && <p className="text-red-400 text-sm">{errMsg(saveMut.error)}</p>}
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={detailQ.isLoading || saveMut.isPending}
+          onClick={() => saveMut.mutate()}
+        >
+          {saveMut.isPending ? 'Saving…' : 'Save feature overrides'}
+        </button>
+      </div>
     </div>
   )
 }

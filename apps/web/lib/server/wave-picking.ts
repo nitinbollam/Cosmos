@@ -1,6 +1,13 @@
 import { PickWaveStatus } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
+import { enrichPickItemsWithBins } from './pick-bin-resolver'
 import { ApiError } from './session'
+
+function compareBinCodes(a?: string, b?: string) {
+  const left = a ?? 'ZZZ-NO-BIN'
+  const right = b ?? 'ZZZ-NO-BIN'
+  return left.localeCompare(right, undefined, { numeric: true })
+}
 
 export async function listPickWaves(tenantId: string, warehouseId?: string) {
   return wmsDb.pickWave.findMany({
@@ -62,4 +69,48 @@ export async function completePickWave(tenantId: string, waveId: string) {
     data: { status: PickWaveStatus.COMPLETED },
     include: { tasks: true },
   })
+}
+
+export async function getPickWaveDetail(tenantId: string, waveId: string) {
+  const wave = await wmsDb.pickWave.findFirst({
+    where: { id: waveId, tenantId },
+    include: { tasks: true },
+  })
+  if (!wave) throw new ApiError(404, 'Pick wave not found')
+
+  const taskIds = wave.tasks.map((t) => t.taskId)
+  const tasks =
+    taskIds.length === 0
+      ? []
+      : await wmsDb.fulfillmentTask.findMany({
+          where: { tenantId, id: { in: taskIds } },
+          include: { pickLines: true },
+        })
+
+  const flatLines = tasks.flatMap((task) =>
+    task.pickLines.map((line) => ({
+      taskId: task.id,
+      orderId: task.orderId,
+      lineId: line.id,
+      skuId: line.skuId,
+      warehouseId: line.warehouseId,
+      quantity: line.quantity,
+      pickedQty: line.pickedQty,
+      status: line.status,
+    })),
+  )
+
+  const pickPath = (await enrichPickItemsWithBins(tenantId, flatLines)).sort((a, b) =>
+    compareBinCodes(a.binCode, b.binCode),
+  )
+
+  return {
+    id: wave.id,
+    warehouseId: wave.warehouseId,
+    status: wave.status,
+    createdAt: wave.createdAt,
+    createdBy: wave.createdBy,
+    tasks: wave.tasks,
+    pickPath,
+  }
 }

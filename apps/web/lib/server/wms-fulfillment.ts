@@ -1,5 +1,6 @@
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
+import { enrichPickItemsWithBins } from './pick-bin-resolver'
 import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
 
@@ -82,6 +83,21 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
     include: { pickLines: true },
   })
   if (!t) throw new ApiError(404, 'Task not found')
+  const pickItems = (await enrichPickItemsWithBins(
+    tenantId,
+    t.pickLines.map((p) => ({
+      id: p.id,
+      skuId: p.skuId,
+      warehouseId: p.warehouseId,
+      quantity: p.quantity,
+      pickedQty: p.pickedQty,
+      status: p.status,
+    })),
+  )).sort((a, b) => {
+    const left = a.binCode ?? 'ZZZ-NO-BIN'
+    const right = b.binCode ?? 'ZZZ-NO-BIN'
+    return left.localeCompare(right, undefined, { numeric: true })
+  })
   return {
     id: t.id,
     orderId: t.orderId,
@@ -91,14 +107,7 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
     correlationId: t.correlationId,
     warehouseId: t.warehouseId,
     assignedUserId: t.assignedUserId,
-    pickItems: t.pickLines.map((p) => ({
-      id: p.id,
-      skuId: p.skuId,
-      warehouseId: p.warehouseId,
-      quantity: p.quantity,
-      pickedQty: p.pickedQty,
-      status: p.status,
-    })),
+    pickItems,
   }
 }
 
@@ -159,23 +168,29 @@ export async function listFulfillmentTasks(
     orderBy: { createdAt: 'asc' },
     take: 200,
   })
-  return rows.map((t) => ({
-    id: t.id,
-    orderId: t.orderId,
-    status: t.status,
-    priority: t.priority,
-    warehouseCode: t.warehouseCode,
-    warehouseId: t.warehouseId,
-    assignedUserId: t.assignedUserId,
-    createdAt: t.createdAt,
-    pickItems: t.pickLines.map((p) => ({
-      id: p.id,
-      skuId: p.skuId,
-      quantity: p.quantity,
-      pickedQty: p.pickedQty,
-      status: p.status,
+  return Promise.all(
+    rows.map(async (t) => ({
+      id: t.id,
+      orderId: t.orderId,
+      status: t.status,
+      priority: t.priority,
+      warehouseCode: t.warehouseCode,
+      warehouseId: t.warehouseId,
+      assignedUserId: t.assignedUserId,
+      createdAt: t.createdAt,
+      pickItems: await enrichPickItemsWithBins(
+        tenantId,
+        t.pickLines.map((p) => ({
+          id: p.id,
+          skuId: p.skuId,
+          warehouseId: p.warehouseId,
+          quantity: p.quantity,
+          pickedQty: p.pickedQty,
+          status: p.status,
+        })),
+      ),
     })),
-  }))
+  )
 }
 
 export async function confirmPickLine(

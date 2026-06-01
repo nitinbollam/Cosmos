@@ -63,6 +63,7 @@ export default function SkuDetailPage() {
 
   const [recvOpen, setRecvOpen] = useState(false)
   const [xferOpen, setXferOpen] = useState(false)
+  const [labelQty, setLabelQty] = useState(1)
 
   const [recvWh, setRecvWh] = useState('')
   const [recvQty, setRecvQty] = useState(1)
@@ -99,6 +100,21 @@ export default function SkuDetailPage() {
   })
 
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
+
+  async function printLabel() {
+    const token = localStorage.getItem('cosmos.accessToken')
+    const qty = Math.max(1, labelQty)
+    const res = await fetch(`/api/v1/skus/${encodeURIComponent(skuId)}/label?qty=${qty}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) return
+    const html = await res.text()
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const w = window.open(url, '_blank', 'noopener,noreferrer')
+    if (w) w.onload = () => w.print()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
 
   const xferBatchMeta = useMemo(() => {
     const rows = (levelsQ.data ?? []).filter((l) => l.warehouseId === xferFrom && l.quantityAvailable > 0)
@@ -247,6 +263,20 @@ export default function SkuDetailPage() {
             <button type="button" className="btn-ghost !text-sm" onClick={() => setXferOpen(true)}>
               Transfer
             </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={99}
+                className="cosmos-input !w-16 !py-1.5 !text-sm"
+                value={labelQty}
+                onChange={(e) => setLabelQty(Math.max(1, Number(e.target.value) || 1))}
+                aria-label="Label quantity"
+              />
+              <button type="button" className="btn-ghost !text-sm" onClick={() => void printLabel()}>
+                Print label
+              </button>
+            </div>
           </div>
         )}
       </div>
