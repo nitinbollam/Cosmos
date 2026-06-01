@@ -12,8 +12,10 @@ export const SIDEBAR_NAV: { href: string; label: string; icon: SidebarIconName }
   { href: '/admin/purchasing', label: 'Purchasing', icon: 'purchasing' },
   { href: '/admin/compliance', label: 'Compliance', icon: 'compliance' },
   { href: '/admin/crm', label: 'CRM', icon: 'crm' },
+  { href: '/admin/quotes', label: 'Quotes', icon: 'orders' },
   { href: '/admin/dispatch', label: 'Dispatch', icon: 'dispatch' },
   { href: '/admin/finance', label: 'Finance', icon: 'finance' },
+  { href: '/admin/pos', label: 'POS', icon: 'orders' },
   { href: '/admin/settings', label: 'Settings', icon: 'settings' },
 ]
 

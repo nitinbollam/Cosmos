@@ -9,7 +9,24 @@ import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-p
 import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
 import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
 
-type Tab = 'picks' | 'receiving' | 'counts'
+type Tab = 'picks' | 'waves' | 'bins' | 'receiving' | 'counts'
+
+type PickWaveRow = {
+  id: string
+  warehouseId: string
+  status: string
+  createdBy: string
+  createdAt: string
+  tasks: { id: string; taskId: string }[]
+}
+
+type BinRow = {
+  id: string
+  warehouseId: string
+  code: string
+  aisle?: string | null
+  zone?: string | null
+}
 
 type PickTask = {
   id: string
@@ -113,6 +130,15 @@ export default function WarehousePage() {
   const [countDetailId, setCountDetailId] = useState<string | null>(null)
   const [countLineDrafts, setCountLineDrafts] = useState<Record<string, string>>({})
 
+  const [waveWarehouseId, setWaveWarehouseId] = useState<string>('')
+  const [waveDrawerOpen, setWaveDrawerOpen] = useState(false)
+  const [waveTaskSelection, setWaveTaskSelection] = useState<Set<string>>(new Set())
+
+  const [binWarehouseId, setBinWarehouseId] = useState<string>('')
+  const [binCode, setBinCode] = useState('')
+  const [binAisle, setBinAisle] = useState('')
+  const [binZone, setBinZone] = useState('')
+
   const warehousesQ = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => api.get<WarehouseRow[]>('/warehouses'),
@@ -195,6 +221,31 @@ export default function WarehousePage() {
     queryKey: ['wms', 'cycle-counts', countDetailId],
     enabled: !!countDetailId,
     queryFn: () => api.get<CycleDetail>(`/wms/cycle-counts/${countDetailId}`),
+  })
+
+  const wavesQ = useQuery({
+    queryKey: ['pick-waves', waveWarehouseId],
+    enabled: tab === 'waves',
+    queryFn: async () => {
+      const q = waveWarehouseId ? `?warehouseId=${encodeURIComponent(waveWarehouseId)}` : ''
+      return api.get<PickWaveRow[]>(`/pick-waves${q}`)
+    },
+  })
+
+  const waveCandidatesQ = useQuery({
+    queryKey: ['wms', 'tasks', 'wave-candidates', waveWarehouseId],
+    enabled: waveDrawerOpen && !!waveWarehouseId,
+    queryFn: async () => {
+      const q = new URLSearchParams({ status: 'PENDING' })
+      q.set('warehouseId', waveWarehouseId)
+      return api.get<PickTask[]>(`/wms/tasks?${q.toString()}`)
+    },
+  })
+
+  const binsQ = useQuery({
+    queryKey: ['bins', binWarehouseId],
+    enabled: tab === 'bins' && !!binWarehouseId,
+    queryFn: () => api.get<BinRow[]>(`/bins?warehouseId=${encodeURIComponent(binWarehouseId)}`),
   })
 
   const assignMut = useMutation({
@@ -354,6 +405,72 @@ export default function WarehousePage() {
     },
   })
 
+  const createWaveMut = useMutation({
+    mutationFn: async () => {
+      await api.post('/pick-waves', {
+        warehouseId: waveWarehouseId,
+        taskIds: [...waveTaskSelection],
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pick-waves'] })
+      void qc.invalidateQueries({ queryKey: ['wms', 'tasks'] })
+      setWaveDrawerOpen(false)
+      setWaveTaskSelection(new Set())
+    },
+  })
+
+  const startWaveMut = useMutation({
+    mutationFn: async (waveId: string) => {
+      await api.post(`/pick-waves/${encodeURIComponent(waveId)}/start`, {})
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pick-waves'] })
+      void qc.invalidateQueries({ queryKey: ['wms', 'tasks'] })
+    },
+  })
+
+  const completeWaveMut = useMutation({
+    mutationFn: async (waveId: string) => {
+      await api.post(`/pick-waves/${encodeURIComponent(waveId)}/complete`, {})
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pick-waves'] })
+    },
+  })
+
+  const createBinMut = useMutation({
+    mutationFn: async () => {
+      await api.post('/bins', {
+        warehouseId: binWarehouseId,
+        code: binCode,
+        ...(binAisle.trim() ? { aisle: binAisle.trim() } : {}),
+        ...(binZone.trim() ? { zone: binZone.trim() } : {}),
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['bins', binWarehouseId] })
+      setBinCode('')
+      setBinAisle('')
+      setBinZone('')
+    },
+  })
+
+  const deleteBinMut = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/bins/${encodeURIComponent(id)}`)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['bins', binWarehouseId] })
+    },
+  })
+
+  useEffect(() => {
+    const whs = warehousesQ.data ?? []
+    if (whs.length > 0 && !binWarehouseId) setBinWarehouseId(whs[0]!.id)
+    if (whs.length > 0 && !waveWarehouseId) setWaveWarehouseId(whs[0]!.id)
+  }, [warehousesQ.data, binWarehouseId, waveWarehouseId])
+
   useEffect(() => {
     const d = countDetailQ.data
     if (!d || d.id !== countDetailId) return
@@ -378,7 +495,7 @@ export default function WarehousePage() {
         <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
           Warehouse
         </h1>
-        <p className="text-cosmos-text-3 text-sm mt-1">Pick tasks, receiving, and cycle counts</p>
+        <p className="text-cosmos-text-3 text-sm mt-1">Pick tasks, wave picking, bin locations, receiving, and cycle counts</p>
       </div>
 
       {!warehousesQ.isLoading && !warehousesQ.isError && (warehousesQ.data ?? []).length === 0 ? (
@@ -399,6 +516,8 @@ export default function WarehousePage() {
         {(
           [
             ['picks', 'Pick tasks'],
+            ['waves', 'Wave picking'],
+            ['bins', 'Bin locations'],
             ['receiving', 'Receiving'],
             ['counts', 'Cycle counts'],
           ] as const
@@ -542,6 +661,238 @@ export default function WarehousePage() {
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === 'waves' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-3 items-end justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+                Warehouse
+              </div>
+              <select
+                className="cosmos-input w-auto min-w-[200px]"
+                value={waveWarehouseId}
+                onChange={(e) => setWaveWarehouseId(e.target.value)}
+              >
+                <option value="">All warehouses</option>
+                {(warehousesQ.data ?? []).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.code} — {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!waveWarehouseId}
+              onClick={() => {
+                setWaveTaskSelection(new Set())
+                setWaveDrawerOpen(true)
+              }}
+            >
+              New pick wave
+            </button>
+          </div>
+          <div className="cosmos-card overflow-x-auto">
+            {wavesQ.isLoading ? (
+              <div className="space-y-2 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="skeleton h-12 w-full" />
+                ))}
+              </div>
+            ) : wavesQ.isError ? (
+              <p className="text-sm py-8" style={{ color: 'var(--c-danger)' }}>
+                {(wavesQ.error as Error)?.message ?? 'Failed to load pick waves'}
+              </p>
+            ) : (wavesQ.data ?? []).length === 0 ? (
+              <EmptyState
+                icon="🌊"
+                title="No pick waves"
+                description="Group pending pick tasks into a wave for batch picking on the floor."
+                action={
+                  waveWarehouseId ? (
+                    <button type="button" className="btn-primary mt-2" onClick={() => setWaveDrawerOpen(true)}>
+                      New pick wave
+                    </button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr>
+                    <th>Wave</th>
+                    <th>Warehouse</th>
+                    <th>Status</th>
+                    <th>Tasks</th>
+                    <th>Created</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(wavesQ.data ?? []).map((w) => (
+                    <tr key={w.id}>
+                      <td className="font-mono text-sm">#{w.id.slice(-8)}</td>
+                      <td className="text-sm">{warehouseLabel.get(w.warehouseId) ?? w.warehouseId.slice(-6)}</td>
+                      <td>
+                        <StatusBadge status={w.status} />
+                      </td>
+                      <td>{w.tasks?.length ?? 0}</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+                        {new Date(w.createdAt).toLocaleString()}
+                      </td>
+                      <td>
+                        <div className="flex gap-2">
+                          {w.status === 'OPEN' ? (
+                            <button
+                              type="button"
+                              className="btn-primary !py-1.5 !px-2 !text-xs"
+                              disabled={startWaveMut.isPending}
+                              onClick={() => startWaveMut.mutate(w.id)}
+                            >
+                              Start
+                            </button>
+                          ) : null}
+                          {w.status === 'IN_PROGRESS' ? (
+                            <button
+                              type="button"
+                              className="btn-ghost !py-1.5 !px-2 !text-xs"
+                              disabled={completeWaveMut.isPending}
+                              onClick={() => completeWaveMut.mutate(w.id)}
+                            >
+                              Complete
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'bins' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+                Warehouse
+              </div>
+              <select
+                className="cosmos-input w-auto min-w-[200px]"
+                value={binWarehouseId}
+                onChange={(e) => setBinWarehouseId(e.target.value)}
+              >
+                <option value="">Select warehouse…</option>
+                {(warehousesQ.data ?? []).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.code} — {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {!binWarehouseId ? (
+            <EmptyState icon="📦" title="Select a warehouse" description="Bin locations are scoped to a single warehouse." />
+          ) : (
+            <>
+              <div className="cosmos-card">
+                <h3 className="text-sm font-semibold text-cosmos-white mb-3">Add bin location</h3>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
+                      Code
+                    </label>
+                    <input
+                      className="cosmos-input w-32"
+                      value={binCode}
+                      onChange={(e) => setBinCode(e.target.value)}
+                      placeholder="A-01-01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
+                      Aisle
+                    </label>
+                    <input className="cosmos-input w-24" value={binAisle} onChange={(e) => setBinAisle(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
+                      Zone
+                    </label>
+                    <input
+                      className="cosmos-input w-24"
+                      value={binZone}
+                      onChange={(e) => setBinZone(e.target.value)}
+                      placeholder="PICK"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={!binCode.trim() || createBinMut.isPending}
+                    onClick={() => createBinMut.mutate()}
+                  >
+                    Add bin
+                  </button>
+                </div>
+              </div>
+              <div className="cosmos-card overflow-x-auto">
+                {binsQ.isLoading ? (
+                  <div className="space-y-2 py-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="skeleton h-10 w-full" />
+                    ))}
+                  </div>
+                ) : binsQ.isError ? (
+                  <p className="text-sm py-8" style={{ color: 'var(--c-danger)' }}>
+                    {(binsQ.error as Error)?.message ?? 'Failed to load bins'}
+                  </p>
+                ) : (binsQ.data ?? []).length === 0 ? (
+                  <EmptyState icon="📍" title="No bin locations" description="Create aisle/shelf codes for directed putaway and picking." />
+                ) : (
+                  <table className="cosmos-table">
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Aisle</th>
+                        <th>Zone</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(binsQ.data ?? []).map((b) => (
+                        <tr key={b.id}>
+                          <td className="font-mono font-semibold">{b.code}</td>
+                          <td>{b.aisle ?? '—'}</td>
+                          <td>{b.zone ?? '—'}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn-ghost !py-1 !px-2 !text-xs"
+                              style={{ color: 'var(--c-danger)' }}
+                              disabled={deleteBinMut.isPending}
+                              onClick={() => {
+                                if (window.confirm(`Remove bin ${b.code}?`)) deleteBinMut.mutate(b.id)
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -702,6 +1053,76 @@ export default function WarehousePage() {
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* New pick wave drawer */}
+      {waveDrawerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={() => setWaveDrawerOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg h-full overflow-y-auto cosmos-card rounded-none border-l"
+            style={{ borderRadius: 0 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-2">New pick wave</h3>
+            <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>
+              {warehouseLabel.get(waveWarehouseId) ?? waveWarehouseId}
+            </p>
+            {waveCandidatesQ.isLoading ? (
+              <div className="space-y-2 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="skeleton h-10 w-full" />
+                ))}
+              </div>
+            ) : (waveCandidatesQ.data ?? []).length === 0 ? (
+              <EmptyState icon="✓" title="No pending tasks" description="Release orders to the warehouse to create pick tasks first." />
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+                {(waveCandidatesQ.data ?? []).map((t) => (
+                  <li key={t.id}>
+                    <label
+                      className="flex items-center gap-3 p-3 rounded-lg cursor-pointer"
+                      style={{ border: '1px solid var(--c-border)', background: 'var(--c-surface-2)' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={waveTaskSelection.has(t.id)}
+                        onChange={(e) => {
+                          setWaveTaskSelection((prev) => {
+                            const next = new Set(prev)
+                            if (e.target.checked) next.add(t.id)
+                            else next.delete(t.id)
+                            return next
+                          })
+                        }}
+                      />
+                      <span className="font-mono text-sm">#{t.id.slice(-8)}</span>
+                      <span className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+                        Order …{t.orderId.slice(-10)} · {t.pickItems?.length ?? 0} lines
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-6 flex gap-2">
+              <button type="button" className="btn-ghost flex-1" onClick={() => setWaveDrawerOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                disabled={waveTaskSelection.size === 0 || createWaveMut.isPending}
+                onClick={() => createWaveMut.mutate()}
+              >
+                Create wave ({waveTaskSelection.size})
+              </button>
+            </div>
           </div>
         </div>
       )}

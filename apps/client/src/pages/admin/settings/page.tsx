@@ -68,7 +68,7 @@ type StripeStatus = {
   rotation: string
 }
 
-type TabId = 'company' | 'users' | 'warehouses' | 'integrations' | 'billing'
+type TabId = 'company' | 'users' | 'warehouses' | 'integrations' | 'billing' | 'audit'
 
 const STEP_LABELS: Record<string, string> = {
   ORG_PROFILE: 'Organization profile',
@@ -98,7 +98,7 @@ function errMsg(e: unknown): string {
   return 'Request failed'
 }
 
-const TAB_IDS: TabId[] = ['company', 'users', 'warehouses', 'integrations', 'billing']
+const TAB_IDS: TabId[] = ['company', 'users', 'warehouses', 'integrations', 'billing', 'audit']
 
 function tabFromSearchParams(raw: string | null): TabId {
   if (raw && TAB_IDS.includes(raw as TabId)) return raw as TabId
@@ -131,6 +131,7 @@ export default function SettingsPage() {
             ['warehouses', 'Warehouses'],
             ['integrations', 'Integrations'],
             ['billing', 'Billing'],
+            ['audit', 'Audit log'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -151,6 +152,7 @@ export default function SettingsPage() {
       {tab === 'warehouses' && <WarehousesTab />}
       {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'billing' && <BillingTab />}
+      {tab === 'audit' && <AuditTab />}
     </div>
   )
 }
@@ -912,6 +914,84 @@ function BillingTab() {
         })}
       </div>
       {upgradeMut.error && <p className="text-red-400 text-sm">{errMsg(upgradeMut.error)}</p>}
+    </div>
+  )
+}
+
+type AuditRow = {
+  id: string
+  userId?: string | null
+  action: string
+  entityType: string
+  entityId?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt: string
+}
+
+function AuditTab() {
+  const [entityType, setEntityType] = useState('')
+
+  const auditQ = useQuery<AuditRow[]>({
+    queryKey: ['audit', entityType],
+    queryFn: () => {
+      const q = entityType.trim() ? `?entityType=${encodeURIComponent(entityType.trim())}&limit=100` : '?limit=100'
+      return api.get(`/audit${q}`)
+    },
+  })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-cosmos-white font-semibold font-display">Audit log</h2>
+        <p className="text-cosmos-text-3 text-sm mt-1">Recent platform events for compliance and troubleshooting.</p>
+      </div>
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="text-xs text-cosmos-text-3">Filter by entity type</label>
+          <select className="cosmos-input mt-1 w-48" value={entityType} onChange={(e) => setEntityType(e.target.value)}>
+            <option value="">All types</option>
+            <option value="Order">Order</option>
+            <option value="Invoice">Invoice</option>
+            <option value="Payment">Payment</option>
+            <option value="User">User</option>
+          </select>
+        </div>
+      </div>
+      <div className="cosmos-card overflow-x-auto">
+        {auditQ.isLoading ? (
+          <div className="skeleton h-32 w-full" />
+        ) : auditQ.isError ? (
+          <p className="text-sm text-red-400">{errMsg(auditQ.error)}</p>
+        ) : (auditQ.data ?? []).length === 0 ? (
+          <EmptyState icon="📋" title="No audit events" description="Actions like order shipped and payments appear here." />
+        ) : (
+          <table className="cosmos-table text-sm">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Action</th>
+                <th>Entity</th>
+                <th>User</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(auditQ.data ?? []).map((row) => (
+                <tr key={row.id}>
+                  <td className="text-cosmos-text-3 whitespace-nowrap">{new Date(row.createdAt).toLocaleString()}</td>
+                  <td className="font-mono text-xs">{row.action}</td>
+                  <td>
+                    <span className="text-cosmos-text-2">{row.entityType}</span>
+                    {row.entityId ? (
+                      <span className="font-mono text-xs text-cosmos-text-3 ml-1">…{row.entityId.slice(-10)}</span>
+                    ) : null}
+                  </td>
+                  <td className="font-mono text-xs text-cosmos-text-3">{row.userId?.slice(-8) ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { endOfWeek, format, startOfWeek, subWeeks } from 'date-fns'
 import { complianceDb } from './db'
+import { readMsaFile, uploadMsaReport } from './msa-storage'
 import { ApiError } from './session'
 
 interface MulticatRecord {
@@ -201,6 +202,11 @@ export async function generateReportForTenant(tenantId: string, weekOffset = 0):
     const fileHash = createHash('sha256').update(fileContent).digest('hex')
     const fileName = `msa/${tenantId}/${didConfig.manufacturerDid}/MULTICAT_${format(targetWeekEnd, 'yyyyMMdd')}_${reportId}.txt`
 
+    await uploadMsaReport(fileName, fileContent).catch(async () => {
+      const { persistMsaFile } = await import('./msa-storage')
+      await persistMsaFile(fileName, fileContent)
+    })
+
     await complianceDb.mSAReport.create({
       data: {
         id: reportId,
@@ -243,4 +249,92 @@ function buildMulticatFile(
   )
   const trailer = `TRL|${records.length.toString().padStart(6, '0')}\n`
   return header + lines.join('\n') + '\n' + trailer
+}
+
+export async function uploadReportToStorage(tenantId: string, reportId: string) {
+  const report = await getReport(tenantId, reportId)
+  if (report.status === 'ACCEPTED') throw new ApiError(400, 'Report already accepted')
+
+  const content = readMsaFile(report.filePath)
+  const result = await uploadMsaReport(report.filePath, content)
+  return { reportId, ...result }
+}
+
+export async function submitReportEdi(tenantId: string, reportId: string) {
+  const report = await getReport(tenantId, reportId)
+  const config = await complianceDb.mSAManufacturerDid.findFirst({
+    where: { manufacturerDid: report.manufacturerDid, msaTenant: { tenantId } },
+  })
+  if (!config?.ediEndpoint?.trim()) {
+    throw new ApiError(400, 'No EDI endpoint configured for this manufacturer')
+  }
+
+  const content = readMsaFile(report.filePath)
+
+  try {
+    const res = await fetch(config.ediEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain',
+        'X-MSA-Reporter-DID': report.reporterDid,
+        'X-MSA-Manufacturer-DID': report.manufacturerDid,
+      },
+      body: content,
+    })
+    const confirmation = res.headers.get('x-confirmation-id') ?? (await res.text()).slice(0, 200)
+    if (!res.ok) throw new Error(`EDI returned ${res.status}`)
+
+    await complianceDb.mSAReport.update({
+      where: { id: reportId },
+      data: {
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+        submissionConfirmation: confirmation,
+        submissionError: null,
+      },
+    })
+    return { reportId, status: 'SUBMITTED' as const, confirmation }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'EDI submission failed'
+    await complianceDb.mSAReport.update({
+      where: { id: reportId },
+      data: { status: 'SUBMISSION_FAILED', submissionError: msg },
+    })
+    throw new ApiError(502, msg)
+  }
+}
+
+/** Weekly automation: generate drafts, upload to storage, EDI-submit when autoSubmit is enabled. */
+export async function runMsaAutomationCron(tenantId: string, weekOffset = 0) {
+  const reportIds = await generateReportForTenant(tenantId, weekOffset)
+  const uploaded: string[] = []
+  const submitted: string[] = []
+  const errors: Array<{ reportId: string; step: string; message: string }> = []
+
+  for (const id of reportIds) {
+    try {
+      await uploadReportToStorage(tenantId, id)
+      uploaded.push(id)
+    } catch (e) {
+      errors.push({ reportId: id, step: 'upload', message: e instanceof Error ? e.message : 'upload failed' })
+    }
+
+    const config = await complianceDb.mSAReport.findFirst({
+      where: { id, tenantId },
+    })
+    if (!config) continue
+    const mfr = await complianceDb.mSAManufacturerDid.findFirst({
+      where: { manufacturerDid: config.manufacturerDid, msaTenant: { tenantId }, autoSubmit: true, isActive: true },
+    })
+    if (!mfr) continue
+
+    try {
+      await submitReportEdi(tenantId, id)
+      submitted.push(id)
+    } catch (e) {
+      errors.push({ reportId: id, step: 'edi', message: e instanceof Error ? e.message : 'edi failed' })
+    }
+  }
+
+  return { generated: reportIds, uploaded, submitted, errors }
 }

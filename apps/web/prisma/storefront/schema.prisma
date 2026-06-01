@@ -10,6 +10,9 @@ datasource db {
 
 enum QuoteStatus {
   OPEN
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
   SUBMITTED
   EXPIRED
 }
@@ -21,6 +24,9 @@ model B2BQuote {
   status             QuoteStatus @default(OPEN)
   notes              String?
   convertedOrderId   String?
+  rejectionReason    String?
+  approvedAt         DateTime?
+  approvedByUserId   String?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
   lines              QuoteLine[]
@@ -41,4 +47,50 @@ model QuoteLine {
 
   @@unique([quoteId, lineNo])
   @@index([quoteId])
+}
+
+model OrderTemplate {
+  id          String              @id @default(cuid())
+  tenantId    String
+  customerRef String
+  name        String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  lines       OrderTemplateLine[]
+
+  @@index([tenantId, customerRef])
+}
+
+model OrderTemplateLine {
+  id         String        @id @default(cuid())
+  templateId String
+  skuId      String
+  quantity   Int
+  template   OrderTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model QuoteCounterOffer {
+  id        String                  @id @default(cuid())
+  quoteId   String
+  offeredBy String
+  userId    String?
+  notes     String?
+  status    String                  @default("OPEN")
+  createdAt DateTime                @default(now())
+  lines     QuoteCounterOfferLine[]
+
+  @@index([quoteId])
+}
+
+model QuoteCounterOfferLine {
+  id             String            @id @default(cuid())
+  counterOfferId String
+  lineNo         Int
+  qty            Int
+  unitPrice      Decimal
+  counterOffer   QuoteCounterOffer @relation(fields: [counterOfferId], references: [id], onDelete: Cascade)
+
+  @@index([counterOfferId])
 }

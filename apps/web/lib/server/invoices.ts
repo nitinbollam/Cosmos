@@ -4,6 +4,7 @@ import { orderDb } from './db'
 import * as crm from './crm'
 import { deriveInvoiceStatus, formatCreditMemoNumber, formatInvoiceNumber, invoiceBalance, toStoredInvoiceStatus } from './invoice-status'
 import { postInvoiceJournal, postCreditMemoJournal } from './invoice-gl'
+import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
 
 function orderSubtotal(lineItems: Array<{ quantity: number; unitPrice: Prisma.Decimal }>): number {
@@ -66,13 +67,26 @@ export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
   })
 
   const journalEntryId = await postInvoiceJournal(tenantId, invoice.id, totalAmount).catch(() => null)
-  if (journalEntryId) {
-    return orderDb.invoice.update({
-      where: { id: invoice.id },
-      data: { journalEntryId },
-    })
-  }
-  return invoice
+  const finalInvoice = journalEntryId
+    ? await orderDb.invoice.update({
+        where: { id: invoice.id },
+        data: { journalEntryId },
+      })
+    : invoice
+
+  void notifyTriggers
+    .notifyInvoiceIssued(
+      tenantId,
+      finalInvoice.id,
+      order.id,
+      order.customerId,
+      finalInvoice.invoiceNumber,
+      totalAmount,
+      dueAt,
+    )
+    .catch(() => undefined)
+
+  return finalInvoice
 }
 
 export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
@@ -117,6 +131,37 @@ export async function listInvoices(
     where.customerId = filters.customerId.trim()
   }
   if (filters?.status && filters.status !== 'ALL') {
+    if (filters.status === 'OVERDUE') {
+      const raw = await orderDb.invoice.findMany({
+        where: { ...where, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } },
+        include: { order: { select: { status: true, paymentMethod: true, channel: true } }, creditMemos: true },
+        orderBy: { issuedAt: 'desc' },
+        take: 500,
+      })
+      const overdue = raw.filter(
+        (inv) =>
+          deriveInvoiceStatus({
+            orderStatus: inv.order.status,
+            totalAmount: Number(inv.totalAmount),
+            amountPaid: Number(inv.amountPaid),
+            amountCredited: Number(inv.amountCredited),
+            paymentMethod: inv.order.paymentMethod,
+            issuedAt: inv.issuedAt,
+          }) === 'OVERDUE',
+      )
+      const slice = overdue.slice((page - 1) * pageSize, page * pageSize)
+      return {
+        items: slice.map((inv) => ({
+          ...inv,
+          balance: invoiceBalance(Number(inv.totalAmount), Number(inv.amountPaid), Number(inv.amountCredited)),
+          displayStatus: 'OVERDUE' as const,
+        })),
+        total: overdue.length,
+        page,
+        pageSize,
+        hasMore: page * pageSize < overdue.length,
+      }
+    }
     where.status = filters.status as never
   }
 
@@ -181,6 +226,74 @@ export async function getInvoiceByOrderId(tenantId: string, orderId: string, opt
   const row = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
   if (!row) throw new ApiError(404, 'Invoice not found')
   return getInvoice(tenantId, row.id, opts)
+}
+
+export async function recordInvoicePayment(
+  tenantId: string,
+  invoiceId: string,
+  body: { amount: number; method: string; reference?: string },
+  opts?: { buyerCustomerId?: string },
+) {
+  const invoice = await getInvoice(tenantId, invoiceId, opts)
+  if (invoice.balance <= 0.01) throw new ApiError(400, 'Invoice is already paid')
+
+  const { recordOrderPayment } = await import('./orders')
+  await recordOrderPayment(tenantId, invoice.orderId, body)
+
+  return getInvoice(tenantId, invoiceId, opts)
+}
+
+export async function getInvoiceHtmlDocument(tenantId: string, invoiceId: string, opts?: { buyerCustomerId?: string }) {
+  const inv = await getInvoice(tenantId, invoiceId, opts)
+  const { buildInvoiceHtml } = await import('./invoice-document')
+  return buildInvoiceHtml(tenantId, {
+    invoiceNumber: inv.invoiceNumber,
+    issuedAt: inv.issuedAt,
+    dueAt: inv.dueAt,
+    customerId: inv.customerId,
+    subtotal: Number(inv.subtotal),
+    taxAmount: Number(inv.taxAmount),
+    totalAmount: Number(inv.totalAmount),
+    amountPaid: Number(inv.amountPaid),
+    balance: inv.balance,
+    displayStatus: inv.displayStatus,
+    lineItems: inv.order.lineItems.map((li) => ({
+      skuId: li.skuId,
+      quantity: li.quantity,
+      unitPrice: Number(li.unitPrice),
+    })),
+    creditMemos: inv.creditMemos?.map((cm) => ({
+      memoNumber: cm.memoNumber,
+      totalAmount: Number(cm.totalAmount),
+      reason: cm.reason,
+    })),
+  })
+}
+
+export async function payInvoiceWithStripe(
+  tenantId: string,
+  invoiceId: string,
+  body: { paymentMethodId: string; amount?: number; correlationId: string },
+  opts?: { buyerCustomerId?: string },
+) {
+  const invoice = await getInvoice(tenantId, invoiceId, opts)
+  if (invoice.balance <= 0.01) throw new ApiError(400, 'Invoice is already paid')
+  const amount = body.amount != null ? Math.min(body.amount, invoice.balance) : invoice.balance
+  if (amount <= 0) throw new ApiError(400, 'Invalid payment amount')
+
+  const payments = await import('./payments')
+  const auth = await payments.authorize(tenantId, {
+    orderId: invoice.orderId,
+    amount,
+    currency: 'usd',
+    paymentMethod: 'CARD',
+    customerId: invoice.customerId,
+    paymentMethodId: body.paymentMethodId,
+    correlationId: body.correlationId,
+  })
+  await payments.capture(tenantId, auth.paymentIntentId, body.correlationId)
+
+  return getInvoice(tenantId, invoiceId, opts)
 }
 
 export type ApplyCreditMemoInput = {

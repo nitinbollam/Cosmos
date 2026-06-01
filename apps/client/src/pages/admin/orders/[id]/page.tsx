@@ -60,6 +60,22 @@ type WmsTask = {
   pickItems: { id: string; quantity: number; pickedQty: number; status: string }[]
 }
 
+type ShipmentRow = {
+  id: string
+  shipmentNo: number
+  status: string
+  carrier?: string | null
+  trackingNumber?: string | null
+  shippedAt?: string | null
+  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number }>
+}
+
+type ShipmentDraft = {
+  carrier: string
+  trackingNumber: string
+  qtyByLineId: Record<string, number>
+}
+
 function formatAddress(addr: Record<string, unknown> | null | undefined): string[] {
   if (!addr) return []
   const parts: string[] = []
@@ -88,6 +104,10 @@ export default function OrderDetailPage() {
   const [returnReason, setReturnReason] = useState('Customer return')
   const [returnQtys, setReturnQtys] = useState<Record<string, number>>({})
 
+  const [shipEditorOpen, setShipEditorOpen] = useState(false)
+  const [shipDrafts, setShipDrafts] = useState<ShipmentDraft[]>([])
+  const [shipErr, setShipErr] = useState<string | null>(null)
+
   const orderQ = useQuery({
     queryKey: ['order', id],
     queryFn: () => api.get<OrderDetail>(`/orders/${encodeURIComponent(id)}`),
@@ -109,6 +129,12 @@ export default function OrderDetailPage() {
   const tasksQ = useQuery({
     queryKey: ['wms', 'tasks', 'order', id],
     queryFn: () => api.get<WmsTask[]>(`/wms/tasks?orderId=${encodeURIComponent(id)}`),
+    enabled: Boolean(id),
+  })
+
+  const shipmentsQ = useQuery({
+    queryKey: ['order-shipments', id],
+    queryFn: () => api.get<ShipmentRow[]>(`/orders/${encodeURIComponent(id)}/shipments`),
     enabled: Boolean(id),
   })
 
@@ -164,7 +190,86 @@ export default function OrderDetailPage() {
     },
   })
 
+  const saveShipmentsMut = useMutation({
+    mutationFn: (payload: {
+      shipments: Array<{
+        carrier?: string
+        trackingNumber?: string
+        lineItems: Array<{ skuId: string; warehouseId: string; quantity: number }>
+      }>
+    }) => api.post(`/orders/${encodeURIComponent(id)}/shipments`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['order-shipments', id] })
+      setShipEditorOpen(false)
+      setShipErr(null)
+    },
+    onError: (e: Error) => setShipErr(e.message),
+  })
+
   const data = orderQ.data
+
+  function openShipEditor() {
+    if (!data?.lineItems?.length) return
+    const existing = shipmentsQ.data ?? []
+    if (existing.length > 0) {
+      setShipDrafts(
+        existing.map((s) => {
+          const qtyByLineId: Record<string, number> = {}
+          for (const li of data.lineItems ?? []) {
+            const match = (s.lineItems ?? []).find(
+              (x) => x.skuId === li.skuId && x.warehouseId === (li.warehouseId ?? ''),
+            )
+            qtyByLineId[li.id] = match?.quantity ?? 0
+          }
+          return {
+            carrier: s.carrier ?? '',
+            trackingNumber: s.trackingNumber ?? '',
+            qtyByLineId,
+          }
+        }),
+      )
+    } else {
+      setShipDrafts([
+        {
+          carrier: '',
+          trackingNumber: '',
+          qtyByLineId: Object.fromEntries((data.lineItems ?? []).map((li) => [li.id, li.quantity])),
+        },
+      ])
+    }
+    setShipErr(null)
+    setShipEditorOpen(true)
+  }
+
+  function saveShipments() {
+    if (!data?.lineItems?.length) return
+    for (const li of data.lineItems) {
+      const sum = shipDrafts.reduce((s, d) => s + (d.qtyByLineId[li.id] ?? 0), 0)
+      if (sum !== li.quantity) {
+        setShipErr(`Line ${li.skuId.slice(-8)} must total ${li.quantity} units across shipments (got ${sum}).`)
+        return
+      }
+    }
+    const shipments = shipDrafts
+      .map((d) => ({
+        carrier: d.carrier.trim() || undefined,
+        trackingNumber: d.trackingNumber.trim() || undefined,
+        lineItems: (data.lineItems ?? [])
+          .filter((li) => (d.qtyByLineId[li.id] ?? 0) > 0)
+          .map((li) => ({
+            skuId: li.skuId,
+            warehouseId: li.warehouseId ?? '',
+            quantity: d.qtyByLineId[li.id] ?? 0,
+          })),
+      }))
+      .filter((s) => s.lineItems.length > 0)
+    if (shipments.length === 0) {
+      setShipErr('Add at least one shipment with quantities.')
+      return
+    }
+    saveShipmentsMut.mutate({ shipments })
+  }
+
   const subtotal =
     data?.lineItems?.reduce((s, li) => s + li.quantity * Number(li.unitPrice), 0) ?? Number(data?.totalAmount ?? 0)
   const tax = Number(data?.taxAmount ?? 0)
@@ -225,6 +330,11 @@ export default function OrderDetailPage() {
                   Start fulfillment
                 </button>
               )}
+              {['PACKED', 'SHIPPED', 'DELIVERED', 'PROCESSING'].includes(data.status) ? (
+                <button type="button" className="btn-ghost !text-sm" onClick={openShipEditor}>
+                  {(shipmentsQ.data?.length ?? 0) > 0 ? 'Edit shipments' : 'Split shipments'}
+                </button>
+              ) : null}
               {['SHIPPED', 'DELIVERED'].includes(data.status) && (
                 <button type="button" className="btn-ghost !text-sm" onClick={() => {
                   const init: Record<string, number> = {}
@@ -365,6 +475,38 @@ export default function OrderDetailPage() {
             </div>
           )}
 
+          {(shipmentsQ.data?.length ?? 0) > 0 ? (
+            <div className="cosmos-card">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h3 className="text-cosmos-white font-semibold font-display">Shipments</h3>
+                <button type="button" className="btn-ghost !py-1 !px-2 !text-xs" onClick={openShipEditor}>
+                  Edit
+                </button>
+              </div>
+              <ul className="space-y-3">
+                {(shipmentsQ.data ?? []).map((s) => (
+                  <li
+                    key={s.id}
+                    className="rounded-lg p-3 border text-sm"
+                    style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono">Shipment #{s.shipmentNo}</span>
+                      <StatusBadge status={s.status} />
+                    </div>
+                    <p className="text-cosmos-text-3 mt-1">
+                      {s.carrier ?? 'Carrier TBD'}
+                      {s.trackingNumber ? ` · ${s.trackingNumber}` : ''}
+                    </p>
+                    <p className="text-xs text-cosmos-text-3 mt-1">
+                      {(s.lineItems ?? []).map((li) => `${li.quantity}× ${li.skuId.slice(-8)}`).join(' · ')}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {data.saga && (
             <div className="cosmos-card">
               <h3 className="text-cosmos-white font-semibold font-display mb-3">Saga timeline</h3>
@@ -479,6 +621,115 @@ export default function OrderDetailPage() {
             'Could not create fulfillment — task may already exist or WMS unavailable.'}
         </div>
       )}
+
+      {shipEditorOpen && data ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.65)' }}
+          onClick={() => setShipEditorOpen(false)}
+        >
+          <div className="cosmos-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-2">Split shipments</h3>
+            <p className="text-xs text-cosmos-text-3 mb-4">
+              Allocate line quantities across shipments. Totals must match the order exactly.
+            </p>
+            <div className="space-y-4">
+              {shipDrafts.map((draft, idx) => (
+                <div key={idx} className="rounded-lg p-4 border" style={{ borderColor: 'var(--c-border)' }}>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="font-semibold text-cosmos-white">Shipment {idx + 1}</span>
+                    {shipDrafts.length > 1 ? (
+                      <button
+                        type="button"
+                        className="btn-ghost !py-1 !px-2 !text-xs"
+                        onClick={() => setShipDrafts((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="text-xs text-cosmos-text-3">Carrier</label>
+                      <input
+                        className="cosmos-input mt-1"
+                        placeholder="UPS, FedEx…"
+                        value={draft.carrier}
+                        onChange={(e) =>
+                          setShipDrafts((prev) =>
+                            prev.map((d, i) => (i === idx ? { ...d, carrier: e.target.value } : d)),
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-cosmos-text-3">Tracking #</label>
+                      <input
+                        className="cosmos-input mt-1 font-mono"
+                        value={draft.trackingNumber}
+                        onChange={(e) =>
+                          setShipDrafts((prev) =>
+                            prev.map((d, i) => (i === idx ? { ...d, trackingNumber: e.target.value } : d)),
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                  <ul className="space-y-2">
+                    {(data.lineItems ?? []).map((li) => (
+                      <li key={li.id} className="flex items-center gap-3 text-sm">
+                        <span className="font-mono text-xs flex-1 truncate">{li.skuId.slice(-12)}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={li.quantity}
+                          className="cosmos-input w-20"
+                          value={draft.qtyByLineId[li.id] ?? 0}
+                          onChange={(e) => {
+                            const v = Math.min(li.quantity, Math.max(0, Number(e.target.value) || 0))
+                            setShipDrafts((prev) =>
+                              prev.map((d, i) =>
+                                i === idx ? { ...d, qtyByLineId: { ...d.qtyByLineId, [li.id]: v } } : d,
+                              ),
+                            )
+                          }}
+                        />
+                        <span className="text-cosmos-text-3 text-xs">/ {li.quantity}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn-ghost !text-sm mt-4"
+              onClick={() => {
+                if (!data.lineItems?.length) return
+                setShipDrafts((prev) => [
+                  ...prev,
+                  {
+                    carrier: '',
+                    trackingNumber: '',
+                    qtyByLineId: Object.fromEntries(data.lineItems!.map((li) => [li.id, 0])),
+                  },
+                ])
+              }}
+            >
+              + Add shipment
+            </button>
+            {shipErr ? <p className="text-red-400 text-sm mt-3">{shipErr}</p> : null}
+            <div className="flex gap-2 justify-end mt-6">
+              <button type="button" className="btn-ghost" onClick={() => setShipEditorOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn-primary" disabled={saveShipmentsMut.isPending} onClick={saveShipments}>
+                {saveShipmentsMut.isPending ? 'Saving…' : 'Save shipments'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

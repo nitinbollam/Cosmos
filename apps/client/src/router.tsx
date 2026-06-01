@@ -20,6 +20,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/', element: page(() => import('@/pages/home/page')) },
       { path: '/login', element: page(() => import('@/pages/login/page')) },
+      { path: '/signup', element: page(() => import('@/pages/signup/page')) },
       {
         element: <ShopLayout />,
         children: [
@@ -35,6 +36,9 @@ const router = createBrowserRouter([
           { path: '/quotes', element: page(() => import('@/pages/quotes/page')) },
           { path: '/quotes/new', element: page(() => import('@/pages/quotes/new/page')) },
           { path: '/quotes/:id', element: page(() => import('@/pages/quotes/[id]/page')) },
+          { path: '/invoices', element: page(() => import('@/pages/invoices/page')) },
+          { path: '/invoices/:id', element: page(() => import('@/pages/invoices/[id]/page')) },
+          { path: '/account', element: page(() => import('@/pages/account/page')) },
         ],
       },
       {
@@ -53,6 +57,7 @@ const router = createBrowserRouter([
             path: 'crm/customers/:id',
             element: page(() => import('@/pages/admin/crm/customers/[id]/page')),
           },
+          { path: 'quotes', element: page(() => import('@/pages/admin/quotes/page')) },
           { path: 'customers', element: page(() => import('@/pages/admin/customers/page')) },
           {
             path: 'customers/:id',
@@ -87,6 +92,7 @@ const router = createBrowserRouter([
             element: page(() => import('@/pages/admin/purchasing/[poId]/page')),
           },
           { path: 'settings', element: page(() => import('@/pages/admin/settings/page')) },
+          { path: 'pos', element: page(() => import('@/pages/admin/pos/page')) },
           { path: 'warehouse', element: page(() => import('@/pages/admin/warehouse/page')) },
         ],
       },

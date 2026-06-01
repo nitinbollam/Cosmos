@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
@@ -38,10 +39,33 @@ const FILTERS: Array<{ label: string; value: '' | PoStatus }> = [
 
 export default function PurchasingPage() {
   const qc = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const prefillSkuId = searchParams.get('skuId') ?? ''
   const [tab, setTab] = useState<'pos' | 'suppliers'>('pos')
   const [statusFilter, setStatusFilter] = useState<'' | PoStatus>('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [supplierDrawer, setSupplierDrawer] = useState(false)
+  const [prefillLine, setPrefillLine] = useState<{ skuCode: string; description: string; qtyOrdered: number } | null>(null)
+
+  useEffect(() => {
+    if (!prefillSkuId) return
+    void (async () => {
+      try {
+        const suggestion = await api.get<{
+          sku: { code: string; name: string }
+          suggestedQty: number
+        }>(`/skus/${encodeURIComponent(prefillSkuId)}/reorder-suggestion`)
+        setPrefillLine({
+          skuCode: suggestion.sku.code,
+          description: suggestion.sku.name,
+          qtyOrdered: suggestion.suggestedQty,
+        })
+        setDrawerOpen(true)
+      } catch {
+        setDrawerOpen(true)
+      }
+    })()
+  }, [prefillSkuId])
 
   const posQuery = useQuery<PurchaseOrder[]>({
     queryKey: ['purchase-orders', statusFilter],
@@ -260,6 +284,7 @@ export default function PurchasingPage() {
         <PoDrawer
           suppliers={suppliers.data ?? []}
           warehouses={warehouses.data ?? []}
+          prefillLine={prefillLine}
           onClose={() => setDrawerOpen(false)}
           onSubmit={(payload) => createPo.mutate(payload)}
           loading={createPo.isPending}
@@ -282,6 +307,7 @@ export default function PurchasingPage() {
 function PoDrawer(props: {
   suppliers: Supplier[]
   warehouses: Array<{ id: string; name: string }>
+  prefillLine?: { skuCode: string; description: string; qtyOrdered: number } | null
   onClose: () => void
   onSubmit: (body: {
     supplierId: string
@@ -294,9 +320,13 @@ function PoDrawer(props: {
 }) {
   const [supplierId, setSupplierId] = useState('')
   const [number, setNumber] = useState(`PO-${Date.now().toString(36).toUpperCase()}`)
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(props.prefillLine ? 'Low-stock replenishment' : '')
   const [warehouseNote, setWarehouseNote] = useState('')
-  const [lines, setLines] = useState([{ lineNo: 1, skuCode: '', description: '', qtyOrdered: 1 }])
+  const [lines, setLines] = useState(() =>
+    props.prefillLine
+      ? [{ lineNo: 1, skuCode: props.prefillLine.skuCode, description: props.prefillLine.description, qtyOrdered: props.prefillLine.qtyOrdered }]
+      : [{ lineNo: 1, skuCode: '', description: '', qtyOrdered: 1 }],
+  )
 
   return (
     <div className="fixed inset-0 z-50 flex">

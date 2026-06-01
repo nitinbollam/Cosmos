@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { CosmosLogo } from '@/components/cosmos-logo'
 import { RequireMobileAuth } from '@/components/auth/require-mobile-auth'
+import { OfflineSyncRunner } from '@/components/mobile/offline-sync-runner'
 
 const TABS = [
   { href: '/m/warehouse', label: 'Warehouse' },
@@ -54,6 +55,7 @@ function MobileShell() {
         })}
       </nav>
       <main className="cosmos-mobile-main">
+        <OfflineSyncRunner />
         <Outlet />
       </main>
     </div>

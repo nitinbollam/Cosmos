@@ -860,3 +860,7 @@ body.cosmos-nav-open {
 .cosmos-shop-link:hover {
   color: var(--c-primary);
 }
+
+.cosmos-shop-link--active {
+  color: var(--c-primary);
+}

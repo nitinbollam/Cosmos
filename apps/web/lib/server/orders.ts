@@ -7,6 +7,8 @@ import { assertCreditAvailable, releaseCreditUsed } from './credit-limit'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
 import { syncInvoiceFromOrder } from './invoices'
+import { assertOrderLinePrices } from './pricing'
+import * as notifyTriggers from './notification-triggers'
 
 export type CreateOrderInput = {
   customerId: string
@@ -35,6 +37,8 @@ export async function createOrder(
     throw new ApiError(403, 'Cannot place orders for another customer')
   }
 
+  await assertOrderLinePrices(tenantId, customerId, dto.lineItems)
+
   await assertCreditAvailable(tenantId, customerId, totalAmount, dto.paymentMethod)
 
   const order = await orderDb.order.create({
@@ -62,6 +66,7 @@ export async function createOrder(
   })
 
   void runOrderFulfillmentPipeline(order.id, tenantId, correlationId).catch(() => undefined)
+  void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
   return order
 }
 
@@ -192,9 +197,46 @@ export async function recordOrderPayment(
 
   await syncInvoiceFromOrder(tenantId, id).catch(() => undefined)
 
+  const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId: id } })
+  if (invoice) {
+    const { postArPaymentJournal } = await import('./operations-gl')
+    await postArPaymentJournal(tenantId, invoice.id, Number(apply)).catch(() => undefined)
+    const { notifyPaymentReceived } = await import('./notification-triggers')
+    void notifyPaymentReceived(tenantId, id, order.customerId, Number(apply), invoice.invoiceNumber).catch(
+      () => undefined,
+    )
+  }
+
   return updated
 }
 
 export async function cancelOrder(tenantId: string, id: string, reason: string) {
   return cancelOrderWithCompensation(tenantId, id, reason)
+}
+
+export async function getReorderLines(tenantId: string, orderId: string, opts?: { buyerCustomerId?: string }) {
+  const order = await findOrderById(tenantId, orderId, opts)
+  const { resolvePricesForCustomer } = await import('./pricing')
+  const skuIds = order.lineItems.map((li) => li.skuId)
+  const prices = await resolvePricesForCustomer(tenantId, order.customerId, skuIds)
+  const skus = await import('./inventory').then((m) =>
+    Promise.all(skuIds.map((id) => m.findSkuById(tenantId, id).catch(() => null))),
+  )
+  const skuMap = new Map(skus.filter(Boolean).map((s) => [s!.id, s!]))
+
+  return order.lineItems.map((li) => {
+    const sku = skuMap.get(li.skuId)
+    const resolved = prices.get(li.skuId)
+    const unitPrice = resolved?.unitPrice ?? Number(li.unitPrice)
+    return {
+      skuId: li.skuId,
+      skuCode: sku?.code ?? li.skuId.slice(0, 12),
+      skuName: sku?.name ?? li.skuId.slice(0, 12),
+      warehouseId: li.warehouseId,
+      quantity: li.quantity,
+      unitPrice,
+      listPrice: sku ? Number(sku.price) : Number(li.unitPrice),
+      priceSource: resolved?.source ?? 'list',
+    }
+  })
 }

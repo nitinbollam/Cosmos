@@ -17,6 +17,10 @@ export function readQueue(): OfflineAction[] {
   }
 }
 
+function writeQueue(q: OfflineAction[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(q))
+}
+
 export function enqueueAction(type: string, payload: unknown): void {
   const q = readQueue()
   q.push({
@@ -25,9 +29,20 @@ export function enqueueAction(type: string, payload: unknown): void {
     payload,
     createdAt: new Date().toISOString(),
   })
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(q))
+  writeQueue(q)
+  window.dispatchEvent(new CustomEvent('cosmos-offline-queue-changed'))
+}
+
+export function removeAction(id: string): void {
+  writeQueue(readQueue().filter((a) => a.id !== id))
+  window.dispatchEvent(new CustomEvent('cosmos-offline-queue-changed'))
 }
 
 export function clearQueue(): void {
   localStorage.removeItem(STORAGE_KEY)
+  window.dispatchEvent(new CustomEvent('cosmos-offline-queue-changed'))
+}
+
+export function queueLength(): number {
+  return readQueue().length
 }

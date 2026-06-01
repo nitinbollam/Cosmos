@@ -1,5 +1,5 @@
 import { CosmosLogo } from '@/components/cosmos-logo'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { useCartStore } from '@/stores/cart.store'
 import { emitStorefrontAuthChanged, STOREFRONT_AUTH_EVENT } from '@/lib/auth-events'
@@ -7,6 +7,7 @@ import { jwtEmail } from '@/lib/jwt'
 import { clearB2bSession } from '@/lib/session'
 
 export function ShopHeader() {
+  const location = useLocation()
   const count = useCartStore((s) => s.count())
   const [tenantLabel, setTenantLabel] = useState('Your business')
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -47,6 +48,11 @@ export function ShopHeader() {
     window.location.href = '/'
   }
 
+  function navClass(path: string) {
+    const active = location.pathname === path || location.pathname.startsWith(`${path}/`)
+    return `cosmos-shop-link${active ? ' cosmos-shop-link--active' : ''}`
+  }
+
   return (
     <header className="cosmos-shop-header">
       <div className="cosmos-shop-header-row">
@@ -70,13 +76,19 @@ export function ShopHeader() {
           <span className="cosmos-shop-brand-label">{tenantLabel}</span>
         </Link>
         <nav className={`cosmos-shop-nav${navOpen ? ' cosmos-shop-nav--open' : ''}`}>
-          <Link to="/catalog" className="cosmos-shop-link" onClick={() => setNavOpen(false)}>
+          <Link to="/catalog" className={navClass('/catalog')} onClick={() => setNavOpen(false)}>
             Catalog
           </Link>
-          <Link to="/orders" className="cosmos-shop-link" onClick={() => setNavOpen(false)}>
+          <Link to="/orders" className={navClass('/orders')} onClick={() => setNavOpen(false)}>
             Orders
           </Link>
-          <Link to="/quotes" className="cosmos-shop-link" onClick={() => setNavOpen(false)}>
+          <Link to="/invoices" className={navClass('/invoices')} onClick={() => setNavOpen(false)}>
+            Invoices
+          </Link>
+          <Link to="/account" className={navClass('/account')} onClick={() => setNavOpen(false)}>
+            Account
+          </Link>
+          <Link to="/quotes" className={navClass('/quotes')} onClick={() => setNavOpen(false)}>
             Quotes
           </Link>
         </nav>

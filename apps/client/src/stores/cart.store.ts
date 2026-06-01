@@ -13,6 +13,7 @@ export interface CartItem {
 interface CartStore {
   items: CartItem[]
   addItem: (item: CartItem) => void
+  addItems: (items: CartItem[]) => void
   removeItem: (skuId: string) => void
   setQty: (skuId: string, qty: number) => void
   clear: () => void
@@ -35,6 +36,21 @@ export const useCartStore = create<CartStore>()(
             }
           }
           return { items: [...s.items, item] }
+        }),
+      addItems: (items) =>
+        set((s) => {
+          let next = [...s.items]
+          for (const item of items) {
+            const ex = next.find((i) => i.skuId === item.skuId)
+            if (ex) {
+              next = next.map((i) =>
+                i.skuId === item.skuId ? { ...i, quantity: i.quantity + item.quantity, unitPrice: item.unitPrice } : i,
+              )
+            } else {
+              next.push(item)
+            }
+          }
+          return { items: next }
         }),
       removeItem: (skuId) => set((s) => ({ items: s.items.filter((i) => i.skuId !== skuId) })),
       setQty: (skuId, qty) =>

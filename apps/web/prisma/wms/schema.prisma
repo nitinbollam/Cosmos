@@ -180,3 +180,33 @@ enum CycleCountStatus {
   COMPLETED
   CANCELLED
 }
+
+enum PickWaveStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model PickWave {
+  id          String         @id @default(cuid())
+  tenantId    String
+  warehouseId String
+  status      PickWaveStatus @default(OPEN)
+  createdBy   String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  tasks       PickWaveTask[]
+
+  @@index([tenantId, warehouseId, status])
+}
+
+model PickWaveTask {
+  id     String   @id @default(cuid())
+  waveId String
+  taskId String
+  wave   PickWave @relation(fields: [waveId], references: [id], onDelete: Cascade)
+
+  @@unique([waveId, taskId])
+  @@index([waveId])
+}

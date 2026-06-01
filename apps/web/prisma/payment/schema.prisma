@@ -76,3 +76,18 @@ enum AccountType {
   REVENUE
   EXPENSE
 }
+
+model SavedPaymentMethod {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  customerId            String
+  stripePaymentMethodId String
+  brand                 String?
+  last4                 String?
+  expMonth              Int?
+  expYear               Int?
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  @@index([tenantId, customerId])
+}

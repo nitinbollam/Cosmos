@@ -31,6 +31,7 @@ model Order {
   lineItems       OrderLineItem[]
   saga            OrderSaga?
   invoice         Invoice?
+  shipments       OrderShipment[]
 
   @@index([tenantId, status])
   @@index([tenantId, customerId])
@@ -161,4 +162,28 @@ model CreditMemo {
   @@unique([tenantId, memoNumber])
   @@index([tenantId, orderId])
   @@index([tenantId, invoiceId])
+}
+
+enum ShipmentStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+}
+
+model OrderShipment {
+  id             String         @id @default(cuid())
+  tenantId       String
+  orderId        String
+  shipmentNo     Int            @default(1)
+  status         ShipmentStatus @default(PENDING)
+  carrier        String?
+  trackingNumber String?
+  shippedAt      DateTime?
+  lineItems      Json
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, orderId])
+  @@index([tenantId, status])
 }

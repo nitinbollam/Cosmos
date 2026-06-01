@@ -9,7 +9,7 @@ export type NotificationDeliveryInput = {
 }
 
 export type NotificationDeliveryResult = {
-  provider: 'console' | 'webhook'
+  provider: 'console' | 'webhook' | 'sendgrid' | 'twilio'
   subject: string
   body: string
 }
@@ -20,12 +20,20 @@ const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subj
     body: `SKU ${String(p.skuCode ?? 'unknown')} is at ${String(p.qtyOnHand ?? '?')} units (reorder ${String(p.reorderPoint ?? '?')}).`,
   }),
   'order.created': (p) => ({
-    subject: 'New order',
-    body: `Order ${String(p.orderId ?? '')} was created for ${String(p.total ?? '')}.`,
+    subject: 'Order confirmation',
+    body: `Your order ${String(p.orderId ?? '').slice(0, 12)}… was placed for $${String(p.total ?? '')}. Thank you for your business.`,
   }),
   'order.shipped': (p) => ({
-    subject: 'Order shipped',
-    body: `Order ${String(p.orderId ?? '')} has shipped.`,
+    subject: 'Your order has shipped',
+    body: `Order ${String(p.orderId ?? '').slice(0, 12)}… is on its way.`,
+  }),
+  'invoice.issued': (p) => ({
+    subject: `Invoice ${String(p.invoiceNumber ?? '')}`,
+    body: `Invoice ${String(p.invoiceNumber ?? '')} for $${String(p.total ?? '')} is ready.${p.dueAt ? ` Due ${String(p.dueAt)}.` : ''} View it in your buyer portal.`,
+  }),
+  'payment.received': (p) => ({
+    subject: 'Payment received',
+    body: `We received your payment of $${String(p.amount ?? '')}${p.invoiceNumber ? ` for invoice ${String(p.invoiceNumber)}` : ''}. Thank you.`,
   }),
 }
 
@@ -38,38 +46,103 @@ function renderNotification(input: NotificationDeliveryInput): { subject: string
   }
 }
 
-/** Demo provider: logs locally and optionally POSTs to NOTIFICATION_WEBHOOK_URL. */
+async function sendViaSendGrid(recipient: string, subject: string, body: string): Promise<void> {
+  const key = process.env.SENDGRID_API_KEY?.trim()
+  if (!key) throw new Error('SENDGRID_API_KEY not configured')
+  const from = process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@cosmos.local'
+  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: recipient }] }],
+      from: { email: from, name: 'Cosmos' },
+      subject,
+      content: [{ type: 'text/plain', value: body }],
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`SendGrid failed (${res.status}): ${text.slice(0, 200)}`)
+  }
+}
+
+async function sendViaTwilio(recipient: string, body: string): Promise<void> {
+  const sid = process.env.TWILIO_ACCOUNT_SID?.trim()
+  const token = process.env.TWILIO_AUTH_TOKEN?.trim()
+  const from = process.env.TWILIO_FROM_NUMBER?.trim()
+  if (!sid || !token || !from) throw new Error('Twilio not configured')
+  const auth = Buffer.from(`${sid}:${token}`).toString('base64')
+  const params = new URLSearchParams({ To: recipient, From: from, Body: body })
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Twilio failed (${res.status}): ${text.slice(0, 200)}`)
+  }
+}
+
+async function sendViaWebhook(
+  input: NotificationDeliveryInput,
+  subject: string,
+  body: string,
+): Promise<NotificationDeliveryResult> {
+  const webhook = process.env.NOTIFICATION_WEBHOOK_URL?.trim()
+  if (!webhook) throw new Error('NOTIFICATION_WEBHOOK_URL not configured')
+  const res = await fetch(webhook, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tenantId: input.tenantId,
+      channel: input.channel,
+      recipient: input.recipient,
+      templateKey: input.templateKey,
+      subject,
+      body,
+      payload: input.payload,
+      sentAt: new Date().toISOString(),
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Notification webhook failed (${res.status}): ${text.slice(0, 200)}`)
+  }
+  return { provider: 'webhook', subject, body }
+}
+
+/** Delivers via SendGrid/Twilio when configured; falls back to webhook or console. */
 export async function deliverNotification(
   input: NotificationDeliveryInput,
 ): Promise<NotificationDeliveryResult> {
   const { subject, body } = renderNotification(input)
+
+  if (input.channel === 'EMAIL' && process.env.SENDGRID_API_KEY?.trim()) {
+    await sendViaSendGrid(input.recipient, subject, body)
+    console.log(`[notification] sendgrid → ${input.recipient} | ${input.templateKey}`)
+    return { provider: 'sendgrid', subject, body }
+  }
+
+  if (input.channel === 'SMS' && process.env.TWILIO_ACCOUNT_SID?.trim()) {
+    await sendViaTwilio(input.recipient, `${subject}\n${body}`)
+    console.log(`[notification] twilio → ${input.recipient} | ${input.templateKey}`)
+    return { provider: 'twilio', subject, body }
+  }
+
+  if (process.env.NOTIFICATION_WEBHOOK_URL?.trim()) {
+    return sendViaWebhook(input, subject, body)
+  }
+
   const line = `[notification] ${input.channel} → ${input.recipient} | ${input.templateKey}`
   console.log(line)
   console.log(`  subject: ${subject}`)
   console.log(`  body: ${body}`)
-
-  const webhook = process.env.NOTIFICATION_WEBHOOK_URL?.trim()
-  if (webhook) {
-    const res = await fetch(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tenantId: input.tenantId,
-        channel: input.channel,
-        recipient: input.recipient,
-        templateKey: input.templateKey,
-        subject,
-        body,
-        payload: input.payload,
-        sentAt: new Date().toISOString(),
-      }),
-    })
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      throw new Error(`Notification webhook failed (${res.status}): ${text.slice(0, 200)}`)
-    }
-    return { provider: 'webhook', subject, body }
-  }
-
   return { provider: 'console', subject, body }
 }

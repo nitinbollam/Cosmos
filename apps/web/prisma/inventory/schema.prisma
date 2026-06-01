@@ -92,9 +92,26 @@ model Warehouse {
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  bins      BinLocation[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
+}
+
+model BinLocation {
+  id          String    @id @default(cuid())
+  tenantId    String
+  warehouseId String
+  code        String
+  aisle       String?
+  zone        String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, warehouseId, code])
+  @@index([tenantId, warehouseId])
 }
 
 model StockReservation {

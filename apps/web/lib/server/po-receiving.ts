@@ -226,6 +226,11 @@ export async function receivePurchaseOrderGoods(
     ? await postInventoryForPoReceipts(tenantId, po, warehouseId, dto.lines, performedBy)
     : { inventoryErrors: [] as string[] }
 
+  if (dto.lines.some((l) => l.qtyReceived > 0)) {
+    const { createBillFromPurchaseOrder } = await import('./ap-bills')
+    await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: poId }).catch(() => undefined)
+  }
+
   return { purchaseOrder: updatedPo, inventoryErrors }
 }
 
@@ -251,9 +256,22 @@ export async function recordPoPayment(
   void body.method
   void body.reference
 
-  return purchasingDb.purchaseOrder.update({
+  const updated = await purchasingDb.purchaseOrder.update({
     where: { id: poId },
     data: { amountPaid: new Prisma.Decimal(paid + apply) },
     include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
   })
+
+  const bill = await purchasingDb.vendorBill.findFirst({
+    where: { tenantId, purchaseOrderId: poId, status: { not: 'VOID' } },
+  })
+  if (bill) {
+    const { recordBillPayment } = await import('./ap-bills')
+    await recordBillPayment(tenantId, bill.id, body).catch(() => undefined)
+  } else {
+    const { postApPaymentJournal } = await import('./operations-gl')
+    await postApPaymentJournal(tenantId, poId, apply).catch(() => undefined)
+  }
+
+  return updated
 }

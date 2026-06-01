@@ -9,6 +9,9 @@ type Sku = {
   name: string
   description?: string | null
   price: string | number
+  listPrice?: string | number
+  contractPrice?: string | number
+  priceSource?: 'list' | 'contract'
   category?: string
   unitOfMeasure?: string | null
   quantityAvailable?: number
@@ -282,7 +285,15 @@ export default function CatalogPage() {
                 <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 15, marginTop: 4 }}>{sku.name}</div>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--c-accent)', marginTop: 8 }}>
                   ${toPrice(sku.price).toFixed(2)}
+                  {sku.priceSource === 'contract' && sku.listPrice != null ? (
+                    <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--c-text-3)', marginLeft: 6, textDecoration: 'line-through' }}>
+                      ${toPrice(sku.listPrice).toFixed(2)}
+                    </span>
+                  ) : null}
                 </div>
+                {sku.priceSource === 'contract' ? (
+                  <div style={{ fontSize: 11, color: 'var(--c-success)', marginTop: 4 }}>Contract price</div>
+                ) : null}
                 <input
                   type="number"
                   min={1}

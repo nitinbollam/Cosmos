@@ -186,7 +186,23 @@ export async function onFulfillmentPacked(tenantId: string, orderId: string) {
 
 export async function onFulfillmentDispatched(tenantId: string, orderId: string) {
   await transitionOrderStatus(tenantId, orderId, 'SHIPPED')
+  const order = await orderDb.order.findFirst({
+    where: { id: orderId, tenantId },
+    include: { lineItems: true },
+  })
   await issueInvoiceForOrder(tenantId, orderId).catch(() => undefined)
+  if (order) {
+    const { computeOrderCogs, postCogsJournal } = await import('./operations-gl')
+    const cogs = await computeOrderCogs(
+      tenantId,
+      order.lineItems.map((li) => ({ skuId: li.skuId, quantity: li.quantity })),
+    )
+    await postCogsJournal(tenantId, orderId, cogs).catch(() => undefined)
+    const { notifyOrderShipped } = await import('./notification-triggers')
+    void notifyOrderShipped(tenantId, orderId, order.customerId).catch(() => undefined)
+    const { auditLog } = await import('./audit-log')
+    void auditLog(tenantId, { action: 'order.shipped', entityType: 'Order', entityId: orderId }).catch(() => undefined)
+  }
 }
 
 export async function onDeliveryStopDelivered(tenantId: string, orderId: string) {

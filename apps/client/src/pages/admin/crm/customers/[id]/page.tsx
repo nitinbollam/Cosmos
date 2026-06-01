@@ -81,6 +81,14 @@ export default function CrmCustomerDetailPage() {
   const [actBody, setActBody] = useState('')
   const [actOutcome, setActOutcome] = useState('')
 
+  const [priceSkuId, setPriceSkuId] = useState('')
+  const [priceAmount, setPriceAmount] = useState('')
+  const [priceNotes, setPriceNotes] = useState('')
+
+  const [volSkuId, setVolSkuId] = useState('')
+  const [volMinQty, setVolMinQty] = useState('10')
+  const [volPrice, setVolPrice] = useState('')
+
   const customer = useQuery<Customer>({
     queryKey: ['customer', id],
     queryFn: () => api.get(`/customers/${encodeURIComponent(id)}`),
@@ -97,6 +105,71 @@ export default function CrmCustomerDetailPage() {
     queryKey: ['orders', 'customer', id],
     queryFn: () => api.get(`/orders?customerId=${encodeURIComponent(id)}&page=1&pageSize=10`),
     enabled: !!id,
+  })
+
+  type ContractPrice = {
+    id: string
+    skuId: string
+    unitPrice: string | number
+    notes?: string | null
+    sku?: { code: string; name: string; price: string | number } | null
+    listPrice?: string | number | null
+  }
+
+  const contractPrices = useQuery<ContractPrice[]>({
+    queryKey: ['customer-prices', id],
+    queryFn: () => api.get(`/customers/${encodeURIComponent(id)}/prices`),
+    enabled: !!id,
+  })
+
+  type VolumeBreak = {
+    id: string
+    skuId: string
+    customerId?: string | null
+    minQty: number
+    unitPrice: string | number
+  }
+
+  const volumeBreaks = useQuery<VolumeBreak[]>({
+    queryKey: ['volume-prices', id],
+    queryFn: () => api.get(`/volume-prices?customerId=${encodeURIComponent(id)}`),
+    enabled: !!id,
+  })
+
+  const savePrice = useMutation({
+    mutationFn: () =>
+      api.post(`/customers/${encodeURIComponent(id)}/prices`, {
+        skuId: priceSkuId.trim(),
+        unitPrice: Number.parseFloat(priceAmount),
+        notes: priceNotes.trim() || undefined,
+      }),
+    onSuccess: () => {
+      setPriceSkuId('')
+      setPriceAmount('')
+      setPriceNotes('')
+      void qc.invalidateQueries({ queryKey: ['customer-prices', id] })
+    },
+  })
+
+  const deletePrice = useMutation({
+    mutationFn: (skuId: string) => api.delete(`/customers/${encodeURIComponent(id)}/prices/${encodeURIComponent(skuId)}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['customer-prices', id] }),
+  })
+
+  const saveVolumeBreak = useMutation({
+    mutationFn: () =>
+      api.post('/volume-prices', {
+        skuId: volSkuId.trim(),
+        customerId: id,
+        minQty: Number.parseInt(volMinQty, 10),
+        unitPrice: Number.parseFloat(volPrice),
+      }),
+    onSuccess: () => {
+      setVolSkuId('')
+      setVolMinQty('10')
+      setVolPrice('')
+      void qc.invalidateQueries({ queryKey: ['volume-prices', id] })
+    },
   })
 
   const salesRep = useQuery<UserRow | null>({
@@ -218,6 +291,97 @@ export default function CrmCustomerDetailPage() {
               </p>
             </div>
           ) : null}
+
+          <div className="cosmos-card overflow-x-auto">
+            <h3 className="font-display font-semibold mb-3" style={{ color: 'var(--c-heading)' }}>Contract pricing</h3>
+            <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>
+              Customer-specific SKU prices override list price in the B2B catalog and at checkout.
+            </p>
+            <div className="grid md:grid-cols-4 gap-2 mb-4">
+              <input className="cosmos-input" placeholder="SKU id" value={priceSkuId} onChange={(e) => setPriceSkuId(e.target.value)} />
+              <input className="cosmos-input" placeholder="Unit price" type="number" step="0.01" value={priceAmount} onChange={(e) => setPriceAmount(e.target.value)} />
+              <input className="cosmos-input md:col-span-2" placeholder="Notes (optional)" value={priceNotes} onChange={(e) => setPriceNotes(e.target.value)} />
+            </div>
+            <button
+              type="button"
+              className="btn-primary mb-4"
+              disabled={!priceSkuId.trim() || !priceAmount || savePrice.isPending}
+              onClick={() => void savePrice.mutate()}
+            >
+              Save contract price
+            </button>
+            {contractPrices.isLoading ? (
+              <div className="skeleton h-16 w-full" />
+            ) : (contractPrices.data?.length ?? 0) === 0 ? (
+              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>No contract prices — catalog uses list price.</p>
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr><th>SKU</th><th>List</th><th>Contract</th><th>Notes</th><th /></tr>
+                </thead>
+                <tbody>
+                  {(contractPrices.data ?? []).map((p) => (
+                    <tr key={p.id}>
+                      <td>
+                        <div className="font-mono text-xs">{p.sku?.code ?? p.skuId.slice(0, 12)}</div>
+                        <div className="text-xs" style={{ color: 'var(--c-text-3)' }}>{p.sku?.name ?? ''}</div>
+                      </td>
+                      <td className="font-mono">{p.listPrice != null ? money(Number(p.listPrice)) : '—'}</td>
+                      <td className="font-mono" style={{ color: 'var(--c-accent)' }}>{money(Number(p.unitPrice))}</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{p.notes ?? '—'}</td>
+                      <td>
+                        <button type="button" className="btn-ghost !py-1 !px-2 !text-xs" onClick={() => void deletePrice.mutate(p.skuId)}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="cosmos-card overflow-x-auto">
+            <h3 className="font-display font-semibold mb-3" style={{ color: 'var(--c-heading)' }}>Volume pricing</h3>
+            <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>
+              Tier breaks apply when order quantity meets minimum — overrides list price at checkout.
+            </p>
+            <div className="grid md:grid-cols-4 gap-2 mb-4">
+              <input className="cosmos-input" placeholder="SKU id" value={volSkuId} onChange={(e) => setVolSkuId(e.target.value)} />
+              <input className="cosmos-input" placeholder="Min qty" type="number" min={1} value={volMinQty} onChange={(e) => setVolMinQty(e.target.value)} />
+              <input className="cosmos-input" placeholder="Unit price" type="number" step="0.01" value={volPrice} onChange={(e) => setVolPrice(e.target.value)} />
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!volSkuId.trim() || !volPrice || saveVolumeBreak.isPending}
+                onClick={() => void saveVolumeBreak.mutate()}
+              >
+                Add tier
+              </button>
+            </div>
+            {volumeBreaks.isLoading ? (
+              <div className="skeleton h-16 w-full" />
+            ) : (volumeBreaks.data ?? []).filter((v) => v.customerId === id).length === 0 ? (
+              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>No volume tiers for this customer.</p>
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr><th>SKU</th><th>Min qty</th><th>Unit price</th></tr>
+                </thead>
+                <tbody>
+                  {(volumeBreaks.data ?? [])
+                    .filter((v) => v.customerId === id)
+                    .map((v) => (
+                      <tr key={v.id}>
+                        <td className="font-mono text-xs">{v.skuId.slice(0, 14)}…</td>
+                        <td>{v.minQty}+</td>
+                        <td className="font-mono" style={{ color: 'var(--c-accent)' }}>{money(Number(v.unitPrice))}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+          </div>
 
           <div className="cosmos-card overflow-x-auto">
             <h3 className="font-display font-semibold mb-3" style={{ color: 'var(--c-heading)' }}>Recent orders</h3>

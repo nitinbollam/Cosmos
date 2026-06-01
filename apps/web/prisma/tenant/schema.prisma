@@ -86,3 +86,30 @@ enum IndustryVertical {
   ALCOHOL
   GENERAL_WHOLESALE
 }
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entityType])
+  @@index([tenantId, entityId])
+}
+
+model PosRegister {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  warehouseId String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}

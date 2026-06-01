@@ -162,6 +162,12 @@
     background: var(--c-surface-2);
   }
 
+  .cosmos-shop-nav .cosmos-shop-link--active {
+    color: var(--c-primary);
+    font-weight: 600;
+    background: var(--c-primary-dim);
+  }
+
   .cosmos-shop-nav-backdrop {
     display: block;
     position: fixed;

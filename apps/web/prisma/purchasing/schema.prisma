@@ -16,6 +16,20 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+enum VendorBillStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum BillMatchStatus {
+  PENDING
+  MATCHED
+  EXCEPTION
+}
+
 model Supplier {
   id             String          @id @default(cuid())
   tenantId       String
@@ -26,6 +40,7 @@ model Supplier {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   purchaseOrders PurchaseOrder[]
+  vendorBills    VendorBill[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -62,5 +77,49 @@ model PurchaseOrderLine {
 
   @@unique([purchaseOrderId, lineNo])
   @@index([purchaseOrderId])
+}
+
+model VendorBill {
+  id              String           @id @default(cuid())
+  tenantId        String
+  supplierId      String
+  purchaseOrderId String?
+  billNumber      String
+  status          VendorBillStatus @default(ISSUED)
+  subtotal        Decimal
+  taxAmount       Decimal          @default(0)
+  totalAmount     Decimal
+  amountPaid      Decimal          @default(0)
+  issuedAt        DateTime         @default(now())
+  dueAt           DateTime?
+  journalEntryId  String?
+  notes           String?
+  matchStatus     BillMatchStatus  @default(PENDING)
+  matchNotes      String?
+  poTotal         Decimal?
+  receivedTotal   Decimal?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  supplier        Supplier         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines           VendorBillLine[]
+
+  @@unique([tenantId, billNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, purchaseOrderId])
+}
+
+model VendorBillLine {
+  id          String     @id @default(cuid())
+  billId      String
+  lineNo      Int
+  skuCode     String?
+  description String
+  quantity    Int
+  unitCost    Decimal
+  bill        VendorBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@unique([billId, lineNo])
+  @@index([billId])
 }
 

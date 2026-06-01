@@ -41,6 +41,19 @@ type PoRow = {
   lines: { qtyOrdered: number; qtyReceived: number; unitCost: string | number | null }[]
 }
 
+type BillRow = {
+  id: string
+  billNumber: string
+  purchaseOrderId?: string | null
+  displayStatus: string
+  totalAmount: string | number
+  amountPaid: string | number
+  balance: number
+  issuedAt: string
+  dueAt?: string | null
+  supplier: { id: string; name: string }
+}
+
 type TrialRow = {
   accountCode: string
   accountName: string
@@ -63,6 +76,27 @@ type CashflowResp = {
   weekly_net_baseline: number
   forecast: CashflowBucket[]
   warnings: string[]
+}
+
+type BankAccount = {
+  id: string
+  name: string
+  accountNumber?: string | null
+  currentBalance: number | string
+}
+
+type BankSummary = {
+  accounts: BankAccount[]
+  unreconciledCount: number
+}
+
+type BankLine = {
+  id: string
+  postedAt: string
+  description: string
+  amount: number | string
+  reference?: string | null
+  bankAccount?: { name: string }
 }
 
 function money(n: number) {
@@ -92,7 +126,7 @@ function apStatus(po: PoRow): string {
 
 export default function FinancePage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow'>('invoices')
+  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow' | 'bank'>('invoices')
   const [invFilter, setInvFilter] = useState('ALL')
   const [apFilter, setApFilter] = useState('ALL')
   const [year, setYear] = useState(new Date().getFullYear())
@@ -100,7 +134,7 @@ export default function FinancePage() {
   const [cfHorizon, setCfHorizon] = useState<30 | 60 | 90>(30)
 
   const [payOrder, setPayOrder] = useState<InvoiceRow | null>(null)
-  const [payPo, setPayPo] = useState<PoRow | null>(null)
+  const [payBill, setPayBill] = useState<BillRow | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
 
@@ -110,10 +144,22 @@ export default function FinancePage() {
     enabled: tab === 'invoices',
   })
 
-  const posQ = useQuery({
-    queryKey: ['finance', 'pos-ap'],
-    queryFn: () => api.get<PoRow[]>('/purchase-orders'),
+  const billsQ = useQuery({
+    queryKey: ['finance', 'bills-ap'],
+    queryFn: () => api.get<BillRow[]>('/bills'),
     enabled: tab === 'bills',
+  })
+
+  const bankSummaryQ = useQuery({
+    queryKey: ['finance', 'bank-summary'],
+    queryFn: () => api.get<BankSummary>('/bank-accounts?summary=true'),
+    enabled: tab === 'bank',
+  })
+
+  const bankLinesQ = useQuery({
+    queryKey: ['finance', 'bank-unreconciled'],
+    queryFn: () => api.get<BankLine[]>('/bank-accounts/unreconciled'),
+    enabled: tab === 'bank',
   })
 
   const trialQ = useQuery({
@@ -206,13 +252,12 @@ export default function FinancePage() {
   }, [invoicesQ.data, invFilter])
 
   const filteredBills = useMemo(() => {
-    const rows = posQ.data ?? []
-    return rows.filter((po) => {
-      if (po.status === 'CANCELLED') return false
-      if (apFilter === 'ALL') return poBalance(po) > 0.01 || Number(po.amountPaid ?? 0) > 0
-      return apStatus(po) === apFilter
+    const rows = billsQ.data ?? []
+    return rows.filter((bill) => {
+      if (apFilter === 'ALL') return bill.balance > 0.01 || Number(bill.amountPaid ?? 0) > 0
+      return bill.displayStatus === apFilter
     })
-  }, [posQ.data, apFilter])
+  }, [billsQ.data, apFilter])
 
   const payOrderMut = useMutation({
     mutationFn: async () => {
@@ -229,18 +274,26 @@ export default function FinancePage() {
     },
   })
 
-  const payPoMut = useMutation({
+  const payBillMut = useMutation({
     mutationFn: async () => {
-      if (!payPo) return
-      await api.post(`/purchase-orders/${payPo.id}/payments`, {
+      if (!payBill) return
+      await api.post(`/bills/${payBill.id}/payments`, {
         amount: parseFloat(payAmount),
         method: payMethod,
       })
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['finance', 'pos-ap'] })
-      setPayPo(null)
+      void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
+      setPayBill(null)
       setPayAmount('')
+    },
+  })
+
+  const reconcileMut = useMutation({
+    mutationFn: (lineId: string) => api.post(`/bank-accounts/${lineId}/reconcile`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'bank-summary'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'bank-unreconciled'] })
     },
   })
 
@@ -279,19 +332,27 @@ export default function FinancePage() {
           Finance
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
-          AR (invoices), AP (purchase orders), trial balance, and cash outlook
+          AR (invoices), AP (vendor bills), bank reconciliation, trial balance, and cash outlook
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['invoices', 'bills', 'trial', 'cashflow'] as const).map((id) => (
+        {(['invoices', 'bills', 'bank', 'trial', 'cashflow'] as const).map((id) => (
           <button
             key={id}
             type="button"
             className={tab === id ? 'btn-primary' : 'btn-ghost'}
             onClick={() => setTab(id)}
           >
-            {id === 'invoices' ? 'Invoices (AR)' : id === 'bills' ? 'Bills (AP)' : id === 'trial' ? 'Trial balance' : 'Cash flow'}
+            {id === 'invoices'
+              ? 'Invoices (AR)'
+              : id === 'bills'
+                ? 'Bills (AP)'
+                : id === 'bank'
+                  ? 'Bank recon'
+                  : id === 'trial'
+                    ? 'Trial balance'
+                    : 'Cash flow'}
           </button>
         ))}
       </div>
@@ -394,16 +455,18 @@ export default function FinancePage() {
             ))}
           </div>
           <div className="cosmos-card overflow-x-auto">
-            {posQ.isLoading ? <div className="skeleton h-40 w-full" /> : posQ.isError ? (
-              <p style={{ color: 'var(--c-danger)' }}>Could not load purchase orders</p>
+            {billsQ.isLoading ? <div className="skeleton h-40 w-full" /> : billsQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>Could not load vendor bills</p>
             ) : filteredBills.length === 0 ? (
-              <EmptyState icon="📥" title="No bills" description="Submitted POs with a balance appear here." />
+              <EmptyState icon="📥" title="No bills" description="Vendor bills are created when goods are received against POs." />
             ) : (
               <table className="cosmos-table">
                 <thead>
                   <tr>
-                    <th>PO #</th>
+                    <th>Bill #</th>
                     <th>Supplier</th>
+                    <th>Issue</th>
+                    <th>Due</th>
                     <th>Total</th>
                     <th>Paid</th>
                     <th>Balance</th>
@@ -412,22 +475,26 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredBills.map((po) => (
-                    <tr key={po.id}>
-                      <td className="font-mono">{po.number}</td>
-                      <td>{po.supplier.name}</td>
-                      <td className="font-mono">{money(poTotal(po))}</td>
-                      <td className="font-mono">{money(Number(po.amountPaid ?? 0))}</td>
-                      <td className="font-mono">{money(poBalance(po))}</td>
-                      <td><StatusBadge status={apStatus(po)} /></td>
+                  {filteredBills.map((bill) => (
+                    <tr key={bill.id}>
+                      <td className="font-mono">{bill.billNumber}</td>
+                      <td>{bill.supplier.name}</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(bill.issuedAt).toLocaleDateString()}</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{bill.dueAt ? new Date(bill.dueAt).toLocaleDateString() : '—'}</td>
+                      <td className="font-mono">{money(Number(bill.totalAmount))}</td>
+                      <td className="font-mono">{money(Number(bill.amountPaid ?? 0))}</td>
+                      <td className="font-mono">{money(bill.balance)}</td>
+                      <td><StatusBadge status={bill.displayStatus} /></td>
                       <td className="space-x-2">
-                        {poBalance(po) > 0.01 && (
+                        {bill.balance > 0.01 && (
                           <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
-                            setPayPo(po)
-                            setPayAmount(String(poBalance(po).toFixed(2)))
+                            setPayBill(bill)
+                            setPayAmount(String(bill.balance.toFixed(2)))
                           }}>Mark paid</button>
                         )}
-                        <Link to={adminPath(`/purchasing/${po.id}`)} style={{ color: 'var(--c-accent)' }}>View PO</Link>
+                        {bill.purchaseOrderId ? (
+                          <Link to={adminPath(`/purchasing/${bill.purchaseOrderId}`)} style={{ color: 'var(--c-accent)' }}>View PO</Link>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -436,6 +503,65 @@ export default function FinancePage() {
             )}
           </div>
         </>
+      )}
+
+      {tab === 'bank' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {(bankSummaryQ.data?.accounts ?? []).map((acct) => (
+              <div key={acct.id} className="cosmos-card">
+                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{acct.name}</div>
+                <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                  {money(Number(acct.currentBalance))}
+                </div>
+                <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{acct.accountNumber ?? '—'}</div>
+              </div>
+            ))}
+            <div className="cosmos-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled lines</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {bankSummaryQ.data?.unreconciledCount ?? 0}
+              </div>
+            </div>
+          </div>
+          <div className="cosmos-card overflow-x-auto">
+            {bankLinesQ.isLoading ? <div className="skeleton h-40 w-full" /> : (bankLinesQ.data ?? []).length === 0 ? (
+              <EmptyState icon="🏦" title="All caught up" description="No unreconciled bank statement lines." />
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(bankLinesQ.data ?? []).map((line) => (
+                    <tr key={line.id}>
+                      <td>{new Date(line.postedAt).toLocaleDateString()}</td>
+                      <td>{line.bankAccount?.name ?? '—'}</td>
+                      <td>{line.description}</td>
+                      <td className="font-mono">{money(Number(line.amount))}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-primary !py-1 !px-2 !text-xs"
+                          disabled={reconcileMut.isPending}
+                          onClick={() => reconcileMut.mutate(line.id)}
+                        >
+                          Reconcile
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       )}
 
       {tab === 'trial' && (
@@ -542,7 +668,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {(payOrder || payPo) && (
+      {(payOrder || payBill) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
           <div className="cosmos-card max-w-md w-full space-y-4">
             <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Record payment</h3>
@@ -553,14 +679,14 @@ export default function FinancePage() {
               {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
             <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayPo(null) }}>Cancel</button>
+              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null) }}>Cancel</button>
               <button
                 type="button"
                 className="btn-primary"
-                disabled={payOrderMut.isPending || payPoMut.isPending}
+                disabled={payOrderMut.isPending || payBillMut.isPending}
                 onClick={() => {
                   if (payOrder) void payOrderMut.mutate()
-                  else void payPoMut.mutate()
+                  else void payBillMut.mutate()
                 }}
               >Submit</button>
             </div>

@@ -56,3 +56,36 @@ model JournalLine {
   @@index([entryId])
   @@index([accountId])
 }
+
+model BankAccount {
+  id             String              @id @default(cuid())
+  tenantId       String
+  name           String
+  accountNumber  String?
+  chartAccountId String?
+  currentBalance Decimal             @default(0)
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  statementLines BankStatementLine[]
+
+  @@index([tenantId])
+}
+
+model BankStatementLine {
+  id             String      @id @default(cuid())
+  tenantId       String
+  bankAccountId  String
+  postedAt       DateTime
+  description    String
+  amount         Decimal
+  reference      String?
+  reconciled     Boolean     @default(false)
+  reconciledAt   DateTime?
+  journalEntryId String?
+  bankAccount    BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, bankAccountId])
+  @@index([tenantId, reconciled])
+  @@index([tenantId, postedAt])
+}

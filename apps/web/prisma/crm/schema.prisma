@@ -39,8 +39,41 @@ model Customer {
   updatedAt            DateTime   @updatedAt
   activities           Activity[]
   leads                Lead[]
+  contractPrices       CustomerPrice[]
 
   @@index([tenantId])
+}
+
+model CustomerPrice {
+  id            String    @id @default(cuid())
+  tenantId      String
+  customerId    String
+  skuId         String
+  unitPrice     Decimal
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, customerId, skuId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, skuId])
+}
+
+model VolumePriceBreak {
+  id         String    @id @default(cuid())
+  tenantId   String
+  customerId String?
+  skuId      String
+  minQty     Int
+  unitPrice  Decimal
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([tenantId, skuId])
+  @@index([tenantId, customerId, skuId])
 }
 
 model Lead {

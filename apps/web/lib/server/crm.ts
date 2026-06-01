@@ -97,6 +97,27 @@ export async function patchCustomer(tenantId: string, id: string, dto: Record<st
   return crmDb.customer.update({ where: { id }, data })
 }
 
+export async function patchCustomerProfile(
+  tenantId: string,
+  customerId: string,
+  dto: {
+    phone?: string | null
+    primaryAddressLine1?: string | null
+    primaryCity?: string | null
+    primaryState?: string | null
+    primaryZip?: string | null
+  },
+) {
+  await getCustomer(tenantId, customerId)
+  const data: Prisma.CustomerUpdateInput = {}
+  if (dto.phone !== undefined) data.phone = dto.phone
+  if (dto.primaryAddressLine1 !== undefined) data.primaryAddressLine1 = dto.primaryAddressLine1
+  if (dto.primaryCity !== undefined) data.primaryCity = dto.primaryCity
+  if (dto.primaryState !== undefined) data.primaryState = dto.primaryState
+  if (dto.primaryZip !== undefined) data.primaryZip = dto.primaryZip
+  return crmDb.customer.update({ where: { id: customerId }, data })
+}
+
 export function listLeads(tenantId: string) {
   return crmDb.lead.findMany({
     where: { tenantId },

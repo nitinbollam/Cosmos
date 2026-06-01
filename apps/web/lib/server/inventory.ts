@@ -39,7 +39,7 @@ export async function listSkus(
   page = 1,
   pageSize = 50,
   search?: string,
-  opts?: { category?: string; warehouseId?: string; inStockOnly?: boolean },
+  opts?: { category?: string; warehouseId?: string; inStockOnly?: boolean; customerId?: string },
 ) {
   const where: Prisma.SKUWhereInput = {
     tenantId,
@@ -113,6 +113,12 @@ export async function listSkus(
     }
   })
 
+  if (opts?.customerId) {
+    const { enrichSkusWithCustomerPrices } = await import('./pricing')
+    const priced = await enrichSkusWithCustomerPrices(tenantId, opts.customerId, enriched)
+    return { items: priced, total, page, pageSize, hasMore: page * pageSize < total }
+  }
+
   return { items: enriched, total, page, pageSize, hasMore: page * pageSize < total }
 }
 
@@ -120,6 +126,26 @@ export async function findSkuById(tenantId: string, id: string) {
   const sku = await inventoryDb.sKU.findFirst({ where: { id, tenantId } })
   if (!sku) throw new ApiError(404, 'SKU not found')
   return sku
+}
+
+export async function getSkuReorderSuggestion(tenantId: string, skuId: string, warehouseId?: string) {
+  const sku = await findSkuById(tenantId, skuId)
+  const level = await inventoryDb.stockLevel.findFirst({
+    where: {
+      tenantId,
+      skuId,
+      ...(warehouseId ? { warehouseId } : {}),
+    },
+    orderBy: { reorderPoint: 'desc' },
+  })
+  const reorderQty = level?.reorderQty && level.reorderQty > 0 ? level.reorderQty : Math.max(1, (level?.reorderPoint ?? 0) * 2 || 10)
+  return {
+    sku: { id: sku.id, code: sku.code, name: sku.name, cost: Number(sku.cost ?? 0) },
+    warehouseId: level?.warehouseId ?? warehouseId ?? null,
+    quantityAvailable: level?.quantityAvailable ?? 0,
+    reorderPoint: level?.reorderPoint ?? 0,
+    suggestedQty: reorderQty,
+  }
 }
 
 export async function findSkuByCode(tenantId: string, code: string) {
@@ -490,7 +516,10 @@ export async function adjustStock(
 
   const batchKey = dto.batchId ?? ''
   const correlationId = dto.correlationId ?? randomUUID()
-  return inventoryDb.$transaction(async (tx) => {
+  const prevLevel = await inventoryDb.stockLevel.findFirst({
+    where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
+  })
+  const result = await inventoryDb.$transaction(async (tx) => {
     const level = await tx.stockLevel.findFirst({
       where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
     })
@@ -529,6 +558,25 @@ export async function adjustStock(
     })
     return updatedLevel
   })
+
+  if (
+    prevLevel &&
+    prevLevel.reorderPoint > 0 &&
+    prevLevel.quantityAvailable > prevLevel.reorderPoint &&
+    result.quantityAvailable <= result.reorderPoint
+  ) {
+    const sku = await inventoryDb.sKU.findFirst({ where: { id: dto.skuId, tenantId }, select: { code: true } })
+    const { notifyLowStock } = await import('./notification-triggers')
+    void notifyLowStock(
+      tenantId,
+      dto.skuId,
+      sku?.code ?? dto.skuId,
+      result.quantityAvailable,
+      result.reorderPoint,
+    ).catch(() => undefined)
+  }
+
+  return result
 }
 
 export function getStockLevels(tenantId: string, opts: { skuId?: string; warehouseId?: string }) {

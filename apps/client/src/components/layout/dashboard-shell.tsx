@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { CosmosLogo } from '@/components/cosmos-logo'
 import { Sidebar } from '@/components/layout/sidebar'
+import { GlobalSearch } from '@/components/global-search'
 
 function titleFromPath(path: string) {
   const parts = path.split('/').filter(Boolean)
@@ -66,6 +67,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <GlobalSearch />
             <Link to="/admin/notifications" className="cosmos-icon-btn" title="Alerts" aria-label="Notifications">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path

@@ -65,6 +65,21 @@ export default function CompliancePage() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['msa', 'reports'] }),
   })
 
+  const runCron = useMutation({
+    mutationFn: () => api.post('/msa/cron?weekOffset=0', {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['msa', 'reports'] }),
+  })
+
+  const uploadReport = useMutation({
+    mutationFn: (id: string) => api.post(`/msa/reports/${id}/upload`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['msa', 'reports'] }),
+  })
+
+  const submitReport = useMutation({
+    mutationFn: (id: string) => api.post(`/msa/reports/${id}/submit`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['msa', 'reports'] }),
+  })
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -118,14 +133,30 @@ export default function CompliancePage() {
               type="button"
               onClick={() => generate.mutate()}
               disabled={generate.isPending}
-              className="ml-auto h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+              className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
             >
               {generate.isPending ? 'Generating…' : 'Generate weekly drafts'}
             </button>
+            <button
+              type="button"
+              onClick={() => runCron.mutate()}
+              disabled={runCron.isPending}
+              className="h-9 px-4 rounded-md border border-cosmos-border text-sm text-cosmos-text disabled:opacity-40"
+            >
+              {runCron.isPending ? 'Running…' : 'Run full automation'}
+            </button>
           </div>
-          {generate.error && (
-            <p className="text-red-400 text-sm">{String((generate.error as Error).message)}</p>
+          {(generate.error || runCron.error) && (
+            <p className="text-red-400 text-sm">
+              {String((generate.error ?? runCron.error as Error)?.message ?? 'MSA action failed')}
+            </p>
           )}
+          {runCron.data ? (
+            <p className="text-xs text-cosmos-muted">
+              Automation: {(runCron.data as { generated?: string[] }).generated?.length ?? 0} generated,{' '}
+              {(runCron.data as { submitted?: string[] }).submitted?.length ?? 0} submitted via EDI
+            </p>
+          ) : null}
 
           {importOpen ? (
             <SpreadsheetImportPanel
@@ -239,12 +270,34 @@ export default function CompliancePage() {
                           <StatusBadge status={r.status} />
                         </td>
                         <td className="py-2">
-                          <Link
-                            to={adminPath(`/compliance/msa/${r.id}`)}
-                            className="text-cosmos-primary text-xs whitespace-nowrap"
-                          >
-                            View
-                          </Link>
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <Link
+                              to={adminPath(`/compliance/msa/${r.id}`)}
+                              className="text-cosmos-primary text-xs whitespace-nowrap"
+                            >
+                              View
+                            </Link>
+                            {r.status === 'GENERATED' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="text-xs text-cosmos-muted hover:text-cosmos-white"
+                                  disabled={uploadReport.isPending}
+                                  onClick={() => uploadReport.mutate(r.id)}
+                                >
+                                  Upload
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-xs text-cosmos-muted hover:text-cosmos-white"
+                                  disabled={submitReport.isPending}
+                                  onClick={() => submitReport.mutate(r.id)}
+                                >
+                                  Submit EDI
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}

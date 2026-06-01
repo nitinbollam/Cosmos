@@ -75,3 +75,17 @@ export function list(tenantId: string) {
     take: 200,
   })
 }
+
+export async function retry(tenantId: string, id: string) {
+  const row = await notificationDb.notificationRequest.findFirst({ where: { id, tenantId } })
+  if (!row) {
+    const { ApiError } = await import('./session')
+    throw new ApiError(404, 'Notification not found')
+  }
+  return deliverRecord(tenantId, row.id, {
+    channel: row.channel,
+    recipient: row.recipient,
+    templateKey: row.templateKey,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+  })
+}

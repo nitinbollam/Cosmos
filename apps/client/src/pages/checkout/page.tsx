@@ -11,6 +11,16 @@ import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
 type CustomerRow = { id: string; name: string; email?: string | null; phone?: string | null }
 
+type SavedCard = {
+  id: string
+  brand?: string | null
+  last4?: string | null
+  expMonth?: number | null
+  expYear?: number | null
+  isDefault: boolean
+  stripePaymentMethodId: string
+}
+
 type PaymentMethod = 'NET_TERMS' | 'CARD' | 'CASH' | 'CHECK' | 'ACH'
 
 const stripePublishable = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
@@ -46,6 +56,10 @@ export default function CheckoutPage() {
 
   const [payment, setPayment] = useState<PaymentMethod>('NET_TERMS')
   const [cardPaymentMethodId, setCardPaymentMethodId] = useState<string | null>(null)
+  const [savedCards, setSavedCards] = useState<SavedCard[]>([])
+  const [cardMode, setCardMode] = useState<'saved' | 'new'>('saved')
+  const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null)
+  const [saveNewCardToAccount, setSaveNewCardToAccount] = useState(true)
 
   const loadCustomer = useCallback(async () => {
     if (!getB2bCustomerId()) {
@@ -53,13 +67,32 @@ export default function CheckoutPage() {
       return
     }
     try {
-      const [c, tax] = await Promise.all([
-        api.get<CustomerRow>('/customers/me'),
+      const [c, tax, methods] = await Promise.all([
+        api.get<CustomerRow & {
+          primaryAddressLine1?: string | null
+          primaryCity?: string | null
+          primaryState?: string | null
+          primaryZip?: string | null
+        }>('/customers/me'),
         api.get<{ salesTaxRate: number }>('/tax/settings'),
+        api.get<SavedCard[]>('/saved-payment-methods').catch(() => [] as SavedCard[]),
       ])
       setCustomer(c)
       setCompany(c.name)
+      setLine1(c.primaryAddressLine1 ?? '')
+      setCity(c.primaryCity ?? '')
+      setState(c.primaryState ?? '')
+      setZip(c.primaryZip ?? '')
       setTaxRate(tax.salesTaxRate)
+      setSavedCards(methods)
+      const defaultCard = methods.find((m) => m.isDefault) ?? methods[0]
+      if (defaultCard) {
+        setSelectedSavedId(defaultCard.id)
+        setCardPaymentMethodId(defaultCard.stripePaymentMethodId)
+        setCardMode('saved')
+      } else {
+        setCardMode('new')
+      }
     } catch (e: unknown) {
       setErr(axiosErr(e))
     }
@@ -71,7 +104,12 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     setCardPaymentMethodId(null)
-  }, [payment])
+    if (payment !== 'CARD') return
+    if (cardMode === 'saved' && selectedSavedId) {
+      const card = savedCards.find((c) => c.id === selectedSavedId)
+      setCardPaymentMethodId(card?.stripePaymentMethodId ?? null)
+    }
+  }, [payment, cardMode, selectedSavedId, savedCards])
 
   async function placeOrder() {
     const cid = getB2bCustomerId()
@@ -135,6 +173,15 @@ export default function CheckoutPage() {
           },
           { 'Idempotency-Key': authKey },
         )
+
+        if (cardMode === 'new' && saveNewCardToAccount && cardPaymentMethodId.startsWith('pm_')) {
+          await api
+            .post('/saved-payment-methods', {
+              stripePaymentMethodId: cardPaymentMethodId,
+              isDefault: savedCards.length === 0,
+            })
+            .catch(() => undefined)
+        }
       }
 
       clear()
@@ -229,6 +276,13 @@ export default function CheckoutPage() {
           stripePromise={stripePromise}
           cardPaymentMethodId={cardPaymentMethodId}
           setCardPaymentMethodId={setCardPaymentMethodId}
+          savedCards={savedCards}
+          cardMode={cardMode}
+          setCardMode={setCardMode}
+          selectedSavedId={selectedSavedId}
+          setSelectedSavedId={setSelectedSavedId}
+          saveNewCardToAccount={saveNewCardToAccount}
+          setSaveNewCardToAccount={setSaveNewCardToAccount}
           onBack={() => setStep(1)}
           onReview={() => setStep(3)}
         />
@@ -250,7 +304,13 @@ export default function CheckoutPage() {
           <p>
             Pay with: <strong>{payment.replace(/_/g, ' ')}</strong>
             {payment === 'CARD' && cardPaymentMethodId ? (
-              <span style={{ color: 'var(--c-success)', fontSize: 13 }}> — card on file</span>
+              <span style={{ color: 'var(--c-success)', fontSize: 13 }}>
+                {' '}
+                —{' '}
+                {cardMode === 'saved'
+                  ? `saved ${savedCards.find((c) => c.id === selectedSavedId)?.brand ?? 'card'} •••• ${savedCards.find((c) => c.id === selectedSavedId)?.last4 ?? '????'}`
+                  : 'new card on file'}
+              </span>
             ) : null}
           </p>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18 }}>${orderTotal.toFixed(2)}</p>
@@ -282,6 +342,13 @@ function PaymentStep2({
   stripePromise,
   cardPaymentMethodId,
   setCardPaymentMethodId,
+  savedCards,
+  cardMode,
+  setCardMode,
+  selectedSavedId,
+  setSelectedSavedId,
+  saveNewCardToAccount,
+  setSaveNewCardToAccount,
   onBack,
   onReview,
 }: {
@@ -295,9 +362,22 @@ function PaymentStep2({
   stripePromise: Promise<Stripe | null> | null
   cardPaymentMethodId: string | null
   setCardPaymentMethodId: (id: string | null) => void
+  savedCards: SavedCard[]
+  cardMode: 'saved' | 'new'
+  setCardMode: (m: 'saved' | 'new') => void
+  selectedSavedId: string | null
+  setSelectedSavedId: (id: string | null) => void
+  saveNewCardToAccount: boolean
+  setSaveNewCardToAccount: (v: boolean) => void
   onBack: () => void
   onReview: () => void
 }) {
+  const canReviewCard =
+    payment !== 'CARD' ||
+    !stripeConfigured ||
+    (cardMode === 'saved' && !!cardPaymentMethodId) ||
+    (cardMode === 'new' && !!cardPaymentMethodId)
+
   const inner = (
     <>
       <h2 style={{ marginTop: 0 }}>Payment</h2>
@@ -313,39 +393,106 @@ function PaymentStep2({
           ✓ Invoiced on terms — place order to confirm.
         </p>
       ) : null}
-      {showStripe ? (
-        <>
-          {!stripeConfigured ? (
-            <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>Missing VITE_STRIPE_PUBLISHABLE_KEY.</p>
-          ) : (
-            <StorefrontCardCapture onPaymentMethodId={(id) => setCardPaymentMethodId(id)} />
-          )}
-          {cardPaymentMethodId ? (
-            <p style={{ fontSize: 13, color: 'var(--c-success)', marginTop: 8 }}>Card saved for this checkout.</p>
+      {payment === 'CARD' && stripeConfigured ? (
+        <div style={{ marginTop: 16 }}>
+          {savedCards.length > 0 ? (
+            <div style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
+              <p style={{ fontSize: 13, color: 'var(--c-text-3)', margin: 0 }}>Saved cards</p>
+              {savedCards.map((c) => (
+                <label
+                  key={c.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: `1px solid ${cardMode === 'saved' && selectedSavedId === c.id ? 'var(--c-primary)' : 'var(--c-border)'}`,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="savedCard"
+                    checked={cardMode === 'saved' && selectedSavedId === c.id}
+                    onChange={() => {
+                      setCardMode('saved')
+                      setSelectedSavedId(c.id)
+                      setCardPaymentMethodId(c.stripePaymentMethodId)
+                    }}
+                  />
+                  <span>
+                    {(c.brand ?? 'Card').toUpperCase()} •••• {c.last4 ?? '????'}
+                    {c.isDefault ? <span style={{ marginLeft: 8, color: 'var(--c-accent)', fontSize: 12 }}>Default</span> : null}
+                  </span>
+                </label>
+              ))}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: `1px solid ${cardMode === 'new' ? 'var(--c-primary)' : 'var(--c-border)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="savedCard"
+                  checked={cardMode === 'new'}
+                  onChange={() => {
+                    setCardMode('new')
+                    setCardPaymentMethodId(null)
+                  }}
+                />
+                <span>Use a new card</span>
+              </label>
+            </div>
           ) : null}
-        </>
+          {(cardMode === 'new' || savedCards.length === 0) && showStripe ? (
+            <>
+              <StorefrontCardCapture onPaymentMethodId={(id) => setCardPaymentMethodId(id)} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={saveNewCardToAccount}
+                  onChange={(e) => setSaveNewCardToAccount(e.target.checked)}
+                />
+                Save this card to my account for next time
+              </label>
+            </>
+          ) : null}
+          {cardPaymentMethodId ? (
+            <p style={{ fontSize: 13, color: 'var(--c-success)', marginTop: 8 }}>Card ready for authorization.</p>
+          ) : null}
+        </div>
+      ) : null}
+      {payment === 'CARD' && !stripeConfigured ? (
+        <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>Missing VITE_STRIPE_PUBLISHABLE_KEY.</p>
       ) : null}
       <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 12 }}>
         Subtotal ${cartSubtotal.toFixed(2)} · Tax ${taxAmount.toFixed(2)} · Total due{' '}
         <strong style={{ fontFamily: 'var(--font-mono)' }}>${orderTotal.toFixed(2)}</strong>
       </p>
+      <p style={{ fontSize: 12, marginTop: 8 }}>
+        <Link to="/account" style={{ color: 'var(--c-accent)' }}>
+          Manage saved cards on your account →
+        </Link>
+      </p>
       <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
         <button type="button" className="btn-ghost" onClick={onBack}>
           Back
         </button>
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={onReview}
-          disabled={payment === 'CARD' && stripeConfigured && !cardPaymentMethodId}
-        >
+        <button type="button" className="btn-primary" onClick={onReview} disabled={!canReviewCard}>
           Review
         </button>
       </div>
     </>
   )
 
-  if (showStripe && stripePromise) {
+  if (showStripe && stripePromise && payment === 'CARD' && (cardMode === 'new' || savedCards.length === 0)) {
     return (
       <div className="cosmos-card">
         <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>

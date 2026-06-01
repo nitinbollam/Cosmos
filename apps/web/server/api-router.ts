@@ -1,6 +1,7 @@
 import { detectSeriesAnomalies, forecastCashFlow, type DetectRequest, type ForecastRequest } from '@cosmos/analytics-engine'
 import { jwtVerify } from 'jose'
 import { loginUser, logoutUser, refreshUserTokens, registerUser } from '../lib/server/auth'
+import { publicSignup } from '../lib/server/signup'
 import { getAuthProfile } from '../lib/server/buyer-context'
 import { jwtSecret } from '../lib/server/env'
 import { handleNativeApi } from '../lib/server/native-router'
@@ -72,6 +73,40 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Login failed'
       return json({ message: msg }, msg === 'Invalid credentials' ? 401 : 500)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/signup' && req.method === 'POST') {
+    let body: {
+      companyName?: string
+      slug?: string
+      email?: string
+      password?: string
+      firstName?: string
+      lastName?: string
+    }
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      return json({ message: 'Invalid JSON body' }, 400)
+    }
+    if (!body.companyName || !body.slug || !body.email || !body.password || !body.firstName || !body.lastName) {
+      return json({ message: 'Missing required fields' }, 400)
+    }
+    try {
+      return json(
+        await publicSignup({
+          companyName: body.companyName,
+          slug: body.slug,
+          email: body.email,
+          password: body.password,
+          firstName: body.firstName,
+          lastName: body.lastName,
+        }),
+        201,
+      )
+    } catch (e) {
+      return toJsonError(e)
     }
   }
 
