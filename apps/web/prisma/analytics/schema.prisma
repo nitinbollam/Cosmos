@@ -21,3 +21,29 @@ model DailyKpiSnapshot {
   @@unique([tenantId, date])
   @@index([tenantId])
 }
+
+model CelestialConversation {
+  id        String             @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      String
+  surface   String             @default("shop")
+  title     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  messages  CelestialMessage[]
+
+  @@index([tenantId, userId])
+}
+
+model CelestialMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  conversation   CelestialConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}

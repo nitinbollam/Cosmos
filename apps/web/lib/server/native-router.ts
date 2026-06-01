@@ -35,6 +35,7 @@ import * as posReceipt from './pos-receipt'
 import * as featureFlags from './feature-flags'
 import * as customerNotificationPrefs from './customer-notification-prefs'
 import { getNotificationProviderStatus } from './notification-provider-status'
+import * as celestial from './celestial/orchestrator'
 import { getAuthProfile, isPortalBuyer, isAdminStaff, requirePortalCustomerId } from './buyer-context'
 import { getTenantTaxSettings } from './tenant-tax'
 import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError } from './session'
@@ -84,6 +85,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'pos') return await routePos(m, seg, req)
     if (seg[0] === 'features') return await routeFeatures(m, seg, req)
     if (seg[0] === 'volume-prices') return await routeVolumePrices(m, seg, req)
+    if (seg[0] === 'celestial') return await routeCelestial(m, seg, req)
     return null
   } catch (e) {
     return toJsonError(e)
@@ -1390,4 +1392,17 @@ async function routeVolumePrices(method: string, seg: string[], req: Request): P
     return Response.json(await pricing.upsertVolumePriceBreak(session.tenantId, body), { status: 201 })
   }
   throw new ApiError(404, 'Volume price route not found')
+}
+
+async function routeCelestial(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requireSession(req)
+
+  if (seg.length === 2 && seg[1] === 'status' && method === 'GET') {
+    return Response.json(celestial.getCelestialModelInfo())
+  }
+  if (seg.length === 2 && seg[1] === 'chat' && method === 'POST') {
+    const body = (await req.json()) as celestial.CelestialChatInput
+    return Response.json(await celestial.chat(session, body))
+  }
+  throw new ApiError(404, 'Celestial route not found')
 }

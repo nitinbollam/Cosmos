@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { CosmosLogo } from '@/components/cosmos-logo'
+import { CelestialChat } from '@/components/celestial/celestial-chat'
 import { Sidebar } from '@/components/layout/sidebar'
 import { GlobalSearch } from '@/components/global-search'
 
@@ -87,6 +88,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="cosmos-admin-content">{children}</main>
       </div>
+      <CelestialChat surface="admin" />
     </div>
   )
 }

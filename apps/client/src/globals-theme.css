@@ -67,3 +67,108 @@
   --cosmos-muted: var(--c-text-3);
   --cosmos-text: var(--c-text);
 }
+
+/* Celestial AI assistant */
+.celestial-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c-accent) 40%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c-accent) 25%, var(--c-surface-2)), var(--c-surface-1));
+  color: var(--c-heading, var(--c-text));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+.celestial-fab-label { font-family: var(--font-display, inherit); }
+.celestial-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 84px;
+  width: min(420px, calc(100vw - 32px));
+  height: min(560px, calc(100vh - 120px));
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.celestial-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--c-border);
+}
+.celestial-panel-title {
+  margin: 0;
+  font-size: 16px;
+  font-family: var(--font-display, inherit);
+  color: var(--c-heading, var(--c-text));
+}
+.celestial-panel-sub {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--c-text-3);
+}
+.celestial-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.celestial-msg {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.celestial-msg--user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--c-accent) 18%, transparent);
+  max-width: 90%;
+}
+.celestial-msg--assistant {
+  align-self: flex-start;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  max-width: 95%;
+}
+.celestial-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.celestial-meta {
+  margin: 6px 0 0;
+  font-size: 10px;
+  color: var(--c-text-3);
+}
+.celestial-empty {
+  font-size: 13px;
+  color: var(--c-text-2);
+}
+.celestial-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.celestial-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--c-border);
+}
+.celestial-input-row .cosmos-input { flex: 1; }

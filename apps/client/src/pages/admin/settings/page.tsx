@@ -984,6 +984,7 @@ type TenantFeatures = {
   wavePicking?: boolean
   splitShipments?: boolean
   advancedTax?: boolean
+  celestial?: boolean
 }
 
 type FeaturesDetail = {
@@ -1000,6 +1001,7 @@ const FEATURE_META: Array<{ key: keyof TenantFeatures; label: string; blurb: str
   { key: 'wavePicking', label: 'Wave picking', blurb: 'Batch pick waves in warehouse' },
   { key: 'splitShipments', label: 'Split shipments', blurb: 'Multiple packages per order with tracking' },
   { key: 'advancedTax', label: 'Advanced tax', blurb: 'Extended sales tax engine' },
+  { key: 'celestial', label: 'Celestial AI', blurb: 'In-app AI assistant for buyers and admin staff' },
 ]
 
 function buildFeatureOverrides(defaults: TenantFeatures, toggles: TenantFeatures): TenantFeatures {
