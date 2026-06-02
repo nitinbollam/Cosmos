@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-crm"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("CRM_DATABASE_URL")
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  NOTE
+}
+
+model Customer {
+  id                   String     @id @default(cuid())
+  tenantId             String
+  name                 String
+  email                String?
+  phone                String?
+  externalRef          String?
+  customerKind         String     @default("BUSINESS")
+  firstName            String?
+  lastName             String?
+  taxId                String?
+  isLicensedTobacco    Boolean    @default(false)
+  tobaccoLicenseNumber String?
+  creditLimit          Decimal?  
+  creditUsed           Decimal    @default(0)
+  paymentTermsDays     Int        @default(0)
+  salesRepUserId       String?
+  primaryAddressLine1  String?
+  primaryCity          String?
+  primaryState         String?
+  primaryZip           String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  activities           Activity[]
+  leads                Lead[]
+  contractPrices       CustomerPrice[]
+
+  @@index([tenantId])
+}
+
+model CustomerPrice {
+  id            String    @id @default(cuid())
+  tenantId      String
+  customerId    String
+  skuId         String
+  unitPrice     Decimal
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, customerId, skuId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, skuId])
+}
+
+model VolumePriceBreak {
+  id         String    @id @default(cuid())
+  tenantId   String
+  customerId String?
+  skuId      String
+  minQty     Int
+  unitPrice  Decimal
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([tenantId, skuId])
+  @@index([tenantId, customerId, skuId])
+}
+
+model Lead {
+  id               String   @id @default(cuid())
+  tenantId         String
+  companyName      String
+  contactName      String?
+  email            String?
+  status           String   @default("NEW")
+  source           String?
+  pipelineValue    Decimal?
+  assignedToUserId String?
+  customerId       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  activities       Activity[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+model Activity {
+  id         String       @id @default(cuid())
+  tenantId   String
+  type       ActivityType
+  subject    String?
+  body       String?
+  outcome    String?
+  customerId String?
+  leadId     String?
+  occurredAt DateTime     @default(now())
+  customer   Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead       Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([leadId])
+}

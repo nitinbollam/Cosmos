@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-dispatch"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DISPATCH_DATABASE_URL")
+}
+
+enum RouteStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum StopStatus {
+  PENDING
+  EN_ROUTE
+  DELIVERED
+  FAILED
+}
+
+model DeliveryRoute {
+  id           String      @id @default(cuid())
+  tenantId     String
+  driverId     String?
+  status       RouteStatus @default(PLANNED)
+  name         String?
+  scheduledFor DateTime?
+  lastKnownLat Float?
+  lastKnownLng Float?
+  lastKnownAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  stops        RouteStop[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, scheduledFor])
+}
+
+model RouteStop {
+  id       String        @id @default(cuid())
+  routeId  String
+  sequence Int
+  address  Json
+  status   StopStatus    @default(PENDING)
+  route    DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, sequence])
+  @@index([routeId])
+}

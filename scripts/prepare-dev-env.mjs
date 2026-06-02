@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 /**
- * Writes per-service .env files from the repo root .env so Nest ConfigModule
- * (cwd = service dir) and Prisma see JWT_SECRET, REDIS_URL, and the correct DATABASE_URL.
+ * Writes apps/web/.env.local from the repo root .env (embedded SQLite *_DATABASE_URL values).
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { DB_BY_SCHEMA, sqliteDatabaseUrl } from './db-urls.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const rootEnvPath = path.join(root, '.env')
 const examplePath = path.join(root, '.env.example')
+const webEnvPath = path.join(root, 'apps', 'web', '.env.local')
+const webExamplePath = path.join(root, 'apps', 'web', '.env.local.example')
+const clientEnvPath = path.join(root, 'apps', 'client', '.env')
 
 if (!fs.existsSync(rootEnvPath) && fs.existsSync(examplePath)) {
   fs.copyFileSync(examplePath, rootEnvPath)
@@ -35,61 +38,75 @@ const baseVars = Object.fromEntries(
     .filter(Boolean),
 )
 
-const baseUrl = baseVars.DATABASE_URL ?? 'postgresql://cosmos:cosmos@127.0.0.1:15432/cosmos'
+const dataDir = baseVars.COSMOS_DATA_DIR ?? '.data'
 
-function dbUrlForService(serviceDirName) {
-  const slug = serviceDirName.replace(/-service$/, '').replace(/-/g, '_')
-  const dbName = `cosmos_${slug}`
-  try {
-    const u = new URL(baseUrl)
-    u.pathname = `/${dbName}`
-    return u.toString()
-  } catch {
-    return `${baseUrl.replace(/\/[^/]*$/, '')}/${dbName}`
-  }
+const webVars = {
+  ...baseVars,
+  COSMOS_DATA_DIR: dataDir,
+  NEXT_PUBLIC_GATEWAY_URL: '/api/v1',
+  NEXT_PUBLIC_WEB_ADMIN_ORIGIN: baseVars.NEXT_PUBLIC_WEB_ADMIN_ORIGIN ?? 'http://localhost:4000',
+  COSMOS_CLIENT_ORIGIN: baseVars.COSMOS_CLIENT_ORIGIN ?? 'http://localhost:4000',
 }
 
-const servicesDir = path.join(root, 'services')
-for (const svc of fs.readdirSync(servicesDir)) {
-  const dir = path.join(servicesDir, svc)
-  if (!fs.statSync(dir).isDirectory()) continue
-
-  const schema = path.join(dir, 'src', 'prisma', 'schema.prisma')
-  const envVars = { ...baseVars, SERVICE_NAME: svc }
-  if (fs.existsSync(schema)) {
-    envVars.DATABASE_URL = dbUrlForService(svc)
-  }
-
-  const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`)
-  fs.writeFileSync(path.join(dir, '.env'), `${lines.join('\n')}\n`)
-  if (fs.existsSync(schema)) {
-    console.log(`[env] ${svc} -> ${envVars.DATABASE_URL.replace(/:[^:@]*@/, ':***@')}`)
-  } else {
-    console.log(`[env] ${svc} (service URLs only)`)
-  }
+for (const [schema, dbName] of Object.entries(DB_BY_SCHEMA)) {
+  const envKey = `${schema.toUpperCase()}_DATABASE_URL`
+  webVars[envKey] = baseVars[envKey] ?? sqliteDatabaseUrl(dbName, dataDir)
 }
 
-for (const app of ['web-admin', 'web-storefront']) {
-  const dir = path.join(root, 'apps', app)
-  if (!fs.existsSync(dir)) continue
-  const appVars = { ...baseVars }
-  if (app === 'web-admin') {
-    // Same-origin rewrite in next.config.mjs — avoids CORS "Network Error" in the browser.
-    appVars.NEXT_PUBLIC_GATEWAY_URL = '/api/v1'
-    delete appVars.CASHFLOW_SERVICE_URL
+const exampleLines = fs.existsSync(webExamplePath) ? fs.readFileSync(webExamplePath, 'utf8') : ''
+const orderedKeys = [
+  'COSMOS_DATA_DIR',
+  'NEXT_PUBLIC_GATEWAY_URL',
+  ...Object.keys(DB_BY_SCHEMA).map((s) => `${s.toUpperCase()}_DATABASE_URL`),
+  'JWT_SECRET',
+  'JWT_REFRESH_SECRET',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_RETURN_URL',
+  'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+  'NEXT_PUBLIC_WEB_ADMIN_ORIGIN',
+]
+
+const lines = []
+for (const key of orderedKeys) {
+  if (webVars[key] != null && webVars[key] !== '') lines.push(`${key}=${webVars[key]}`)
+}
+for (const [k, v] of Object.entries(webVars)) {
+  if (!orderedKeys.includes(k) && !k.startsWith('AUTH_SERVICE') && !k.endsWith('_SERVICE_URL')) {
+    lines.push(`${k}=${v}`)
   }
-  const lines = Object.entries(appVars).map(([k, v]) => `${k}=${v}`)
-  fs.writeFileSync(path.join(dir, '.env'), `${lines.join('\n')}\n`)
-  console.log(`[env] apps/${app}`)
+}
+if (exampleLines.includes('# Legacy')) {
+  lines.push('')
+  lines.push('# Legacy Nest URLs not used by @cosmos/web')
 }
 
-console.log('Dev .env files ready.')
+fs.writeFileSync(webEnvPath, `${lines.join('\n')}\n`)
+console.log(`[env] apps/web/.env.local (${lines.length} vars, SQLite in apps/web/${dataDir})`)
 
-const ae = spawnSync('pnpm', ['--filter', '@cosmos/analytics-engine', 'build'], {
+const clientEnv = [
+  `VITE_GATEWAY_URL=${baseVars.VITE_GATEWAY_URL ?? '/api/v1'}`,
+  `VITE_WEB_ADMIN_ORIGIN=${webVars.NEXT_PUBLIC_WEB_ADMIN_ORIGIN}`,
+  `VITE_STRIPE_PUBLISHABLE_KEY=${baseVars.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? baseVars.STRIPE_PUBLISHABLE_KEY ?? ''}`,
+].join('\n')
+fs.writeFileSync(clientEnvPath, `${clientEnv}\n`)
+console.log('[env] apps/client/.env')
+
+spawnSync(process.execPath, [path.join(root, 'scripts', 'clean-client-public.mjs')], {
+  cwd: root,
+  stdio: 'inherit',
+})
+spawnSync(process.execPath, [path.join(root, 'scripts', 'generate-favicons.mjs')], {
+  cwd: root,
+  stdio: 'inherit',
+})
+
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const ae = spawnSync(npm, ['run', 'build', '-w', '@cosmos/analytics-engine'], {
   cwd: root,
   stdio: 'inherit',
   shell: process.platform === 'win32',
 })
-if (ae.status !== 0) {
-  process.exit(ae.status ?? 1)
-}
+if (ae.status !== 0) process.exit(ae.status ?? 1)
+
+console.log('Dev env ready (Vite UI + API on :4000).')

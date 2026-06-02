@@ -1,0 +1,294 @@
+import type { ToolResult } from './tools'
+
+type WarehouseRow = {
+  code: string
+  name: string
+  address?: string | null
+  city?: string | null
+  isDefault?: boolean
+}
+
+type OrderRow = {
+  id: string
+  status: string
+  total: number
+  createdAt: string | Date
+  lineCount?: number
+}
+
+type InvoiceRow = {
+  invoiceNumber: string
+  status: string
+  total: number
+  balance?: number
+}
+
+type QuoteRow = {
+  id: string
+  status: string
+  lineCount?: number
+}
+
+type SkuRow = {
+  code: string
+  name: string
+  available?: number
+  price?: number
+  reorderPoint?: number
+}
+
+type GlobalSearchData = {
+  orders?: OrderRow[]
+  customers?: Array<{ id: string; name: string; email?: string | null }>
+  skus?: SkuRow[]
+  quotes?: QuoteRow[]
+}
+
+export function composeFromToolResults(toolResults: ToolResult[]): string {
+  if (toolResults.length === 0) {
+    return ''
+  }
+
+  const sections = toolResults.filter(toolResultHasData).map(formatToolSection).filter(Boolean)
+  if (sections.length === 0) {
+    return ''
+  }
+
+  return sections.join('\n\n')
+}
+
+export function toolResultHasData(result: ToolResult): boolean {
+  if (result.name === 'global_search') {
+    const data = result.data as { orders?: unknown[]; customers?: unknown[]; skus?: unknown[]; quotes?: unknown[] }
+    return (
+      (data?.orders?.length ?? 0) > 0 ||
+      (data?.customers?.length ?? 0) > 0 ||
+      (data?.skus?.length ?? 0) > 0 ||
+      (data?.quotes?.length ?? 0) > 0
+    )
+  }
+  if (result.name === 'get_order_detail') {
+    return result.data != null && typeof result.data === 'object'
+  }
+  if (Array.isArray(result.data)) return result.data.length > 0
+  return false
+}
+
+export function buildDocFallbackReply(message: string, docs: Array<{ heading: string; body: string }>): string {
+  if (docs.length === 0) {
+    return [
+      `I'm **Celestial**, your Cosmos assistant.`,
+      '',
+      'I can help with **orders**, **inventory**, **warehouses**, **finance**, **POS**, **quotes**, and how Cosmos features work.',
+      '',
+      `You asked: "${message}"`,
+      '',
+      'Try questions like "What warehouses do we have?", "Any orders pending?", or "How does POS work in Cosmos?"',
+    ].join('\n')
+  }
+
+  const sections = docs.slice(0, 2).map((doc) => {
+    const excerpt = doc.body.length > 700 ? `${doc.body.slice(0, 700).trim()}…` : doc.body
+    return `### ${doc.heading}\n${excerpt}`
+  })
+
+  return [
+    'Here is what Cosmos documentation says about your question:',
+    '',
+    ...sections,
+    '',
+    'Ask a follow-up if you want steps for a specific screen or live data (orders, stock, warehouses).',
+  ].join('\n')
+}
+
+/** @deprecated use composeFromToolResults */
+export function tryComposeDirectReply(toolResults: ToolResult[], _userMessage: string): string | null {
+  if (!toolResults.some(toolResultHasData)) return null
+  const reply = composeFromToolResults(toolResults)
+  return reply || null
+}
+
+function formatToolSection(result: ToolResult): string | null {
+  switch (result.name) {
+    case 'list_warehouses':
+      return formatWarehouses(result)
+    case 'get_my_orders':
+      return formatOrders(result)
+    case 'get_order_detail':
+      return formatOrderDetail(result)
+    case 'list_my_invoices':
+      return formatInvoices(result)
+    case 'list_my_quotes':
+      return formatQuotes(result)
+    case 'list_low_stock':
+      return formatLowStock(result)
+    case 'search_catalog':
+      return formatCatalog(result)
+    case 'global_search':
+      return formatGlobalSearch(result)
+    default:
+      return null
+  }
+}
+
+function formatWarehouses(result: ToolResult): string {
+  const rows = result.data as WarehouseRow[]
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '**Warehouses:** No active warehouses found in Cosmos.'
+  }
+  const tableRows = rows.map(
+    (w) => `| \`${w.code}\` | ${w.name} | ${w.address ?? w.city ?? '—'} | ${w.isDefault ? '**Yes**' : '—'} |`,
+  )
+  return [
+    `**Warehouses** — ${rows.length} active:`,
+    '',
+    '| Code | Name | Address | Default |',
+    '| --- | --- | --- | --- |',
+    ...tableRows,
+    '',
+    'Manage in [Settings → Warehouses](/admin/settings?tab=warehouses).',
+  ].join('\n')
+}
+
+function formatOrders(result: ToolResult): string {
+  const rows = result.data as OrderRow[]
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '**Orders:** No matching orders found in Cosmos.'
+  }
+  const listPath = result.links[0]?.href?.replace(/\/[^/]+$/, '') ?? '/admin/orders'
+  const tableRows = rows.map((o) => {
+    const shortId = o.id.length > 10 ? `…${o.id.slice(-8)}` : o.id
+    const date = formatDate(o.createdAt)
+    return `| \`${shortId}\` | ${o.status} | $${o.total.toFixed(2)} | ${date} | ${o.lineCount ?? '—'} |`
+  })
+  return [
+    `**Orders** — ${rows.length} recent:`,
+    '',
+    '| Order | Status | Total | Created | Lines |',
+    '| --- | --- | --- | --- | --- |',
+    ...tableRows,
+    '',
+    `Open [Orders](${listPath}) for full detail.`,
+  ].join('\n')
+}
+
+function formatOrderDetail(result: ToolResult): string {
+  const o = result.data as OrderRow & { amountPaid?: number; lines?: unknown[] }
+  if (!o?.id) return '**Order:** Not found.'
+  const shortId = o.id.length > 10 ? `…${o.id.slice(-8)}` : o.id
+  return [
+    `**Order \`${shortId}\`**`,
+    `- Status: **${o.status}**`,
+    `- Total: $${Number(o.total).toFixed(2)}`,
+    o.amountPaid != null ? `- Paid: $${Number(o.amountPaid).toFixed(2)}` : '',
+    `- Lines: ${Array.isArray(o.lines) ? o.lines.length : o.lineCount ?? '—'}`,
+    '',
+    `View [order detail](/admin/orders/${o.id}).`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function formatInvoices(result: ToolResult): string {
+  const rows = result.data as InvoiceRow[]
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '**Invoices:** No matching invoices found.'
+  }
+  const tableRows = rows.map(
+    (inv) =>
+      `| ${inv.invoiceNumber} | ${inv.status} | $${inv.total.toFixed(2)} | ${inv.balance != null ? `$${inv.balance.toFixed(2)}` : '—'} |`,
+  )
+  return [
+    `**Invoices** — ${rows.length} recent:`,
+    '',
+    '| Invoice | Status | Total | Balance |',
+    '| --- | --- | --- | --- |',
+    ...tableRows,
+  ].join('\n')
+}
+
+function formatQuotes(result: ToolResult): string {
+  const rows = result.data as QuoteRow[]
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '**Quotes:** No open quotes found.'
+  }
+  const tableRows = rows.map((q) => {
+    const shortId = q.id.length > 10 ? `…${q.id.slice(-8)}` : q.id
+    return `| \`${shortId}\` | ${q.status} | ${q.lineCount ?? '—'} |`
+  })
+  return [
+    `**Quotes** — ${rows.length} recent:`,
+    '',
+    '| Quote | Status | Lines |',
+    '| --- | --- | --- |',
+    ...tableRows,
+    '',
+    'Open [Quotes](/admin/quotes).',
+  ].join('\n')
+}
+
+function formatLowStock(result: ToolResult): string {
+  const rows = result.data as SkuRow[]
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '**Low stock:** No SKUs at or below reorder point.'
+  }
+  const tableRows = rows.map(
+    (s) => `| \`${s.code}\` | ${s.name} | ${s.available ?? 0} | ${s.reorderPoint ?? '—'} |`,
+  )
+  return [
+    `**Low stock SKUs** — ${rows.length}:`,
+    '',
+    '| SKU | Name | Available | Reorder pt |',
+    '| --- | --- | --- | --- |',
+    ...tableRows,
+    '',
+    'Review in [Inventory](/admin/inventory).',
+  ].join('\n')
+}
+
+function formatCatalog(result: ToolResult): string {
+  const rows = result.data as SkuRow[]
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '**Catalog:** No in-stock SKUs matched your search.'
+  }
+  const tableRows = rows.map(
+    (s) => `| \`${s.code}\` | ${s.name} | ${s.available ?? '—'} | ${s.price != null ? `$${s.price.toFixed(2)}` : '—'} |`,
+  )
+  return [
+    `**Catalog matches** — ${rows.length}:`,
+    '',
+    '| SKU | Name | Available | Price |',
+    '| --- | --- | --- | --- |',
+    ...tableRows,
+    '',
+    'Browse [Catalog](/catalog).',
+  ].join('\n')
+}
+
+function formatGlobalSearch(result: ToolResult): string {
+  const data = result.data as GlobalSearchData
+  const parts: string[] = []
+
+  if (data.orders?.length) {
+    parts.push(formatOrders({ ...result, name: 'get_my_orders', data: data.orders }))
+  }
+  if (data.customers?.length) {
+    const rows = data.customers.map((c) => `| ${c.name} | ${c.email ?? '—'} |`)
+    parts.push(['**Customers found:**', '', '| Name | Email |', '| --- | --- |', ...rows].join('\n'))
+  }
+  if (data.skus?.length) {
+    parts.push(formatCatalog({ ...result, name: 'search_catalog', data: data.skus }))
+  }
+  if (data.quotes?.length) {
+    parts.push(formatQuotes({ ...result, name: 'list_my_quotes', data: data.quotes }))
+  }
+
+  if (parts.length === 0) return '**Search:** No matching orders, customers, SKUs, or quotes found.'
+  return parts.join('\n\n')
+}
+
+function formatDate(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}

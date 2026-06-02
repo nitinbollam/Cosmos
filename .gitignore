@@ -9,6 +9,9 @@ out/
 .next/
 .turbo/
 .expo/
+apps/web/public/
+apps/client/public/assets/
+apps/client/public/index.html
 *.tsbuildinfo
 
 # env
@@ -16,6 +19,11 @@ out/
 .env.local
 .env.*.local
 !.env.example
+
+# embedded SQLite (dev)
+apps/web/.data/
+apps/client/.env
+apps/client/dist/
 
 # logs
 *.log
@@ -66,3 +74,4 @@ tmp/
 
 # Prisma generated clients (per-service)
 services/*/src/generated/
+apps/web/generated/

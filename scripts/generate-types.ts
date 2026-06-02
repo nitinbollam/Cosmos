@@ -31,5 +31,5 @@ for (const svc of services) {
 }
 
 console.log('[build] @cosmos/types')
-execSync('pnpm --filter @cosmos/types build', { cwd: ROOT, stdio: 'inherit' })
+execSync('npm run build -w @cosmos/types', { cwd: ROOT, stdio: 'inherit' })
 console.log('Done.')

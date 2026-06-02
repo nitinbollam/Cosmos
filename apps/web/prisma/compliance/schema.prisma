@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-compliance"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("COMPLIANCE_DATABASE_URL")
+}
+
+model MSATenant {
+  id               String               @id @default(cuid())
+  tenantId         String               @unique
+  isActive         Boolean              @default(true)
+  msaEnabled       Boolean              @default(true)
+  reporterDid      String
+  manufacturerDids MSAManufacturerDid[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+model MSAManufacturerDid {
+  id               String    @id @default(cuid())
+  msaTenantId      String
+  reporterDid      String
+  manufacturerDid  String
+  manufacturerName String
+  ediEndpoint      String?
+  autoSubmit       Boolean   @default(false)
+  ediCredentials   Json      
+  isActive         Boolean   @default(true)
+  msaTenant        MSATenant @relation(fields: [msaTenantId], references: [id], onDelete: Cascade)
+
+  @@unique([msaTenantId, manufacturerDid])
+}
+
+model MSATransaction {
+  id                String   @id @default(cuid())
+  tenantId          String
+  manufacturerDid   String
+  upcCode           String
+  transactionDate   DateTime
+  quantityPurchased Int
+  cartonCount       Int
+  netAmount         Decimal 
+  returnAmount      Decimal  @default(0)
+  isQualifying      Boolean  @default(true)
+  orderId           String?
+  poId              String?
+  createdAt         DateTime @default(now())
+
+  @@index([tenantId, manufacturerDid, transactionDate])
+  @@index([tenantId, isQualifying])
+}
+
+model MSAReport {
+  id                     String    @id @default(cuid())
+  tenantId               String
+  reporterDid            String
+  manufacturerDid        String
+  weekStart              DateTime
+  weekEnding             DateTime
+  filePath               String
+  fileHash               String
+  totalTransactions      Int
+  netPurchases           Decimal  
+  status                 MSAStatus
+  submittedAt            DateTime?
+  submissionConfirmation String?
+  submissionError        String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, weekEnding])
+}
+
+model Batch {
+  id              String    @id @default(cuid())
+  tenantId        String
+  skuId           String
+  batchNumber     String
+  warehouseId     String
+  quantity        Int
+  manufactureDate DateTime?
+  expiryDate      DateTime
+  recalled        Boolean   @default(false)
+  recalledAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([tenantId, skuId, batchNumber])
+  @@index([tenantId, expiryDate])
+}
+
+enum MSAStatus {
+  GENERATED
+  SUBMITTED
+  SUBMISSION_FAILED
+  ACCEPTED
+}

@@ -1,0 +1,28 @@
+{
+  "name": "Cosmos",
+  "short_name": "Cosmos",
+  "description": "Cosmos ERP — admin, B2B shop, and mobile warehouse/delivery/sales",
+  "start_url": "/m/warehouse",
+  "display": "standalone",
+  "background_color": "#DEC0F1",
+  "theme_color": "#7161EF",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/cosmos-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

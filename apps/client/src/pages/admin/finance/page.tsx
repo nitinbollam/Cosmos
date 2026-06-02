@@ -1,0 +1,787 @@
+import { Link } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { api } from '@/lib/api-admin'
+import { adminPath } from '@/lib/admin-path'
+import { StatusBadge } from '@/components/cosmos/status-badge'
+import { EmptyState } from '@/components/cosmos/empty-state'
+
+type InvoiceRow = {
+  id: string
+  orderId: string
+  invoiceNumber: string
+  customerId: string
+  status: string
+  displayStatus: string
+  totalAmount: string | number
+  amountPaid: string | number
+  amountCredited?: string | number
+  balance: number
+  issuedAt: string
+  order?: { status: string; paymentMethod: string }
+}
+
+type InvoiceList = { items: InvoiceRow[]; total: number }
+
+type PoRow = {
+  id: string
+  number: string
+  status: string
+  amountPaid?: string | number
+  supplier: { id: string; name: string }
+  lines: { qtyOrdered: number; qtyReceived: number; unitCost: string | number | null }[]
+}
+
+type BillRow = {
+  id: string
+  billNumber: string
+  purchaseOrderId?: string | null
+  displayStatus: string
+  matchStatus?: string
+  matchNotes?: string | null
+  poTotal?: string | number | null
+  receivedTotal?: string | number | null
+  totalAmount: string | number
+  amountPaid: string | number
+  balance: number
+  issuedAt: string
+  dueAt?: string | null
+  supplier: { id: string; name: string }
+}
+
+type TrialRow = {
+  accountCode: string
+  accountName: string
+  type: string
+  debits: number
+  credits: number
+  netBalance: number
+}
+
+type CashflowBucket = {
+  label?: string
+  period?: string
+  projected_net: number
+  projected_inflow: number
+  projected_outflow: number
+}
+
+type CashflowResp = {
+  tenant_id: string
+  weekly_net_baseline: number
+  forecast: CashflowBucket[]
+  warnings: string[]
+}
+
+type BankAccount = {
+  id: string
+  name: string
+  accountNumber?: string | null
+  currentBalance: number | string
+}
+
+type BankSummary = {
+  accounts: BankAccount[]
+  unreconciledCount: number
+}
+
+type BankLine = {
+  id: string
+  postedAt: string
+  description: string
+  amount: number | string
+  reference?: string | null
+  bankAccount?: { name: string }
+}
+
+function money(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+}
+
+function poTotal(po: PoRow): number {
+  return po.lines.reduce((s, l) => {
+    const c = l.unitCost != null ? Number(l.unitCost) : 0
+    return s + l.qtyOrdered * c
+  }, 0)
+}
+
+function poBalance(po: PoRow): number {
+  const t = poTotal(po)
+  const p = Number(po.amountPaid ?? 0)
+  return Math.max(0, t - p)
+}
+
+function apStatus(po: PoRow): string {
+  const b = poBalance(po)
+  if (po.status === 'CANCELLED') return 'VOIDED'
+  if (b <= 0.01) return 'PAID'
+  if (Number(po.amountPaid ?? 0) > 0) return 'PARTIALLY_PAID'
+  return 'ISSUED'
+}
+
+export default function FinancePage() {
+  const qc = useQueryClient()
+  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow' | 'bank'>('invoices')
+  const [invFilter, setInvFilter] = useState('ALL')
+  const [apFilter, setApFilter] = useState('ALL')
+  const [year, setYear] = useState(new Date().getFullYear())
+  const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [cfHorizon, setCfHorizon] = useState<30 | 60 | 90>(30)
+
+  const [payOrder, setPayOrder] = useState<InvoiceRow | null>(null)
+  const [payBill, setPayBill] = useState<BillRow | null>(null)
+  const [matchBill, setMatchBill] = useState<BillRow | null>(null)
+  const [payAmount, setPayAmount] = useState('')
+  const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
+
+  const invoicesQ = useQuery({
+    queryKey: ['finance', 'invoices-ar'],
+    queryFn: () => api.get<InvoiceList>('/invoices?page=1&pageSize=200'),
+    enabled: tab === 'invoices',
+  })
+
+  const billsQ = useQuery({
+    queryKey: ['finance', 'bills-ap'],
+    queryFn: () => api.get<BillRow[]>('/bills'),
+    enabled: tab === 'bills',
+  })
+
+  const bankSummaryQ = useQuery({
+    queryKey: ['finance', 'bank-summary'],
+    queryFn: () => api.get<BankSummary>('/bank-accounts?summary=true'),
+    enabled: tab === 'bank',
+  })
+
+  const bankLinesQ = useQuery({
+    queryKey: ['finance', 'bank-unreconciled'],
+    queryFn: () => api.get<BankLine[]>('/bank-accounts/unreconciled'),
+    enabled: tab === 'bank',
+  })
+
+  const trialQ = useQuery({
+    queryKey: ['finance', 'trial', year, month],
+    queryFn: () => api.get<TrialRow[]>(`/reports/trial-balance?year=${year}&month=${month}`),
+    enabled: tab === 'trial',
+  })
+
+  type KpiSnap = { tenantId: string; date: string; revenue: string | number }
+  const snapsQ = useQuery({
+    queryKey: ['finance', 'kpi-snapshots'],
+    queryFn: () => api.get<KpiSnap[]>('/kpi/snapshots'),
+    enabled: tab === 'cashflow',
+  })
+
+  const cashInput = useMemo(() => {
+    const rows = [...(snapsQ.data ?? [])].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    )
+    if (rows.length < 2) return null
+    const tail = rows.slice(-20)
+    const tenantId = tail[tail.length - 1]?.tenantId ?? 'tenant'
+    const history = tail.map((s) => {
+      const inflow = Number(s.revenue)
+      return { period: new Date(s.date).toISOString().slice(0, 10), inflow, outflow: Math.max(0, inflow * 0.55) }
+    })
+    return {
+      tenant_id: tenantId,
+      history,
+      horizon_weeks: Math.max(1, Math.ceil(cfHorizon / 7)),
+    }
+  }, [snapsQ.data, cfHorizon])
+
+  const cashQ = useQuery({
+    queryKey: ['finance', 'cashflow', cfHorizon, (snapsQ.data ?? []).length],
+    enabled: tab === 'cashflow' && !!cashInput,
+    queryFn: async () => {
+      const res = await fetch('/api/cashflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cashInput),
+      })
+      const j = (await res.json()) as CashflowResp & { message?: string }
+      if (!res.ok) throw new Error(j.message ?? 'Cashflow failed')
+      return j
+    },
+  })
+
+  const aging = useMemo(() => {
+    const rows = invoicesQ.data?.items ?? []
+    const open = rows.filter((inv) => inv.balance > 0.01 && inv.order?.status !== 'CANCELLED')
+    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
+    const now = Date.now()
+    for (const inv of open) {
+      const days = (now - new Date(inv.issuedAt).getTime()) / (86400 * 1000)
+      const b = inv.balance
+      if (days <= 30) buckets.current += b
+      else if (days <= 60) buckets.d30 += b
+      else if (days <= 90) buckets.d60 += b
+      else if (days <= 120) buckets.d90 += b
+      else buckets.d90p += b
+    }
+    return buckets
+  }, [invoicesQ.data])
+
+  const arSummary = useMemo(() => {
+    const rows = (invoicesQ.data?.items ?? []).filter((inv) => inv.order?.status !== 'CANCELLED')
+    let invoiced = 0
+    let collected = 0
+    for (const inv of rows) {
+      invoiced += Number(inv.totalAmount) + Number(inv.amountCredited ?? 0)
+      collected += Number(inv.amountPaid ?? 0)
+    }
+    return {
+      invoiced,
+      collected,
+      outstanding: rows.reduce((s, inv) => s + inv.balance, 0),
+      count: rows.length,
+    }
+  }, [invoicesQ.data])
+
+  const filteredInvoices = useMemo(() => {
+    const rows = invoicesQ.data?.items ?? []
+    return rows.filter((inv) => {
+      const st = inv.displayStatus
+      if (invFilter === 'ALL') return inv.order?.status !== 'CANCELLED'
+      if (invFilter === 'FAILED') return inv.order?.status === 'FAILED'
+      return st === invFilter
+    })
+  }, [invoicesQ.data, invFilter])
+
+  const filteredBills = useMemo(() => {
+    const rows = billsQ.data ?? []
+    return rows.filter((bill) => {
+      if (apFilter === 'ALL') return bill.balance > 0.01 || Number(bill.amountPaid ?? 0) > 0
+      if (apFilter === 'MATCHED' || apFilter === 'EXCEPTION' || apFilter === 'PENDING') {
+        return (bill.matchStatus ?? 'PENDING') === apFilter
+      }
+      return bill.displayStatus === apFilter
+    })
+  }, [billsQ.data, apFilter])
+
+  const payOrderMut = useMutation({
+    mutationFn: async () => {
+      if (!payOrder) return
+      await api.post(`/orders/${payOrder.orderId}/payments`, {
+        amount: parseFloat(payAmount),
+        method: payMethod,
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
+      setPayOrder(null)
+      setPayAmount('')
+    },
+  })
+
+  const payBillMut = useMutation({
+    mutationFn: async () => {
+      if (!payBill) return
+      await api.post(`/bills/${payBill.id}/payments`, {
+        amount: parseFloat(payAmount),
+        method: payMethod,
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
+      setPayBill(null)
+      setPayAmount('')
+    },
+  })
+
+  const reconcileMut = useMutation({
+    mutationFn: (lineId: string) => api.post(`/bank-accounts/${lineId}/reconcile`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'bank-summary'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'bank-unreconciled'] })
+    },
+  })
+
+  const matchBillMut = useMutation({
+    mutationFn: (billId: string) => api.post<BillRow>(`/bills/${encodeURIComponent(billId)}/match`, {}),
+    onSuccess: (updated) => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
+      setMatchBill(updated)
+    },
+  })
+
+  function exportTrialCsv() {
+    const rows = trialQ.data ?? []
+    const head = ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net']
+    const lines = [head.join(','), ...rows.map((r) =>
+      [r.accountCode, `"${r.accountName.replace(/"/g, '""')}"`, r.type, r.debits, r.credits, r.netBalance].join(','))]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `cosmos-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const cfChart = useMemo(() => {
+    const fc = cashQ.data?.forecast ?? []
+    if (fc.length === 0) return []
+    let bal = cashQ.data?.weekly_net_baseline ?? 0
+    return fc.map((w, i) => {
+      bal += w.projected_net
+      return {
+        i,
+        label: w.label ?? w.period ?? String(i),
+        closing: bal,
+        neg: bal < 0 ? bal : 0,
+      }
+    })
+  }, [cashQ.data])
+
+  return (
+    <div className="p-6 space-y-6" style={{ fontFamily: 'var(--font-body)' }}>
+      <div>
+        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+          Finance
+        </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
+          AR (invoices), AP (vendor bills), bank reconciliation, trial balance, and cash outlook
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(['invoices', 'bills', 'bank', 'trial', 'cashflow'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={tab === id ? 'btn-primary' : 'btn-ghost'}
+            onClick={() => setTab(id)}
+          >
+            {id === 'invoices'
+              ? 'Invoices (AR)'
+              : id === 'bills'
+                ? 'Bills (AP)'
+                : id === 'bank'
+                  ? 'Bank recon'
+                  : id === 'trial'
+                    ? 'Trial balance'
+                    : 'Cash flow'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'invoices' && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { label: 'Total invoiced', v: arSummary.invoiced, hint: `${arSummary.count} invoices` },
+              { label: 'Collected', v: arSummary.collected, hint: 'Payments received' },
+              { label: 'Outstanding AR', v: arSummary.outstanding, hint: 'Unpaid balance' },
+            ].map((c) => (
+              <div key={c.label} className="cosmos-card">
+                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
+                <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{c.hint}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>
+            Aging buckets below show <strong>outstanding</strong> balance by days since issue — not total invoiced.
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { k: 'current', label: 'Current (0–30d)', v: aging.current, color: 'var(--c-success)' },
+              { k: 'd30', label: '31–60 Days', v: aging.d30, color: 'var(--c-warning)' },
+              { k: 'd60', label: '61–90 Days', v: aging.d60, color: '#ea580c' },
+              { k: 'd90', label: '91–120 Days', v: aging.d90, color: 'var(--c-danger)' },
+              { k: 'd90p', label: '120+ Days', v: aging.d90p, color: '#b91c1c' },
+            ].map((c) => (
+              <div key={c.k} className="cosmos-card metric-accent" style={{ borderLeftColor: c.color }}>
+                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
+                <div className="text-lg font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'FAILED'].map((s) => (
+              <button key={s} type="button" className={invFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setInvFilter(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="cosmos-card overflow-x-auto">
+            {invoicesQ.isLoading ? <div className="skeleton h-40 w-full" /> : invoicesQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>Could not load invoices</p>
+            ) : filteredInvoices.length === 0 ? (
+              <EmptyState icon="📄" title="No invoices" description="Invoices are issued when orders ship." />
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Issue</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredInvoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td className="font-mono text-xs">{inv.invoiceNumber}</td>
+                      <td className="font-mono text-xs">{inv.orderId.slice(0, 12)}…</td>
+                      <td>{inv.customerId.slice(0, 12)}…</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(inv.issuedAt).toLocaleDateString()}</td>
+                      <td className="font-mono">{money(Number(inv.totalAmount))}</td>
+                      <td className="font-mono">{money(Number(inv.amountPaid ?? 0))}</td>
+                      <td className="font-mono">{money(inv.balance)}</td>
+                      <td><StatusBadge status={inv.displayStatus} /></td>
+                      <td className="space-x-2">
+                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && (
+                          <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
+                            setPayOrder(inv)
+                            setPayAmount(String(inv.balance.toFixed(2)))
+                          }}>Record payment</button>
+                        )}
+                        <Link to={adminPath(`/orders/${inv.orderId}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === 'bills' && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'MATCHED', 'EXCEPTION', 'PENDING'].map((s) => (
+              <button key={s} type="button" className={apFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setApFilter(s)}>
+                {s.replace(/_/g, ' ')}
+              </button>
+            ))}
+          </div>
+          <div className="cosmos-card overflow-x-auto">
+            {billsQ.isLoading ? <div className="skeleton h-40 w-full" /> : billsQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>Could not load vendor bills</p>
+            ) : filteredBills.length === 0 ? (
+              <EmptyState icon="📥" title="No bills" description="Vendor bills are created when goods are received against POs." />
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr>
+                    <th>Bill #</th>
+                    <th>Supplier</th>
+                    <th>Issue</th>
+                    <th>Due</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>3-way match</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredBills.map((bill) => (
+                    <tr key={bill.id}>
+                      <td className="font-mono">{bill.billNumber}</td>
+                      <td>{bill.supplier.name}</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(bill.issuedAt).toLocaleDateString()}</td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{bill.dueAt ? new Date(bill.dueAt).toLocaleDateString() : '—'}</td>
+                      <td className="font-mono">{money(Number(bill.totalAmount))}</td>
+                      <td className="font-mono">{money(Number(bill.amountPaid ?? 0))}</td>
+                      <td className="font-mono">{money(bill.balance)}</td>
+                      <td><StatusBadge status={bill.displayStatus} /></td>
+                      <td>
+                        {bill.purchaseOrderId ? (
+                          <button
+                            type="button"
+                            className="btn-ghost !py-0.5 !px-1.5 !text-xs"
+                            onClick={() => setMatchBill(bill)}
+                          >
+                            <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
+                          </button>
+                        ) : (
+                          <span className="text-xs text-cosmos-text-3">—</span>
+                        )}
+                      </td>
+                      <td className="space-x-2 whitespace-nowrap">
+                        {bill.balance > 0.01 && (
+                          <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
+                            setPayBill(bill)
+                            setPayAmount(String(bill.balance.toFixed(2)))
+                          }}>Mark paid</button>
+                        )}
+                        {bill.purchaseOrderId ? (
+                          <Link to={adminPath(`/purchasing/${bill.purchaseOrderId}`)} style={{ color: 'var(--c-accent)' }}>View PO</Link>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === 'bank' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {(bankSummaryQ.data?.accounts ?? []).map((acct) => (
+              <div key={acct.id} className="cosmos-card">
+                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{acct.name}</div>
+                <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                  {money(Number(acct.currentBalance))}
+                </div>
+                <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{acct.accountNumber ?? '—'}</div>
+              </div>
+            ))}
+            <div className="cosmos-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled lines</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {bankSummaryQ.data?.unreconciledCount ?? 0}
+              </div>
+            </div>
+          </div>
+          <div className="cosmos-card overflow-x-auto">
+            {bankLinesQ.isLoading ? <div className="skeleton h-40 w-full" /> : (bankLinesQ.data ?? []).length === 0 ? (
+              <EmptyState icon="🏦" title="All caught up" description="No unreconciled bank statement lines." />
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(bankLinesQ.data ?? []).map((line) => (
+                    <tr key={line.id}>
+                      <td>{new Date(line.postedAt).toLocaleDateString()}</td>
+                      <td>{line.bankAccount?.name ?? '—'}</td>
+                      <td>{line.description}</td>
+                      <td className="font-mono">{money(Number(line.amount))}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-primary !py-1 !px-2 !text-xs"
+                          disabled={reconcileMut.isPending}
+                          onClick={() => reconcileMut.mutate(line.id)}
+                        >
+                          Reconcile
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'trial' && (
+        <div className="cosmos-card space-y-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
+            <select className="cosmos-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
+              ))}
+            </select>
+            <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Year</label>
+            <select className="cosmos-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
+              {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button type="button" className="btn-ghost" onClick={() => void trialQ.refetch()}>Load</button>
+            <button type="button" className="btn-primary" onClick={exportTrialCsv} disabled={!(trialQ.data?.length)}>Export CSV</button>
+          </div>
+          {trialQ.isLoading ? <div className="skeleton h-48 w-full" /> : trialQ.isError ? (
+            <p style={{ color: 'var(--c-danger)' }}>Could not load trial balance</p>
+          ) : (trialQ.data?.length ?? 0) === 0 ? (
+            <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this month to see balances." />
+          ) : (
+            <table className="cosmos-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Debits</th>
+                  <th>Credits</th>
+                  <th>Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(trialQ.data ?? []).map((r) => (
+                  <tr key={r.accountCode}>
+                    <td className="font-mono">{r.accountCode}</td>
+                    <td>{r.accountName}</td>
+                    <td><StatusBadge status={r.type} /></td>
+                    <td className="font-mono">{money(r.debits)}</td>
+                    <td className="font-mono">{money(r.credits)}</td>
+                    <td className="font-mono" style={{ color: r.netBalance < 0 ? 'var(--c-danger)' : 'var(--c-text)' }}>
+                      {money(r.netBalance)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {tab === 'cashflow' && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            {[30, 60, 90].map((h) => (
+              <button key={h} type="button" className={cfHorizon === h ? 'btn-primary' : 'btn-ghost'} onClick={() => setCfHorizon(h as 30 | 60 | 90)}>
+                {h} days
+              </button>
+            ))}
+          </div>
+          <div className="cosmos-card">
+            {!cashInput ? (
+              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Need KPI snapshots from analytics to run cashflow. Open dashboard once data exists.</p>
+            ) : cashQ.isLoading ? <div className="skeleton h-64 w-full" /> : cashQ.isError ? (
+              <p style={{ color: 'var(--c-danger)' }}>{cashQ.error instanceof Error ? cashQ.error.message : 'Error'}</p>
+            ) : (
+              <>
+                <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>Weekly buckets from native EWMA forecast (no Python sidecar)</p>
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={cfChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="cfPos" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--c-primary)" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="var(--c-primary)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
+                      <XAxis dataKey="label" tick={{ fill: 'var(--c-text-3)', fontSize: 10 }} />
+                      <YAxis tick={{ fill: 'var(--c-text-3)', fontSize: 10 }} tickFormatter={(v) => money(v)} />
+                      <Tooltip
+                        contentStyle={{
+                          background: 'var(--c-surface-2)',
+                          border: '1px solid var(--c-border)',
+                          borderRadius: 8,
+                          color: 'var(--c-heading)',
+                        }}
+                        labelStyle={{ color: 'var(--c-text-2)' }}
+                        itemStyle={{ color: 'var(--c-heading)' }}
+                        formatter={(v: number) => [money(v), 'Closing']}
+                      />
+                      <Area type="monotone" dataKey="closing" stroke="var(--c-primary)" fill="url(#cfPos)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                {(cashQ.data?.warnings?.length ?? 0) > 0 && (
+                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">{cashQ.data!.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(payOrder || payBill) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+          <div className="cosmos-card max-w-md w-full space-y-4">
+            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Record payment</h3>
+            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
+            <input className="cosmos-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
+            <select className="cosmos-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
+              {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null) }}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={payOrderMut.isPending || payBillMut.isPending}
+                onClick={() => {
+                  if (payOrder) void payOrderMut.mutate()
+                  else void payBillMut.mutate()
+                }}
+              >Submit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {matchBill ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setMatchBill(null)}>
+          <div className="cosmos-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start gap-3">
+              <div>
+                <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)', margin: 0 }}>3-way match</h3>
+                <p className="font-mono text-sm mt-1" style={{ color: 'var(--c-accent)' }}>{matchBill.billNumber}</p>
+              </div>
+              <StatusBadge status={matchBill.matchStatus ?? 'PENDING'} />
+            </div>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>PO total</dt>
+                <dd className="font-mono">{matchBill.poTotal != null ? money(Number(matchBill.poTotal)) : '—'}</dd>
+              </div>
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>Received total</dt>
+                <dd className="font-mono">{matchBill.receivedTotal != null ? money(Number(matchBill.receivedTotal)) : '—'}</dd>
+              </div>
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>Bill total</dt>
+                <dd className="font-mono">{money(Number(matchBill.totalAmount))}</dd>
+              </div>
+              <div>
+                <dt style={{ color: 'var(--c-text-3)' }}>Balance due</dt>
+                <dd className="font-mono">{money(matchBill.balance)}</dd>
+              </div>
+            </dl>
+            {matchBill.matchNotes ? (
+              <p className="text-sm rounded-lg p-3" style={{ background: 'var(--c-surface-2)', color: 'var(--c-warning)' }}>
+                {matchBill.matchNotes}
+              </p>
+            ) : matchBill.matchStatus === 'MATCHED' ? (
+              <p className="text-sm" style={{ color: 'var(--c-success)' }}>Bill quantities and amounts match received goods on the PO.</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2 justify-end">
+              {matchBill.purchaseOrderId ? (
+                <Link to={adminPath(`/purchasing/${matchBill.purchaseOrderId}`)} className="btn-ghost !text-sm">
+                  View PO
+                </Link>
+              ) : null}
+              <button type="button" className="btn-ghost" onClick={() => setMatchBill(null)}>
+                Close
+              </button>
+              {matchBill.purchaseOrderId ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={matchBillMut.isPending}
+                  onClick={() => matchBillMut.mutate(matchBill.id)}
+                >
+                  {matchBillMut.isPending ? 'Running…' : 'Re-run match'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}

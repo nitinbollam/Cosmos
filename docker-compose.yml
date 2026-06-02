@@ -1,3 +1,4 @@
+# Optional — Redis, MinIO, OTEL for scaled deployments. Dev uses local Postgres only (`npm run db:setup`).
 version: "3.9"
 
 services:
@@ -12,7 +13,7 @@ services:
       - "15432:5432"
     volumes:
       - cosmos-pg-data:/var/lib/postgresql/data
-      - ./infra/docker/init-db.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ./infra/sql/init-databases.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cosmos -d cosmos"]
       interval: 5s

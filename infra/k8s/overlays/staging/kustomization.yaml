@@ -4,7 +4,7 @@ namespace: cosmos
 resources:
   - ../../base
 patches:
-  - target: { kind: Deployment, name: auth-service }
+  - target: { kind: Deployment, name: cosmos-web }
     patch: |-
       - op: replace
         path: /spec/replicas

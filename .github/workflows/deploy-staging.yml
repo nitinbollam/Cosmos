@@ -26,27 +26,11 @@ jobs:
 
       - uses: aws-actions/amazon-ecr-login@v2
 
-      - uses: pnpm/action-setup@v3
-        with: { version: 9 }
-
-      - uses: actions/setup-node@v4
-        with: { node-version: '20', cache: 'pnpm' }
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build & push images
+      - name: Build & push @cosmos/web
         run: |
           IMAGE_TAG=${{ github.sha }}
-          for svc in services/*; do
-            name=$(basename "$svc")
-            docker build -f infra/docker/node-service.Dockerfile -t "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG" "$svc"
-            docker push "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG"
-          done
-          for svc in ai/*; do
-            name=$(basename "$svc")
-            docker build -f infra/docker/python-service.Dockerfile -t "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG" "$svc"
-            docker push "$ECR_REGISTRY/cosmos-$name:$IMAGE_TAG"
-          done
+          docker build -f apps/web/Dockerfile -t "$ECR_REGISTRY/cosmos-web:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/cosmos-web:$IMAGE_TAG"
 
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
@@ -56,5 +40,5 @@ jobs:
           IMAGE_TAG=${{ github.sha }}
           cd infra/k8s/overlays/staging
           kubectl apply -k . --record
-          kubectl get deploy -n cosmos -o name | xargs -I {} kubectl set image {} '*=${ECR_REGISTRY}/{}:'$IMAGE_TAG -n cosmos || true
-          kubectl rollout status deploy -n cosmos --timeout=10m
+          kubectl set image deployment/cosmos-web web="$ECR_REGISTRY/cosmos-web:$IMAGE_TAG" -n cosmos
+          kubectl rollout status deployment/cosmos-web -n cosmos --timeout=10m

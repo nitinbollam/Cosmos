@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-tenant"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("TENANT_DATABASE_URL")
+}
+
+model TenantOrganization {
+  id               String               @id
+  slug             String               @unique
+  displayName      String
+  plan             TenantPlan           @default(STARTER)
+  onboardingPhase  OnboardingPhase      @default(PROFILE)
+  settings         Json                 
+  billingEmail     String?
+  timeZone         String               @default("Etc/UTC")
+  industry         IndustryVertical     @default(GENERAL_WHOLESALE)
+  suspended        Boolean              @default(false)
+  metadata         Json                 
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  onboardingSteps  TenantOnboardingStep[]
+  invites            TenantInvite[]
+
+  @@index([slug])
+}
+
+model TenantInvite {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  role      String   @default("STAFF")
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  tenant    TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, email])
+}
+
+model TenantOnboardingStep {
+  id           String               @id @default(cuid())
+  tenantId     String
+  stepKey      String
+  completed    Boolean              @default(false)
+  completedAt  DateTime?
+  payload      Json?
+  tenant       TenantOrganization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, stepKey])
+  @@index([tenantId])
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  tenantId    String
+  event       String
+  url         String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+enum TenantPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum OnboardingPhase {
+  PROFILE
+  BILLING
+  READY
+}
+
+enum IndustryVertical {
+  TOBACCO_VAPE
+  PHARMA
+  FOOD_BEVERAGE
+  ALCOHOL
+  GENERAL_WHOLESALE
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entityType])
+  @@index([tenantId, entityId])
+}
+
+model PosRegister {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  warehouseId String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}

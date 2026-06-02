@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "paths": {
+      "@/*": ["./*"],
+      "@src/*": ["./src/*"],
+      "@/generated/prisma-auth": ["./generated/prisma-auth"],
+      "@/generated/prisma-tenant": ["./generated/prisma-tenant"],
+      "@/generated/prisma-inventory": ["./generated/prisma-inventory"],
+      "@/generated/prisma-order": ["./generated/prisma-order"],
+      "@/generated/prisma-crm": ["./generated/prisma-crm"],
+      "@/generated/prisma-storefront": ["./generated/prisma-storefront"],
+      "@/generated/prisma-wms": ["./generated/prisma-wms"],
+      "@/generated/prisma-dispatch": ["./generated/prisma-dispatch"],
+      "@/generated/prisma-purchasing": ["./generated/prisma-purchasing"],
+      "@/generated/prisma-payment": ["./generated/prisma-payment"],
+      "@/generated/prisma-compliance": ["./generated/prisma-compliance"],
+      "@/generated/prisma-notification": ["./generated/prisma-notification"],
+      "@/generated/prisma-ledger": ["./generated/prisma-ledger"],
+      "@/generated/prisma-analytics": ["./generated/prisma-analytics"]
+    }
+  },
+  "include": ["lib/**/*.ts", "server/**/*.ts"],
+  "exclude": ["node_modules", "generated"]
+}
