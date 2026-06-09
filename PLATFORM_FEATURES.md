@@ -23,6 +23,7 @@ Comprehensive reference for the Cosmos ERP/distribution platform: what the produ
 13. [Local development](#local-development)
 14. [Demo accounts & seed data](#demo-accounts--seed-data)
 15. [Known gaps / deferred work](#known-gaps--deferred-work)
+16. [ERP industry comparison](#erp-industry-comparison)
 
 ---
 
@@ -541,9 +542,15 @@ After `npm run seed`, the following accounts are available (demo tenant: **Cosmo
 
 ---
 
+## ERP industry comparison
+
+See **[ERP_FEATURE_GAP.md](ERP_FEATURE_GAP.md)** for a full comparison of Cosmos vs established wholesale/distribution ERP platforms (NetSuite, Business Central, Acumatica, Prophet 21, etc.) — module coverage, gaps, and suggested roadmap priorities.
+
+---
+
 ## Known gaps / deferred work
 
-Documented in `MISSING.md` and backlog:
+Documented in `MISSING.md`, `ERP_FEATURE_GAP.md`, and backlog:
 
 - Legacy Nest/Expo/Python microservices not on this branch
 - Redis event bus (stub in `event-bus.ts`; set `REDIS_URL` for production wiring)
@@ -567,6 +574,7 @@ Documented in `MISSING.md` and backlog:
 | API router | `apps/web/lib/server/native-router.ts` |
 | Celestial AI | `apps/web/lib/server/celestial/`, `apps/client/src/components/celestial/`, `apps/client/src/stores/celestial-store.ts` |
 | Celestial knowledge base | `docs/celestial/*.md` (RAG source; indexed by `retrieval.ts`) |
+| ERP industry gap analysis | `ERP_FEATURE_GAP.md` |
 | Invoices / returns | `apps/web/lib/server/invoices.ts` |
 | Quotes | `apps/web/lib/server/quotes.ts` |
 | POS | `apps/web/lib/server/pos.ts`, `apps/client/src/pages/admin/pos/` |
