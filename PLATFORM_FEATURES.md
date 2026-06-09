@@ -53,8 +53,9 @@ Comprehensive reference for the Cosmos ERP/distribution platform: what the produ
 |-------------|---------|
 | `/` | Hub — links to Admin, Shop, Mobile |
 | `/admin/*` | ERP admin console |
-| `/catalog`, `/cart`, `/checkout`, `/orders`, `/quotes` | B2B buyer portal |
+| `/catalog`, `/cart`, `/checkout`, `/orders`, `/quotes`, `/invoices`, `/account` | B2B buyer portal |
 | `/m/*` | Mobile warehouse / delivery / sales |
+| `/admin/celestial` | Full-page Celestial AI assistant (admin) |
 | `/api/v1/*` | REST API |
 | `/api/cashflow`, `/api/anomaly` | Analytics endpoints |
 
@@ -89,17 +90,22 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | Module | Route | Highlights |
 |--------|-------|------------|
 | **Dashboard** | `/admin` | Revenue/orders KPIs, cashflow forecast chart, low-stock alerts, recent orders, compliance badge |
-| **Inventory** | `/admin/inventory` | SKU catalog, stock by warehouse, adjustments, transfers, spreadsheet import, low-stock alerts |
-| **Orders** | `/admin/orders` | Order list, detail with saga timeline, confirm/cancel/fulfill, **returns (RMA)**, invoice link |
+| **Inventory** | `/admin/inventory` | SKU catalog, stock by warehouse, adjustments, transfers, spreadsheet import, low-stock alerts, barcode labels |
+| **Orders** | `/admin/orders` | Order list, detail with saga timeline, confirm/cancel/fulfill, **returns (RMA)**, split shipments, invoice link |
 | **Fulfillment** | `/admin/fulfillment` | Pick/pack tasks, assign picker, pick-all / pack / dispatch actions |
-| **Warehouse** | `/admin/warehouse` | Pick tasks, receiving sessions, cycle counts |
+| **Warehouse** | `/admin/warehouse` | Pick tasks, receiving sessions, cycle counts, **wave picking**, **bin locations** |
 | **Purchasing** | `/admin/purchasing` | Purchase orders, suppliers, receive goods |
 | **Compliance** | `/admin/compliance` | MSA reports, tax exposure summary, batch tracking context |
-| **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion |
+| **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion, contract/volume pricing |
+| **Quotes** | `/admin/quotes` | Admin quote approval, counter-offers |
 | **Dispatch** | `/admin/dispatch` | Delivery routes, stop reorder, driver assignment, map, proof of delivery |
-| **Finance** | `/admin/finance` | **AR invoices**, AP (PO bills), trial balance, cashflow chart, record payment |
-| **Settings** | `/admin/settings` | Company profile, onboarding, team invites, warehouses, webhooks, Stripe/MSA, billing plan |
-| **Notifications** | `/admin/notifications` | Notification request inbox (stub provider) |
+| **Finance** | `/admin/finance` | **AR invoices**, AP (PO bills), 3-way match, bank recon, trial balance, cashflow chart, record payment |
+| **POS** | `/admin/pos` | In-store checkout: register, customer, SKU cart, cash/card/check, receipt print |
+| **Notifications** | `/admin/notifications` | Notification request inbox (SendGrid/Twilio when configured) |
+| **Celestial** | `/admin/celestial` | Full-page AI copilot (also floating ✦ panel on all admin pages) |
+| **Settings** | `/admin/settings` | Company profile, onboarding, team invites, warehouses, webhooks, feature flags, audit log, Stripe/MSA, billing plan |
+
+**Navigation notes:** Sidebar order matches `SIDEBAR_NAV` in `sidebar.tsx`. Celestial sidebar link is hidden when the `celestial` feature flag is off. `/admin/customers` and `/admin/customers/:id` redirect to `/admin/crm` and `/admin/crm/customers/:id`.
 
 **Shell components:** `dashboard-shell.tsx`, `sidebar.tsx`, `sidebar-icons.tsx`.
 
@@ -157,7 +163,10 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | Finance | journal entries, chart of accounts, reports | `ledger.ts` |
 | Analytics | KPIs, snapshots | `analytics.ts` |
 | Webhooks | subscription CRUD, test | `webhooks.ts` |
-| Notifications | list, send (stub) | `notifications.ts` |
+| Notifications | list, send, provider status | `notifications.ts` |
+| Features | `GET /features` — plan defaults + tenant overrides | `feature-flags.ts` |
+| POS | `POST /pos/orders`, receipt | `pos.ts`, `pos-receipt.ts` |
+| **Celestial** | `POST /celestial/chat`, `POST /celestial/chat/stream`, `GET /celestial/status`, `GET /celestial/conversations`, `GET /celestial/conversations/:id` | `celestial/` |
 
 **Order saga:** `order-saga.ts` + `order-orchestration.ts` — orchestrated confirm → allocate → pick → ship pipeline.
 
@@ -182,7 +191,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | `ledger` | ChartAccount, JournalEntry, JournalLine |
 | `compliance` | MSATenant, MSAReport, Batch, … |
 | `notification` | NotificationRequest |
-| `analytics` | DailyKpiSnapshot |
+| `analytics` | DailyKpiSnapshot, **CelestialConversation**, **CelestialMessage** |
 
 **Commands:** `npm run db:setup`, `db:generate`, `db:migrate`, `seed`.
 
@@ -421,16 +430,31 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — RAG on `docs/celestial/*.md` + `PLATFORM_FEATURES.md`, intent-based tools, LLM providers |
-| **15.2 Chat API** | `POST /celestial/chat`, `GET /celestial/status` · gated by `celestial` feature flag |
-| **15.3 Buyer + admin UI** | Floating ✦ Celestial panel on shop and admin layouts with contextual page hints |
-| **15.4 Tooling** | Live data: orders, invoices, catalog, quotes (buyer); global search + low stock (admin) |
-| **15.5 Conversation store** | `CelestialConversation` / `CelestialMessage` in analytics DB · audit `celestial.chat` events |
-| **15.6 Streaming UI** | `POST /celestial/chat/stream` (SSE) · Markdown + syntax-highlighted code in chat panel |
+| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — hybrid RAG + live-data tools + LLM synthesis (OpenRouter, Groq, Gemini, Ollama, mock) |
+| **15.2 Knowledge base (RAG)** | `docs/celestial/*.md` (6 LLM-optimized files) + `PLATFORM_FEATURES.md` · chunked `##`/`###` retrieval with synonym scoring |
+| **15.3 Chat API** | `POST /celestial/chat` (JSON or SSE via `Accept: text/event-stream` / `X-Celestial-Stream: 1`), `POST /celestial/chat/stream`, `GET /celestial/status` (`enabled` + provider/model) · gated by `celestial` feature flag |
+| **15.4 Conversation history API** | `GET /celestial/conversations?surface=&limit=`, `GET /celestial/conversations/:id` — server-side thread restore across devices |
+| **15.5 Buyer + admin UI** | Floating ✦ panel on shop/admin layouts · full page `/admin/celestial` · shared Zustand store `cosmos-celestial-v1` |
+| **15.6 Live data tools** | `get_my_orders`, `get_order_detail`, `list_my_invoices`, `search_catalog`, `list_my_quotes`, `list_warehouses`, `global_search`, `list_low_stock` — buyer-scoped where applicable |
+| **15.7 Answer pipeline** | Intent detection → tools + doc retrieval → direct Markdown tables when data exists → LLM synthesis for how-to/general → doc fallback if LLM empty/fails (always returns an answer) |
+| **15.8 Streaming UI** | SSE token streaming · `react-markdown` + GFM + syntax highlighting · contextual deep links from tool results |
+| **15.9 Conversation store** | `CelestialConversation` / `CelestialMessage` in analytics DB · links/metadata on assistant messages · audit `celestial.chat` events |
+| **15.10 Feature gating** | Settings → Features tab · sidebar Celestial link hidden when disabled · shop FAB hidden until login |
 
-**LLM env vars:** `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, or `CELESTIAL_PROVIDER=ollama`. Runs in **mock mode** without keys (tool-backed answers).
+**LLM env vars:** `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, or `CELESTIAL_PROVIDER=ollama`. Set `CELESTIAL_MODEL` as needed. Runs in **mock mode** without keys (tool-backed structured answers still work).
 
-**Key files:** `apps/web/lib/server/celestial/`, `apps/client/src/components/celestial/celestial-chat.tsx`.
+**Knowledge base files (`docs/celestial/`):**
+
+| File | Contents |
+|------|----------|
+| `01-platform-overview.md` | Platform summary, architecture, order lifecycle, demo accounts, glossary |
+| `02-admin-modules.md` | Per-module how-to guides (Dashboard → Settings, POS, warehouse, finance) |
+| `03-buyer-mobile.md` | B2B shop, account, invoices, mobile warehouse/delivery/sales apps |
+| `04-api-finance-integrations.md` | REST API domains, AR/AP/GL workflows, Stripe, MSA, feature flags |
+| `05-celestial-ai.md` | Celestial tools, API, env vars, example questions |
+| `06-faq.md` | Common Q&A (POS, fulfillment, logins, local dev) |
+
+**Key files:** `apps/web/lib/server/celestial/` (orchestrator, intent, tools, retrieval, compose, llm, prompts), `apps/client/src/components/celestial/`, `apps/client/src/stores/celestial-store.ts`, `apps/client/src/pages/admin/celestial/`.
 
 ### Tier 5 — Deferred (not yet implemented)
 
@@ -451,6 +475,9 @@ Summary of major work completed in the current development cycle.
 | `apps/web/lib/server/cycle-count-adjust.test.ts` | Cycle count |
 | `apps/web/lib/server/po-receiving.test.ts` | PO receiving |
 | `apps/web/lib/server/notification-provider.test.ts` | Notification stub |
+| `apps/web/lib/server/celestial/intent.test.ts` | Celestial intent detection (orders, POS how-to, warehouses) |
+| `apps/web/lib/server/celestial/compose.test.ts` | Direct compose tables, doc fallback replies |
+| `apps/web/lib/server/celestial/retrieval.test.ts` | RAG chunk loading, POS/FAQ/warehouse retrieval |
 | `packages/analytics-engine/src/cashflow.test.ts` | Cashflow forecast |
 | `packages/web-gateway-client/src/resolve-gateway.test.ts` | API base URL |
 | `apps/client/src/lib/admin-path.test.ts` | Admin path helpers |
@@ -520,7 +547,7 @@ Documented in `MISSING.md` and backlog:
 
 - Legacy Nest/Expo/Python microservices not on this branch
 - Redis event bus (stub in `event-bus.ts`; set `REDIS_URL` for production wiring)
-- MSA S3 upload / EDI cron (metadata + stub; full S3/EDI automation pending)
+- MSA automation depends on env (`MSA_S3_BUCKET`, `MSA_UPLOAD_WEBHOOK_URL`, manufacturer `ediEndpoint`); local archive + cron (`POST /msa/cron`) implemented in Tier 9
 - Full native PDF generation (invoice download is print-ready HTML)
 - Postgres unified dev path (local uses SQLite; production URL helpers in `env.ts`)
 
@@ -538,11 +565,14 @@ Documented in `MISSING.md` and backlog:
 | Logo | `apps/client/src/components/cosmos-logo.tsx`, `cosmos_logo.svg` |
 | Sidebar / shell | `apps/client/src/components/layout/` |
 | API router | `apps/web/lib/server/native-router.ts` |
+| Celestial AI | `apps/web/lib/server/celestial/`, `apps/client/src/components/celestial/`, `apps/client/src/stores/celestial-store.ts` |
+| Celestial knowledge base | `docs/celestial/*.md` (RAG source; indexed by `retrieval.ts`) |
 | Invoices / returns | `apps/web/lib/server/invoices.ts` |
 | Quotes | `apps/web/lib/server/quotes.ts` |
+| POS | `apps/web/lib/server/pos.ts`, `apps/client/src/pages/admin/pos/` |
 | Seed | `scripts/seed-db.ts` |
 | Migrations | `scripts/migrate-all.ts` |
 
 ---
 
-*Last updated: May 2026 — reflects Tier 15 Celestial AI assistant.*
+*Last updated: May 2026 — reflects Tier 15 Celestial AI (RAG knowledge base, conversation API, streaming UI, feature gating).*
