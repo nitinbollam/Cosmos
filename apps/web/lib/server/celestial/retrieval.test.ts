@@ -38,3 +38,13 @@ test('retrievePlatformDocs finds Celestial documentation', () => {
   const chunks = retrievePlatformDocs('how does Celestial AI work')
   assert.ok(chunks.some((c) => /celestial/i.test(c.heading + c.body)))
 })
+
+test('retrievePlatformDocs prefers plain language for how Cosmos works', () => {
+  clearRetrievalCache()
+  const chunks = retrievePlatformDocs('How cosmos works?', 6, true)
+  assert.ok(chunks.length > 0)
+  assert.ok(
+    chunks.some((c) => /plain language/i.test(c.heading)),
+    `expected plain-language chunk first, got: ${chunks.map((c) => c.heading).join(', ')}`,
+  )
+})

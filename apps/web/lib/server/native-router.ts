@@ -9,6 +9,12 @@ import * as quotes from './quotes'
 import * as wmsFulfillment from './wms-fulfillment'
 import * as wmsReceiving from './wms-receiving'
 import * as wmsCycleCount from './wms-cycle-count'
+import * as wmsPutaway from './wms-putaway'
+import * as wmsLabor from './wms-labor'
+import * as inventoryLots from './inventory-lots'
+import * as inventorySerials from './inventory-serials'
+import * as backorders from './backorders'
+import * as dropShip from './drop-ship'
 import * as dispatch from './dispatch'
 import * as purchasing from './purchasing'
 import * as payments from './payments'
@@ -36,6 +42,9 @@ import * as featureFlags from './feature-flags'
 import * as customerNotificationPrefs from './customer-notification-prefs'
 import { getNotificationProviderStatus } from './notification-provider-status'
 import * as celestial from './celestial/orchestrator'
+import * as edi from './edi'
+import * as demandPlanning from './demand-planning'
+import { checkDatabaseConnections } from './db-health'
 import { getAuthProfile, isPortalBuyer, isAdminStaff, requirePortalCustomerId } from './buyer-context'
 import { getTenantTaxSettings } from './tenant-tax'
 import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError } from './session'
@@ -62,6 +71,10 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'routes') return await routeRoutes(m, seg, req)
     if (seg[0] === 'dispatch') return await routeDispatchMobile(m, seg, req)
     if (seg[0] === 'purchase-orders') return await routePurchaseOrders(m, seg, req)
+    if (seg[0] === 'edi') return await routeEdi(m, seg, req)
+    if (seg[0] === 'health' && seg[1] === 'db' && m === 'GET') {
+      return Response.json(await checkDatabaseConnections())
+    }
     if (seg[0] === 'bills') return await routeBills(m, seg, req)
     if (seg[0] === 'suppliers') return await routeSuppliers(m, seg, req)
     if (seg[0] === 'payments') return await routePayments(m, seg, req)
@@ -196,11 +209,43 @@ async function routeSkus(method: string, seg: string[], req: Request): Promise<R
     const warehouseId = url.searchParams.get('warehouseId') ?? undefined
     return Response.json(await inv.getSkuReorderSuggestion(session.tenantId, seg[1], warehouseId ?? undefined))
   }
+  if (seg.length === 3 && seg[2] === 'demand-plan' && method === 'GET') {
+    const warehouseId = url.searchParams.get('warehouseId') ?? undefined
+    const days = +(url.searchParams.get('days') ?? 30)
+    return Response.json(
+      await demandPlanning.getSkuDemandPlan(session.tenantId, seg[1], warehouseId ?? undefined, days),
+    )
+  }
   if (seg.length === 3 && seg[2] === 'label' && method === 'GET') {
     const qty = +(url.searchParams.get('qty') ?? 1)
     const html = await barcodeLabels.buildSkuLabelHtml(session.tenantId, seg[1], qty)
     return new Response(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="label-${seg[1]}.html"` },
+    })
+  }
+  if (seg.length === 3 && seg[2] === 'tracking' && method === 'GET') {
+    return Response.json(await inventoryLots.getSkuLotTracking(session.tenantId, seg[1]))
+  }
+  if (seg.length === 3 && seg[2] === 'tracking' && method === 'PATCH') {
+    const body = (await req.json()) as { trackLot?: boolean; trackSerial?: boolean }
+    return Response.json(await inventoryLots.setSkuLotTracking(session.tenantId, seg[1], body))
+  }
+  if (seg.length === 3 && seg[2] === 'lots' && method === 'GET') {
+    const warehouseId = url.searchParams.get('warehouseId') ?? undefined
+    return Response.json(await inventoryLots.listInventoryLots(session.tenantId, seg[1], warehouseId))
+  }
+  if (seg.length === 3 && seg[2] === 'serials' && method === 'GET') {
+    return Response.json(
+      await inventorySerials.listSerialUnits(session.tenantId, {
+        skuId: seg[1],
+        status: url.searchParams.get('status') ?? undefined,
+      }),
+    )
+  }
+  if (seg.length === 3 && seg[2] === 'serials' && method === 'POST') {
+    const body = (await req.json()) as Parameters<typeof inventorySerials.registerSerialUnits>[1]
+    return Response.json(await inventorySerials.registerSerialUnits(session.tenantId, { ...body, skuId: seg[1] }), {
+      status: 201,
     })
   }
   if (seg.length === 2 && method === 'PATCH') {
@@ -282,6 +327,25 @@ async function routeInventory(method: string, seg: string[], req: Request): Prom
     await inv.releaseReservation(session.tenantId, body.reservationId)
     return Response.json({ released: true })
   }
+  if (seg[1] === 'demand-plan' && seg.length === 2 && method === 'GET') {
+    const warehouseId = url.searchParams.get('warehouseId') ?? undefined
+    const days = +(url.searchParams.get('days') ?? 30)
+    const limit = +(url.searchParams.get('limit') ?? 50)
+    return Response.json(
+      await demandPlanning.listDemandPlans(session.tenantId, warehouseId ?? undefined, days, limit),
+    )
+  }
+  if (seg[1] === 'lots' && seg.length === 2 && method === 'GET') {
+    const skuId = url.searchParams.get('skuId')
+    if (!skuId) throw new ApiError(400, 'skuId query required')
+    return Response.json(
+      await inventoryLots.listInventoryLots(
+        session.tenantId,
+        skuId,
+        url.searchParams.get('warehouseId') ?? undefined,
+      ),
+    )
+  }
   throw new ApiError(404, 'Inventory route not found')
 }
 
@@ -308,6 +372,9 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
   }
   if (seg.length === 2 && method === 'GET') {
     return Response.json(await orders.findOrderById(session.tenantId, seg[1], buyerOpts))
+  }
+  if (seg.length === 2 && seg[1] === 'backorders' && method === 'GET') {
+    return Response.json(await backorders.listOpenBackorders(session.tenantId, +(url.searchParams.get('limit') ?? 50)))
   }
   if (seg.length === 1 && method === 'GET') {
     return Response.json(
@@ -369,6 +436,15 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
       assertRole(session, ADMIN_ROLES)
     }
     return Response.json(await orders.recordOrderPayment(session.tenantId, seg[1], body))
+  }
+  if (seg.length === 4 && seg[2] === 'drop-ship' && seg[3] === 'ship' && method === 'POST') {
+    await requireRole(req, ADMIN_ROLES)
+    const body = (await req.json()) as { carrier?: string; trackingNumber?: string }
+    return Response.json(await dropShip.markDropShipLinesShipped(session.tenantId, seg[1], body))
+  }
+  if (seg.length === 4 && seg[2] === 'drop-ship' && seg[3] === 'create-po' && method === 'POST') {
+    await requireRole(req, ADMIN_ROLES)
+    return Response.json(await dropShip.createDropShipPurchaseOrders(session.tenantId, seg[1]))
   }
   throw new ApiError(404, 'Order route not found')
 }
@@ -647,8 +723,66 @@ async function routePurchaseOrders(method: string, seg: string[], req: Request):
     const body = (await req.json()) as purchasing.RecordPoPaymentInput
     return Response.json(await purchasing.recordPurchaseOrderPayment(session.tenantId, seg[1], body))
   }
+  if (seg.length === 3 && seg[2] === 'landed-costs' && method === 'GET') {
+    return Response.json(await purchasing.getPurchaseOrderLandedCostPreview(session.tenantId, seg[1]))
+  }
+  if (seg.length === 3 && seg[2] === 'landed-costs' && method === 'PATCH') {
+    const body = (await req.json()) as Parameters<typeof purchasing.updatePurchaseOrderLandedCosts>[2]
+    return Response.json(await purchasing.updatePurchaseOrderLandedCosts(session.tenantId, seg[1], body))
+  }
 
   throw new ApiError(404, 'Purchase order route not found')
+}
+
+async function routeEdi(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requireRole(req, ADMIN_ROLES)
+  const url = new URL(req.url)
+
+  if (seg[1] === 'partners') {
+    if (seg.length === 2 && method === 'GET') {
+      return Response.json(await edi.listTradingPartners(session.tenantId))
+    }
+    if (seg.length === 2 && method === 'POST') {
+      const body = (await req.json()) as Parameters<typeof edi.createTradingPartner>[1]
+      return Response.json(await edi.createTradingPartner(session.tenantId, body), { status: 201 })
+    }
+    if (seg.length === 3 && method === 'PATCH') {
+      const body = (await req.json()) as Parameters<typeof edi.updateTradingPartner>[2]
+      return Response.json(await edi.updateTradingPartner(session.tenantId, seg[2], body))
+    }
+  }
+
+  if (seg[1] === 'documents' && seg.length === 2 && method === 'GET') {
+    const limit = +(url.searchParams.get('limit') ?? 50)
+    return Response.json(await edi.listEdiDocuments(session.tenantId, limit))
+  }
+
+  if (seg[1] === 'inbound' && seg[2] === '850' && method === 'POST') {
+    const body = (await req.json()) as edi.Edi850Payload
+    return Response.json(await edi.ingest850(session.tenantId, body), { status: 201 })
+  }
+
+  if (seg[1] === 'documents' && seg.length === 4 && seg[3] === 'process' && method === 'POST') {
+    const orderId = await edi.process850Document(session.tenantId, seg[2])
+    return Response.json({ orderId })
+  }
+
+  if (seg[1] === 'outbound' && seg[2] === '810' && method === 'POST') {
+    const body = (await req.json()) as { invoiceId: string }
+    if (!body.invoiceId) throw new ApiError(400, 'invoiceId required')
+    return Response.json(await edi.generate810ForInvoice(session.tenantId, body.invoiceId), { status: 201 })
+  }
+
+  if (seg[1] === 'outbound' && seg[2] === '856' && method === 'POST') {
+    const body = (await req.json()) as { orderId: string; shipmentNo: number }
+    if (!body.orderId || body.shipmentNo == null) throw new ApiError(400, 'orderId and shipmentNo required')
+    return Response.json(
+      await edi.generate856ForShipment(session.tenantId, body.orderId, body.shipmentNo),
+      { status: 201 },
+    )
+  }
+
+  throw new ApiError(404, 'EDI route not found')
 }
 
 async function routeBills(method: string, seg: string[], req: Request): Promise<Response> {
@@ -889,6 +1023,38 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
         ),
       )
     }
+  }
+
+  if (seg[1] === 'putaway' && seg[2] === 'tasks') {
+    if (seg.length === 3 && method === 'GET') {
+      return Response.json(
+        await wmsPutaway.listPutawayTasks(
+          session.tenantId,
+          url.searchParams.get('warehouseId') ?? undefined,
+          url.searchParams.get('status') ?? undefined,
+        ),
+      )
+    }
+    if (seg.length === 5 && seg[3] === 'lines' && method === 'PATCH') {
+      const body = (await req.json()) as { actualBinId?: string; actualBinCode?: string }
+      return Response.json(
+        await wmsPutaway.confirmPutawayLine(session.tenantId, seg[2], seg[4], {
+          ...body,
+          performedBy: session.userId,
+        }),
+      )
+    }
+  }
+
+  if (seg[1] === 'labor' && seg[2] === 'metrics' && method === 'GET') {
+    const days = +(url.searchParams.get('days') ?? 7)
+    return Response.json(
+      await wmsLabor.getLaborMetrics(
+        session.tenantId,
+        url.searchParams.get('warehouseId') ?? undefined,
+        days,
+      ),
+    )
   }
 
   if (seg[1] === 'cycle-counts') {

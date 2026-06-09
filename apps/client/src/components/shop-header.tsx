@@ -2,9 +2,10 @@ import { CosmosLogo } from '@/components/cosmos-logo'
 import { Link, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { useCartStore } from '@/stores/cart.store'
-import { emitStorefrontAuthChanged, STOREFRONT_AUTH_EVENT } from '@/lib/auth-events'
+import { STOREFRONT_AUTH_EVENT } from '@/lib/auth-events'
 import { jwtEmail } from '@/lib/jwt'
-import { clearB2bSession } from '@/lib/session'
+import { signOut } from '@/lib/auth-session'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 
 export function ShopHeader() {
   const location = useLocation()
@@ -39,14 +40,6 @@ export function ShopHeader() {
     document.body.classList.toggle('cosmos-shop-menu-open', navOpen)
     return () => document.body.classList.remove('cosmos-shop-menu-open')
   }, [navOpen])
-
-  function logout() {
-    window.localStorage.removeItem('cosmos.accessToken')
-    window.localStorage.removeItem('cosmos.refreshToken')
-    clearB2bSession()
-    emitStorefrontAuthChanged()
-    window.location.href = '/'
-  }
 
   function navClass(path: string) {
     const active = location.pathname === path || location.pathname.startsWith(`${path}/`)
@@ -97,6 +90,7 @@ export function ShopHeader() {
         </nav>
       </div>
       <div className="cosmos-shop-header-actions">
+        <ThemeSwitcher compact />
         <Link to="/cart" className="cosmos-shop-link cosmos-shop-cart-link">
           Cart
           {count > 0 ? <span className="cosmos-shop-cart-badge">{count}</span> : null}
@@ -112,7 +106,7 @@ export function ShopHeader() {
             </button>
             {userMenuOpen ? (
               <div className="cosmos-card cosmos-shop-user-dropdown">
-                <button type="button" className="cosmos-shop-signout" onClick={() => logout()}>
+                <button type="button" className="cosmos-shop-signout" onClick={() => void signOut()}>
                   Sign out
                 </button>
               </div>

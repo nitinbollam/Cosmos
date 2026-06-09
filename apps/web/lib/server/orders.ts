@@ -18,7 +18,15 @@ export type CreateOrderInput = {
   priority?: string
   notes?: string
   shippingAddress?: Record<string, unknown>
-  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; unitPrice: number }>
+  lineItems: Array<{
+    skuId: string
+    warehouseId: string
+    quantity: number
+    unitPrice: number
+    fulfillmentType?: 'STOCK' | 'DROP_SHIP'
+    supplierId?: string
+    preferredBatchId?: string
+  }>
 }
 
 export async function createOrder(
@@ -59,6 +67,9 @@ export async function createOrder(
           warehouseId: li.warehouseId,
           quantity: li.quantity,
           unitPrice: new Prisma.Decimal(li.unitPrice),
+          fulfillmentType: li.fulfillmentType ?? 'STOCK',
+          supplierId: li.supplierId ?? null,
+          preferredBatchId: li.preferredBatchId ?? null,
         })),
       },
     },
@@ -147,7 +158,7 @@ export async function confirmOrder(tenantId: string, id: string) {
 
 export async function fulfillOrder(tenantId: string, id: string) {
   const order = await findOrderById(tenantId, id)
-  if (!['PENDING', 'CONFIRMED', 'PROCESSING'].includes(order.status)) {
+  if (!['PENDING', 'CONFIRMED', 'BACKORDERED', 'PROCESSING'].includes(order.status)) {
     throw new ApiError(400, `Order cannot be fulfilled from status ${order.status}`)
   }
   const correlationId = order.saga?.correlationId ?? randomUUID()

@@ -3,11 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#7161EF" />
+    <meta name="theme-color" content="#09090B" />
+    <meta
+      name="description"
+      content="Cosmos — modern wholesale ERP. Orders, inventory, warehouse, B2B shop, and AI in one platform."
+    />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Cosmos</title>
+    <script>
+      (function () {
+        var t = localStorage.getItem('cosmos.theme');
+        if (t !== 'aurora' && t !== 'obsidian') t = 'obsidian';
+        document.documentElement.setAttribute('data-theme', t);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', t === 'aurora' ? '#DEC0F1' : '#09090B');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

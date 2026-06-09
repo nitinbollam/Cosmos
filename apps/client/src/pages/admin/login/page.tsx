@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 import { CosmosLogo } from '@/components/cosmos-logo'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
 import { axiosErr } from '@/lib/axios-error'
+import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -19,6 +21,7 @@ export default function LoginPage() {
       const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
       window.localStorage.setItem('cosmos.accessToken', r.accessToken)
       window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
+      emitStorefrontAuthChanged()
       const next = new URLSearchParams(window.location.search).get('next')
       navigate(next?.startsWith('/') ? next : '/admin')
     } catch (e) {
@@ -30,6 +33,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--c-bg)' }}>
+      <AuthThemeToolbar />
       <form onSubmit={submit} className="bento-cell bento-tone-white w-full max-w-sm space-y-4">
         <div className="flex justify-center pb-2">
           <CosmosLogo size="lg" />

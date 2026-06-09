@@ -53,10 +53,10 @@ interface CashflowResponse {
   warnings: string[]
 }
 
-const CHART_GRID = 'rgba(113, 97, 239, 0.16)'
-const CHART_AXIS = '#5F5775'
-const CHART_LINE = '#7161EF'
-const CHART_FILL = '#957FEF'
+const CHART_GRID = 'rgba(255, 255, 255, 0.06)'
+const CHART_AXIS = '#71717a'
+const CHART_LINE = '#5b8def'
+const CHART_FILL = '#6b9fd4'
 
 function sumNetWeeks(forecast: CashflowBucket[], weeks: number): number {
   let s = 0

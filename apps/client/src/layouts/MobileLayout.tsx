@@ -2,6 +2,8 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { CosmosLogo } from '@/components/cosmos-logo'
 import { RequireMobileAuth } from '@/components/auth/require-mobile-auth'
 import { OfflineSyncRunner } from '@/components/mobile/offline-sync-runner'
+import { ThemeSwitcher } from '@/components/theme-switcher'
+import { signOut } from '@/lib/auth-session'
 
 const TABS = [
   { href: '/m/warehouse', label: 'Warehouse' },
@@ -36,9 +38,16 @@ function MobileShell() {
           <CosmosLogo variant="mark" size="sm" />
           <span>Mobile</span>
         </Link>
-        <Link to="/m/login" className="cosmos-mobile-back">
-          Sign in
-        </Link>
+        <div className="cosmos-mobile-header-actions">
+          <ThemeSwitcher compact />
+          <button
+            type="button"
+            className="cosmos-mobile-back cosmos-mobile-signout"
+            onClick={() => void signOut({ redirectTo: '/m/login' })}
+          >
+            Sign out
+          </button>
+        </div>
       </header>
       <nav className="cosmos-mobile-nav">
         {TABS.map((t) => {

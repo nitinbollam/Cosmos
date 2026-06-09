@@ -52,9 +52,13 @@ model PurchaseOrder {
   supplierId String
   number     String
   status     PurchaseOrderStatus   @default(DRAFT)
-  notes      String?
-  amountPaid Decimal               @default(0)
-  createdAt  DateTime              @default(now())
+  notes             String?
+  freightAmount     Decimal               @default(0)
+  dutyAmount        Decimal               @default(0)
+  otherLandedAmount Decimal               @default(0)
+  landedCostNotes   String?
+  amountPaid        Decimal               @default(0)
+  createdAt         DateTime              @default(now())
   updatedAt  DateTime              @updatedAt
   supplier   Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   lines      PurchaseOrderLine[]

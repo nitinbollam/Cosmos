@@ -56,3 +56,23 @@ test('buildDocFallbackReply uses documentation excerpts', () => {
   ])
   assert.match(reply, /POS/)
 })
+
+test('buildDocFallbackReply uses plain language intro for overview questions', () => {
+  const reply = buildDocFallbackReply(
+    'How cosmos works?',
+    [
+      {
+        heading: 'How Cosmos works (plain language)',
+        body: 'Cosmos helps wholesale businesses take orders, ship from the warehouse, and get paid.',
+      },
+      {
+        heading: 'Local development quickstart',
+        body: 'npm run dev\nOpen http://localhost:4000',
+      },
+    ],
+    true,
+  )
+  assert.match(reply, /simple explanation/i)
+  assert.match(reply, /wholesale businesses/i)
+  assert.doesNotMatch(reply, /npm run/)
+})

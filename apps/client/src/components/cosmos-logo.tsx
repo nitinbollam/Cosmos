@@ -9,10 +9,10 @@ type CosmosLogoProps = {
 
 const heights = { sm: 32, md: 38, lg: 56 } as const
 
-const MARK = '#7161EF'
-const MARK_SOFT = '#957FEF'
-const INK = '#2D2640'
-const MUTED = '#5F5775'
+const MARK = '#5B8DEF'
+const MARK_SOFT = '#6B9FD4'
+const INK = '#FAFAFA'
+const MUTED = '#A1A1AA'
 
 /** Orbital mark — 52×52 artboard with safe padding */
 function CosmosMarkGraphic() {

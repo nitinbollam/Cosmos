@@ -16,7 +16,7 @@ Cosmos is **not a full enterprise ERP replacement yet**, but it **covers most co
 |---------|------------------------------|
 | **Core distribution ops** (orders, inventory, PO, basic WMS, B2B) | **~85%** — strong for a single-tenant SMB distributor |
 | **Finance depth** (GL, AR/AP, recon, tax) | **~70%** — solid basics; missing multi-currency, consolidation, fixed assets |
-| **Advanced supply chain** (demand planning, EDI hub, drop ship, landed cost) | **~35%** — major gap vs Prophet 21 / NetSuite mid-market |
+| **Advanced supply chain** (demand planning, EDI hub, drop ship, landed cost) | **~70%** — EDI hub (850/810/856), demand planning, landed cost on PO receive |
 | **Enterprise scale** (multi-entity, high volume, deep BI, HR/payroll) | **~15%** — intentionally out of scope today |
 
 Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not include natively. It complements but does not replace gaps like general EDI or demand planning.
@@ -63,12 +63,12 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Wave picking | ✅ | Admin + mobile |
 | Bin locations / directed picking | ✅ | Bin-sorted pick path |
 | Barcode labels | ✅ | Printable HTML (`GET /skus/:id/label`) |
-| Lot / batch tracking | ⚠️ Partial | `batchId` in schema/receiving; limited traceability UI |
-| Serial number tracking | ❌ | Not implemented |
+| Lot / batch tracking | ✅ | `InventoryLot`, FEFO allocation, SKU `trackLot`, receiving + SKU detail |
+| Serial number tracking | ✅ | `SerialUnit`, register/reserve/ship, SKU `trackSerial` toggle |
 | RF scanner / hardware WMS | ⚠️ Partial | Mobile PWA; not industrial RF workflow |
-| Directed putaway | ❌ | Not implemented |
-| Labor / productivity tracking | ❌ | Not implemented |
-| Automated replenishment (MRP) | ⚠️ Partial | Reorder qty + low-stock PO prefill; no usage forecasting |
+| Directed putaway | ✅ | Bin suggestion, putaway tasks from receiving, admin confirm |
+| Labor / productivity tracking | ✅ | `WmsLaborEvent` on pick/receive/putaway; 7-day metrics tab |
+| Automated replenishment (MRP) | ✅ | Usage-based demand plan from stock ledger + lead time; reorder suggestions |
 
 **Verdict:** **Mid-tier WMS** — beyond basic pick lists, but below Prophet 21 / NetSuite WMS for high-volume distribution centers.
 
@@ -89,12 +89,12 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Split shipments / tracking | ✅ | `OrderShipment`, buyer tracking UI |
 | Returns (RMA) | ✅ | Credit memo, restock |
 | Reorder / order templates | ✅ | |
-| Backorder management | ❌ | No explicit backorder queue / allocation |
-| Drop shipping | ❌ | Not implemented |
+| Backorder management | ✅ | Partial reserve, `BACKORDERED` status, `BackorderLine` queue, auto-fill on receipt |
+| Drop shipping | ✅ | `DROP_SHIP` lines, auto PO per supplier, ship + invoice from admin |
 | Omnichannel (Amazon / Shopify sync) | ❌ | No native connectors |
 | Sales commissions | ❌ | Not implemented |
 
-**Verdict:** Strong **B2B + counter** order model. Missing **backorder, drop ship, and channel integrations** common in mid-market ERPs.
+**Verdict:** Strong **B2B + counter** order model with **backorder and drop-ship**. Still missing **channel integrations** common in mid-market ERPs.
 
 ---
 
@@ -156,7 +156,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Webhooks | ✅ | Settings → Webhooks |
 | Stripe payments | ✅ | Checkout + invoice pay |
 | Email / SMS (SendGrid / Twilio) | ⚠️ | Works with env; console fallback |
-| EDI (850 / 810 / 856 etc.) | ⚠️ | MSA EDI submit only; not general trading-partner EDI |
+| EDI (850 / 810 / 856 etc.) | ✅ | Trading partners, inbound 850 → orders, outbound 810/856 documents |
 | MSA / regulated compliance | ✅ | Reports, S3/webhook, cron (`POST /msa/cron`) |
 | Redis event bus | ⚠️ | Stub (`event-bus.ts`) |
 | Public signup / multi-tenant SaaS | ✅ | `/signup` |
@@ -197,19 +197,19 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 | # | Gap | Why it matters |
 |---|-----|----------------|
-| 1 | **General EDI** (850 orders, 810 invoices, ASN) | Biggest integration gap vs big-box / industrial buyers |
-| 2 | **Backorder management** | Allocate, promise dates, split across warehouses |
-| 3 | **Demand planning** | Usage-based replenishment beyond static reorder points |
-| 4 | **Drop shipping** | Vendor ships direct to customer |
-| 5 | **Production database path** | Postgres as default production DB, not SQLite-only dev |
+| 1 | ~~**General EDI**~~ | ✅ JSON interchange — partners, 850 ingest, 810/856 export |
+| 2 | ~~**Backorder management**~~ | ✅ Shipped — partial allocate, queue, auto-fill on receipt |
+| 3 | ~~**Demand planning**~~ | ✅ Usage forecast from ledger + lead time on stock levels |
+| 4 | ~~**Drop shipping**~~ | ✅ Shipped — DROP_SHIP lines, vendor PO, admin ship |
+| 5 | ~~**Production database path**~~ | ✅ `COSMOS_DB_PROVIDER=postgres`, migrate-all, `db:setup:postgres`, health check |
 
 ### Medium priority — mid-market
 
 | # | Gap |
 |---|-----|
-| 6 | Landed cost on PO receive |
+| 6 | ~~Landed cost on PO receive~~ | ✅ Freight/duty/other allocated into inventory unit cost on receive |
 | 7 | Purchase requisition + approval workflow |
-| 8 | Lot / serial traceability UI (recall, compliance) |
+| 8 | Lot / serial recall & compliance UI (beyond basic tracking) |
 | 9 | Deeper sales tax (nexus, exemptions) |
 | 10 | Native PDF documents |
 | 11 | Fine-grained RBAC per module |
@@ -225,9 +225,9 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 16 | Manufacturing / kitting / BOM |
 | 17 | HR & payroll |
 | 18 | Advanced BI / AI forecasting (beyond cashflow EWMA) |
-| 19 | Labor management in WMS |
+| 19 | ~~Labor management in WMS~~ | ✅ Basic productivity metrics |
 
-**Suggested implementation order:** EDI → backorders → demand planning → Postgres hardening → drop ship.
+**Suggested implementation order:** ~~EDI → demand planning → Postgres hardening → landed cost~~ (shipped). Next: purchase requisitions, deeper tax, report builder.
 
 ---
 
@@ -245,8 +245,8 @@ Reference: what NetSuite, Business Central, and mid-market distributors typicall
 | B2B customer portal | ✅ In place |
 | CRM + contract pricing | ✅ In place |
 | Warehouse mobile / barcode | ⚠️ Partial |
-| EDI / trading partner hub | ❌ Missing (MSA-only EDI) |
-| Demand planning / MRP | ❌ Missing |
+| EDI / trading partner hub | ✅ JSON 850/810/856 + partner config |
+| Demand planning / MRP | ✅ Usage-based replenishment |
 | Multi-entity / FX | ❌ Missing |
 
 ---

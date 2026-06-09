@@ -75,30 +75,79 @@ export function toolResultHasData(result: ToolResult): boolean {
   return false
 }
 
-export function buildDocFallbackReply(message: string, docs: Array<{ heading: string; body: string }>): string {
+function simplifyDocExcerpt(body: string, plainLanguage: boolean): string {
+  if (!plainLanguage) {
+    return body.length > 700 ? `${body.slice(0, 700).trim()}…` : body
+  }
+
+  const lines = body
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim()
+      if (!t) return true
+      if (/^```/.test(t)) return false
+      if (/\b(npm run|localhost|apps\/|prisma|schema\.prisma|\/admin\/|\/m\/|\/catalog)\b/i.test(t)) return false
+      if (/^\|.*\|.*\|/.test(t) && /route|url|stack|schema/i.test(t)) return false
+      return true
+    })
+
+  const cleaned = lines.join('\n').trim()
+  const excerpt = cleaned.length > 700 ? `${cleaned.slice(0, 700).trim()}…` : cleaned
+  return excerpt || body.slice(0, 700)
+}
+
+export function buildDocFallbackReply(
+  message: string,
+  docs: Array<{ heading: string; body: string }>,
+  plainLanguage = true,
+): string {
   if (docs.length === 0) {
     return [
       `I'm **Celestial**, your Cosmos assistant.`,
       '',
-      'I can help with **orders**, **inventory**, **warehouses**, **finance**, **POS**, **quotes**, and how Cosmos features work.',
+      plainLanguage
+        ? 'I can explain how Cosmos helps you sell, ship, and get paid — or look up your orders, stock, and invoices.'
+        : 'I can help with **orders**, **inventory**, **warehouses**, **finance**, **POS**, **quotes**, and how Cosmos features work.',
       '',
       `You asked: "${message}"`,
       '',
-      'Try questions like "What warehouses do we have?", "Any orders pending?", or "How does POS work in Cosmos?"',
+      plainLanguage
+        ? 'Try: "How does Cosmos work?", "Any orders waiting to ship?", or "What\'s low on stock?"'
+        : 'Try questions like "What warehouses do we have?", "Any orders pending?", or "How does POS work?"',
     ].join('\n')
   }
 
-  const sections = docs.slice(0, 2).map((doc) => {
-    const excerpt = doc.body.length > 700 ? `${doc.body.slice(0, 700).trim()}…` : doc.body
-    return `### ${doc.heading}\n${excerpt}`
+  const isTechnicalDoc = (doc: { heading: string; body: string }) =>
+    /architecture|tech stack|local development|data model|api base/i.test(doc.heading) ||
+    /\b(npm run|localhost:\d+|apps\/)/i.test(doc.body)
+
+  const ranked = plainLanguage
+    ? [...docs]
+        .filter((d) => !isTechnicalDoc(d))
+        .sort((a, b) => {
+          const aPlain = /plain language|simple overview/i.test(a.heading) ? 1 : 0
+          const bPlain = /plain language|simple overview/i.test(b.heading) ? 1 : 0
+          return bPlain - aPlain
+        })
+    : docs
+
+  const pool = ranked.length > 0 ? ranked : docs
+  const sections = pool.slice(0, 2).map((doc) => {
+    const excerpt = simplifyDocExcerpt(doc.body, plainLanguage)
+    const heading = plainLanguage ? doc.heading.replace(/\s*—\s*how it works/i, '') : doc.heading
+    return `### ${heading}\n${excerpt}`
   })
 
   return [
-    'Here is what Cosmos documentation says about your question:',
+    plainLanguage
+      ? 'Here’s a simple explanation based on how Cosmos is set up for your business:'
+      : 'Here is what Cosmos documentation says about your question:',
     '',
     ...sections,
     '',
-    'Ask a follow-up if you want steps for a specific screen or live data (orders, stock, warehouses).',
+    plainLanguage
+      ? 'Ask a follow-up if you want step-by-step help on a specific task, or ask me to look up live orders or stock.'
+      : 'Ask a follow-up if you want steps for a specific screen or live data (orders, stock, warehouses).',
   ].join('\n')
 }
 

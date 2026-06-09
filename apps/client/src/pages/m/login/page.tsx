@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 import { api, formatApiReachabilityError } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
 import { parseJwtPayload } from '@/lib/jwt'
@@ -42,6 +43,7 @@ export default function MobileLoginPage() {
 
   return (
     <div className="cosmos-mobile" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AuthThemeToolbar />
       <header className="cosmos-mobile-header">
         <Link to="/" className="cosmos-shop-link" style={{ fontSize: 13 }}>
           ← Hub

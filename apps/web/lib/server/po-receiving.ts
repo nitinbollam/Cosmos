@@ -104,13 +104,16 @@ export async function postInventoryForPoReceipts(
     }
     try {
       const sku = await inv.findSkuByCode(tenantId, code)
+      const baseCost = line.unitCost != null ? toNumberDecimal(line.unitCost) : 0
+      const { computeReceivedUnitCost } = await import('./landed-cost')
+      const unitCost = computeReceivedUnitCost(baseCost, po, line.id, r.qtyReceived)
       await inv.receiveStock(
         tenantId,
         {
           skuId: sku.id,
           warehouseId,
           quantity: r.qtyReceived,
-          unitCost: line.unitCost != null ? toNumberDecimal(line.unitCost) : 0,
+          unitCost,
           supplierId: po.supplierId,
           poId: po.id,
         },

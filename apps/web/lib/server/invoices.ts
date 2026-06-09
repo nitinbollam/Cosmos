@@ -86,6 +86,12 @@ export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
     )
     .catch(() => undefined)
 
+  if (order.channel === 'EDI') {
+    void import('./edi')
+      .then((m) => m.generate810ForInvoice(tenantId, finalInvoice.id))
+      .catch(() => undefined)
+  }
+
   return finalInvoice
 }
 

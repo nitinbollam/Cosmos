@@ -329,8 +329,8 @@ export function CelestialChat({
             <h3 className="celestial-empty-title">How can I help?</h3>
             <p className="celestial-empty-text">
               {isPage
-                ? 'Ask about orders, inventory, warehouses, finance, or how Cosmos works.'
-                : 'Ask about orders, invoices, catalog, quotes, or platform features.'}
+                ? 'Ask how Cosmos works, or about your orders, stock, and invoices.'
+                : 'Ask how Cosmos works, or look up orders, inventory, warehouses, and finance.'}
             </p>
             <div className="celestial-suggestions">
               {suggestions.map((s) => (

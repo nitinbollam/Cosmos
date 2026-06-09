@@ -149,15 +149,15 @@ export function BentoHeroCard({
 
 export function BentoAvatarStack({ labels }: { labels: string[] }) {
   const shown = labels.slice(0, 4)
-  const fills = ['#EFD9CE', '#DEC0F1', '#B79CED', '#F3E4F8']
+  const fills = ['#1a1a1d', '#222226', '#2a2a2e', '#333338']
   return (
     <div className="flex items-center gap-3 mt-4">
       <div className="flex -space-x-2">
         {shown.map((label, i) => (
           <span
             key={`${label}-${i}`}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[10px] font-bold border-2 border-white"
-            style={{ background: fills[i % fills.length], color: '#475569' }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[10px] font-bold border-2"
+            style={{ background: fills[i % fills.length], color: 'var(--c-text)', borderColor: 'var(--c-border-card)' }}
           >
             {label.slice(0, 2).toUpperCase()}
           </span>

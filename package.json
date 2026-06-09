@@ -29,6 +29,8 @@
     "db:migrate": "tsx scripts/migrate-all.ts",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
     "db:setup": "node scripts/setup-sqlite.mjs",
+    "db:setup:postgres": "node scripts/setup-postgres.mjs",
+    "db:provider": "node scripts/apply-prisma-provider.mjs",
     "infra:up": "npm run db:setup",
     "infra:docker:up": "docker compose -f docker-compose.yml up -d",
     "infra:docker:down": "docker compose -f docker-compose.yml down",

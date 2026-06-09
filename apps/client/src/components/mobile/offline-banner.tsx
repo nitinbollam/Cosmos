@@ -41,8 +41,8 @@ export function OfflineBanner() {
   return (
     <div
       style={{
-        background: offline ? '#f59e0b' : '#7161EF',
-        color: offline ? '#0f172a' : '#fff',
+        background: offline ? 'var(--c-warning)' : 'var(--c-primary)',
+        color: offline ? 'var(--c-bg)' : 'var(--c-on-primary)',
         padding: 8,
         textAlign: 'center',
         fontSize: 13,

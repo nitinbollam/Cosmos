@@ -14,6 +14,8 @@ import { canTransitionOrderStatus, fulfillmentTaskStatusToOrderStatus, type Orde
 import { ApiError } from './session'
 import * as wmsFulfillment from './wms-fulfillment'
 import { issueInvoiceForOrder } from './invoices'
+import * as backorders from './backorders'
+import * as dropShip from './drop-ship'
 
 function parseCompletedSteps(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []
@@ -78,15 +80,29 @@ export async function runOrderFulfillmentPipeline(
 
   try {
     if (!steps.includes('RESERVE_INVENTORY')) {
-      for (const item of order.lineItems) {
-        await inv.reserveStock(tenantId, {
+      const stockLines = order.lineItems.filter((li) => li.fulfillmentType !== 'DROP_SHIP')
+      let anyBackordered = false
+
+      for (const item of stockLines) {
+        const result = await backorders.reserveLineWithBackorder(tenantId, {
+          orderId,
+          orderLineItemId: item.id,
           skuId: item.skuId,
           warehouseId: item.warehouseId,
           quantity: item.quantity,
-          orderId,
           correlationId,
+          preferredBatchId: item.preferredBatchId,
+        })
+        if (result.backordered > 0) anyBackordered = true
+      }
+
+      if (anyBackordered) {
+        await orderDb.order.update({
+          where: { id: orderId },
+          data: { status: 'BACKORDERED' },
         })
       }
+
       steps.push('RESERVE_INVENTORY')
       await orderDb.orderSaga.update({
         where: { id: saga.id },
@@ -94,19 +110,37 @@ export async function runOrderFulfillmentPipeline(
       })
     }
 
+    if (!steps.includes('CREATE_DROP_SHIP')) {
+      const hasDropShip = order.lineItems.some((li) => li.fulfillmentType === 'DROP_SHIP')
+      if (hasDropShip) {
+        await dropShip.createDropShipPurchaseOrders(tenantId, orderId)
+      }
+      steps.push('CREATE_DROP_SHIP')
+      await orderDb.orderSaga.update({
+        where: { id: saga.id },
+        data: { completedSteps: steps },
+      })
+    }
+
     if (!steps.includes('CREATE_FULFILLMENT')) {
-      try {
-        await wmsFulfillment.createFulfillmentTask(tenantId, {
-          orderId,
-          correlationId,
-          lineItems: order.lineItems.map((li) => ({
-            skuId: li.skuId,
-            warehouseId: li.warehouseId,
-            quantity: li.quantity,
-          })),
-        })
-      } catch (err) {
-        if (!(err instanceof ApiError && err.status === 409)) throw err
+      const fulfillLines = order.lineItems.filter(
+        (li) => li.fulfillmentType !== 'DROP_SHIP' && li.quantityAllocated > 0,
+      )
+      if (fulfillLines.length > 0) {
+        try {
+          await wmsFulfillment.createFulfillmentTask(tenantId, {
+            orderId,
+            correlationId,
+            lineItems: fulfillLines.map((li) => ({
+              skuId: li.skuId,
+              warehouseId: li.warehouseId,
+              quantity: li.quantityAllocated,
+              batchId: li.preferredBatchId ?? undefined,
+            })),
+          })
+        } catch (err) {
+          if (!(err instanceof ApiError && err.status === 409)) throw err
+        }
       }
       steps.push('CREATE_FULFILLMENT')
       await orderDb.orderSaga.update({
@@ -118,15 +152,37 @@ export async function runOrderFulfillmentPipeline(
     if (!steps.includes('CONFIRM_ORDER')) {
       const confirmedAt = order.confirmedAt ?? new Date()
       const current = order.status as OrderStatus
-      if (current === 'PENDING' || current === 'CONFIRMED') {
+      const refreshed = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
+      const nextStatus: OrderStatus =
+        refreshed?.status === 'BACKORDERED' ? 'BACKORDERED' : 'PROCESSING'
+
+      if (current === 'PENDING' || current === 'CONFIRMED' || current === 'BACKORDERED') {
+        if (nextStatus !== current) {
+          await orderDb.order.update({
+            where: { id: orderId },
+            data: {
+              status: nextStatus,
+              confirmedAt,
+            },
+          })
+        } else if (!order.confirmedAt) {
+          await orderDb.order.update({
+            where: { id: orderId },
+            data: { confirmedAt },
+          })
+        }
+      }
+
+      const dropOnly =
+        order.lineItems.length > 0 &&
+        order.lineItems.every((li) => li.fulfillmentType === 'DROP_SHIP')
+      if (dropOnly) {
         await orderDb.order.update({
           where: { id: orderId },
-          data: {
-            status: 'PROCESSING',
-            confirmedAt,
-          },
+          data: { status: 'CONFIRMED', confirmedAt },
         })
       }
+
       if (order.paymentMethod === 'NET_TERMS') {
         const exposure = netTermsExposure(Number(order.totalAmount), Number(order.amountPaid ?? 0))
         await applyCreditUsed(tenantId, order.customerId, exposure)
@@ -223,6 +279,11 @@ export async function cancelOrderWithCompensation(tenantId: string, orderId: str
 
   await wmsFulfillment.cancelFulfillmentByOrder(tenantId, orderId, 'cancel').catch(() => undefined)
   await inv.releaseReservationsForOrder(tenantId, orderId).catch(() => undefined)
+
+  await orderDb.backorderLine.updateMany({
+    where: { tenantId, orderId, status: { in: ['OPEN', 'PARTIAL'] } },
+    data: { status: 'CANCELLED' },
+  })
 
   if (order.paymentMethod === 'NET_TERMS') {
     const exposure = netTermsExposure(Number(order.totalAmount), Number(order.amountPaid ?? 0))

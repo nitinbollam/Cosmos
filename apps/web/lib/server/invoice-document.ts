@@ -54,7 +54,7 @@ export async function buildInvoiceHtml(tenantId: string, inv: InvoiceDocInput): 
     th { text-align: left; color: #444; }
     .totals { margin-top: 24px; width: 280px; margin-left: auto; }
     .totals div { display: flex; justify-content: space-between; padding: 4px 0; }
-    .balance { font-weight: 700; font-size: 18px; color: #7161EF; }
+    .balance { font-weight: 700; font-size: 18px; color: #5B8DEF; }
     @media print { body { margin: 0; } }
   </style>
 </head>

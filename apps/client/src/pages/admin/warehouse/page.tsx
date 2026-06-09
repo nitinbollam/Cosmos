@@ -9,7 +9,7 @@ import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-p
 import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
 import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
 
-type Tab = 'picks' | 'waves' | 'bins' | 'receiving' | 'counts'
+type Tab = 'picks' | 'waves' | 'bins' | 'receiving' | 'putaway' | 'labor' | 'counts'
 
 type PickWaveRow = {
   id: string
@@ -83,6 +83,29 @@ type CycleDetail = Omit<CycleRow, '_count'> & {
     systemQty: number
     countedQty: number | null
   }>
+}
+
+type PutawayTaskRow = {
+  id: string
+  warehouseId: string
+  status: string
+  receivingSessionId: string | null
+  createdAt: string
+  lines: Array<{
+    id: string
+    skuId: string
+    batchId: string | null
+    quantity: number
+    suggestedBinCode: string | null
+    actualBinCode: string | null
+    status: string
+  }>
+}
+
+type LaborMetrics = {
+  since: string
+  totalEvents: number
+  byUser: Array<{ userId: string; picks: number; receives: number; putaways: number; packs: number }>
 }
 
 
@@ -216,6 +239,24 @@ export default function WarehousePage() {
     queryKey: ['wms', 'cycle-counts'],
     enabled: tab === 'counts',
     queryFn: () => api.get<CycleRow[]>('/wms/cycle-counts'),
+  })
+
+  const putawayQ = useQuery({
+    queryKey: ['wms', 'putaway', 'tasks'],
+    enabled: tab === 'putaway',
+    queryFn: () => api.get<PutawayTaskRow[]>('/wms/putaway/tasks'),
+  })
+
+  const laborQ = useQuery({
+    queryKey: ['wms', 'labor', 'metrics'],
+    enabled: tab === 'labor',
+    queryFn: () => api.get<LaborMetrics>('/wms/labor/metrics?days=7'),
+  })
+
+  const confirmPutaway = useMutation({
+    mutationFn: async ({ taskId, lineId }: { taskId: string; lineId: string }) =>
+      api.patch(`/wms/putaway/tasks/${encodeURIComponent(taskId)}/lines/${encodeURIComponent(lineId)}`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['wms', 'putaway', 'tasks'] }),
   })
 
   const countDetailQ = useQuery({
@@ -537,6 +578,8 @@ export default function WarehousePage() {
             ['waves', 'Wave picking'],
             ['bins', 'Bin locations'],
             ['receiving', 'Receiving'],
+            ['putaway', 'Putaway'],
+            ['labor', 'Labor'],
             ['counts', 'Cycle counts'],
           ] as const
         ).map(([k, label]) => (
@@ -1027,6 +1070,114 @@ export default function WarehousePage() {
                           </button>
                         )}
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'putaway' && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+            Directed putaway tasks are created when receiving sessions complete. Confirm lines to assign stock to bins.
+          </p>
+          <div className="cosmos-card overflow-x-auto">
+            {putawayQ.isLoading ? (
+              <div className="space-y-2 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="skeleton h-12 w-full" />
+                ))}
+              </div>
+            ) : (putawayQ.data ?? []).length === 0 ? (
+              <EmptyState
+                icon="📦"
+                title="No putaway tasks"
+                description="Complete a receiving session to generate putaway work."
+              />
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr>
+                    <th>Task</th>
+                    <th>Warehouse</th>
+                    <th>Status</th>
+                    <th>Lines</th>
+                    <th>Suggested bin</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(putawayQ.data ?? []).flatMap((task) =>
+                    (task.lines ?? []).map((line) => (
+                      <tr key={line.id}>
+                        <td className="font-mono text-xs">{task.id.slice(-10)}</td>
+                        <td className="text-sm">{warehouseLabel.get(task.warehouseId) ?? task.warehouseId.slice(-6)}</td>
+                        <td>
+                          <StatusBadge status={line.status} />
+                        </td>
+                        <td className="font-mono text-xs">
+                          {line.skuId.slice(-8)} × {line.quantity}
+                          {line.batchId ? ` · ${line.batchId}` : ''}
+                        </td>
+                        <td className="font-mono text-sm">{line.suggestedBinCode ?? '—'}</td>
+                        <td>
+                          {line.status === 'PENDING' ? (
+                            <button
+                              type="button"
+                              className="btn-ghost !py-1.5 !px-2 !text-xs"
+                              disabled={confirmPutaway.isPending}
+                              onClick={() => confirmPutaway.mutate({ taskId: task.id, lineId: line.id })}
+                            >
+                              Confirm
+                            </button>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'var(--c-text-3)' }}>
+                              {line.actualBinCode ?? 'Done'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'labor' && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+            Warehouse productivity for the last 7 days (picks, receives, putaways, packs).
+          </p>
+          <div className="cosmos-card overflow-x-auto">
+            {laborQ.isLoading ? (
+              <div className="skeleton h-24 w-full" />
+            ) : (laborQ.data?.byUser ?? []).length === 0 ? (
+              <EmptyState icon="📊" title="No labor events" description="Pick, receive, and putaway activity will appear here." />
+            ) : (
+              <table className="cosmos-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Picks</th>
+                    <th>Receives</th>
+                    <th>Putaways</th>
+                    <th>Packs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(laborQ.data?.byUser ?? []).map((row) => (
+                    <tr key={row.userId}>
+                      <td className="text-sm">{userLabel.get(row.userId) ?? row.userId.slice(-8)}</td>
+                      <td>{row.picks}</td>
+                      <td>{row.receives}</td>
+                      <td>{row.putaways}</td>
+                      <td>{row.packs}</td>
                     </tr>
                   ))}
                 </tbody>

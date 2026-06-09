@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { detectIntent, isHowToQuestion } from './intent'
+import { detectIntent, isHowToQuestion, isPlainLanguagePreferred } from './intent'
 
 test('detectIntent picks order tools for buyer', () => {
   const intent = detectIntent('Where is my order shipment?', true)
@@ -38,4 +38,10 @@ test('detectIntent skips tools for how-to POS question', () => {
 test('isHowToQuestion allows data questions', () => {
   assert.equal(isHowToQuestion('how many warehouses do we have?'), false)
   assert.equal(isHowToQuestion('show pending orders'), false)
+})
+
+test('isPlainLanguagePreferred for general Cosmos overview', () => {
+  assert.equal(isPlainLanguagePreferred('How cosmos works?'), true)
+  assert.equal(isPlainLanguagePreferred('What is Cosmos?'), true)
+  assert.equal(isPlainLanguagePreferred('show pending orders'), false)
 })

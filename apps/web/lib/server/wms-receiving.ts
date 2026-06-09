@@ -223,6 +223,34 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
     await poReceiving.syncPurchaseOrderFromSkuReceipts(tenantId, session.poId, skuReceipts)
   }
 
+  const putawayItems = session.items
+    .map((it) => ({
+      skuId: it.skuId,
+      batchId: it.batchId,
+      quantity: Math.max(0, it.receivedQty - (it.damagedQty ?? 0)),
+    }))
+    .filter((it) => it.quantity > 0)
+
+  if (putawayItems.length > 0) {
+    const { createPutawayTaskFromReceiving } = await import('./wms-putaway')
+    await createPutawayTaskFromReceiving(tenantId, sessionId, session.warehouseId, putawayItems).catch(
+      () => undefined,
+    )
+  }
+
+  const { recordLaborEvent } = await import('./wms-labor')
+  for (const it of session.items) {
+    const qty = Math.max(0, it.receivedQty - (it.damagedQty ?? 0))
+    if (qty <= 0) continue
+    void recordLaborEvent(tenantId, {
+      userId: performedBy,
+      eventType: 'RECEIVE_SCAN',
+      referenceId: it.id,
+      quantity: qty,
+      warehouseId: session.warehouseId,
+    }).catch(() => undefined)
+  }
+
   await wmsDb.receivingSession.update({
     where: { id: sessionId },
     data: {

@@ -5,6 +5,8 @@ import { CosmosLogo } from '@/components/cosmos-logo'
 import { CelestialChat } from '@/components/celestial/celestial-chat'
 import { Sidebar } from '@/components/layout/sidebar'
 import { GlobalSearch } from '@/components/global-search'
+import { ThemeSwitcher } from '@/components/theme-switcher'
+import { UserMenu } from '@/components/user-menu'
 
 function titleFromPath(path: string) {
   const parts = path.split('/').filter(Boolean)
@@ -70,6 +72,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <GlobalSearch />
+            <ThemeSwitcher compact className="hidden sm:flex" />
             <Link to="/admin/notifications" className="cosmos-icon-btn" title="Alerts" aria-label="Notifications">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path
@@ -82,9 +85,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
               </svg>
             </Link>
-            <div className="cosmos-icon-btn cosmos-avatar-btn" aria-hidden>
-              A
-            </div>
+            <UserMenu afterLogout="/admin/login" />
           </div>
         </header>
         <main className="cosmos-admin-content">{children}</main>

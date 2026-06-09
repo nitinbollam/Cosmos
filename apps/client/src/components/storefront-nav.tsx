@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { CosmosLogo } from '@/components/cosmos-logo'
-import { STOREFRONT_AUTH_EVENT, emitStorefrontAuthChanged } from '@/lib/auth-events'
+import { STOREFRONT_AUTH_EVENT } from '@/lib/auth-events'
+import { signOut } from '@/lib/auth-session'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 import { B2B_CART_KEY, cartTotalLines, readCart } from '@/lib/b2b-cart'
 
 export function StorefrontNav() {
@@ -35,13 +37,6 @@ export function StorefrontNav() {
     }
   }, [refreshCart, refreshAuth])
 
-  function logout() {
-    window.localStorage.removeItem('cosmos.accessToken')
-    window.localStorage.removeItem('cosmos.refreshToken')
-    emitStorefrontAuthChanged()
-    window.location.href = '/'
-  }
-
   return (
     <header className="cosmos-shop-header">
       <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
@@ -67,8 +62,9 @@ export function StorefrontNav() {
         ) : null}
       </nav>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <ThemeSwitcher compact />
         {hasToken ? (
-          <button type="button" onClick={() => logout()} className="btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }}>
+          <button type="button" onClick={() => void signOut()} className="btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }}>
             Sign out
           </button>
         ) : (

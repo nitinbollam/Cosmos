@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { DB_BY_SCHEMA, sqliteDatabaseUrl } from './db-urls.mjs'
+import { DB_BY_SCHEMA, databaseUrlForSchema, getDbProvider } from './db-urls.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const rootEnvPath = path.join(root, '.env')
@@ -48,9 +48,19 @@ const webVars = {
   COSMOS_CLIENT_ORIGIN: baseVars.COSMOS_CLIENT_ORIGIN ?? 'http://localhost:4000',
 }
 
-for (const [schema, dbName] of Object.entries(DB_BY_SCHEMA)) {
+const dbProvider = baseVars.COSMOS_DB_PROVIDER ?? ''
+if (dbProvider === 'postgres') {
+  webVars.COSMOS_DB_PROVIDER = 'postgres'
+  if (!webVars.DATABASE_URL) {
+    webVars.DATABASE_URL = baseVars.DATABASE_URL ?? 'postgresql://cosmos:cosmos@localhost:5432/postgres'
+  }
+}
+
+for (const [schema] of Object.entries(DB_BY_SCHEMA)) {
   const envKey = `${schema.toUpperCase()}_DATABASE_URL`
-  webVars[envKey] = baseVars[envKey] ?? sqliteDatabaseUrl(dbName, dataDir)
+  webVars[envKey] =
+    baseVars[envKey] ??
+    databaseUrlForSchema(schema, { dataDir })
 }
 
 const exampleLines = fs.existsSync(webExamplePath) ? fs.readFileSync(webExamplePath, 'utf8') : ''
@@ -82,7 +92,8 @@ if (exampleLines.includes('# Legacy')) {
 }
 
 fs.writeFileSync(webEnvPath, `${lines.join('\n')}\n`)
-console.log(`[env] apps/web/.env.local (${lines.length} vars, SQLite in apps/web/${dataDir})`)
+const mode = webVars.COSMOS_DB_PROVIDER === 'postgres' ? 'Postgres' : `SQLite in apps/web/${dataDir}`
+console.log(`[env] apps/web/.env.local (${lines.length} vars, ${mode})`)
 
 const clientEnv = [
   `VITE_GATEWAY_URL=${baseVars.VITE_GATEWAY_URL ?? '/api/v1'}`,

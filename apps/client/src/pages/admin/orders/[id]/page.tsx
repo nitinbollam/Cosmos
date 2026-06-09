@@ -11,6 +11,11 @@ type LineItem = {
   skuId: string
   warehouseId?: string
   quantity: number
+  quantityAllocated?: number
+  quantityBackordered?: number
+  fulfillmentType?: string
+  supplierId?: string | null
+  dropShipPoId?: string | null
   returnedQty?: number
   unitPrice: string | number
   taxAmount?: string | number
@@ -107,6 +112,8 @@ export default function OrderDetailPage() {
   const [shipEditorOpen, setShipEditorOpen] = useState(false)
   const [shipDrafts, setShipDrafts] = useState<ShipmentDraft[]>([])
   const [shipErr, setShipErr] = useState<string | null>(null)
+  const [dropShipTracking, setDropShipTracking] = useState('')
+  const [dropShipCarrier, setDropShipCarrier] = useState('Vendor')
 
   const orderQ = useQuery({
     queryKey: ['order', id],
@@ -160,6 +167,18 @@ export default function OrderDetailPage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['wms', 'tasks', 'order', id] })
       void qc.invalidateQueries({ queryKey: ['order', id] })
+    },
+  })
+
+  const dropShipMut = useMutation({
+    mutationFn: () =>
+      api.post(`/orders/${encodeURIComponent(id)}/drop-ship/ship`, {
+        carrier: dropShipCarrier.trim() || 'Vendor',
+        trackingNumber: dropShipTracking.trim() || undefined,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['order', id] })
+      void qc.invalidateQueries({ queryKey: ['order-shipments', id] })
     },
   })
 
@@ -420,6 +439,9 @@ export default function OrderDetailPage() {
                 <tr>
                   <th>SKU</th>
                   <th>Qty</th>
+                  <th>Allocated</th>
+                  <th>Backordered</th>
+                  <th>Fulfillment</th>
                   <th>Returned</th>
                   <th>Unit</th>
                   <th>Total</th>
@@ -432,6 +454,18 @@ export default function OrderDetailPage() {
                     <tr key={li.id}>
                       <td className="font-mono text-xs">{li.skuId.slice(-14)}</td>
                       <td>{li.quantity}</td>
+                      <td>{li.quantityAllocated ?? 0}</td>
+                      <td>{li.quantityBackordered ?? 0}</td>
+                      <td className="text-xs">
+                        {li.fulfillmentType === 'DROP_SHIP' ? (
+                          <span>
+                            Drop-ship
+                            {li.dropShipPoId ? ` · PO ${li.dropShipPoId.slice(-8)}` : ''}
+                          </span>
+                        ) : (
+                          'Stock'
+                        )}
+                      </td>
                       <td>{li.returnedQty ?? 0}</td>
                       <td className="font-mono">${Number(li.unitPrice).toFixed(2)}</td>
                       <td className="font-mono">${lt.toFixed(2)}</td>
@@ -440,6 +474,26 @@ export default function OrderDetailPage() {
                 })}
               </tbody>
             </table>
+            {(data.lineItems ?? []).some((li) => li.fulfillmentType === 'DROP_SHIP') &&
+            !['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(data.status) ? (
+              <div className="mt-4 p-4 rounded-lg flex flex-wrap gap-3 items-end" style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+                    Carrier
+                  </div>
+                  <input className="cosmos-input" value={dropShipCarrier} onChange={(e) => setDropShipCarrier(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+                    Tracking
+                  </div>
+                  <input className="cosmos-input" value={dropShipTracking} onChange={(e) => setDropShipTracking(e.target.value)} placeholder="Optional" />
+                </div>
+                <button type="button" className="btn-primary" disabled={dropShipMut.isPending} onClick={() => dropShipMut.mutate()}>
+                  Mark drop-ship shipped
+                </button>
+              </div>
+            ) : null}
             <div className="mt-4 text-right text-sm space-y-1 max-w-xs ml-auto">
               <div className="flex justify-between gap-6 text-cosmos-text-2">
                 <span>Subtotal</span>

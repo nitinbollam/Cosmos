@@ -75,6 +75,15 @@ function isNonBatchBatchId(batchId: string | null | undefined) {
   return batchId == null || batchId === ''
 }
 
+type DemandPlanRow = {
+  sku: { code: string; name: string }
+  warehouseId: string
+  avgDailyUsage: number
+  suggestedOrderQty: number
+  quantityAvailable: number
+  method: string
+}
+
 export default function InventoryPage() {
   const qc = useQueryClient()
   const [searchInput, setSearchInput] = useState('')
@@ -113,6 +122,15 @@ export default function InventoryPage() {
   const warehousesQ = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => api.get<WarehouseRow[]>('/warehouses'),
+  })
+
+  const demandQ = useQuery({
+    queryKey: ['inventory', 'demand-plan', warehouseId],
+    queryFn: () => {
+      const q = new URLSearchParams({ days: '30', limit: '15' })
+      if (warehouseId) q.set('warehouseId', warehouseId)
+      return api.get<DemandPlanRow[]>(`/inventory/demand-plan?${q.toString()}`)
+    },
   })
 
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
@@ -234,6 +252,42 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      {(demandQ.data ?? []).length > 0 ? (
+        <div className="cosmos-card">
+          <h3 className="text-cosmos-white font-semibold font-display mb-2">Demand-based replenishment</h3>
+          <p className="text-sm text-cosmos-text-3 mb-3">
+            Suggested buy quantities from recent usage (last 30 days) and lead time.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="cosmos-table text-sm">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Available</th>
+                  <th>Avg/day</th>
+                  <th>Suggest buy</th>
+                  <th>Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(demandQ.data ?? []).map((row) => (
+                  <tr key={`${row.sku.code}-${row.warehouseId}`}>
+                    <td>
+                      <span className="font-mono text-cosmos-accent">{row.sku.code}</span>
+                      <span className="text-cosmos-text-3 ml-2">{row.sku.name}</span>
+                    </td>
+                    <td>{row.quantityAvailable}</td>
+                    <td>{row.avgDailyUsage}</td>
+                    <td className="font-semibold text-cosmos-white">{row.suggestedOrderQty}</td>
+                    <td className="text-xs text-cosmos-text-3">{row.method}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {importOpen ? (
         <SpreadsheetImportPanel

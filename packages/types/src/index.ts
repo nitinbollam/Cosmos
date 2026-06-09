@@ -48,6 +48,7 @@ export interface MoneyAmount {
 export type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
+  | 'BACKORDERED'
   | 'PROCESSING'
   | 'PACKED'
   | 'SHIPPED'
@@ -56,7 +57,7 @@ export type OrderStatus =
   | 'FAILED'
   | 'RETURNED'
 
-export type OrderChannel = 'POS' | 'B2B_PORTAL' | 'SALES_REP' | 'API'
+export type OrderChannel = 'POS' | 'B2B_PORTAL' | 'SALES_REP' | 'API' | 'EDI'
 
 export type PaymentMethod = 'CARD' | 'ACH' | 'CHECK' | 'CASH' | 'NET_TERMS'
 

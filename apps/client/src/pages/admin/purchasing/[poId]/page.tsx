@@ -21,6 +21,10 @@ type PurchaseOrder = {
   number: string
   status: string
   notes?: string | null
+  freightAmount?: string | number
+  dutyAmount?: string | number
+  otherLandedAmount?: string | number
+  landedCostNotes?: string | null
   supplier?: { id: string; name: string; code: string }
   lines?: PoLine[]
 }
@@ -40,6 +44,9 @@ export default function PurchaseOrderDetailPage() {
   const poId = typeof params.poId === 'string' ? params.poId : params.poId?.[0] ?? ''
   const qc = useQueryClient()
   const [receiveOpen, setReceiveOpen] = useState(false)
+  const [freight, setFreight] = useState('0')
+  const [duty, setDuty] = useState('0')
+  const [otherLanded, setOtherLanded] = useState('0')
 
   const po = useQuery<PurchaseOrder>({
     queryKey: ['purchase-order', poId],
@@ -66,6 +73,33 @@ export default function PurchaseOrderDetailPage() {
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
     },
+  })
+
+  useEffect(() => {
+    if (!po.data) return
+    setFreight(String(po.data.freightAmount ?? 0))
+    setDuty(String(po.data.dutyAmount ?? 0))
+    setOtherLanded(String(po.data.otherLandedAmount ?? 0))
+  }, [po.data])
+
+  const saveLanded = useMutation({
+    mutationFn: () =>
+      api.patch(`/purchase-orders/${encodeURIComponent(poId)}/landed-costs`, {
+        freightAmount: Number(freight) || 0,
+        dutyAmount: Number(duty) || 0,
+        otherLandedAmount: Number(otherLanded) || 0,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['purchase-order', poId] }),
+  })
+
+  type LandedPreview = {
+    lines: Array<{ lineNo: number; landedUnitCost: number }>
+  }
+
+  const landedPreviewQ = useQuery<LandedPreview>({
+    queryKey: ['po-landed-preview', poId, freight, duty, otherLanded],
+    enabled: !!poId && Number(freight) + Number(duty) + Number(otherLanded) > 0,
+    queryFn: () => api.get(`/purchase-orders/${encodeURIComponent(poId)}/landed-costs`),
   })
 
   const startReceiving = useMutation({
@@ -176,6 +210,55 @@ export default function PurchaseOrderDetailPage() {
           {po.data.notes && (
             <p className="text-sm text-cosmos-muted whitespace-pre-wrap">{po.data.notes}</p>
           )}
+          <Card>
+            <CardTitle>Landed costs</CardTitle>
+            <p className="text-xs text-cosmos-muted mt-2">
+              Freight, duty, and other charges are allocated to received unit cost by line value.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <label className="text-xs text-cosmos-muted">
+                Freight ($)
+                <input
+                  className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm"
+                  value={freight}
+                  onChange={(e) => setFreight(e.target.value)}
+                />
+              </label>
+              <label className="text-xs text-cosmos-muted">
+                Duty ($)
+                <input
+                  className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm"
+                  value={duty}
+                  onChange={(e) => setDuty(e.target.value)}
+                />
+              </label>
+              <label className="text-xs text-cosmos-muted">
+                Other ($)
+                <input
+                  className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm"
+                  value={otherLanded}
+                  onChange={(e) => setOtherLanded(e.target.value)}
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              className="mt-3 h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-50"
+              disabled={saveLanded.isPending}
+              onClick={() => saveLanded.mutate()}
+            >
+              {saveLanded.isPending ? 'Saving…' : 'Save landed costs'}
+            </button>
+            {landedPreviewQ.data?.lines?.length ? (
+              <div className="mt-4 text-xs text-cosmos-muted space-y-1">
+                {landedPreviewQ.data.lines.map((l) => (
+                  <div key={l.lineNo}>
+                    Line {l.lineNo}: landed unit cost ${l.landedUnitCost.toFixed(2)}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </Card>
           <Card>
             <CardTitle>Line items</CardTitle>
             <div className="mt-4 overflow-x-auto">

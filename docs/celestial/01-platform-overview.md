@@ -2,7 +2,33 @@
 
 This document helps Celestial and other AI assistants answer questions about Cosmos — a wholesale ERP and distribution platform for SMB distributors.
 
-**Keywords:** Cosmos, ERP, distribution, wholesale, B2B, platform overview, what is Cosmos, modules, features
+**Keywords:** Cosmos, ERP, distribution, wholesale, B2B, platform overview, what is Cosmos, how Cosmos works, modules, features, plain language
+
+---
+
+## How Cosmos works (plain language)
+
+Cosmos is software that helps a **wholesale or distribution business** run day to day — from taking orders to getting paid.
+
+**The big picture:**
+
+1. **Customers order products** — Business buyers use an online catalog and checkout; your team can also enter orders in the office or ring up walk-in sales at the **Point of Sale** counter.
+2. **You fulfill from the warehouse** — Staff pick items (often guided by bin locations), pack orders, and mark them ready to ship. Mobile apps help warehouse teams scan and pick on the floor.
+3. **You deliver** — Drivers follow routes, update stops, and capture proof of delivery on a phone app.
+4. **You get paid** — Invoices go out when orders ship; customers pay online or on terms. Finance tracks money in (customer invoices) and money out (supplier bills).
+5. **You stay stocked** — Inventory shows what you have at each warehouse; purchasing brings in more from suppliers when you receive goods.
+
+**Who uses what:**
+
+| Role | What they use Cosmos for |
+|------|--------------------------|
+| **Office / admin staff** | Orders, inventory, purchasing, customers, finance, settings |
+| **Warehouse team** | Picking, receiving shipments, cycle counts (phone or tablet app) |
+| **Drivers** | Delivery routes and proof of delivery (phone app) |
+| **Field sales** | Leads, customers, and visit notes (phone app) |
+| **B2B buyers** | Browse catalog, place orders, pay invoices, track shipments |
+
+**Celestial (this assistant)** can answer questions about how features work and look up your live orders, stock, and warehouses — in everyday language.
 
 ---
 

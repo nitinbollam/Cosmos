@@ -180,7 +180,10 @@ function expandQueryTerms(query: string): string[] {
   return [...terms]
 }
 
-function scoreChunk(query: string, chunk: DocChunk): number {
+const TECHNICAL_DOC_PATTERN =
+  /\b(npm run|localhost:\d+|apps\/|prisma|schema\.prisma|monorepo|express|vite|sqlite|native-router|\.ts\b|```)/i
+
+function scoreChunk(query: string, chunk: DocChunk, plainLanguage = false): number {
   const terms = expandQueryTerms(query)
   let score = 0
   const hay = `${chunk.heading}\n${chunk.body}`.toLowerCase()
@@ -201,13 +204,20 @@ function scoreChunk(query: string, chunk: DocChunk): number {
   if (/\bhow\b/.test(q) && /\bhow\b/.test(hay)) score += 2
   if (/\bfaq\b/.test(q) && chunk.source?.includes('faq')) score += 3
 
+  if (plainLanguage) {
+    if (/plain language|simple overview|end-to-end story/i.test(chunk.heading)) score += 20
+    if (TECHNICAL_DOC_PATTERN.test(chunk.body)) score -= 6
+    if (/architecture|tech stack|local development|data model/i.test(chunk.heading)) score -= 4
+    if (/how it works/i.test(chunk.heading) && !TECHNICAL_DOC_PATTERN.test(chunk.body.slice(0, 400))) score += 5
+  }
+
   return score
 }
 
-export function retrievePlatformDocs(query: string, limit = 6): DocChunk[] {
+export function retrievePlatformDocs(query: string, limit = 6, plainLanguage = false): DocChunk[] {
   const chunks = loadDocChunks()
   const scored = [...chunks]
-    .map((c) => ({ c, score: scoreChunk(query, c) }))
+    .map((c) => ({ c, score: scoreChunk(query, c, plainLanguage) }))
     .sort((a, b) => b.score - a.score)
 
   const matched = scored.filter((x) => x.score > 0).slice(0, limit).map((x) => x.c)

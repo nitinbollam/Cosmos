@@ -21,7 +21,7 @@ export type CreateFulfillmentTaskInput = {
   orderId: string
   correlationId: string
   priority?: string
-  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number }>
+  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; batchId?: string; locationId?: string }>
 }
 
 export async function createFulfillmentTask(tenantId: string, dto: CreateFulfillmentTaskInput) {
@@ -55,6 +55,8 @@ export async function createFulfillmentTask(tenantId: string, dto: CreateFulfill
           skuId: li.skuId,
           warehouseId: li.warehouseId,
           quantity: li.quantity,
+          batchId: li.batchId ?? null,
+          locationId: li.locationId ?? null,
         })),
       },
     },
@@ -237,6 +239,17 @@ export async function confirmPickLine(
     })
   }
 
+  if (pickedQty > 0) {
+    const { recordLaborEvent } = await import('./wms-labor')
+    void recordLaborEvent(tenantId, {
+      userId: task.assignedUserId ?? 'system',
+      eventType: 'PICK',
+      referenceId: lineId,
+      quantity: pickedQty,
+      warehouseId: task.warehouseId,
+    }).catch(() => undefined)
+  }
+
   return getFulfillmentTask(tenantId, taskId)
 }
 
@@ -263,6 +276,17 @@ export async function confirmAllPickLines(tenantId: string, taskId: string) {
       where: { id: taskId },
       data: { status: 'PICKING' },
     })
+  }
+
+  const { recordLaborEvent } = await import('./wms-labor')
+  for (const line of task.pickLines) {
+    void recordLaborEvent(tenantId, {
+      userId: task.assignedUserId ?? 'system',
+      eventType: 'PICK',
+      referenceId: line.id,
+      quantity: line.quantity,
+      warehouseId: task.warehouseId,
+    }).catch(() => undefined)
   }
 
   return getFulfillmentTask(tenantId, taskId)

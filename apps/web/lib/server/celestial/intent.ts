@@ -18,6 +18,18 @@ export type DetectedIntent = {
 
 const ORDER_ID = /\b(seed_ord_[a-z0-9_]+|[a-z0-9]{20,})\b/i
 
+/** General overview / how-it-works questions — prefer plain business language, not dev docs. */
+export function isPlainLanguagePreferred(message: string): boolean {
+  const lower = message.toLowerCase().trim()
+  if (isHowToQuestion(message)) return true
+  if (/\b(what is|tell me about|explain|describe|overview of)\b/.test(lower) && /\bcosmos\b/.test(lower)) {
+    return true
+  }
+  if (/\bhow\b[\s\S]{0,30}\bcosmos\b/.test(lower)) return true
+  if (/\bwhat can cosmos do\b/.test(lower)) return true
+  return false
+}
+
 export function isHowToQuestion(message: string): boolean {
   const lower = message.toLowerCase()
   if (/\bhow many\b/.test(lower)) return false

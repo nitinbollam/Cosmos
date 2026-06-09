@@ -129,22 +129,21 @@ export async function findSkuById(tenantId: string, id: string) {
 }
 
 export async function getSkuReorderSuggestion(tenantId: string, skuId: string, warehouseId?: string) {
+  const { getSkuDemandPlan } = await import('./demand-planning')
+  const plan = await getSkuDemandPlan(tenantId, skuId, warehouseId)
   const sku = await findSkuById(tenantId, skuId)
-  const level = await inventoryDb.stockLevel.findFirst({
-    where: {
-      tenantId,
-      skuId,
-      ...(warehouseId ? { warehouseId } : {}),
-    },
-    orderBy: { reorderPoint: 'desc' },
-  })
-  const reorderQty = level?.reorderQty && level.reorderQty > 0 ? level.reorderQty : Math.max(1, (level?.reorderPoint ?? 0) * 2 || 10)
+  const suggestedQty =
+    plan.method === 'USAGE_FORECAST' && plan.suggestedOrderQty > 0
+      ? plan.suggestedOrderQty
+      : plan.staticReorderQty
   return {
     sku: { id: sku.id, code: sku.code, name: sku.name, cost: Number(sku.cost ?? 0) },
-    warehouseId: level?.warehouseId ?? warehouseId ?? null,
-    quantityAvailable: level?.quantityAvailable ?? 0,
-    reorderPoint: level?.reorderPoint ?? 0,
-    suggestedQty: reorderQty,
+    warehouseId: plan.warehouseId,
+    quantityAvailable: plan.quantityAvailable,
+    reorderPoint: plan.reorderPoint,
+    suggestedQty,
+    demandMethod: plan.method,
+    avgDailyUsage: plan.avgDailyUsage,
   }
 }
 
@@ -183,13 +182,23 @@ export type ReceiveStockInput = {
 }
 
 export async function receiveStock(tenantId: string, dto: ReceiveStockInput, performedBy: string) {
-  await findSkuById(tenantId, dto.skuId)
+  const sku = await findSkuById(tenantId, dto.skuId)
   await findWarehouseById(tenantId, dto.warehouseId)
   const correlationId = randomUUID()
   const entryId = randomUUID()
   const batchKey = dto.batchId ?? ''
 
-  return inventoryDb.$transaction(async (tx) => {
+  if (batchKey && sku.trackLot) {
+    const { ensureInventoryLot } = await import('./inventory-lots')
+    await ensureInventoryLot(tenantId, {
+      skuId: dto.skuId,
+      warehouseId: dto.warehouseId,
+      batchCode: batchKey,
+      supplierId: dto.supplierId ?? null,
+    })
+  }
+
+  const result = await inventoryDb.$transaction(async (tx) => {
     const currentLevel = await tx.stockLevel.upsert({
       where: {
         tenantId_skuId_warehouseId_batchId: {
@@ -235,6 +244,11 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
       },
     })
   })
+
+  const { fillBackordersOnReceipt } = await import('./backorders')
+  void fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId).catch(() => undefined)
+
+  return result
 }
 
 export type TransferStockInput = {
@@ -592,7 +606,7 @@ export function getStockLevels(tenantId: string, opts: { skuId?: string; warehou
 export async function patchStockLevel(
   tenantId: string,
   levelId: string,
-  patch: { reorderPoint?: number; reorderQty?: number; locationId?: string | null },
+  patch: { reorderPoint?: number; reorderQty?: number; leadTimeDays?: number; locationId?: string | null },
 ) {
   const row = await inventoryDb.stockLevel.findFirst({ where: { id: levelId, tenantId } })
   if (!row) throw new ApiError(404, 'Stock level not found')
@@ -601,6 +615,7 @@ export async function patchStockLevel(
     data: {
       ...(patch.reorderPoint !== undefined ? { reorderPoint: patch.reorderPoint } : {}),
       ...(patch.reorderQty !== undefined ? { reorderQty: patch.reorderQty } : {}),
+      ...(patch.leadTimeDays !== undefined ? { leadTimeDays: patch.leadTimeDays } : {}),
       ...(patch.locationId !== undefined ? { locationId: patch.locationId || null } : {}),
     },
   })
@@ -639,6 +654,17 @@ export async function ensureStockLevel(
       ...(dto.reorderQty !== undefined ? { reorderQty: dto.reorderQty } : {}),
       ...(dto.locationId !== undefined ? { locationId: dto.locationId || null } : {}),
     },
+  })
+}
+
+export async function findStockLevel(
+  tenantId: string,
+  skuId: string,
+  warehouseId: string,
+  batchId = '',
+) {
+  return inventoryDb.stockLevel.findFirst({
+    where: { tenantId, skuId, warehouseId, batchId },
   })
 }
 

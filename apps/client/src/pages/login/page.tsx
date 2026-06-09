@@ -1,3 +1,4 @@
+import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 import { CosmosLogo } from '@/components/cosmos-logo'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
@@ -47,6 +48,7 @@ export default function LoginPage() {
 
   return (
     <main className="cosmos-auth-page">
+      <AuthThemeToolbar />
       <div className="cosmos-card cosmos-auth-card">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ display: 'inline-flex', justifyContent: 'center' }}>

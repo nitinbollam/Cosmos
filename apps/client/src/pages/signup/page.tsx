@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 
 export default function SignupPage() {
   const navigate = useNavigate()
@@ -36,7 +37,9 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md p-8">
+    <div className="cosmos-auth-page" style={{ display: 'block', paddingTop: 48 }}>
+      <AuthThemeToolbar />
+      <div className="mx-auto max-w-md p-8">
       <h1 className="text-2xl font-semibold mb-2">Start your Cosmos workspace</h1>
       <p className="text-sm mb-6" style={{ color: 'var(--c-text-3)' }}>
         Create a new distributor tenant. Already have an account? <Link to="/login">Sign in</Link>
@@ -58,6 +61,7 @@ export default function SignupPage() {
           {loading ? 'Creating…' : 'Create workspace'}
         </button>
       </form>
+      </div>
     </div>
   )
 }

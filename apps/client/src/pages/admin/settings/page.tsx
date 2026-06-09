@@ -729,9 +729,108 @@ function IntegrationsTab() {
 
   const cfg = msaQ.data
 
+  const ediPartnersQ = useQuery<
+    Array<{ id: string; code: string; name: string; inboundEnabled: boolean; outboundEnabled: boolean; autoCreateOrders: boolean }>
+  >({
+    queryKey: ['edi-partners'],
+    queryFn: () => api.get('/edi/partners'),
+  })
+
+  const [ediCode, setEdiCode] = useState('')
+  const [ediName, setEdiName] = useState('')
+  const [ediDrawer, setEdiDrawer] = useState(false)
+
+  const createEdiPartner = useMutation({
+    mutationFn: () =>
+      api.post('/edi/partners', {
+        code: ediCode.trim(),
+        name: ediName.trim(),
+        autoCreateOrders: true,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['edi-partners'] })
+      setEdiDrawer(false)
+      setEdiCode('')
+      setEdiName('')
+    },
+  })
+
+  const ediDocsQ = useQuery<
+    Array<{ id: string; docType: string; direction: string; status: string; controlNumber: string | null; createdAt: string }>
+  >({
+    queryKey: ['edi-documents'],
+    queryFn: () => api.get('/edi/documents?limit=20'),
+  })
+
   return (
     <div className="space-y-6">
       <WebhookManager />
+
+      <div className="cosmos-card">
+        <div className="flex flex-wrap justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-cosmos-white font-semibold font-display">Trading partner EDI</h3>
+            <p className="text-cosmos-text-3 text-sm mt-1">
+              Inbound 850 purchase orders, outbound 810 invoices and 856 ship notices (JSON interchange).
+            </p>
+          </div>
+          <button type="button" className="btn-primary !text-sm" onClick={() => setEdiDrawer(true)}>
+            Add partner
+          </button>
+        </div>
+        {ediPartnersQ.isLoading ? (
+          <div className="skeleton h-16 w-full" />
+        ) : (ediPartnersQ.data ?? []).length === 0 ? (
+          <p className="text-sm text-cosmos-text-3">No trading partners — add one to receive EDI orders.</p>
+        ) : (
+          <ul className="space-y-2">
+            {(ediPartnersQ.data ?? []).map((p) => (
+              <li key={p.id} className="text-sm flex flex-wrap gap-3 items-center" style={{ color: 'var(--c-text-2)' }}>
+                <span className="font-mono text-cosmos-accent">{p.code}</span>
+                <span className="text-cosmos-white">{p.name}</span>
+                <span className="text-xs text-cosmos-text-3">
+                  In: {p.inboundEnabled ? 'on' : 'off'} · Out: {p.outboundEnabled ? 'on' : 'off'} · Auto orders:{' '}
+                  {p.autoCreateOrders ? 'on' : 'off'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {(ediDocsQ.data ?? []).length > 0 ? (
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--c-border)' }}>
+            <p className="text-xs uppercase tracking-wider text-cosmos-text-3 mb-2">Recent EDI documents</p>
+            <ul className="space-y-1 text-xs font-mono" style={{ color: 'var(--c-text-3)' }}>
+              {(ediDocsQ.data ?? []).slice(0, 5).map((d) => (
+                <li key={d.id}>
+                  {d.docType} {d.direction} · {d.status} · {d.controlNumber ?? d.id.slice(-8)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+
+      {ediDrawer ? (
+        <CosmosDialogModal open={ediDrawer} onOpenChange={setEdiDrawer} title="New EDI trading partner">
+          <label className="block text-xs text-cosmos-text-3 mt-2">Partner code</label>
+          <input className="cosmos-input mt-1 w-full" value={ediCode} onChange={(e) => setEdiCode(e.target.value)} placeholder="ACME" />
+          <label className="block text-xs text-cosmos-text-3 mt-3">Name</label>
+          <input className="cosmos-input mt-1 w-full" value={ediName} onChange={(e) => setEdiName(e.target.value)} placeholder="Acme Retail EDI" />
+          <div className="flex gap-2 mt-4 justify-end">
+            <button type="button" className="btn-ghost" onClick={() => setEdiDrawer(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!ediCode.trim() || !ediName.trim() || createEdiPartner.isPending}
+              onClick={() => createEdiPartner.mutate()}
+            >
+              Save
+            </button>
+          </div>
+        </CosmosDialogModal>
+      ) : null}
 
       <div>
         <h2 className="text-cosmos-white font-semibold font-display">Other integrations</h2>

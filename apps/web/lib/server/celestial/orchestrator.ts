@@ -9,7 +9,7 @@ import {
   listConversations,
   touchConversation,
 } from './conversations'
-import { detectIntent } from './intent'
+import { detectIntent, isPlainLanguagePreferred } from './intent'
 import { completeChat, getCelestialModelInfo, streamChat, type ChatMessage } from './llm'
 import { buildContextPrompt, buildSystemPrompt } from './prompts'
 import { formatDocContext, retrievePlatformDocs } from './retrieval'
@@ -44,10 +44,15 @@ function buildContextBlock(
   return parts.join('\n\n')
 }
 
-function finalizeReply(message: string, reply: string, docs: ReturnType<typeof retrievePlatformDocs>): string {
+function finalizeReply(
+  message: string,
+  reply: string,
+  docs: ReturnType<typeof retrievePlatformDocs>,
+  plainLanguage = true,
+): string {
   const trimmed = reply.trim()
   if (trimmed) return trimmed
-  return buildDocFallbackReply(message, docs)
+  return buildDocFallbackReply(message, docs, plainLanguage)
 }
 
 export type CelestialChatInput = {
@@ -77,6 +82,7 @@ type PreparedChat = {
   toolsUsed: string[]
   docs: ReturnType<typeof retrievePlatformDocs>
   directReply: string | null
+  plainLanguage: boolean
 }
 
 async function prepareChat(session: SessionUser, input: CelestialChatInput): Promise<PreparedChat> {
@@ -103,7 +109,8 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     quoteId: input.context?.quoteId,
   })
 
-  const docs = retrievePlatformDocs(message)
+  const plainLanguage = isPlainLanguagePreferred(message)
+  const docs = retrievePlatformDocs(message, 6, plainLanguage)
   const toolResults = await runTools(intent.tools, {
     session,
     customerId,
@@ -122,9 +129,9 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
   const contextBlock = buildContextBlock(message, toolResults, docs, input.context?.page)
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: buildSystemPrompt(session, profile.customerName) },
+    { role: 'system', content: buildSystemPrompt(session, profile.customerName, plainLanguage) },
     ...history,
-    { role: 'system', content: buildContextPrompt(message, contextBlock) },
+    { role: 'system', content: buildContextPrompt(message, contextBlock, plainLanguage) },
     { role: 'user', content: message },
   ]
 
@@ -139,6 +146,7 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     toolsUsed: toolResults.map((t) => t.name),
     docs,
     directReply,
+    plainLanguage,
   }
 }
 
@@ -186,11 +194,11 @@ export async function chat(session: SessionUser, input: CelestialChatInput): Pro
   let model: string
   try {
     const llm = await completeChat(prepared.messages)
-    reply = finalizeReply(prepared.message, llm.content, prepared.docs)
+    reply = finalizeReply(prepared.message, llm.content, prepared.docs, prepared.plainLanguage)
     provider = llm.provider
     model = llm.model
   } catch {
-    reply = buildDocFallbackReply(prepared.message, prepared.docs)
+    reply = buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage)
     provider = 'cosmos'
     model = 'fallback'
   }
@@ -254,11 +262,15 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
           const llm = result.value
           const streamed = fullContent.trim()
           if (!streamed) {
-            await streamText(buildDocFallbackReply(prepared.message, prepared.docs), 'cosmos', 'fallback')
+            await streamText(
+              buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
+              'cosmos',
+              'fallback',
+            )
             return
           }
 
-          const reply = finalizeReply(prepared.message, streamed, prepared.docs)
+          const reply = finalizeReply(prepared.message, streamed, prepared.docs, prepared.plainLanguage)
           await persistChatResult(session, prepared, reply, llm.provider, llm.model)
           send('done', {
             conversationId: prepared.conversationId,
@@ -269,7 +281,11 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
           })
           controller.close()
         } catch {
-          await streamText(buildDocFallbackReply(prepared.message, prepared.docs), 'cosmos', 'fallback')
+          await streamText(
+            buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
+            'cosmos',
+            'fallback',
+          )
         }
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Celestial stream failed'

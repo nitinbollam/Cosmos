@@ -21,7 +21,11 @@ type Sku = {
   minPrice?: string | number | null
   manufacturerDid?: string | null
   exciseTaxCategory?: string | null
+  trackLot?: boolean
+  trackSerial?: boolean
 }
+
+type SkuTracking = { trackLot: boolean; trackSerial: boolean }
 
 type StockLevel = {
   id: string
@@ -97,6 +101,21 @@ export default function SkuDetailPage() {
   const warehousesQ = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => api.get<WarehouseRow[]>('/warehouses'),
+  })
+
+  const trackingQ = useQuery({
+    queryKey: ['skus', skuId, 'tracking'],
+    enabled: !!skuId,
+    queryFn: () => api.get<SkuTracking>(`/skus/${encodeURIComponent(skuId)}/tracking`),
+  })
+
+  const patchTracking = useMutation({
+    mutationFn: async (patch: Partial<SkuTracking>) =>
+      api.patch(`/skus/${encodeURIComponent(skuId)}/tracking`, patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['skus', skuId, 'tracking'] })
+      void qc.invalidateQueries({ queryKey: ['skus', skuId] })
+    },
   })
 
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
@@ -283,6 +302,30 @@ export default function SkuDetailPage() {
 
       {sku && (
         <>
+          <div className="cosmos-card">
+            <h3 className="text-cosmos-white font-semibold font-display mb-3">Tracking</h3>
+            <div className="flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trackingQ.data?.trackLot ?? sku.trackLot ?? false}
+                  disabled={patchTracking.isPending}
+                  onChange={(e) => patchTracking.mutate({ trackLot: e.target.checked })}
+                />
+                Lot / batch tracking
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trackingQ.data?.trackSerial ?? sku.trackSerial ?? false}
+                  disabled={patchTracking.isPending}
+                  onChange={(e) => patchTracking.mutate({ trackSerial: e.target.checked })}
+                />
+                Serial number tracking
+              </label>
+            </div>
+          </div>
+
           <div className="cosmos-card">
             <h3 className="text-cosmos-white font-semibold font-display mb-3">Stock by warehouse</h3>
             {levelsQ.isLoading ? (
