@@ -30,6 +30,10 @@ async function sendWebResponse(res: express.Response, response: Response) {
     if (key.toLowerCase() === 'transfer-encoding') return
     res.setHeader(key, value)
   })
+  const contentType = response.headers.get('content-type') ?? ''
+  if (contentType.includes('text/event-stream') && typeof res.flushHeaders === 'function') {
+    res.flushHeaders()
+  }
   if (!response.body) {
     res.end()
     return

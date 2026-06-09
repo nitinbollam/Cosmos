@@ -58,6 +58,7 @@ export function composeFromToolResults(toolResults: ToolResult[]): string {
 }
 
 export function toolResultHasData(result: ToolResult): boolean {
+  if (result.error) return false
   if (result.name === 'global_search') {
     const data = result.data as { orders?: unknown[]; customers?: unknown[]; skus?: unknown[]; quotes?: unknown[] }
     return (
@@ -139,6 +140,7 @@ function formatWarehouses(result: ToolResult): string {
   const tableRows = rows.map(
     (w) => `| \`${w.code}\` | ${w.name} | ${w.address ?? w.city ?? '—'} | ${w.isDefault ? '**Yes**' : '—'} |`,
   )
+  const manageHref = result.links.find((l) => /warehouse|settings/i.test(l.href))?.href
   return [
     `**Warehouses** — ${rows.length} active:`,
     '',
@@ -146,8 +148,10 @@ function formatWarehouses(result: ToolResult): string {
     '| --- | --- | --- | --- |',
     ...tableRows,
     '',
-    'Manage in [Settings → Warehouses](/admin/settings?tab=warehouses).',
-  ].join('\n')
+    manageHref ? `Manage in [warehouse settings](${manageHref}).` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function formatOrders(result: ToolResult): string {
@@ -176,6 +180,7 @@ function formatOrderDetail(result: ToolResult): string {
   const o = result.data as OrderRow & { amountPaid?: number; lines?: unknown[] }
   if (!o?.id) return '**Order:** Not found.'
   const shortId = o.id.length > 10 ? `…${o.id.slice(-8)}` : o.id
+  const detailHref = result.links[0]?.href ?? `/admin/orders/${o.id}`
   return [
     `**Order \`${shortId}\`**`,
     `- Status: **${o.status}**`,
@@ -183,7 +188,7 @@ function formatOrderDetail(result: ToolResult): string {
     o.amountPaid != null ? `- Paid: $${Number(o.amountPaid).toFixed(2)}` : '',
     `- Lines: ${Array.isArray(o.lines) ? o.lines.length : o.lineCount ?? '—'}`,
     '',
-    `View [order detail](/admin/orders/${o.id}).`,
+    `View [order detail](${detailHref}).`,
   ]
     .filter(Boolean)
     .join('\n')

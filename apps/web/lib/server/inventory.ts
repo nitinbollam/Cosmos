@@ -727,11 +727,12 @@ export async function lowStockAlerts(tenantId: string) {
     skuIds.length > 0
       ? await inventoryDb.sKU.findMany({ where: { id: { in: skuIds }, tenantId } })
       : []
-  const skuName = new Map(skus.map((s) => [s.id, s.name]))
+  const skuMeta = new Map(skus.map((s) => [s.id, { name: s.name, code: s.code }]))
   return {
     lowStock: low.slice(0, 50).map((r) => ({
       skuId: r.skuId,
-      name: skuName.get(r.skuId) ?? r.skuId,
+      code: skuMeta.get(r.skuId)?.code ?? r.skuId,
+      name: skuMeta.get(r.skuId)?.name ?? r.skuId,
       available: r.quantityAvailable,
       reorderPoint: r.reorderPoint,
     })),

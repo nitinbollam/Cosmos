@@ -1398,7 +1398,11 @@ async function routeCelestial(method: string, seg: string[], req: Request): Prom
   const session = await requireSession(req)
 
   if (seg.length === 2 && seg[1] === 'status' && method === 'GET') {
-    return Response.json(celestial.getCelestialModelInfo())
+    const features = await featureFlags.getTenantFeatures(session.tenantId)
+    return Response.json({
+      ...celestial.getCelestialModelInfo(),
+      enabled: Boolean(features.celestial),
+    })
   }
   if (seg.length === 2 && seg[1] === 'chat' && method === 'POST') {
     const body = (await req.json()) as celestial.CelestialChatInput
@@ -1415,6 +1419,20 @@ async function routeCelestial(method: string, seg: string[], req: Request): Prom
   if (seg.length === 3 && seg[1] === 'chat' && seg[2] === 'stream' && method === 'POST') {
     const body = (await req.json()) as celestial.CelestialChatInput
     return celestial.chatStream(session, body)
+  }
+  if (seg.length === 2 && seg[1] === 'conversations' && method === 'GET') {
+    const url = new URL(req.url)
+    const surface = url.searchParams.get('surface') as 'shop' | 'admin' | null
+    const limit = Number(url.searchParams.get('limit') ?? '10')
+    return Response.json(
+      await celestial.listCelestialConversations(session, {
+        surface: surface ?? undefined,
+        limit: Number.isFinite(limit) ? limit : 10,
+      }),
+    )
+  }
+  if (seg.length === 3 && seg[1] === 'conversations' && method === 'GET') {
+    return Response.json(await celestial.getCelestialConversation(session, seg[2]))
   }
   throw new ApiError(404, 'Celestial route not found')
 }

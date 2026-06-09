@@ -2,7 +2,13 @@ import { auditLog } from '../audit-log'
 import { getAuthProfile, isPortalBuyer, requirePortalCustomerId } from '../buyer-context'
 import { assertFeature } from '../feature-flags'
 import { ApiError, type SessionUser } from '../session'
-import { appendMessage, getOrCreateConversation, touchConversation } from './conversations'
+import {
+  appendMessage,
+  getConversation,
+  getOrCreateConversation,
+  listConversations,
+  touchConversation,
+} from './conversations'
 import { detectIntent } from './intent'
 import { completeChat, getCelestialModelInfo, streamChat, type ChatMessage } from './llm'
 import { buildContextPrompt, buildSystemPrompt } from './prompts'
@@ -148,6 +154,7 @@ async function persistChatResult(
     provider,
     model,
     toolsUsed: prepared.toolsUsed,
+    links: prepared.links,
   })
   await touchConversation(prepared.conversationId)
 
@@ -277,6 +284,66 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
+}
+
+type MessageMetadata = {
+  provider?: string
+  model?: string
+  toolsUsed?: string[]
+  links?: Array<{ label: string; href: string }>
+}
+
+function formatMessageMeta(metadata: MessageMetadata | null | undefined): string | undefined {
+  if (!metadata?.provider) return undefined
+  const tools = metadata.toolsUsed?.length ? ` · ${metadata.toolsUsed.join(', ')}` : ''
+  return `${metadata.provider}/${metadata.model ?? 'unknown'}${tools}`
+}
+
+export async function listCelestialConversations(
+  session: SessionUser,
+  opts?: { surface?: 'shop' | 'admin'; limit?: number },
+) {
+  await assertFeature(session.tenantId, 'celestial')
+
+  const rows = await listConversations(session.tenantId, session.userId, {
+    limit: opts?.limit ?? 10,
+    surface: opts?.surface,
+  })
+
+  return {
+    items: rows.map((c) => ({
+      id: c.id,
+      surface: c.surface,
+      title: c.title,
+      updatedAt: c.updatedAt,
+      preview: c.messages[0]?.content?.slice(0, 160) ?? '',
+    })),
+  }
+}
+
+export async function getCelestialConversation(session: SessionUser, conversationId: string) {
+  await assertFeature(session.tenantId, 'celestial')
+
+  const conversation = await getConversation(session.tenantId, session.userId, conversationId)
+
+  return {
+    id: conversation.id,
+    surface: conversation.surface,
+    title: conversation.title,
+    updatedAt: conversation.updatedAt,
+    messages: conversation.messages.map((m) => {
+      const metadata = (m.metadata ?? {}) as MessageMetadata
+      return {
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        links: metadata.links,
+        meta: formatMessageMeta(metadata),
+        createdAt: m.createdAt,
+      }
+    }),
+  }
 }

@@ -1,9 +1,18 @@
 import { lazy, Suspense, type ComponentType } from 'react'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router-dom'
 import { RootLayout } from '@/layouts/RootLayout'
 import { ShopLayout } from '@/layouts/ShopLayout'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { MobileLayout } from '@/layouts/MobileLayout'
+
+function AdminCustomersRedirect() {
+  return <Navigate to="/admin/crm" replace />
+}
+
+function AdminCustomerDetailRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/admin/crm/customers/${id ?? ''}`} replace />
+}
 
 function page(importFn: () => Promise<{ default: ComponentType }>) {
   const Lazy = lazy(importFn)
@@ -59,11 +68,8 @@ const router = createBrowserRouter([
             element: page(() => import('@/pages/admin/crm/customers/[id]/page')),
           },
           { path: 'quotes', element: page(() => import('@/pages/admin/quotes/page')) },
-          { path: 'customers', element: page(() => import('@/pages/admin/customers/page')) },
-          {
-            path: 'customers/:id',
-            element: page(() => import('@/pages/admin/customers/[id]/page')),
-          },
+          { path: 'customers', element: <AdminCustomersRedirect /> },
+          { path: 'customers/:id', element: <AdminCustomerDetailRedirect /> },
           { path: 'dispatch', element: page(() => import('@/pages/admin/dispatch/page')) },
           {
             path: 'dispatch/:routeId',

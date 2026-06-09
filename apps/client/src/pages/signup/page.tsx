@@ -26,7 +26,7 @@ export default function SignupPage() {
       })
       const data = (await res.json()) as { accessToken?: string; message?: string }
       if (!res.ok) throw new Error(data.message ?? 'Signup failed')
-      if (data.accessToken) localStorage.setItem('cosmos_token', data.accessToken)
+      if (data.accessToken) localStorage.setItem('cosmos.accessToken', data.accessToken)
       navigate('/admin')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed')

@@ -84,7 +84,7 @@ export default function CustomersPage() {
               <li key={c.id} className="py-3 flex justify-between gap-4">
                 <div>
                   <Link
-                    to={adminPath(`/customers/${c.id}`)}
+                    to={adminPath(`/crm/customers/${c.id}`)}
                     className="text-cosmos-white font-medium hover:text-cosmos-primary"
                   >
                     {c.name}

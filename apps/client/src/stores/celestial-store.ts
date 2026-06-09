@@ -18,6 +18,8 @@ type SurfaceState = {
   conversationId?: string
   floatingOpen: boolean
   providerInfo: string | null
+  /** When true, skip auto-restore from server (after "New chat") */
+  skipHistoryRestore: boolean
 }
 
 type CelestialStore = {
@@ -36,6 +38,7 @@ type CelestialStore = {
     patch: Partial<CelestialChatMessage>,
   ) => void
   clearChat: (surface: CelestialSurface) => void
+  setSkipHistoryRestore: (surface: CelestialSurface, skip: boolean) => void
 }
 
 function emptySurface(): SurfaceState {
@@ -44,6 +47,7 @@ function emptySurface(): SurfaceState {
     conversationId: undefined,
     floatingOpen: false,
     providerInfo: null,
+    skipHistoryRestore: false,
   }
 }
 
@@ -72,7 +76,16 @@ export const useCelestialStore = create<CelestialStore>()(
             messages: s[surface].messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
           },
         })),
-      clearChat: (surface) => set((s) => ({ [surface]: emptySurface() })),
+      clearChat: (surface) =>
+        set((s) => ({
+          [surface]: {
+            ...emptySurface(),
+            floatingOpen: s[surface].floatingOpen,
+            skipHistoryRestore: true,
+          },
+        })),
+      setSkipHistoryRestore: (surface, skip) =>
+        set((s) => ({ [surface]: { ...s[surface], skipHistoryRestore: skip } })),
     }),
     {
       name: 'cosmos-celestial-v1',

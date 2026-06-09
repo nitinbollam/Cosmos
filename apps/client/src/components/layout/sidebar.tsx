@@ -1,9 +1,13 @@
 import { CosmosLogo } from '@/components/cosmos-logo'
 import { Link } from 'react-router-dom'
 import { useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api-admin'
 import { SidebarIcon, type SidebarIconName } from '@/components/layout/sidebar-icons'
 
-export const SIDEBAR_NAV: { href: string; label: string; icon: SidebarIconName }[] = [
+type NavItem = { href: string; label: string; icon: SidebarIconName; feature?: 'celestial' }
+
+const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
   { href: '/admin/inventory', label: 'Inventory', icon: 'inventory' },
   { href: '/admin/orders', label: 'Orders', icon: 'orders' },
@@ -16,9 +20,13 @@ export const SIDEBAR_NAV: { href: string; label: string; icon: SidebarIconName }
   { href: '/admin/dispatch', label: 'Dispatch', icon: 'dispatch' },
   { href: '/admin/finance', label: 'Finance', icon: 'finance' },
   { href: '/admin/pos', label: 'POS', icon: 'orders' },
-  { href: '/admin/celestial', label: 'Celestial', icon: 'celestial' },
+  { href: '/admin/notifications', label: 'Notifications', icon: 'notifications' },
+  { href: '/admin/celestial', label: 'Celestial', icon: 'celestial', feature: 'celestial' },
   { href: '/admin/settings', label: 'Settings', icon: 'settings' },
 ]
+
+/** @deprecated use BASE_SIDEBAR_NAV filtered in Sidebar */
+export const SIDEBAR_NAV = BASE_SIDEBAR_NAV
 
 export function Sidebar({
   collapsed,
@@ -33,6 +41,16 @@ export function Sidebar({
 }) {
   const pathname = useLocation().pathname ?? '/admin'
   const showLabels = mobileOpen || !collapsed
+
+  const { data: features } = useQuery({
+    queryKey: ['tenant-features'],
+    queryFn: () => api.get<{ effective?: { celestial?: boolean } }>('/features'),
+  })
+
+  const navItems = BASE_SIDEBAR_NAV.filter((item) => {
+    if (item.feature === 'celestial') return features?.effective?.celestial !== false
+    return true
+  })
 
   return (
     <aside
@@ -68,7 +86,7 @@ export function Sidebar({
       </div>
 
       <nav className="cosmos-sidebar-nav" aria-label="Admin navigation">
-        {SIDEBAR_NAV.map((item) => {
+        {navItems.map((item) => {
           const active =
             item.href === '/admin'
               ? pathname === '/admin' || pathname === '/admin/'
