@@ -186,6 +186,20 @@ export default function CrmCustomerDetailPage() {
     enabled: !!customer.data?.salesRepUserId,
   })
 
+  const [portalInviteUrl, setPortalInviteUrl] = useState<string | null>(null)
+  const [portalLinkCopied, setPortalLinkCopied] = useState(false)
+  const portalInvite = useMutation({
+    mutationFn: () =>
+      api.post<{ inviteUrl?: string }>('/tenants/me/invites', {
+        email: customer.data?.email,
+        role: 'STAFF',
+      }),
+    onSuccess: (res) => {
+      setPortalLinkCopied(false)
+      setPortalInviteUrl(res?.inviteUrl ?? null)
+    },
+  })
+
   const addActivity = useMutation({
     mutationFn: () =>
       api.post('/activities', {
@@ -238,10 +252,51 @@ export default function CrmCustomerDetailPage() {
                 Since {new Date(c.createdAt).toLocaleDateString()}
               </p>
             </div>
-            <button type="button" className="btn-primary" onClick={() => setActivityOpen(true)}>
-              Log activity
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {c.email ? (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={portalInvite.isPending}
+                  onClick={() => portalInvite.mutate()}
+                >
+                  {portalInvite.isPending ? 'Inviting…' : 'Invite to buyer portal'}
+                </button>
+              ) : null}
+              <button type="button" className="btn-primary" onClick={() => setActivityOpen(true)}>
+                Log activity
+              </button>
+            </div>
           </div>
+
+          {portalInvite.error ? (
+            <p className="text-sm" style={{ color: 'var(--c-danger)' }}>{errMsg(portalInvite.error)}</p>
+          ) : null}
+          {portalInviteUrl ? (
+            <div className="cosmos-card" style={{ borderColor: 'var(--c-accent)' }}>
+              <h3 className="font-display font-semibold" style={{ color: 'var(--c-heading)' }}>Buyer portal invite created</h3>
+              <p className="text-sm mt-1 mb-3" style={{ color: 'var(--c-text-3)' }}>
+                Sent to {c.email}. Share this link if email delivery isn&rsquo;t configured — shown once, expires in 7 days.
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <code className="text-xs font-mono break-all px-3 py-2 rounded-lg" style={{ background: 'var(--c-surface-2)', color: 'var(--c-accent)' }}>
+                  {portalInviteUrl}
+                </code>
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(portalInviteUrl).then(() => setPortalLinkCopied(true))
+                  }}
+                >
+                  {portalLinkCopied ? 'Copied' : 'Copy'}
+                </button>
+                <button type="button" className="btn-ghost !py-1 !px-3 !text-xs" onClick={() => setPortalInviteUrl(null)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="cosmos-card space-y-2">

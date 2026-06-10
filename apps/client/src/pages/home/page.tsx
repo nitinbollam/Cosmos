@@ -148,8 +148,7 @@ export default function HomePage() {
             ))}
           </ul>
           <p className="cosmos-landing-demo-note">
-            <strong>Demo:</strong> Admin <code>admin@cosmos.local</code> / <code>admin1234</code> · Buyer{' '}
-            <code>buyer@acme-retail.com</code> / <code>buyer1234</code>
+            New here? <Link to="/signup">Create a workspace</Link> in under a minute — no card required.
           </p>
         </aside>
       </section>
@@ -258,6 +257,8 @@ export default function HomePage() {
             <Link to="/catalog">Shop</Link>
             <Link to="/signup">Sign up</Link>
             <Link to="/admin/login">Admin login</Link>
+            <Link to="/terms">Terms</Link>
+            <Link to="/privacy">Privacy</Link>
           </div>
         </div>
         <p className="cosmos-landing-footer-copy">© {new Date().getFullYear()} Cosmos</p>

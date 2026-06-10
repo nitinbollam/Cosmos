@@ -194,7 +194,10 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
       const line = it.purchaseOrderLineId
         ? poForCost.lines.find((l) => l.id === it.purchaseOrderLineId)
         : undefined
-      if (line?.unitCost != null) unitCost = Number(line.unitCost)
+      if (line?.unitCost != null) {
+        const { computeReceivedUnitCost } = await import('./landed-cost')
+        unitCost = computeReceivedUnitCost(Number(line.unitCost), poForCost, line.id, goodQty)
+      }
     }
 
     await inv.receiveStock(

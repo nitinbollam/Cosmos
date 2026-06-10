@@ -21,6 +21,32 @@ export function listCustomers(tenantId: string) {
   return crmDb.customer.findMany({ where: { tenantId }, orderBy: { name: 'asc' } })
 }
 
+export async function listCustomersPaged(
+  tenantId: string,
+  opts: { page: number; pageSize: number; search?: string },
+) {
+  const page = Math.max(1, opts.page)
+  const pageSize = Math.min(200, Math.max(1, opts.pageSize))
+  const search = opts.search?.trim()
+  const where = {
+    tenantId,
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search } },
+            { email: { contains: search } },
+            { phone: { contains: search } },
+          ],
+        }
+      : {}),
+  }
+  const [items, total] = await Promise.all([
+    crmDb.customer.findMany({ where, orderBy: { name: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
+    crmDb.customer.count({ where }),
+  ])
+  return { items, total, page, pageSize }
+}
+
 export async function getCustomer(tenantId: string, id: string) {
   const row = await crmDb.customer.findFirst({ where: { id, tenantId } })
   if (!row) throw new ApiError(404, 'Customer not found')

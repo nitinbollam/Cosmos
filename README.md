@@ -28,6 +28,8 @@ npm run dev
 - **B2B buyer:** http://localhost:4000/login — `buyer@acme-retail.com` / `buyer1234`
 - **Mobile (warehouse/delivery/sales):** http://localhost:4000/m/login
 
+> The credentials above come from `npm run seed` and exist only in your local SQLite database. Production tenants are created via `/signup`; team members join via admin-issued invites (`/accept-invite`). See `PRODUCTION_READINESS.md` for the security/hardening status.
+
 Dev uses Vite middleware (HMR) plus the embedded API server — no separate Next.js process.
 
 ### UI themes

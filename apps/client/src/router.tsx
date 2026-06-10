@@ -30,6 +30,12 @@ const router = createBrowserRouter([
       { path: '/', element: page(() => import('@/pages/home/page')) },
       { path: '/login', element: page(() => import('@/pages/login/page')) },
       { path: '/signup', element: page(() => import('@/pages/signup/page')) },
+      { path: '/forgot-password', element: page(() => import('@/pages/forgot-password/page')) },
+      { path: '/reset-password', element: page(() => import('@/pages/reset-password/page')) },
+      { path: '/accept-invite', element: page(() => import('@/pages/accept-invite/page')) },
+      { path: '/verify-email', element: page(() => import('@/pages/verify-email/page')) },
+      { path: '/terms', element: page(() => import('@/pages/legal/terms/page')) },
+      { path: '/privacy', element: page(() => import('@/pages/legal/privacy/page')) },
       {
         element: <ShopLayout />,
         children: [

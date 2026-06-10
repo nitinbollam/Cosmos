@@ -282,6 +282,8 @@ function CompanyTab() {
         )}
       </div>
 
+      <TaxSettingsCard />
+
       {tenant.data?.onboardingSteps && tenant.data.onboardingSteps.length > 0 && (
         <div className="cosmos-card">
           <h2 className="text-cosmos-white font-semibold font-display mb-1">Onboarding</h2>
@@ -321,6 +323,8 @@ function UsersTab() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<string>(INVITE_ROLES[0])
   const [deactivateUser, setDeactivateUser] = useState<UserRow | null>(null)
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const usersQ = useQuery<UsersPage>({
     queryKey: ['users', 'settings'],
@@ -333,13 +337,25 @@ function UsersTab() {
   })
 
   const inviteMut = useMutation({
-    mutationFn: () => api.post('/tenants/me/invites', { email: inviteEmail.trim(), role: inviteRole }),
-    onSuccess: () => {
+    mutationFn: () =>
+      api.post<InviteRow & { inviteUrl?: string }>('/tenants/me/invites', {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      }),
+    onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: ['tenant-invites'] })
       setInviteOpen(false)
       setInviteEmail('')
       setInviteRole(INVITE_ROLES[0])
+      setLinkCopied(false)
+      setInviteLink(created?.inviteUrl ?? null)
     },
+  })
+
+  const roleMut = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      api.patch(`/users/${encodeURIComponent(id)}`, { role }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['users'] }),
   })
 
   const revokeMut = useMutation({
@@ -390,7 +406,27 @@ function UsersTab() {
                     {u.firstName} {u.lastName}
                   </td>
                   <td className="font-mono text-xs">{u.email}</td>
-                  <td className="text-sm text-cosmos-text-2">{u.role}</td>
+                  <td className="text-sm text-cosmos-text-2">
+                    {u.isActive ? (
+                      <select
+                        className="cosmos-input !py-1 !px-2 !text-xs w-auto"
+                        value={u.role}
+                        disabled={roleMut.isPending}
+                        onChange={(e) => roleMut.mutate({ id: u.id, role: e.target.value })}
+                      >
+                        {(INVITE_ROLES.includes(u.role as (typeof INVITE_ROLES)[number])
+                          ? INVITE_ROLES
+                          : [u.role, ...INVITE_ROLES]
+                        ).map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      u.role
+                    )}
+                  </td>
                   <td className="text-sm">{u.isActive ? 'Active' : 'Inactive'}</td>
                   <td className="text-right">
                     {u.isActive && (
@@ -404,7 +440,37 @@ function UsersTab() {
             </tbody>
           </table>
         )}
+        {roleMut.error ? <p className="text-red-400 text-xs mt-2">{errMsg(roleMut.error)}</p> : null}
       </div>
+
+      {inviteLink ? (
+        <div className="cosmos-card" style={{ borderColor: 'var(--c-accent)' }}>
+          <h3 className="text-cosmos-white font-semibold font-display mb-2">Invite link created</h3>
+          <p className="text-cosmos-text-3 text-sm mb-3">
+            An email was sent if delivery is configured. You can also share this link directly — it is shown only
+            once and expires in 7 days.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <code className="text-xs font-mono break-all px-3 py-2 rounded-lg" style={{ background: 'var(--c-surface-2)', color: 'var(--c-accent)' }}>
+              {inviteLink}
+            </code>
+            <button
+              type="button"
+              className="btn-ghost !py-1 !px-3 !text-xs"
+              onClick={() => {
+                void navigator.clipboard.writeText(inviteLink).then(() => setLinkCopied(true))
+              }}
+            >
+              {linkCopied ? 'Copied' : 'Copy'}
+            </button>
+            <button type="button" className="btn-ghost !py-1 !px-3 !text-xs" onClick={() => setInviteLink(null)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <ChangePasswordCard />
 
       <div className="cosmos-card">
         <h3 className="text-cosmos-white font-semibold font-display mb-3">Pending invites</h3>
@@ -510,6 +576,144 @@ function UsersTab() {
         )}
         {deactivateMut.error && <p className="text-red-400 text-sm mt-3">{errMsg(deactivateMut.error)}</p>}
       </CosmosDialogModal>
+    </div>
+  )
+}
+
+function TaxSettingsCard() {
+  const qc = useQueryClient()
+  const taxQ = useQuery<{ salesTaxRate: number; salesTaxPercent: number }>({
+    queryKey: ['tax-settings'],
+    queryFn: () => api.get('/tax/settings'),
+  })
+  const [percent, setPercent] = useState('')
+
+  useEffect(() => {
+    if (taxQ.data) setPercent(String(taxQ.data.salesTaxPercent))
+  }, [taxQ.data])
+
+  const saveMut = useMutation({
+    mutationFn: (rate: number) => api.patch('/tax/settings', { salesTaxRate: rate }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['tax-settings'] }),
+  })
+
+  const parsed = Number.parseFloat(percent)
+  const valid = Number.isFinite(parsed) && parsed >= 0 && parsed <= 50
+
+  return (
+    <div className="cosmos-card">
+      <h2 className="text-cosmos-white font-semibold font-display mb-1">Sales tax</h2>
+      <p className="text-cosmos-text-3 text-sm mb-4">
+        Applied to orders, quotes, and POS transactions for this tenant.
+      </p>
+      {taxQ.isLoading ? (
+        <div className="skeleton h-10 w-48" />
+      ) : (
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (valid) saveMut.mutate(+(parsed / 100).toFixed(6))
+          }}
+        >
+          <div>
+            <label className="text-xs text-cosmos-text-3">Sales tax rate (%)</label>
+            <input
+              className="cosmos-input mt-1 w-32"
+              type="number"
+              step="0.01"
+              min="0"
+              max="50"
+              value={percent}
+              onChange={(e) => setPercent(e.target.value)}
+            />
+          </div>
+          <button type="submit" className="btn-primary" disabled={!valid || saveMut.isPending}>
+            {saveMut.isPending ? 'Saving…' : 'Save tax rate'}
+          </button>
+        </form>
+      )}
+      {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
+      {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Tax rate updated.</p>}
+    </div>
+  )
+}
+
+function ChangePasswordCard() {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [localErr, setLocalErr] = useState<string | null>(null)
+
+  const changeMut = useMutation({
+    mutationFn: () => api.post('/auth/change-password', { currentPassword, newPassword }),
+    onSuccess: () => {
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirm('')
+      setLocalErr(null)
+    },
+  })
+
+  return (
+    <div className="cosmos-card">
+      <h3 className="text-cosmos-white font-semibold font-display mb-1">Change your password</h3>
+      <p className="text-cosmos-text-3 text-sm mb-4">
+        At least 10 characters with a letter and a number. Changing your password signs out other sessions.
+      </p>
+      <form
+        className="space-y-3 max-w-md"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (newPassword !== confirm) {
+            setLocalErr('New passwords do not match')
+            return
+          }
+          setLocalErr(null)
+          changeMut.mutate()
+        }}
+      >
+        <input
+          className="cosmos-input"
+          type="password"
+          placeholder="Current password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+        />
+        <input
+          className="cosmos-input"
+          type="password"
+          placeholder="New password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          required
+          minLength={10}
+          autoComplete="new-password"
+        />
+        <input
+          className="cosmos-input"
+          type="password"
+          placeholder="Confirm new password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          required
+          minLength={10}
+          autoComplete="new-password"
+        />
+        {(localErr || changeMut.error) && (
+          <p className="text-red-400 text-sm">{localErr ?? errMsg(changeMut.error)}</p>
+        )}
+        {changeMut.isSuccess && !localErr ? <p className="text-emerald-400 text-sm">Password updated.</p> : null}
+        <button
+          type="submit"
+          className="btn-primary"
+          disabled={!currentPassword || !newPassword || !confirm || changeMut.isPending}
+        >
+          {changeMut.isPending ? 'Updating…' : 'Update password'}
+        </button>
+      </form>
     </div>
   )
 }
@@ -1022,39 +1226,103 @@ const PLANS = [
   },
 ]
 
+type BillingStatus = {
+  plan: string
+  billingStatus: string | null
+  billingConfigured: boolean
+  pricesConfigured: { growth: boolean; enterprise: boolean }
+}
+
 function BillingTab() {
   const qc = useQueryClient()
+  const searchParams = useQueryParams()
+  const checkoutResult = searchParams.get('checkout')
+
   const tenant = useQuery<TenantMe>({
     queryKey: ['tenant-me'],
     queryFn: () => api.get('/tenants/me'),
   })
 
+  const billingQ = useQuery<BillingStatus>({
+    queryKey: ['billing-status'],
+    queryFn: () => api.get('/tenants/me/billing'),
+  })
+
   const upgradeMut = useMutation({
-    mutationFn: (plan: 'STARTER' | 'GROWTH' | 'ENTERPRISE') => api.post('/tenants/me/upgrade', { plan }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['tenant-me'] }),
+    mutationFn: async (plan: 'STARTER' | 'GROWTH' | 'ENTERPRISE') => {
+      if (billingQ.data?.billingConfigured && plan !== 'STARTER') {
+        const { url } = await api.post<{ url: string }>('/tenants/me/billing/checkout', { plan })
+        window.location.href = url
+        return
+      }
+      return api.post('/tenants/me/upgrade', { plan })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tenant-me'] })
+      void qc.invalidateQueries({ queryKey: ['billing-status'] })
+    },
+  })
+
+  const portalMut = useMutation({
+    mutationFn: () => api.post<{ url: string }>('/tenants/me/billing/portal'),
+    onSuccess: (res) => {
+      if (res?.url) window.location.href = res.url
+    },
   })
 
   const current = tenant.data?.plan ?? 'STARTER'
+  const stripeOn = billingQ.data?.billingConfigured ?? false
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-cosmos-white font-semibold font-display">Billing</h2>
-        <p className="text-cosmos-text-3 text-sm mt-1">POST /tenants/me/upgrade to change plan (admin)</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-cosmos-white font-semibold font-display">Billing</h2>
+          <p className="text-cosmos-text-3 text-sm mt-1">
+            {stripeOn
+              ? 'Paid plans are billed through Stripe Checkout. Manage your subscription in the billing portal.'
+              : 'Stripe is not configured — plan changes apply immediately (local dev only).'}
+          </p>
+        </div>
+        {stripeOn && billingQ.data?.billingStatus ? (
+          <button
+            type="button"
+            className="btn-ghost !text-sm"
+            disabled={portalMut.isPending}
+            onClick={() => portalMut.mutate()}
+          >
+            {portalMut.isPending ? 'Opening…' : 'Manage subscription'}
+          </button>
+        ) : null}
       </div>
+
+      {checkoutResult === 'success' ? (
+        <p className="text-sm text-emerald-400">Checkout complete — your plan will update shortly.</p>
+      ) : checkoutResult === 'cancel' ? (
+        <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Checkout canceled.</p>
+      ) : null}
 
       <div className="cosmos-card">
         <h3 className="text-cosmos-white font-semibold font-display mb-2">Current plan</h3>
         {tenant.isLoading ? (
           <div className="skeleton h-10 w-48" />
         ) : (
-          <p className="text-2xl font-bold text-cosmos-accent font-display">{current}</p>
+          <>
+            <p className="text-2xl font-bold text-cosmos-accent font-display">{current}</p>
+            {billingQ.data?.billingStatus ? (
+              <p className="text-xs text-cosmos-text-3 mt-2 capitalize">Subscription: {billingQ.data.billingStatus}</p>
+            ) : null}
+          </>
         )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         {PLANS.map((p) => {
           const isCurrent = current === p.id
+          const paidUnavailable =
+            stripeOn &&
+            p.id !== 'STARTER' &&
+            !billingQ.data?.pricesConfigured[p.id === 'GROWTH' ? 'growth' : 'enterprise']
           return (
             <div key={p.id} className="cosmos-card flex flex-col">
               <h4 className="text-cosmos-white font-semibold font-display">{p.name}</h4>
@@ -1062,16 +1330,27 @@ function BillingTab() {
               <button
                 type="button"
                 className="btn-primary mt-4 w-full"
-                disabled={isCurrent || upgradeMut.isPending}
+                disabled={isCurrent || upgradeMut.isPending || paidUnavailable || (stripeOn && p.id === 'STARTER')}
                 onClick={() => upgradeMut.mutate(p.id)}
               >
-                {isCurrent ? 'Current plan' : `Upgrade to ${p.name}`}
+                {isCurrent
+                  ? 'Current plan'
+                  : stripeOn && p.id !== 'STARTER'
+                    ? `Subscribe to ${p.name}`
+                    : p.id === 'STARTER'
+                      ? 'Free tier'
+                      : `Upgrade to ${p.name}`}
               </button>
+              {paidUnavailable ? (
+                <p className="text-xs text-amber-400 mt-2">Set STRIPE_PRICE_{p.id} in environment</p>
+              ) : null}
             </div>
           )
         })}
       </div>
-      {upgradeMut.error && <p className="text-red-400 text-sm">{errMsg(upgradeMut.error)}</p>}
+      {(upgradeMut.error || portalMut.error) && (
+        <p className="text-red-400 text-sm">{errMsg(upgradeMut.error ?? portalMut.error)}</p>
+      )}
     </div>
   )
 }

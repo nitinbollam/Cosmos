@@ -207,7 +207,7 @@ select.cosmos-input option {
 .bento-section-title {
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.02em;
   color: var(--c-heading);
 }
 
@@ -221,7 +221,7 @@ select.cosmos-input option {
 .bento-hero-title {
   font-size: clamp(1.65rem, 2.8vw, 2.1rem);
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.01em;
   line-height: 1.12;
   color: var(--c-heading);
 }
@@ -457,7 +457,7 @@ select.cosmos-input option {
 .cosmos-admin-header-title {
   font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.02em;
   color: var(--c-heading);
 }
 

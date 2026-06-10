@@ -98,12 +98,6 @@ export default function CrmPage() {
     enabled: tab === 'leads',
   })
 
-  const customersQ = useQuery<CustomerRow[]>({
-    queryKey: ['customers'],
-    queryFn: () => api.get('/customers'),
-    enabled: tab === 'customers',
-  })
-
   const usersQ = useQuery<{ items: UserRow[] }>({
     queryKey: ['users', 'crm'],
     queryFn: () => api.get('/users?page=1&pageSize=200'),
@@ -141,9 +135,6 @@ export default function CrmPage() {
 
       {tab === 'customers' && (
         <CustomersSection
-          customers={customersQ.data ?? []}
-          loading={customersQ.isLoading}
-          error={customersQ.isError}
           repById={repById}
           users={usersQ.data?.items ?? []}
           usersLoading={usersQ.isLoading}
@@ -164,10 +155,27 @@ export default function CrmPage() {
   )
 }
 
+const CUSTOMERS_PAGE_SIZE = 25
+
+function csvEscape(value: unknown): string {
+  const s = value == null ? '' : String(value)
+  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>): void {
+  const lines = [headers.join(','), ...rows.map((r) => r.map(csvEscape).join(','))]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+type CustomersPage = { items: CustomerRow[]; total: number; page: number; pageSize: number }
+
 function CustomersSection(props: {
-  customers: CustomerRow[]
-  loading: boolean
-  error: boolean
   repById: Map<string, UserRow>
   users: UserRow[]
   usersLoading: boolean
@@ -175,23 +183,54 @@ function CustomersSection(props: {
 }) {
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
+  const [page, setPage] = useState(1)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(search.trim().toLowerCase()), 300)
+    const t = setTimeout(() => {
+      setDebounced(search.trim())
+      setPage(1)
+    }, 300)
     return () => clearTimeout(t)
   }, [search])
 
-  const filtered = useMemo(() => {
-    if (!debounced) return props.customers
-    return props.customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(debounced) ||
-        (c.email?.toLowerCase().includes(debounced) ?? false) ||
-        (c.phone?.toLowerCase().includes(debounced) ?? false),
-    )
-  }, [props.customers, debounced])
+  const customersQ = useQuery<CustomersPage>({
+    queryKey: ['customers', page, debounced],
+    queryFn: () =>
+      api.get(
+        `/customers?page=${page}&pageSize=${CUSTOMERS_PAGE_SIZE}${debounced ? `&search=${encodeURIComponent(debounced)}` : ''}`,
+      ),
+    placeholderData: (prev) => prev,
+  })
+
+  const filtered = customersQ.data?.items ?? []
+  const total = customersQ.data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / CUSTOMERS_PAGE_SIZE))
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const all = await api.get<CustomerRow[]>('/customers')
+      downloadCsv(
+        `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Name', 'Email', 'Phone', 'Type', 'Credit limit', 'Credit used', 'Payment terms (days)', 'Sales rep'],
+        all.map((c) => [
+          c.name,
+          c.email ?? '',
+          c.phone ?? '',
+          c.customerKind ?? 'BUSINESS',
+          c.creditLimit ?? '',
+          c.creditUsed ?? '',
+          c.paymentTermsDays ?? '',
+          c.salesRepUserId ? (props.repById.get(c.salesRepUserId) ? userLabel(props.repById.get(c.salesRepUserId)!) : '') : '',
+        ]),
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <>
@@ -207,6 +246,9 @@ function CustomersSection(props: {
         </button>
         <button type="button" className="btn-ghost" onClick={() => setImportOpen((open) => !open)}>
           {importOpen ? 'Hide import' : 'Import CSV/Excel'}
+        </button>
+        <button type="button" className="btn-ghost" disabled={exporting} onClick={() => void exportCsv()}>
+          {exporting ? 'Exporting…' : 'Export CSV'}
         </button>
       </div>
 
@@ -259,9 +301,9 @@ function CustomersSection(props: {
       ) : null}
 
       <div className="cosmos-card overflow-x-auto">
-        {props.loading ? (
+        {customersQ.isLoading ? (
           <div className="skeleton h-40 w-full" />
-        ) : props.error ? (
+        ) : customersQ.isError ? (
           <p style={{ color: 'var(--c-danger)' }}>Could not load customers.</p>
         ) : filtered.length === 0 ? (
           <EmptyState icon="🏢" title="No customers" description="Add a customer with the button above." />
@@ -332,6 +374,32 @@ function CustomersSection(props: {
           </table>
         )}
       </div>
+
+      {total > CUSTOMERS_PAGE_SIZE ? (
+        <div className="flex items-center justify-between gap-3 text-sm" style={{ color: 'var(--c-text-2)' }}>
+          <span>
+            Page {page} of {totalPages} · {total} customer{total === 1 ? '' : 's'}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-ghost !py-1 !px-3 !text-xs"
+              disabled={page <= 1 || customersQ.isFetching}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ← Prev
+            </button>
+            <button
+              type="button"
+              className="btn-ghost !py-1 !px-3 !text-xs"
+              disabled={page >= totalPages || customersQ.isFetching}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {drawerOpen && (
         <NewCustomerDrawer

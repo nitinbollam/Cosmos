@@ -176,7 +176,7 @@ export default function DashboardPage() {
           <p className="text-[11px] uppercase tracking-[0.16em] font-semibold" style={{ color: 'var(--c-text-3)' }}>
             Dashboard
           </p>
-          <h2 className="text-2xl font-bold tracking-tight mt-1" style={{ color: 'var(--c-heading)' }}>
+          <h2 className="text-2xl font-bold mt-1" style={{ color: 'var(--c-heading)' }}>
             Good to see you
           </h2>
         </div>

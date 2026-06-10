@@ -9,19 +9,24 @@ datasource db {
 }
 
 model User {
-  id               String    @id @default(cuid())
-  tenantId         String
-  email            String
-  passwordHash     String
-  firstName        String
-  lastName         String
-  role             Role      @default(STAFF)
+  id                     String    @id @default(cuid())
+  tenantId               String
+  email                  String
+  passwordHash           String
+  firstName              String
+  lastName               String
+  role                   Role      @default(STAFF)
   permissions Json 
-  isActive         Boolean   @default(true)
-  lastLoginAt      DateTime?
-  refreshTokenHash String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  isActive               Boolean   @default(true)
+  lastLoginAt            DateTime?
+  refreshTokenHash       String?
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
+  emailVerifiedAt              DateTime?
+  emailVerificationTokenHash   String?
+  emailVerificationExpiresAt   DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@unique([tenantId, email])
   @@index([tenantId])

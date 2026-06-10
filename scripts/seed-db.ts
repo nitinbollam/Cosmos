@@ -127,7 +127,14 @@ async function seedAuth(): Promise<{ tenantId: string; adminId: string; driverId
     for (const u of users) {
       const row = await prisma.user.upsert({
         where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
-        update: { passwordHash: await hash(u.password), role: u.role, isActive: true, firstName: u.firstName, lastName: u.lastName },
+        update: {
+          passwordHash: await hash(u.password),
+          role: u.role,
+          isActive: true,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          emailVerifiedAt: new Date(),
+        },
         create: {
           tenantId: tenant.id,
           email: u.email,
@@ -136,6 +143,7 @@ async function seedAuth(): Promise<{ tenantId: string; adminId: string; driverId
           lastName: u.lastName,
           role: u.role,
           permissions: [],
+          emailVerifiedAt: new Date(),
         },
       })
       ids[u.email] = row.id

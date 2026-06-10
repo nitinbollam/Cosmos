@@ -14,9 +14,15 @@ export default function SignupPage() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [agreed, setAgreed] = useState(false)
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!agreed) {
+      setError('Please agree to the Terms of Service and Privacy Policy')
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -25,9 +31,20 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      const data = (await res.json()) as { accessToken?: string; message?: string }
+      const data = (await res.json()) as {
+        accessToken?: string
+        refreshToken?: string
+        requiresVerification?: boolean
+        email?: string
+        message?: string
+      }
       if (!res.ok) throw new Error(data.message ?? 'Signup failed')
+      if (data.requiresVerification) {
+        setVerifyEmail(data.email ?? form.email)
+        return
+      }
       if (data.accessToken) localStorage.setItem('cosmos.accessToken', data.accessToken)
+      if (data.refreshToken) localStorage.setItem('cosmos.refreshToken', data.refreshToken)
       navigate('/admin')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed')
@@ -41,6 +58,21 @@ export default function SignupPage() {
       <AuthThemeToolbar />
       <div className="mx-auto max-w-md p-8">
       <h1 className="text-2xl font-semibold mb-2">Start your Cosmos workspace</h1>
+      {verifyEmail ? (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--c-text-2)' }}>
+            We sent a verification link to <strong>{verifyEmail}</strong>. Confirm your email, then sign in to finish
+            setup.
+          </p>
+          <Link to="/verify-email" className="cosmos-btn cosmos-btn-primary w-full inline-block text-center">
+            Open verification page
+          </Link>
+          <Link to="/admin/login" className="text-sm" style={{ color: 'var(--c-accent)' }}>
+            Go to sign in
+          </Link>
+        </div>
+      ) : (
+        <>
       <p className="text-sm mb-6" style={{ color: 'var(--c-text-3)' }}>
         Create a new distributor tenant. Already have an account? <Link to="/login">Sign in</Link>
       </p>
@@ -49,18 +81,39 @@ export default function SignupPage() {
           <input
             key={key}
             className="cosmos-input w-full"
-            placeholder={key === 'slug' ? 'company-slug' : key.replace(/([A-Z])/g, ' $1')}
-            type={key === 'password' ? 'password' : 'text'}
+            placeholder={
+              key === 'slug'
+                ? 'company-slug'
+                : key === 'password'
+                  ? 'password (10+ chars, letter + number)'
+                  : key.replace(/([A-Z])/g, ' $1')
+            }
+            type={key === 'password' ? 'password' : key === 'email' ? 'email' : 'text'}
+            minLength={key === 'password' ? 10 : undefined}
             value={form[key]}
             onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
             required
           />
         ))}
+        <label className="flex items-start gap-2 text-sm" style={{ color: 'var(--c-text-2)' }}>
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            I agree to the <Link to="/terms" style={{ color: 'var(--c-accent)' }}>Terms of Service</Link> and{' '}
+            <Link to="/privacy" style={{ color: 'var(--c-accent)' }}>Privacy Policy</Link>
+          </span>
+        </label>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <button type="submit" className="cosmos-btn cosmos-btn-primary w-full" disabled={loading}>
           {loading ? 'Creating…' : 'Create workspace'}
         </button>
       </form>
+        </>
+      )}
       </div>
     </div>
   )

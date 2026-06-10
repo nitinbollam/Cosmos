@@ -21,6 +21,8 @@ export async function reserveLineWithBackorder(
     quantity: number
     correlationId: string
     preferredBatchId?: string | null
+    /** When true (fill-on-receipt path), the caller manages the backorder row itself. */
+    skipBackorderRow?: boolean
   },
 ): Promise<PartialReserveResult> {
   let remaining = dto.quantity
@@ -79,16 +81,17 @@ export async function reserveLineWithBackorder(
 
   const backordered = remaining
 
+  // Increment (not overwrite) so fill-on-receipt calls add to prior allocations.
   await orderDb.orderLineItem.update({
     where: { id: dto.orderLineItemId },
     data: {
-      quantityAllocated: allocated,
+      quantityAllocated: { increment: allocated },
       quantityBackordered: backordered,
       ...(primaryBatch ? { preferredBatchId: primaryBatch } : {}),
     },
   })
 
-  if (backordered > 0) {
+  if (backordered > 0 && !dto.skipBackorderRow) {
     await orderDb.backorderLine.upsert({
       where: { orderLineItemId: dto.orderLineItemId },
       create: {
@@ -127,10 +130,14 @@ export async function fillBackordersOnReceipt(tenantId: string, skuId: string, w
   })
 
   const filled: string[] = []
+  const allocatedByOrder = new Map<string, Array<{ skuId: string; warehouseId: string; quantity: number; batchId?: string }>>()
+
   for (const row of open) {
     const need = row.quantity - row.quantityFilled
     if (need <= 0) continue
 
+    // reserveLineWithBackorder increments the order line's allocation itself;
+    // skipBackorderRow prevents it from clobbering this backorder row.
     const result = await reserveLineWithBackorder(tenantId, {
       orderId: row.orderId,
       orderLineItemId: row.orderLineItemId,
@@ -138,6 +145,7 @@ export async function fillBackordersOnReceipt(tenantId: string, skuId: string, w
       warehouseId: row.warehouseId,
       quantity: need,
       correlationId: randomUUID(),
+      skipBackorderRow: true,
     })
 
     if (result.allocated <= 0) break
@@ -149,18 +157,10 @@ export async function fillBackordersOnReceipt(tenantId: string, skuId: string, w
       data: { quantityFilled: newFilled, status },
     })
 
-    const line = await orderDb.orderLineItem.findUnique({ where: { id: row.orderLineItemId } })
-    if (line) {
-      await orderDb.orderLineItem.update({
-        where: { id: row.orderLineItemId },
-        data: {
-          quantityAllocated: line.quantityAllocated + result.allocated,
-          quantityBackordered: Math.max(0, line.quantityBackordered - result.allocated),
-        },
-      })
-    }
-
     filled.push(row.id)
+    const lines = allocatedByOrder.get(row.orderId) ?? []
+    lines.push({ skuId: row.skuId, warehouseId: row.warehouseId, quantity: result.allocated, batchId: result.batchId })
+    allocatedByOrder.set(row.orderId, lines)
 
     const order = await orderDb.order.findFirst({
       where: { id: row.orderId, tenantId },
@@ -172,6 +172,14 @@ export async function fillBackordersOnReceipt(tenantId: string, skuId: string, w
         await orderDb.order.update({ where: { id: row.orderId }, data: { status: 'PROCESSING' } })
       }
     }
+  }
+
+  // Newly allocated stock needs a pick task so the fill actually flows to the floor.
+  const { ensureFulfillmentForLines } = await import('./wms-fulfillment')
+  for (const [orderId, lines] of allocatedByOrder) {
+    await ensureFulfillmentForLines(tenantId, orderId, lines).catch((err) =>
+      console.error(`[backorders] could not create fulfillment for order ${orderId}:`, err),
+    )
   }
 
   return { filledCount: filled.length, filledIds: filled }

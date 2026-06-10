@@ -13,7 +13,6 @@ import * as payments from './payments'
 import { canTransitionOrderStatus, fulfillmentTaskStatusToOrderStatus, type OrderStatus } from './order-status'
 import { ApiError } from './session'
 import * as wmsFulfillment from './wms-fulfillment'
-import { issueInvoiceForOrder } from './invoices'
 import * as backorders from './backorders'
 import * as dropShip from './drop-ship'
 
@@ -237,28 +236,125 @@ export async function tryCaptureAuthorizedPayment(tenantId: string, orderId: str
 export async function onFulfillmentPacked(tenantId: string, orderId: string) {
   await transitionOrderStatus(tenantId, orderId, 'PACKED')
   const correlationId = randomUUID()
-  await tryCaptureAuthorizedPayment(tenantId, orderId, correlationId).catch(() => undefined)
+  await tryCaptureAuthorizedPayment(tenantId, orderId, correlationId).catch((err) =>
+    console.error(`[payments] capture at pack failed for order ${orderId}:`, err),
+  )
 }
 
-export async function onFulfillmentDispatched(tenantId: string, orderId: string) {
+/**
+ * Dispatch a packed fulfillment task end-to-end:
+ *  1. enforce serial assignment for serial-tracked SKUs
+ *  2. commit inventory (decrement on-hand, fulfill reservations, STOCK_SHIPPED ledger)
+ *  3. move SHORT-picked remainders to backorder
+ *  4. mark the WMS task DISPATCHED
+ *  5. transition the order, invoice the shipped quantities, post COGS
+ *
+ * Inventory is committed before the WMS status flips so a failure leaves the task
+ * PACKED (retryable) rather than DISPATCHED-with-no-stock-movement.
+ */
+export async function dispatchFulfillmentTask(tenantId: string, taskId: string) {
+  const task = await wmsFulfillment.getFulfillmentTaskRaw(tenantId, taskId)
+  if (task.status !== 'PACKED') throw new ApiError(400, 'Task must be PACKED before dispatch')
+
+  const shippedLines = task.pickLines
+    .map((p) => ({
+      skuId: p.skuId,
+      warehouseId: p.warehouseId,
+      batchId: p.batchId ?? undefined,
+      quantity: p.pickedQty,
+    }))
+    .filter((l) => l.quantity > 0)
+
+  const serials = await import('./inventory-serials')
+  await serials.enforceAndShipSerialsForOrder(tenantId, task.orderId, shippedLines)
+
+  const { shipped } = await inv.commitShipmentForOrder(tenantId, task.orderId, 'system', shippedLines)
+
+  await moveShortPicksToBackorder(tenantId, task.orderId, task.pickLines)
+
+  const updated = await wmsFulfillment.markFulfillmentDispatched(tenantId, taskId)
+
+  await onFulfillmentDispatched(tenantId, task.orderId, shipped)
+
+  return { taskId: updated.taskId, orderId: task.orderId, status: updated.status, shipped }
+}
+
+/** SHORT-picked quantity goes back to backorder so a receipt can re-fulfill it. */
+async function moveShortPicksToBackorder(
+  tenantId: string,
+  orderId: string,
+  pickLines: Array<{ skuId: string; warehouseId: string; quantity: number; pickedQty: number }>,
+) {
+  const shorts = pickLines.filter((p) => p.pickedQty < p.quantity)
+  if (shorts.length === 0) return
+
+  const order = await orderDb.order.findFirst({
+    where: { id: orderId, tenantId },
+    include: { lineItems: true },
+  })
+  if (!order) return
+
+  for (const p of shorts) {
+    const shortQty = p.quantity - p.pickedQty
+    const line = order.lineItems.find((li) => li.skuId === p.skuId && li.warehouseId === p.warehouseId)
+    if (!line) continue
+
+    await orderDb.orderLineItem.update({
+      where: { id: line.id },
+      data: {
+        quantityAllocated: { decrement: Math.min(shortQty, line.quantityAllocated) },
+        quantityBackordered: { increment: shortQty },
+      },
+    })
+    await orderDb.backorderLine.upsert({
+      where: { orderLineItemId: line.id },
+      create: {
+        id: randomUUID(),
+        tenantId,
+        orderId,
+        orderLineItemId: line.id,
+        skuId: p.skuId,
+        warehouseId: p.warehouseId,
+        quantity: shortQty,
+        status: 'OPEN',
+      },
+      update: {
+        quantity: { increment: shortQty },
+        status: 'OPEN',
+      },
+    })
+  }
+}
+
+export async function onFulfillmentDispatched(
+  tenantId: string,
+  orderId: string,
+  shipped?: Array<{ skuId: string; quantity: number }>,
+) {
   await transitionOrderStatus(tenantId, orderId, 'SHIPPED')
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
     include: { lineItems: true },
   })
-  await issueInvoiceForOrder(tenantId, orderId).catch(() => undefined)
-  if (order) {
-    const { computeOrderCogs, postCogsJournal } = await import('./operations-gl')
-    const cogs = await computeOrderCogs(
-      tenantId,
-      order.lineItems.map((li) => ({ skuId: li.skuId, quantity: li.quantity })),
-    )
-    await postCogsJournal(tenantId, orderId, cogs).catch(() => undefined)
-    const { notifyOrderShipped } = await import('./notification-triggers')
-    void notifyOrderShipped(tenantId, orderId, order.customerId).catch(() => undefined)
-    const { auditLog } = await import('./audit-log')
-    void auditLog(tenantId, { action: 'order.shipped', entityType: 'Order', entityId: orderId }).catch(() => undefined)
-  }
+  if (!order) return
+
+  const billedLines =
+    shipped ?? order.lineItems.map((li) => ({ skuId: li.skuId, quantity: li.quantity }))
+
+  const { invoiceShipmentForOrder } = await import('./invoices')
+  await invoiceShipmentForOrder(tenantId, orderId, billedLines).catch((err) =>
+    console.error(`[orders] invoicing failed for order ${orderId}:`, err),
+  )
+
+  const { computeOrderCogs, postCogsJournal } = await import('./operations-gl')
+  const cogs = await computeOrderCogs(tenantId, billedLines)
+  await postCogsJournal(tenantId, orderId, cogs).catch((err) =>
+    console.error(`[gl] COGS journal failed for order ${orderId}:`, err),
+  )
+  const { notifyOrderShipped } = await import('./notification-triggers')
+  void notifyOrderShipped(tenantId, orderId, order.customerId).catch(() => undefined)
+  const { auditLog } = await import('./audit-log')
+  void auditLog(tenantId, { action: 'order.shipped', entityType: 'Order', entityId: orderId }).catch(() => undefined)
 }
 
 export async function onDeliveryStopDelivered(tenantId: string, orderId: string) {
@@ -276,6 +372,26 @@ export async function cancelOrderWithCompensation(tenantId: string, orderId: str
   const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
   if (!order) throw new ApiError(404, 'Order not found')
   if (order.status === 'CANCELLED' || order.status === 'DELIVERED') return order
+
+  // Compensate payments first: a cancel that can't unwind money must fail loudly.
+  const correlationId = randomUUID()
+  const intents = await paymentDb.paymentIntent.findMany({
+    where: { tenantId, orderId, status: { in: ['AUTHORIZED', 'CAPTURED'] } },
+  })
+  for (const intent of intents) {
+    if (intent.status === 'AUTHORIZED') {
+      await payments.voidIntent(tenantId, intent.id, correlationId)
+    } else {
+      const refundable = Number(intent.amount) - Number(intent.refundedAmount ?? 0)
+      if (refundable > 0.009) {
+        await payments.refund(tenantId, intent.id, refundable, correlationId)
+        await orderDb.order.update({
+          where: { id: orderId },
+          data: { amountPaid: { decrement: new Prisma.Decimal(refundable) } },
+        })
+      }
+    }
+  }
 
   await wmsFulfillment.cancelFulfillmentByOrder(tenantId, orderId, 'cancel').catch(() => undefined)
   await inv.releaseReservationsForOrder(tenantId, orderId).catch(() => undefined)

@@ -51,6 +51,11 @@ export default function LoginPage() {
         <button type="submit" className="btn-primary w-full" disabled={loading}>
           {loading ? 'Signing in…' : 'Continue'}
         </button>
+        <p className="text-center">
+          <a href="/forgot-password" className="text-sm" style={{ color: 'var(--c-accent)' }}>
+            Forgot password?
+          </a>
+        </p>
       </form>
     </div>
   )

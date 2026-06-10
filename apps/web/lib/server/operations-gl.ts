@@ -50,6 +50,39 @@ export async function postArPaymentJournal(tenantId: string, refId: string, amou
   return entry.id
 }
 
+/** Refund to customer: Dr AR (restore) / Cr Cash. Pairs with the credit memo journal. */
+export async function postArRefundJournal(tenantId: string, refId: string, amount: number) {
+  if (amount <= 0) return null
+  const accts = await accountsByCodes(tenantId, [CASH_CODE, AR_CODE])
+  if (!accts) return null
+
+  const entry = await ledgerDb.journalEntry.create({
+    data: {
+      tenantId,
+      description: `Customer refund ${refId.slice(-8)}`,
+      isPosted: true,
+      postedAt: new Date(),
+      lines: {
+        create: [
+          {
+            accountId: accts.get(AR_CODE)!.id,
+            memo: 'Accounts receivable restored',
+            debit: new Prisma.Decimal(amount),
+            credit: new Prisma.Decimal(0),
+          },
+          {
+            accountId: accts.get(CASH_CODE)!.id,
+            memo: 'Cash refunded',
+            debit: new Prisma.Decimal(0),
+            credit: new Prisma.Decimal(amount),
+          },
+        ],
+      },
+    },
+  })
+  return entry.id
+}
+
 export async function postPoReceiptJournal(tenantId: string, refId: string, amount: number) {
   if (amount <= 0) return null
   const accts = await accountsByCodes(tenantId, [INV_CODE, AP_CODE])
@@ -137,6 +170,39 @@ export async function postCogsJournal(tenantId: string, refId: string, cogsAmoun
           {
             accountId: accts.get(INV_CODE)!.id,
             memo: 'Inventory reduction',
+            debit: new Prisma.Decimal(0),
+            credit: new Prisma.Decimal(cogsAmount),
+          },
+        ],
+      },
+    },
+  })
+  return entry.id
+}
+
+/** Restocked return: Dr Inventory / Cr COGS — reverses the ship-time COGS for returned units. */
+export async function postCogsReversalJournal(tenantId: string, refId: string, cogsAmount: number) {
+  if (cogsAmount <= 0) return null
+  const accts = await accountsByCodes(tenantId, [COGS_CODE, INV_CODE])
+  if (!accts) return null
+
+  const entry = await ledgerDb.journalEntry.create({
+    data: {
+      tenantId,
+      description: `COGS reversal on return ${refId.slice(-8)}`,
+      isPosted: true,
+      postedAt: new Date(),
+      lines: {
+        create: [
+          {
+            accountId: accts.get(INV_CODE)!.id,
+            memo: 'Inventory restored',
+            debit: new Prisma.Decimal(cogsAmount),
+            credit: new Prisma.Decimal(0),
+          },
+          {
+            accountId: accts.get(COGS_CODE)!.id,
+            memo: 'Cost of goods sold reversal',
             debit: new Prisma.Decimal(0),
             credit: new Prisma.Decimal(cogsAmount),
           },

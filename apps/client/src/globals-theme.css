@@ -9,6 +9,17 @@
   --border-width: 1px;
 }
 
+/* Enterprise typography: all headings render in uppercase */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 /* Obsidian — matte black enterprise (default) */
 [data-theme='obsidian'] {
   color-scheme: dark;

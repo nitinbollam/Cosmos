@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '@cosmos/ui'
 import { api } from '@/lib/api-admin'
+import { showToast } from '@/lib/toast'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 
 type PoLine = {
@@ -112,7 +113,7 @@ export default function PurchaseOrderDetailPage() {
       })
     },
     onSuccess: () => {
-      alert('Receiving session started — continue in mobile warehouse or WMS API.')
+      showToast('Receiving session started — continue in mobile warehouse or WMS API.', 'success')
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
     },
   })
@@ -355,8 +356,10 @@ function ReceiveDrawer(props: {
       )
 
       if (res.inventoryErrors?.length) {
-        alert(
-          'Purchase order receipt saved. Some inventory postings failed:\n\n' + res.inventoryErrors.join('\n'),
+        showToast(
+          `Receipt saved, but ${res.inventoryErrors.length} inventory posting(s) failed: ${res.inventoryErrors.join('; ')}`,
+          'error',
+          8000,
         )
       }
       props.onDone()

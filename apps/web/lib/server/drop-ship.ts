@@ -48,6 +48,8 @@ export async function createDropShipPurchaseOrders(
       notes: `Drop-ship for order ${orderId}. Ship to customer.`,
       lines: poLines,
     })
+    // Submit immediately — drop-ship POs must be receivable without manual touch.
+    await purchasing.submitPurchaseOrder(tenantId, po.id)
 
     for (const line of lines) {
       await orderDb.orderLineItem.update({
@@ -99,8 +101,13 @@ export async function markDropShipLinesShipped(
 
   await transitionOrderStatus(tenantId, orderId, 'SHIPPED')
 
-  const { issueInvoiceForOrder } = await import('./invoices')
-  await issueInvoiceForOrder(tenantId, orderId).catch(() => undefined)
+  // Bill exactly the drop-shipped lines (stock lines invoice at their own dispatch).
+  const { invoiceShipmentForOrder } = await import('./invoices')
+  await invoiceShipmentForOrder(
+    tenantId,
+    orderId,
+    dropLines.map((l) => ({ skuId: l.skuId, quantity: l.quantity })),
+  ).catch((err) => console.error(`[orders] drop-ship invoicing failed for order ${orderId}:`, err))
 
   return { orderId, shipmentNo }
 }

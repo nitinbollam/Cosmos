@@ -18,7 +18,11 @@ function invoiceDueDate(paymentTermsDays: number | null | undefined, issuedAt: D
   return due
 }
 
-export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
+export async function issueInvoiceForOrder(
+  tenantId: string,
+  orderId: string,
+  amounts?: { subtotal: number; taxAmount: number; totalAmount: number },
+) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
     include: { lineItems: true, invoice: true },
@@ -29,9 +33,9 @@ export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
   }
   if (order.invoice) return order.invoice
 
-  const subtotal = orderSubtotal(order.lineItems)
-  const taxAmount = Number(order.taxAmount ?? 0)
-  const totalAmount = Number(order.totalAmount)
+  const subtotal = amounts?.subtotal ?? orderSubtotal(order.lineItems)
+  const taxAmount = amounts?.taxAmount ?? Number(order.taxAmount ?? 0)
+  const totalAmount = amounts?.totalAmount ?? Number(order.totalAmount)
   const issuedAt = new Date()
 
   let dueAt: Date | undefined
@@ -42,6 +46,7 @@ export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
     dueAt = invoiceDueDate(30, issuedAt)
   }
 
+  const paidApplied = Math.min(Number(order.amountPaid ?? 0), totalAmount)
   const invoice = await orderDb.invoice.create({
     data: {
       tenantId,
@@ -51,13 +56,13 @@ export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
       subtotal: new Prisma.Decimal(subtotal),
       taxAmount: new Prisma.Decimal(taxAmount),
       totalAmount: new Prisma.Decimal(totalAmount),
-      amountPaid: new Prisma.Decimal(order.amountPaid ?? 0),
+      amountPaid: new Prisma.Decimal(paidApplied),
       issuedAt,
       dueAt,
       status: toStoredInvoiceStatus(
         deriveInvoiceStatus({
           totalAmount,
-          amountPaid: Number(order.amountPaid ?? 0),
+          amountPaid: paidApplied,
           amountCredited: 0,
           paymentMethod: order.paymentMethod,
           issuedAt,
@@ -66,7 +71,10 @@ export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
     },
   })
 
-  const journalEntryId = await postInvoiceJournal(tenantId, invoice.id, totalAmount).catch(() => null)
+  const journalEntryId = await postInvoiceJournal(tenantId, invoice.id, totalAmount).catch((err) => {
+    console.error(`[gl] invoice journal failed for invoice ${invoice.id}:`, err)
+    return null
+  })
   const finalInvoice = journalEntryId
     ? await orderDb.invoice.update({
         where: { id: invoice.id },
@@ -93,6 +101,75 @@ export async function issueInvoiceForOrder(tenantId: string, orderId: string) {
   }
 
   return finalInvoice
+}
+
+/**
+ * Bill exactly what shipped. First shipment creates the invoice from shipped
+ * quantities (not ordered quantities — SHORT picks and backorders bill later);
+ * follow-up shipments augment the same invoice and post a delta AR journal.
+ */
+export async function invoiceShipmentForOrder(
+  tenantId: string,
+  orderId: string,
+  shippedLines: Array<{ skuId: string; quantity: number }>,
+) {
+  const order = await orderDb.order.findFirst({
+    where: { id: orderId, tenantId },
+    include: { lineItems: true, invoice: true },
+  })
+  if (!order) throw new ApiError(404, 'Order not found')
+
+  const priceBySku = new Map<string, number>()
+  for (const li of order.lineItems) {
+    if (!priceBySku.has(li.skuId)) priceBySku.set(li.skuId, Number(li.unitPrice))
+  }
+
+  const subtotal = +shippedLines
+    .reduce((s, l) => s + l.quantity * (priceBySku.get(l.skuId) ?? 0), 0)
+    .toFixed(2)
+  if (subtotal <= 0) return order.invoice ?? null
+
+  const orderSub = orderSubtotal(order.lineItems)
+  const taxRate = orderSub > 0 ? Number(order.taxAmount ?? 0) / orderSub : 0
+  const taxAmount = +(subtotal * taxRate).toFixed(2)
+  const totalAmount = +(subtotal + taxAmount).toFixed(2)
+
+  if (!order.invoice) {
+    return issueInvoiceForOrder(tenantId, orderId, { subtotal, taxAmount, totalAmount })
+  }
+
+  // Follow-up shipment: extend the existing invoice and post the delta to AR.
+  const newSubtotal = +(Number(order.invoice.subtotal) + subtotal).toFixed(2)
+  const newTax = +(Number(order.invoice.taxAmount) + taxAmount).toFixed(2)
+  const newTotal = +(Number(order.invoice.totalAmount) + totalAmount).toFixed(2)
+  const paidApplied = Math.min(Number(order.amountPaid ?? 0), newTotal)
+
+  const updated = await orderDb.invoice.update({
+    where: { id: order.invoice.id },
+    data: {
+      subtotal: new Prisma.Decimal(newSubtotal),
+      taxAmount: new Prisma.Decimal(newTax),
+      totalAmount: new Prisma.Decimal(newTotal),
+      amountPaid: new Prisma.Decimal(paidApplied),
+      status: toStoredInvoiceStatus(
+        deriveInvoiceStatus({
+          orderStatus: order.status,
+          totalAmount: newTotal,
+          amountPaid: paidApplied,
+          amountCredited: Number(order.invoice.amountCredited),
+          paymentMethod: order.paymentMethod,
+          issuedAt: order.invoice.issuedAt,
+        }),
+      ) as never,
+    },
+  })
+
+  await postInvoiceJournal(tenantId, updated.id, totalAmount).catch((err) => {
+    console.error(`[gl] shipment invoice journal failed for invoice ${updated.id}:`, err)
+    return null
+  })
+
+  return updated
 }
 
 export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
@@ -448,9 +525,50 @@ export async function applyCreditMemo(
     await releaseCreditUsed(tenantId, order.customerId, creditTotal).catch(() => undefined)
   }
 
-  const journalEntryId = await postCreditMemoJournal(tenantId, creditMemo.id, creditTotal).catch(() => null)
+  const journalEntryId = await postCreditMemoJournal(tenantId, creditMemo.id, creditTotal).catch((err) => {
+    console.error(`[gl] credit memo journal failed for ${creditMemo.id}:`, err)
+    return null
+  })
   if (journalEntryId) {
     await orderDb.creditMemo.update({ where: { id: creditMemo.id }, data: { journalEntryId } })
+  }
+
+  // Restocked goods reverse their ship-time COGS.
+  if (input.restock !== false) {
+    const { computeOrderCogs, postCogsReversalJournal } = await import('./operations-gl')
+    const returnedCogs = await computeOrderCogs(
+      tenantId,
+      memoLines.map((ml) => ({ skuId: ml.skuId, quantity: ml.quantity })),
+    )
+    await postCogsReversalJournal(tenantId, creditMemo.id, returnedCogs).catch((err) =>
+      console.error(`[gl] COGS reversal failed for credit memo ${creditMemo.id}:`, err),
+    )
+  }
+
+  // Money back: refund captured card/ACH payments up to the credited amount.
+  const paidSoFar = Number(order.amountPaid ?? 0)
+  const refundDue = Math.min(creditTotal, paidSoFar)
+  if (refundDue > 0.009) {
+    const { paymentDb } = await import('./db')
+    const intent = await paymentDb.paymentIntent.findFirst({
+      where: { tenantId, orderId: order.id, status: { in: ['CAPTURED', 'REFUNDED'] } },
+      orderBy: { createdAt: 'desc' },
+    })
+    const refundable = intent ? Number(intent.amount) - Number(intent.refundedAmount ?? 0) : 0
+    if (intent && intent.status === 'CAPTURED' && refundable > 0.009) {
+      const payments = await import('./payments')
+      const refundAmount = Math.min(refundDue, refundable)
+      try {
+        await payments.refund(tenantId, intent.id, refundAmount, randomUUID())
+        await orderDb.order.update({
+          where: { id: order.id },
+          data: { amountPaid: new Prisma.Decimal(Math.max(0, paidSoFar - refundAmount)) },
+        })
+        await syncInvoiceFromOrder(tenantId, order.id).catch(() => undefined)
+      } catch (err) {
+        console.error(`[payments] refund failed for credit memo ${creditMemo.id}:`, err)
+      }
+    }
   }
 
   return {

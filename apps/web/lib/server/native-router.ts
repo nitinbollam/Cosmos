@@ -47,7 +47,15 @@ import * as demandPlanning from './demand-planning'
 import { checkDatabaseConnections } from './db-health'
 import { getAuthProfile, isPortalBuyer, isAdminStaff, requirePortalCustomerId } from './buyer-context'
 import { getTenantTaxSettings } from './tenant-tax'
-import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError } from './session'
+import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError, type SessionUser } from './session'
+
+/** CRM access: admins plus sales reps. */
+const CRM_ROLES = [...ADMIN_ROLES, 'SALES_REP'] as const
+
+/** Routes that are internal back-office surface — portal buyers are never allowed. */
+function assertNotBuyer(session: SessionUser) {
+  if (isPortalBuyer(session.role)) throw new ApiError(403, 'Forbidden')
+}
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -73,6 +81,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'purchase-orders') return await routePurchaseOrders(m, seg, req)
     if (seg[0] === 'edi') return await routeEdi(m, seg, req)
     if (seg[0] === 'health' && seg[1] === 'db' && m === 'GET') {
+      await requireRole(req, ADMIN_ROLES)
       return Response.json(await checkDatabaseConnections())
     }
     if (seg[0] === 'bills') return await routeBills(m, seg, req)
@@ -108,6 +117,9 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
 async function routeTenants(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   const tenantId = session.tenantId
+  assertNotBuyer(session)
+  // Tenant settings, invites, plan, and onboarding are admin-only beyond reads.
+  if (method !== 'GET' || seg[2] === 'invites') assertRole(session, ADMIN_ROLES)
 
   if (seg[1] === 'me' && seg.length === 2 && method === 'GET') {
     return Response.json(await tenant.findTenantById(tenantId))
@@ -138,6 +150,26 @@ async function routeTenants(method: string, seg: string[], req: Request): Promis
     if (!body.plan) throw new ApiError(400, 'plan required')
     return Response.json(await tenant.updateTenantPlan(tenantId, body.plan))
   }
+  if (seg[1] === 'me' && seg[2] === 'billing' && seg.length === 3 && method === 'GET') {
+    const billing = await import('./billing')
+    return Response.json(await billing.getBillingStatus(tenantId))
+  }
+  if (seg[1] === 'me' && seg[2] === 'billing' && seg[3] === 'checkout' && method === 'POST') {
+    const billing = await import('./billing')
+    const body = (await req.json()) as { plan?: 'GROWTH' | 'ENTERPRISE' }
+    if (!body.plan) throw new ApiError(400, 'plan must be GROWTH or ENTERPRISE')
+    const org = await tenant.findTenantById(tenantId)
+    const email = org.billingEmail ?? session.email
+    if (!email) throw new ApiError(400, 'Set a billing email on your company profile first')
+    return Response.json(await billing.createCheckoutSession(tenantId, body.plan, email))
+  }
+  if (seg[1] === 'me' && seg[2] === 'billing' && seg[3] === 'portal' && method === 'POST') {
+    const billing = await import('./billing')
+    const org = await tenant.findTenantById(tenantId)
+    const email = org.billingEmail ?? session.email
+    if (!email) throw new ApiError(400, 'Set a billing email on your company profile first')
+    return Response.json(await billing.createPortalSession(tenantId, email))
+  }
   if (seg[1] === 'me' && seg[2] === 'onboarding-steps' && seg.length === 4 && method === 'PATCH') {
     const body = (await req.json()) as { completed?: boolean; payload?: Record<string, unknown> }
     return Response.json(await tenant.patchOnboardingStep(tenantId, seg[3], body))
@@ -146,7 +178,7 @@ async function routeTenants(method: string, seg: string[], req: Request): Promis
 }
 
 async function routeUsers(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, ADMIN_ROLES)
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -154,7 +186,12 @@ async function routeUsers(method: string, seg: string[], req: Request): Promise<
     const pageSize = +(url.searchParams.get('pageSize') ?? 20)
     return Response.json(await users.listUsers(session.tenantId, page, pageSize))
   }
+  if (seg.length === 2 && method === 'PATCH') {
+    const body = (await req.json()) as { role?: string; isActive?: boolean }
+    return Response.json(await users.updateUser(session.tenantId, seg[1], body, session.userId))
+  }
   if (seg.length === 2 && method === 'DELETE') {
+    if (seg[1] === session.userId) throw new ApiError(400, 'You cannot deactivate your own account')
     return Response.json(await users.deactivateUser(session.tenantId, seg[1]))
   }
   throw new ApiError(404, 'User route not found')
@@ -163,6 +200,14 @@ async function routeUsers(method: string, seg: string[], req: Request): Promise<
 async function routeSkus(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   const url = new URL(req.url)
+
+  if (method !== 'GET') {
+    assertRole(session, OPS_ROLES)
+  } else if (isPortalBuyer(session.role) && seg[1] !== 'categories' && seg.length > 2) {
+    // Buyers may browse the catalog (list, categories, detail) but not internal
+    // inventory views (lots, serials, demand plans, labels, lookups).
+    throw new ApiError(403, 'Forbidden')
+  }
 
   if (seg[1] === 'categories' && method === 'GET') {
     return Response.json(await inv.distinctCategories(session.tenantId))
@@ -257,6 +302,7 @@ async function routeSkus(method: string, seg: string[], req: Request): Promise<R
 
 async function routeWarehouses(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  if (method !== 'GET') assertRole(session, ADMIN_ROLES)
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await inv.listWarehouses(session.tenantId))
@@ -277,7 +323,7 @@ async function routeWarehouses(method: string, seg: string[], req: Request): Pro
 }
 
 async function routeInventory(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, OPS_ROLES)
   const url = new URL(req.url)
 
   if (seg[1] === 'ledger' && method === 'GET') {
@@ -415,6 +461,8 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
     return Response.json(await orderShipments.getOrderTracking(session.tenantId, seg[1], buyerOpts))
   }
   if (seg.length === 3 && seg[2] === 'shipments' && method === 'GET') {
+    // Ownership check: buyers may only see shipments for their own orders.
+    if (buyerOpts) await orders.findOrderById(session.tenantId, seg[1], buyerOpts)
     return Response.json(await orderShipments.listOrderShipments(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'shipments' && method === 'POST') {
@@ -503,6 +551,17 @@ async function routeCustomers(method: string, seg: string[], req: Request): Prom
     return Response.json(await crm.importCustomers(session.tenantId, body.rows ?? []))
   }
   if (seg.length === 1 && method === 'GET') {
+    const url = new URL(req.url)
+    const pageParam = url.searchParams.get('page')
+    if (pageParam) {
+      return Response.json(
+        await crm.listCustomersPaged(session.tenantId, {
+          page: +pageParam || 1,
+          pageSize: +(url.searchParams.get('pageSize') ?? 25) || 25,
+          search: url.searchParams.get('search') ?? undefined,
+        }),
+      )
+    }
     return Response.json(await crm.listCustomers(session.tenantId))
   }
   if (seg.length === 1 && method === 'POST') {
@@ -532,7 +591,7 @@ async function routeCustomers(method: string, seg: string[], req: Request): Prom
 }
 
 async function routeLeads(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, CRM_ROLES)
 
   if (seg[1] === 'import' && method === 'POST') {
     const body = (await req.json()) as { rows?: Record<string, unknown>[] }
@@ -561,7 +620,7 @@ async function routeLeads(method: string, seg: string[], req: Request): Promise<
 }
 
 async function routeActivities(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, CRM_ROLES)
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -677,6 +736,8 @@ async function routeQuotes(method: string, seg: string[], req: Request): Promise
     return Response.json(await quotes.rejectQuote(session.tenantId, seg[1], body.reason))
   }
   if (seg.length === 3 && seg[2] === 'counter-offers' && method === 'GET') {
+    // Ownership check: buyers may only see counter-offers on their own quotes.
+    if (buyerOpts) await quotes.getQuote(session.tenantId, seg[1], buyerOpts)
     return Response.json(await quotes.listQuoteCounterOffers(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'counter-offers' && method === 'POST') {
@@ -687,6 +748,7 @@ async function routeQuotes(method: string, seg: string[], req: Request): Promise
     )
   }
   if (seg.length === 4 && seg[2] === 'counter-offers' && seg[3] === 'accept' && method === 'POST') {
+    if (buyerOpts) await quotes.getQuote(session.tenantId, seg[1], buyerOpts)
     const body = (await req.json()) as { counterOfferId?: string }
     if (!body.counterOfferId) throw new ApiError(400, 'counterOfferId required')
     return Response.json(await quotes.acceptQuoteCounterOffer(session.tenantId, seg[1], body.counterOfferId))
@@ -696,7 +758,7 @@ async function routeQuotes(method: string, seg: string[], req: Request): Promise
 
 async function routePurchaseOrders(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
-  const session = isRead ? await requireSession(req) : await requireRole(req, ADMIN_ROLES)
+  const session = isRead ? await requireRole(req, OPS_ROLES) : await requireRole(req, ADMIN_ROLES)
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -827,7 +889,8 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
   if (seg[1] === 'webhook' && seg[2] === 'stripe' && method === 'POST') {
     const sig = req.headers.get('stripe-signature') ?? ''
     const raw = Buffer.from(await req.arrayBuffer())
-    const result = payments.handleStripeWebhook(raw, sig)
+    const result = await payments.handleStripeWebhook(raw, sig)
+    if (!result.received) return Response.json(result, { status: 400 })
     return Response.json(result)
   }
 
@@ -835,29 +898,49 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
 
   if (seg.length === 2 && seg[1] === 'authorize' && method === 'POST') {
     const key = requireIdempotencyKey(req)
-    const cached = await paymentIdempotency.getIdempotentResponse(key)
+    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
     if (cached) return Response.json(cached.body, { status: cached.status })
     const body = (await req.json()) as payments.AuthorizeInput
+    // Buyers can authorize payment only against their own orders.
+    if (isPortalBuyer(session.role)) {
+      const buyerCustomerId = await requirePortalCustomerId(session)
+      const order = await orders.findOrderById(session.tenantId, body.orderId, { buyerCustomerId })
+      if (order.customerId !== buyerCustomerId) throw new ApiError(403, 'Forbidden')
+    }
     const result = await payments.authorize(session.tenantId, body)
     await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
     return Response.json(result)
   }
+
+  // Capture, void, and refund are back-office operations.
+  assertRole(session, ADMIN_ROLES)
+
   if (seg.length === 2 && seg[1] === 'capture' && method === 'POST') {
-    requireIdempotencyKey(req)
+    const key = requireIdempotencyKey(req)
+    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
+    if (cached) return Response.json(cached.body, { status: cached.status })
     const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
-    return Response.json(await payments.capture(session.tenantId, body.paymentIntentId, body.correlationId))
+    const result = await payments.capture(session.tenantId, body.paymentIntentId, body.correlationId)
+    await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
+    return Response.json(result)
   }
   if (seg.length === 2 && seg[1] === 'void' && method === 'POST') {
-    requireIdempotencyKey(req)
+    const key = requireIdempotencyKey(req)
+    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
+    if (cached) return Response.json(cached.body, { status: cached.status })
     const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
-    return Response.json(await payments.voidIntent(session.tenantId, body.paymentIntentId, body.correlationId))
+    const result = await payments.voidIntent(session.tenantId, body.paymentIntentId, body.correlationId)
+    await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
+    return Response.json(result)
   }
   if (seg.length === 2 && seg[1] === 'refund' && method === 'POST') {
-    requireIdempotencyKey(req)
+    const key = requireIdempotencyKey(req)
+    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
+    if (cached) return Response.json(cached.body, { status: cached.status })
     const body = (await req.json()) as { paymentIntentId: string; correlationId: string; amount?: number }
-    return Response.json(
-      await payments.refund(session.tenantId, body.paymentIntentId, body.amount, body.correlationId),
-    )
+    const result = await payments.refund(session.tenantId, body.paymentIntentId, body.amount, body.correlationId)
+    await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
+    return Response.json(result)
   }
 
   throw new ApiError(404, 'Payment route not found')
@@ -865,6 +948,8 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
 
 async function routeSuppliers(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
+  if (method !== 'GET') assertRole(session, ADMIN_ROLES)
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await purchasing.listSuppliers(session.tenantId))
@@ -903,20 +988,21 @@ async function routeFulfillment(method: string, seg: string[], req: Request): Pr
   }
   if (seg[1] === 'tasks' && seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
     const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
-    await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch(() => undefined)
+    await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch((err) =>
+      console.error(`[orders] pack side-effects failed for order ${result.orderId}:`, err),
+    )
     return Response.json(result)
   }
   if (seg[1] === 'tasks' && seg.length === 4 && seg[3] === 'dispatch' && method === 'POST') {
-    const result = await wmsFulfillment.markFulfillmentDispatched(session.tenantId, seg[2])
-    await orderOrchestration.onFulfillmentDispatched(session.tenantId, result.orderId).catch(() => undefined)
-    return Response.json(result)
+    // Single orchestrated dispatch: serials → inventory commit → backorder shorts →
+    // WMS status → order/invoice/COGS. Fails atomically enough to retry (task stays PACKED).
+    return Response.json(await orderOrchestration.dispatchFulfillmentTask(session.tenantId, seg[2]))
   }
   throw new ApiError(404, 'Fulfillment route not found')
 }
 
 async function routeWms(method: string, seg: string[], req: Request): Promise<Response> {
-  const isRead = method === 'GET'
-  const session = isRead ? await requireSession(req) : await requireRole(req, OPS_ROLES)
+  const session = await requireRole(req, OPS_ROLES)
   const url = new URL(req.url)
 
   if (seg[1] === 'tasks') {
@@ -1097,7 +1183,7 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
 
 async function routeRoutes(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
-  const session = isRead ? await requireSession(req) : await requireRole(req, ADMIN_ROLES)
+  const session = isRead ? await requireRole(req, DRIVER_ROLES) : await requireRole(req, ADMIN_ROLES)
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'shipped-orders' && method === 'GET') {
@@ -1165,6 +1251,7 @@ async function routeDispatchMobile(method: string, seg: string[], req: Request):
 
 async function routeMsa(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'reports' && method === 'GET') {
@@ -1217,14 +1304,25 @@ async function routeMsa(method: string, seg: string[], req: Request): Promise<Re
 
 async function routeTax(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
 
   if (seg.length === 2 && seg[1] === 'settings' && method === 'GET') {
     return Response.json(await getTenantTaxSettings(session.tenantId))
+  }
+  if (seg.length === 2 && seg[1] === 'settings' && method === 'PATCH') {
+    assertRole(session, ADMIN_ROLES)
+    const body = (await req.json()) as { salesTaxRate?: number }
+    if (typeof body.salesTaxRate !== 'number' || body.salesTaxRate < 0 || body.salesTaxRate > 0.5) {
+      throw new ApiError(400, 'salesTaxRate must be a number between 0 and 0.5')
+    }
+    const { updateTenantSalesTaxRate } = await import('./tenant-tax')
+    return Response.json(await updateTenantSalesTaxRate(session.tenantId, body.salesTaxRate))
   }
   if (seg.length === 2 && seg[1] === 'summary' && method === 'GET') {
     return Response.json(await complianceTax.taxSummary(session.tenantId))
   }
   if (seg.length === 2 && seg[1] === 'record' && method === 'POST') {
+    assertRole(session, ADMIN_ROLES)
     const body = (await req.json()) as complianceTax.RecordTaxInput
     return Response.json(await complianceTax.recordTax(session.tenantId, body))
   }
@@ -1233,6 +1331,7 @@ async function routeTax(method: string, seg: string[], req: Request): Promise<Re
 
 async function routeNotifications(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -1268,7 +1367,7 @@ async function routeNotifications(method: string, seg: string[], req: Request): 
 }
 
 async function routeJournalEntries(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, ADMIN_ROLES)
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await ledger.listJournalEntries(session.tenantId))
@@ -1287,7 +1386,7 @@ async function routeJournalEntries(method: string, seg: string[], req: Request):
 }
 
 async function routeChartAccounts(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, ADMIN_ROLES)
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await ledger.listChartAccounts(session.tenantId))
@@ -1307,7 +1406,7 @@ async function routeChartAccounts(method: string, seg: string[], req: Request): 
 }
 
 async function routeReports(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, ADMIN_ROLES)
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'trial-balance' && method === 'GET') {
@@ -1322,6 +1421,7 @@ async function routeReports(method: string, seg: string[], req: Request): Promis
 
 async function routeKpi(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
 
   if (seg.length === 2 && seg[1] === 'snapshots' && method === 'GET') {
     return Response.json(await analytics.listSnapshots(session.tenantId))
@@ -1331,6 +1431,7 @@ async function routeKpi(method: string, seg: string[], req: Request): Promise<Re
 
 async function routeAnalytics(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
 
   if (seg.length === 2 && seg[1] === 'kpis' && method === 'GET') {
     return Response.json(await analytics.dashboardKpis(session.tenantId))
@@ -1339,7 +1440,7 @@ async function routeAnalytics(method: string, seg: string[], req: Request): Prom
 }
 
 async function routeInternal(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requireRole(req, ADMIN_ROLES)
 
   if (seg.length === 2 && seg[1] === 'refresh' && method === 'POST') {
     const body = (await req.json()) as analytics.RefreshKpiInput
@@ -1349,7 +1450,8 @@ async function routeInternal(method: string, seg: string[], req: Request): Promi
 }
 
 async function routeWebhooks(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  // Outbound webhooks can exfiltrate data — admin only.
+  const session = await requireRole(req, ADMIN_ROLES)
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await webhooks.listWebhooks(session.tenantId))
@@ -1416,6 +1518,7 @@ async function routeAudit(method: string, seg: string[], req: Request): Promise<
 
 async function routeSearch(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
   const q = new URL(req.url).searchParams.get('q') ?? ''
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await search.globalSearch(session.tenantId, q))
@@ -1562,6 +1665,7 @@ async function routeVolumePrices(method: string, seg: string[], req: Request): P
 
 async function routeCelestial(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertNotBuyer(session)
 
   if (seg.length === 2 && seg[1] === 'status' && method === 'GET') {
     const features = await featureFlags.getTenantFeatures(session.tenantId)

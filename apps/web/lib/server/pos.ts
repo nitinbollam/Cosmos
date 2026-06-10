@@ -33,25 +33,63 @@ export async function createPosOrder(
   const register = await tenantDb.posRegister.findFirst({ where: { id: dto.registerId, tenantId, isActive: true } })
   if (!register) throw new ApiError(404, 'POS register not found')
 
-  const subtotal = dto.lineItems.reduce((s, l) => s + l.quantity * l.unitPrice, 0)
-  const { computeSalesTax } = await import('./compliance-tax')
-  const taxAmount = computeSalesTax(subtotal)
-  const totalAmount = +(subtotal + taxAmount).toFixed(2)
+  // Counter sale: reserve synchronously so we can fail fast on missing stock.
+  const order = await orders.createOrder(
+    tenantId,
+    {
+      customerId: dto.customerId,
+      channel: 'POS',
+      paymentMethod: dto.paymentMethod,
+      lineItems: dto.lineItems,
+      notes: `POS register ${register.name}`,
+    },
+    { awaitPipeline: true },
+  )
 
-  const order = await orders.createOrder(tenantId, {
-    customerId: dto.customerId,
-    channel: 'POS',
-    paymentMethod: dto.paymentMethod,
-    lineItems: dto.lineItems,
-    notes: `POS register ${register.name}`,
+  const created = await orderDb.order.findFirst({
+    where: { id: order.id, tenantId },
+    include: { lineItems: true },
   })
+  if (!created) throw new ApiError(500, 'Order not found after creation')
+
+  // Tax comes from the tenant rate applied inside createOrder — no hardcoded default.
+  const totalAmount = Number(created.totalAmount)
+  const taxAmount = Number(created.taxAmount ?? 0)
+
+  if (created.lineItems.some((li) => li.quantityBackordered > 0)) {
+    const { cancelOrderWithCompensation } = await import('./order-orchestration')
+    await cancelOrderWithCompensation(tenantId, order.id, 'POS sale cancelled: insufficient stock')
+    throw new ApiError(400, 'Insufficient stock for POS sale')
+  }
 
   if (dto.paymentMethod === 'CASH' || dto.paymentMethod === 'CHECK') {
     await orderDb.order.update({
       where: { id: order.id },
-      data: { amountPaid: new Prisma.Decimal(totalAmount), status: 'CONFIRMED', confirmedAt: new Date() },
+      data: { amountPaid: new Prisma.Decimal(totalAmount), confirmedAt: new Date() },
     })
   }
+
+  // Goods leave with the customer now: cancel the pick task, commit inventory,
+  // walk the order to DELIVERED, and invoice the shipped quantities.
+  const wms = await import('./wms-fulfillment')
+  await wms.cancelFulfillmentByOrder(tenantId, order.id, 'pos-immediate')
+
+  const inv = await import('./inventory')
+  const serials = await import('./inventory-serials')
+  const shipLines = created.lineItems.map((li) => ({
+    skuId: li.skuId,
+    warehouseId: li.warehouseId,
+    quantity: li.quantity,
+  }))
+  await serials.enforceAndShipSerialsForOrder(tenantId, order.id, shipLines)
+  const { shipped } = await inv.commitShipmentForOrder(tenantId, order.id, userId)
+
+  const { transitionOrderStatus, onFulfillmentDispatched, onDeliveryStopDelivered } = await import(
+    './order-orchestration'
+  )
+  await transitionOrderStatus(tenantId, order.id, 'PACKED')
+  await onFulfillmentDispatched(tenantId, order.id, shipped)
+  await onDeliveryStopDelivered(tenantId, order.id)
 
   void auditLog(tenantId, {
     action: 'pos.order_created',
@@ -61,5 +99,5 @@ export async function createPosOrder(
     metadata: { registerId: dto.registerId, totalAmount },
   }).catch(() => undefined)
 
-  return { ...order, totalAmount, taxAmount }
+  return { ...order, status: 'DELIVERED', totalAmount, taxAmount }
 }

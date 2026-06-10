@@ -15,7 +15,10 @@ model TenantOrganization {
   plan             TenantPlan           @default(STARTER)
   onboardingPhase  OnboardingPhase      @default(PROFILE)
   settings         Json                 
-  billingEmail     String?
+  billingEmail           String?
+  stripeCustomerId       String?              @unique
+  stripeSubscriptionId   String?
+  billingStatus          String?
   timeZone         String               @default("Etc/UTC")
   industry         IndustryVertical     @default(GENERAL_WHOLESALE)
   suspended        Boolean              @default(false)
@@ -29,14 +32,16 @@ model TenantOrganization {
 }
 
 model TenantInvite {
-  id        String   @id @default(cuid())
-  tenantId  String
-  email     String
-  role      String   @default("STAFF")
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
-  tenant    TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  tenantId   String
+  email      String
+  role       String   @default("STAFF")
+  token      String?  @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+  tenant     TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, email])

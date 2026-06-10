@@ -32,7 +32,7 @@ export type CreateOrderInput = {
 export async function createOrder(
   tenantId: string,
   dto: CreateOrderInput,
-  opts?: { buyerCustomerId?: string },
+  opts?: { buyerCustomerId?: string; awaitPipeline?: boolean },
 ) {
   const subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
   const taxRate = await getTenantSalesTaxRate(tenantId)
@@ -76,7 +76,13 @@ export async function createOrder(
     include: { lineItems: true },
   })
 
-  void runOrderFulfillmentPipeline(order.id, tenantId, correlationId).catch(() => undefined)
+  if (opts?.awaitPipeline) {
+    await runOrderFulfillmentPipeline(order.id, tenantId, correlationId)
+  } else {
+    void runOrderFulfillmentPipeline(order.id, tenantId, correlationId).catch((err) =>
+      console.error(`[orders] fulfillment pipeline failed for order ${order.id}:`, err),
+    )
+  }
   void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
   return order
 }

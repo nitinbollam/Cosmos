@@ -54,9 +54,22 @@ async function main() {
   loadEnv()
   await import('../../web/server/register-paths.mjs')
   const { handleApiRequest } = await import('../../web/server/api-router.ts')
+  const { startBackgroundJobs } = await import('../../web/lib/server/background-jobs.ts')
+  startBackgroundJobs()
 
   const app = express()
   app.disable('x-powered-by')
+
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self)')
+    if (isProd) {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    }
+    next()
+  })
 
   app.use(async (req, res, next) => {
     if (!req.path.startsWith('/api')) return next()

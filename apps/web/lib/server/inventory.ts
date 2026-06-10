@@ -668,30 +668,41 @@ export async function findStockLevel(
   })
 }
 
+/** Order reservations are long-lived; the safety expiry exists to reap abandoned holds. */
+const RESERVATION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
 export async function reserveStock(
   tenantId: string,
   dto: { skuId: string; warehouseId: string; quantity: number; orderId: string; correlationId: string; batchId?: string },
 ): Promise<string> {
-  const batchKey = dto.batchId ?? ''
-  const level = await inventoryDb.stockLevel.findFirst({
-    where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
-  })
-  if (!level || level.quantityAvailable < dto.quantity) {
-    throw new ApiError(
-      400,
-      `Insufficient stock: available ${level?.quantityAvailable ?? 0}, requested ${dto.quantity}`,
-    )
+  if (!Number.isInteger(dto.quantity) || dto.quantity <= 0) {
+    throw new ApiError(400, 'quantity must be a positive integer')
   }
+  const batchKey = dto.batchId ?? ''
   const reservationId = randomUUID()
-  await inventoryDb.$transaction([
-    inventoryDb.stockLevel.update({
-      where: { id: level.id },
+
+  await inventoryDb.$transaction(async (tx) => {
+    const level = await tx.stockLevel.findFirst({
+      where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
+    })
+    if (!level || level.quantityAvailable < dto.quantity) {
+      throw new ApiError(
+        400,
+        `Insufficient stock: available ${level?.quantityAvailable ?? 0}, requested ${dto.quantity}`,
+      )
+    }
+    // Conditional update guards against concurrent reservations racing past the check above.
+    const updated = await tx.stockLevel.updateMany({
+      where: { id: level.id, quantityAvailable: { gte: dto.quantity } },
       data: {
         quantityReserved: { increment: dto.quantity },
         quantityAvailable: { decrement: dto.quantity },
       },
-    }),
-    inventoryDb.stockReservation.create({
+    })
+    if (updated.count === 0) {
+      throw new ApiError(400, `Insufficient stock: requested ${dto.quantity} no longer available`)
+    }
+    await tx.stockReservation.create({
       data: {
         id: reservationId,
         tenantId,
@@ -700,12 +711,131 @@ export async function reserveStock(
         batchId: batchKey,
         orderId: dto.orderId,
         quantity: dto.quantity,
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        expiresAt: new Date(Date.now() + RESERVATION_TTL_MS),
         status: 'ACTIVE',
       },
-    }),
-  ])
+    })
+  })
   return reservationId
+}
+
+/** Reap reservations past their safety expiry, returning stock to availability. */
+export async function releaseExpiredReservations(limit = 200): Promise<{ released: number }> {
+  const rows = await inventoryDb.stockReservation.findMany({
+    where: { status: 'ACTIVE', expiresAt: { lt: new Date() } },
+    take: limit,
+  })
+  for (const row of rows) {
+    await inventoryDb.$transaction([
+      inventoryDb.stockReservation.update({
+        where: { id: row.id },
+        data: { status: 'EXPIRED' },
+      }),
+      inventoryDb.stockLevel.updateMany({
+        where: {
+          tenantId: row.tenantId,
+          skuId: row.skuId,
+          warehouseId: row.warehouseId,
+          batchId: row.batchId ?? '',
+        },
+        data: {
+          quantityReserved: { decrement: row.quantity },
+          quantityAvailable: { increment: row.quantity },
+        },
+      }),
+    ])
+  }
+  return { released: rows.length }
+}
+
+/**
+ * Commit a shipment: decrement on-hand, release the reservation hold, mark reservations
+ * FULFILLED, and write STOCK_SHIPPED ledger entries. This is the inventory side of dispatch.
+ *
+ * `shippedByLine` (optional) caps how much of each reservation actually ships — used for SHORT
+ * picks where pickedQty < reserved. The unshipped remainder of a reservation is returned to
+ * available stock. When omitted, the full reserved quantity ships.
+ */
+export async function commitShipmentForOrder(
+  tenantId: string,
+  orderId: string,
+  performedBy: string,
+  shippedByLine?: Array<{ skuId: string; warehouseId: string; batchId?: string; quantity: number }>,
+): Promise<{ shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> }> {
+  const correlationId = randomUUID()
+  const shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> = []
+
+  // Remaining shippable quantity per sku|warehouse|batch from the pick result.
+  const cap = new Map<string, number>()
+  if (shippedByLine) {
+    for (const l of shippedByLine) {
+      const key = `${l.skuId}|${l.warehouseId}|${l.batchId ?? ''}`
+      cap.set(key, (cap.get(key) ?? 0) + l.quantity)
+    }
+  }
+
+  await inventoryDb.$transaction(async (tx) => {
+    const reservations = await tx.stockReservation.findMany({
+      where: { tenantId, orderId, status: 'ACTIVE' },
+    })
+
+    for (const res of reservations) {
+      const batchKey = res.batchId ?? ''
+      const key = `${res.skuId}|${res.warehouseId}|${batchKey}`
+      const shipQty = shippedByLine ? Math.min(res.quantity, Math.max(0, cap.get(key) ?? 0)) : res.quantity
+      if (shippedByLine) cap.set(key, Math.max(0, (cap.get(key) ?? 0) - shipQty))
+
+      const level = await tx.stockLevel.findFirst({
+        where: { tenantId, skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey },
+      })
+
+      if (level) {
+        const newOnHand = Math.max(0, level.quantityOnHand - shipQty)
+        // Release the full reservation hold; only `shipQty` actually leaves stock, so the
+        // unshipped remainder (res.quantity - shipQty) flows back into availability.
+        const availableDelta = res.quantity - shipQty
+        await tx.stockLevel.update({
+          where: { id: level.id },
+          data: {
+            quantityOnHand: newOnHand,
+            quantityReserved: { decrement: res.quantity },
+            quantityAvailable: { increment: availableDelta },
+          },
+        })
+
+        if (shipQty > 0) {
+          await tx.stockLedgerEntry.create({
+            data: {
+              id: randomUUID(),
+              tenantId,
+              skuId: res.skuId,
+              warehouseId: res.warehouseId,
+              batchId: batchKey,
+              eventType: 'STOCK_SHIPPED',
+              quantityDelta: -shipQty,
+              quantityAfter: newOnHand,
+              unitCost: new Prisma.Decimal(0),
+              referenceId: orderId,
+              referenceType: 'ORDER',
+              performedBy,
+              correlationId,
+            },
+          })
+        }
+      }
+
+      await tx.stockReservation.update({
+        where: { id: res.id },
+        data: { status: 'FULFILLED' },
+      })
+
+      if (shipQty > 0) {
+        shipped.push({ skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey, quantity: shipQty })
+      }
+    }
+  })
+
+  return { shipped }
 }
 
 export async function releaseReservation(tenantId: string, reservationId: string): Promise<void> {

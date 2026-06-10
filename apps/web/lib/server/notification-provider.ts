@@ -35,6 +35,18 @@ const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subj
     subject: 'Payment received',
     body: `We received your payment of $${String(p.amount ?? '')}${p.invoiceNumber ? ` for invoice ${String(p.invoiceNumber)}` : ''}. Thank you.`,
   }),
+  'auth.email_verify': (p) => ({
+    subject: 'Verify your Cosmos email',
+    body: `Hi ${String(p.firstName ?? 'there')},\n\nThanks for signing up. Confirm your email within 24 hours:\n\n${String(p.verifyUrl ?? '')}\n\nIf you didn't create an account, you can ignore this email.`,
+  }),
+  'auth.password_reset': (p) => ({
+    subject: 'Reset your Cosmos password',
+    body: `Hi ${String(p.firstName ?? 'there')},\n\nWe received a request to reset your password. Use the link below within 30 minutes:\n\n${String(p.resetUrl ?? '')}\n\nIf you didn't request this, you can safely ignore this email.`,
+  }),
+  'tenant.invite': (p) => ({
+    subject: `You've been invited to join ${String(p.orgName ?? 'a team')} on Cosmos`,
+    body: `You've been invited to join ${String(p.orgName ?? 'a team')} as ${String(p.role ?? 'STAFF')}.\n\nAccept the invite within 7 days:\n\n${String(p.inviteUrl ?? '')}`,
+  }),
 }
 
 function renderNotification(input: NotificationDeliveryInput): { subject: string; body: string } {

@@ -23,7 +23,7 @@ model FulfillmentTask {
   pickLines      PickLine[]
   cartons        Carton[]
 
-  @@unique([tenantId, orderId])
+  @@index([tenantId, orderId])
   @@index([tenantId, status])
   @@index([tenantId, updatedAt])
   @@index([tenantId, assignedUserId])

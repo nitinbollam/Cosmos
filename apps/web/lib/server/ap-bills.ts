@@ -34,13 +34,20 @@ export type ThreeWayMatchResult = {
 
 export function computeThreeWayMatch(input: {
   poLines: Array<{ qtyOrdered: number; qtyReceived: number; unitCost: number | null }>
-  billLines: Array<{ quantity: number; unitCost: number }>
+  billLines: Array<{ quantity: number; unitCost: number; skuCode?: string | null }>
+  /** Expected landed charges (freight/duty/other) billed alongside goods. */
+  landedExpected?: number
 }): ThreeWayMatchResult {
   const poTotal = +input.poLines.reduce((s, l) => s + l.qtyOrdered * toNum(l.unitCost), 0).toFixed(2)
-  const receivedTotal = +input.poLines.reduce((s, l) => s + l.qtyReceived * toNum(l.unitCost), 0).toFixed(2)
+  const receivedTotal = +(
+    input.poLines.reduce((s, l) => s + l.qtyReceived * toNum(l.unitCost), 0) + (input.landedExpected ?? 0)
+  ).toFixed(2)
   const billTotal = +input.billLines.reduce((s, l) => s + l.quantity * l.unitCost, 0).toFixed(2)
 
-  const qtyOk = input.billLines.every((bl, i) => {
+  // Lines with an explicit null skuCode (landed charges) are amount-checked via
+  // receivedTotal rather than quantity-matched against PO lines.
+  const goodsLines = input.billLines.filter((bl) => bl.skuCode !== null)
+  const qtyOk = goodsLines.every((bl, i) => {
     const po = input.poLines[i]
     return po && bl.quantity <= po.qtyReceived
   })
@@ -74,9 +81,17 @@ export async function runThreeWayMatch(tenantId: string, billId: string) {
   })
   if (!po) throw new ApiError(404, 'Purchase order not found')
 
+  const { totalLandedCharges } = await import('./landed-cost')
+  const landedTotal = totalLandedCharges(po)
+  const poBase = po.lines.reduce((s, l) => s + l.qtyOrdered * toNum(l.unitCost), 0)
+  const receivedBase = po.lines.reduce((s, l) => s + l.qtyReceived * toNum(l.unitCost), 0)
+  const landedExpected =
+    landedTotal > 0 && poBase > 0 ? +((landedTotal * receivedBase) / poBase).toFixed(2) : 0
+
   const match = computeThreeWayMatch({
     poLines: po.lines.map((l) => ({ qtyOrdered: l.qtyOrdered, qtyReceived: l.qtyReceived, unitCost: toNum(l.unitCost) })),
-    billLines: bill.lines.map((l) => ({ quantity: l.quantity, unitCost: toNum(l.unitCost) })),
+    billLines: bill.lines.map((l) => ({ quantity: l.quantity, unitCost: toNum(l.unitCost), skuCode: l.skuCode })),
+    landedExpected,
   })
 
   return purchasingDb.vendorBill.update({
@@ -151,6 +166,23 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
     }))
 
   if (billLines.length === 0) throw new ApiError(400, 'No received quantities to bill')
+
+  // Landed charges (freight/duty/other) bill in proportion to the received fraction so
+  // the AP side stays aligned with inventory, which is posted at landed unit cost.
+  const { totalLandedCharges } = await import('./landed-cost')
+  const landedTotal = totalLandedCharges(po)
+  const poBase = po.lines.reduce((s, l) => s + l.qtyOrdered * toNum(l.unitCost), 0)
+  const receivedBase = billLines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
+  const landedShare = landedTotal > 0 && poBase > 0 ? +((landedTotal * receivedBase) / poBase).toFixed(2) : 0
+  if (landedShare > 0) {
+    billLines.push({
+      lineNo: (po.lines.at(-1)?.lineNo ?? billLines.length) + 1,
+      skuCode: null,
+      description: 'Landed charges (freight / duty / other)',
+      quantity: 1,
+      unitCost: landedShare,
+    })
+  }
 
   const subtotal = billLines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
   const totalAmount = +subtotal.toFixed(2)

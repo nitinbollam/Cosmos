@@ -231,7 +231,9 @@ export async function receivePurchaseOrderGoods(
 
   if (dto.lines.some((l) => l.qtyReceived > 0)) {
     const { createBillFromPurchaseOrder } = await import('./ap-bills')
-    await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: poId }).catch(() => undefined)
+    await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: poId }).catch((err) =>
+      console.error(`[ap] vendor bill creation failed for PO ${poId}:`, err),
+    )
   }
 
   return { purchaseOrder: updatedPo, inventoryErrors }

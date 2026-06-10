@@ -19,6 +19,16 @@ function money(n: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
+/** Escape user-controlled values (customer names, memo reasons) before HTML interpolation. */
+function esc(value: unknown): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 export async function buildInvoiceHtml(tenantId: string, inv: InvoiceDocInput): Promise<string> {
   let customerName = inv.customerId
   try {
@@ -31,20 +41,20 @@ export async function buildInvoiceHtml(tenantId: string, inv: InvoiceDocInput): 
   const rows = inv.lineItems
     .map(
       (li) =>
-        `<tr><td>${li.skuId.slice(0, 16)}</td><td style="text-align:right">${li.quantity}</td><td style="text-align:right">${money(li.unitPrice)}</td><td style="text-align:right">${money(li.quantity * li.unitPrice)}</td></tr>`,
+        `<tr><td>${esc(li.skuId.slice(0, 16))}</td><td style="text-align:right">${li.quantity}</td><td style="text-align:right">${money(li.unitPrice)}</td><td style="text-align:right">${money(li.quantity * li.unitPrice)}</td></tr>`,
     )
     .join('')
 
   const credits =
     inv.creditMemos && inv.creditMemos.length > 0
-      ? `<h3>Credit memos</h3><ul>${inv.creditMemos.map((cm) => `<li>${cm.memoNumber} — ${money(Number(cm.totalAmount))}${cm.reason ? ` (${cm.reason})` : ''}</li>`).join('')}</ul>`
+      ? `<h3>Credit memos</h3><ul>${inv.creditMemos.map((cm) => `<li>${esc(cm.memoNumber)} — ${money(Number(cm.totalAmount))}${cm.reason ? ` (${esc(cm.reason)})` : ''}</li>`).join('')}</ul>`
       : ''
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>${inv.invoiceNumber}</title>
+  <title>${esc(inv.invoiceNumber)}</title>
   <style>
     body { font-family: system-ui, sans-serif; color: #111; max-width: 720px; margin: 40px auto; padding: 0 24px; }
     h1 { font-size: 28px; margin-bottom: 4px; }
@@ -59,12 +69,12 @@ export async function buildInvoiceHtml(tenantId: string, inv: InvoiceDocInput): 
   </style>
 </head>
 <body>
-  <h1>Invoice ${inv.invoiceNumber}</h1>
+  <h1>Invoice ${esc(inv.invoiceNumber)}</h1>
   <div class="meta">
-    <div>Bill to: ${customerName}</div>
+    <div>Bill to: ${esc(customerName)}</div>
     <div>Issued: ${inv.issuedAt.toLocaleDateString()}</div>
     ${inv.dueAt ? `<div>Due: ${inv.dueAt.toLocaleDateString()}</div>` : ''}
-    <div>Status: ${inv.displayStatus}</div>
+    <div>Status: ${esc(inv.displayStatus)}</div>
   </div>
   <table>
     <thead><tr><th>SKU</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Line</th></tr></thead>

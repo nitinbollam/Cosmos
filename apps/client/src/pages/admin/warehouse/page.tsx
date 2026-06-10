@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useMemo, useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
+import { showToast } from '@/lib/toast'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/cosmos/status-badge'
 import { EmptyState } from '@/components/cosmos/empty-state'
@@ -381,7 +382,7 @@ export default function WarehousePage() {
       void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts'] })
       void qc.invalidateQueries({ queryKey: ['inventory'] })
       if (typeof res.adjustmentsPosted === 'number') {
-        alert(`Cycle count posted — ${res.adjustmentsPosted} stock adjustment(s) applied.`)
+        showToast(`Cycle count posted — ${res.adjustmentsPosted} stock adjustment(s) applied.`, 'success')
       }
       setCountDetailId(null)
     },
@@ -1060,7 +1061,7 @@ export default function WarehousePage() {
                             disabled={completeRecvMut.isPending}
                             onClick={() => {
                               if ((s._count?.items ?? 0) < 1) {
-                                alert('Scan at least one item before completing.')
+                                showToast('Scan at least one item before completing.', 'error')
                                 return
                               }
                               completeRecvMut.mutate(s.id)
@@ -1523,7 +1524,7 @@ export default function WarehousePage() {
                   disabled={completeRecvMut.isPending || (recvDetailQ.data.items?.length ?? 0) < 1}
                   onClick={() => {
                     if ((recvDetailQ.data.items?.length ?? 0) < 1) {
-                      alert('Scan at least one line item before completing.')
+                      showToast('Scan at least one line item before completing.', 'error')
                       return
                     }
                     completeRecvMut.mutate(recvDetailQ.data.id)
