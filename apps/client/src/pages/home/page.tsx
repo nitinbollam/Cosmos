@@ -69,7 +69,7 @@ const WORKSPACES = [
     role: 'Pickers & receivers',
     desc: 'Mobile-friendly PWA for pick tasks, bin locations, receiving, and wave picking — works on the floor.',
     features: ['Offline-friendly', 'Barcode scans', 'Putaway tasks'],
-    accent: 'var(--palette-wisteria)',
+    accent: 'var(--c-success)',
   },
   {
     href: '/m/delivery',
@@ -87,7 +87,7 @@ const WORKSPACES = [
     role: 'Field reps',
     desc: 'Leads, customer lookup, and activity logging while visiting accounts.',
     features: ['Lead pipeline', 'Visit notes', 'Quick customer search'],
-    accent: 'var(--palette-powder-petal)',
+    accent: 'var(--c-warning)',
   },
 ] as const
 

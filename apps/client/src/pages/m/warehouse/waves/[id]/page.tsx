@@ -86,7 +86,7 @@ export default function WarehouseWaveDetailPage() {
       {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13, marginTop: 12 }}>{err}</p> : null}
       {wave ? (
         <div style={{ marginTop: 16 }}>
-          <h1 style={{ margin: '0 0 8px', fontSize: '1.25rem', fontFamily: 'var(--font-syne)' }}>
+          <h1 style={{ margin: '0 0 8px', fontSize: '1.25rem', fontFamily: 'var(--font-display)' }}>
             Wave #{wave.id.slice(-8)}
           </h1>
           <p style={{ margin: 0, fontSize: 13, opacity: 0.75 }}>

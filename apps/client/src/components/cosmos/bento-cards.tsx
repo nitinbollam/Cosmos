@@ -149,7 +149,7 @@ export function BentoHeroCard({
 
 export function BentoAvatarStack({ labels }: { labels: string[] }) {
   const shown = labels.slice(0, 4)
-  const fills = ['#1a1a1d', '#222226', '#2a2a2e', '#333338']
+  const fills = ['var(--c-surface-2)', 'var(--c-surface-3)', 'var(--c-primary-dim)', 'var(--c-accent-dim)']
   return (
     <div className="flex items-center gap-3 mt-4">
       <div className="flex -space-x-2">

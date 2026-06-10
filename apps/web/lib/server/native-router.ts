@@ -370,11 +370,11 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
     const order = await orders.createOrder(session.tenantId, body, buyerOpts)
     return Response.json(order, { status: 201 })
   }
-  if (seg.length === 2 && method === 'GET') {
-    return Response.json(await orders.findOrderById(session.tenantId, seg[1], buyerOpts))
-  }
   if (seg.length === 2 && seg[1] === 'backorders' && method === 'GET') {
     return Response.json(await backorders.listOpenBackorders(session.tenantId, +(url.searchParams.get('limit') ?? 50)))
+  }
+  if (seg.length === 2 && method === 'GET') {
+    return Response.json(await orders.findOrderById(session.tenantId, seg[1], buyerOpts))
   }
   if (seg.length === 1 && method === 'GET') {
     return Response.json(

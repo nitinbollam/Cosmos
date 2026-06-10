@@ -23,10 +23,31 @@ npm run seed
 npm run dev
 ```
 
-- **App:** http://localhost:4000  
-- **Login:** http://localhost:4000/admin/login — `admin@cosmos.local` / `admin1234`
+- **App:** http://localhost:4000 (landing page with role-based entry points)
+- **Admin:** http://localhost:4000/admin/login — `admin@cosmos.local` / `admin1234`
+- **B2B buyer:** http://localhost:4000/login — `buyer@acme-retail.com` / `buyer1234`
+- **Mobile (warehouse/delivery/sales):** http://localhost:4000/m/login
 
 Dev uses Vite middleware (HMR) plus the embedded API server — no separate Next.js process.
+
+### UI themes
+
+Two switchable themes (toggle in any header; persisted per browser):
+
+| Theme | Style |
+|-------|-------|
+| **Obsidian** (default) | Matte black, minimal enterprise |
+| **Aurora** | Light purple wholesale palette |
+
+### Database
+
+Local dev uses **SQLite** (`apps/web/.data/*.db`). For Postgres:
+
+```bash
+COSMOS_DB_PROVIDER=postgres npm run db:setup:postgres
+```
+
+Health check: `GET /api/v1/health/db`.
 
 ### Scripts
 

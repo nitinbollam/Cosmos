@@ -83,7 +83,7 @@ export default function SalesMobilePage() {
   return (
     <div>
       <OfflineBanner />
-      <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem' }}>Field sales</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>Field sales</h1>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         {(['leads', 'customers', 'activities'] as const).map((t) => (
           <button

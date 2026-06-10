@@ -49,7 +49,7 @@ export default function DeliveryMobilePage() {
   return (
     <div>
       <OfflineBanner />
-      <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem' }}>Active routes</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>Active routes</h1>
       <button type="button" className="btn-ghost" onClick={() => void load()} style={{ marginBottom: 12 }}>
         Refresh
       </button>

@@ -67,7 +67,7 @@ export default function DeliveryRoutePage() {
       <Link to="/m/delivery" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← Routes
       </Link>
-      <h1 style={{ fontFamily: 'var(--font-syne)' }}>Route {id?.slice(-8)}</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)' }}>Route {id?.slice(-8)}</h1>
       {err && <p style={{ color: 'var(--c-danger)' }}>{err}</p>}
       <textarea
         className="cosmos-input"

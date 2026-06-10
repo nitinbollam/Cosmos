@@ -87,7 +87,7 @@ export default function WarehouseTaskPage() {
       <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← Tasks
       </Link>
-      <h1 style={{ fontFamily: 'var(--font-syne)' }}>Task {id?.slice(-8)}</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)' }}>Task {id?.slice(-8)}</h1>
       {err && <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p>}
       {task && (
         <>

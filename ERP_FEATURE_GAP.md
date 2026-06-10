@@ -4,7 +4,7 @@ Comparison of **Cosmos** against well-established wholesale/distribution ERP sys
 
 **Sources:** Industry guides for wholesale distribution ERP ([Gestisoft 2026](https://www.gestisoft.com/en/blog/erp-distribution), [NetSuite editions](https://netsuite.folio3.com/blog/netsuite-edition-for-wholesale-distributors/), [Anchor Group 2025](https://www.anchorgroup.tech/blog/wholesale-distribution-erp-systems-2025), [ERP Software Blog 2026](https://erpsoftwareblog.com/2025/11/top-11-erp-for-distribution/)).
 
-**Cosmos reference:** `PLATFORM_FEATURES.md`, `MISSING.md`, and the live codebase (Tiers 4–15).
+**Cosmos reference:** `PLATFORM_FEATURES.md`, `MISSING.md`, and the live codebase (Tiers 4–18).
 
 ---
 
@@ -107,11 +107,11 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Receive → inventory + AP bill | ✅ | GL auto-post on receive |
 | Low-stock → PO prefill | ✅ | `/admin/purchasing?skuId=` |
 | Purchase requisitions / approvals | ❌ | Direct PO only |
-| Landed cost (freight / duty allocation) | ❌ | Not implemented |
+| Landed cost (freight / duty allocation) | ✅ | Freight/duty/other on PO, allocated into unit cost on receive |
 | Vendor scorecards / portal | ❌ | Not implemented |
-| Demand planning / MRP | ❌ | Reorder points only |
+| Demand planning / MRP | ✅ | Usage-based demand plan from stock ledger + lead times |
 
-**Verdict:** **Basic procure-to-pay** is in place; **planning and landed cost** are gaps.
+**Verdict:** **Procure-to-pay with landed cost and replenishment planning** is in place; requisition approvals and vendor portals are the remaining gaps.
 
 ---
 
@@ -161,7 +161,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Redis event bus | ⚠️ | Stub (`event-bus.ts`) |
 | Public signup / multi-tenant SaaS | ✅ | `/signup` |
 
-**Verdict:** **API-first** for custom integrations; **not an EDI hub** like SPS Commerce + NetSuite.
+**Verdict:** **API-first** with a native JSON EDI layer (partners, 850 in, 810/856 out); not yet a managed X12/AS2 hub like SPS Commerce.
 
 ---
 
@@ -188,6 +188,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 3. **Unified B2B portal** — catalog through invoices and quotes in one buyer UX
 4. **POS + B2B + admin** in one monorepo
 5. **Fast local dev** — SQLite seed, demo tenant, single port `:4000`
+6. **Themeable enterprise UI** — Obsidian (matte black) and Aurora (light) themes with an in-app switcher, persisted per user
 
 ---
 
@@ -271,4 +272,4 @@ Reference: what NetSuite, Business Central, and mid-market distributors typicall
 
 ---
 
-*Last updated: May 2026 — based on Cosmos Tiers 4–15 and wholesale ERP industry benchmarks.*
+*Last updated: June 2026 — based on Cosmos Tiers 4–18 and wholesale ERP industry benchmarks.*

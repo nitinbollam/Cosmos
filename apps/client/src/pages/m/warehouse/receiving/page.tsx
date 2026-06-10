@@ -51,7 +51,7 @@ export default function ReceivingMobilePage() {
       <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
         ← Tasks
       </Link>
-      <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem' }}>Receiving</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>Receiving</h1>
       {!sessionId ? (
         <>
           <label style={{ display: 'block', fontSize: 13, marginTop: 12 }}>PO ID (optional)</label>

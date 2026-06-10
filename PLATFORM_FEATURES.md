@@ -215,17 +215,19 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 
 ## Branding, theme & UX
 
-### Color palette (Powder Petal / Mauve / Purple)
+### Themes — Obsidian (default) & Aurora
 
-Defined in `apps/client/src/globals-theme.css`:
+Two switchable themes defined as `[data-theme]` token sets in `apps/client/src/globals-theme.css`:
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| Powder Petal | `#EFD9CE` | Cards, sidebar surface |
-| Mauve | `#DEC0F1` | Page background |
-| Wisteria | `#B79CED` | Accents |
-| Soft Periwinkle | `#957FEF` | Links, orbit ring |
-| Medium Slate Blue | `#7161EF` | Primary buttons, logo mark |
+| Theme | Style | Key colors |
+|-------|-------|------------|
+| **Obsidian** (default) | Matte black, minimal enterprise | bg `#09090B`, surfaces `#141416`–`#222226`, primary `#5B8DEF`, accent `#6B9FD4` |
+| **Aurora** | Light wholesale (original palette) | Mauve `#DEC0F1` bg, Powder Petal `#EFD9CE` surfaces, primary `#7161EF` |
+
+- **Switcher** (`components/theme-switcher.tsx`) in landing, admin, shop, and mobile headers plus all auth pages
+- Persisted in `localStorage` (`cosmos.theme`); applied pre-paint by an inline script in `index.html` (no flash)
+- `lib/theme.ts` — storage, `applyTheme`, change events; meta `theme-color` updated per theme
+- Typography: **Inter** (body + display), JetBrains Mono (code)
 
 Styles split across `globals-theme.css`, `globals-admin.css`, `globals-shop.css`.
 
@@ -456,6 +458,42 @@ Summary of major work completed in the current development cycle.
 | `06-faq.md` | Common Q&A (POS, fulfillment, logins, local dev) |
 
 **Key files:** `apps/web/lib/server/celestial/` (orchestrator, intent, tools, retrieval, compose, llm, prompts), `apps/client/src/components/celestial/`, `apps/client/src/stores/celestial-store.ts`, `apps/client/src/pages/admin/celestial/`.
+
+### Tier 16 — ERP depth: lots/serials, putaway, labor, backorders, drop ship
+
+| Item | What was added |
+|------|----------------|
+| **16.1 Lot/batch tracking** | `InventoryLot` model, FEFO allocation, SKU `trackLot` toggle, receiving + SKU detail UI |
+| **16.2 Serial numbers** | `SerialUnit` register/reserve/ship lifecycle, SKU `trackSerial` toggle |
+| **16.3 Directed putaway** | Bin suggestions, putaway tasks generated from receiving, admin confirm tab |
+| **16.4 Labor / productivity** | `WmsLaborEvent` recorded on pick/receive/putaway; 7-day metrics tab (`GET /wms/labor/metrics`) |
+| **16.5 Backorders** | Partial reservation, `BACKORDERED` status, `BackorderLine` queue, auto-fill on PO receipt (`GET /orders/backorders`) |
+| **16.6 Drop shipping** | `DROP_SHIP` order lines, auto-PO per supplier, ship + invoice from admin order detail |
+
+**Key files:** `apps/web/lib/server/inventory-lots.ts`, `inventory-serials.ts`, `wms-putaway.ts`, `wms-labor.ts`, `backorders.ts`, `drop-ship.ts`.
+
+### Tier 17 — EDI, demand planning, landed cost & Postgres path
+
+| Item | What was added |
+|------|----------------|
+| **17.1 EDI** | Trading partners (Settings → Integrations), inbound 850 → orders, outbound 810/856 documents, `OrderChannel.EDI` |
+| **17.2 Demand planning** | Usage from stock ledger + lead times; `GET /inventory/demand-plan`, `GET /skus/:id/demand-plan`; replenishment table on inventory page |
+| **17.3 Landed cost** | Freight/duty/other on PO allocated into inventory unit cost on receive; PO detail UI |
+| **17.4 Postgres hardening** | `COSMOS_DB_PROVIDER=postgres`, `npm run db:setup:postgres`, dual-mode `migrate-all.ts`, `GET /health/db` |
+
+**Key files:** `apps/web/lib/server/edi.ts`, `demand-planning.ts`, `landed-cost.ts`, `db-health.ts`, `scripts/setup-postgres.mjs`, `scripts/db-urls.mjs`.
+
+### Tier 18 — Obsidian theme, theme switcher, landing & logout
+
+| Item | What was added |
+|------|----------------|
+| **18.1 Obsidian theme** | New default matte-black enterprise theme; Inter typography; flat surfaces, hairline borders, steel-blue accent |
+| **18.2 Theme switcher** | Obsidian ↔ Aurora toggle in landing/admin/shop/mobile headers and auth pages; persisted `cosmos.theme`; pre-paint apply (no flash) |
+| **18.3 Landing page** | `/` — role-based quick start, 6 feature modules, Celestial section, order-to-cash flow, workspace cards, demo credentials |
+| **18.4 Logout everywhere** | Central `signOut()` (`lib/auth-session.ts`) — revokes server session (`POST /auth/logout`), clears tokens + B2B session; admin avatar menu, shop dropdown, mobile header, landing nav |
+| **18.5 Celestial plain language** | Intent-aware plain-language answers for non-technical users; technical URLs/commands stripped unless asked |
+
+**Key files:** `apps/client/src/globals-theme.css`, `lib/theme.ts`, `lib/auth-session.ts`, `components/theme-switcher.tsx`, `components/user-menu.tsx`, `pages/home/page.tsx`.
 
 ### Tier 5 — Deferred (not yet implemented)
 

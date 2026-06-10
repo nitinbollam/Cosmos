@@ -53,7 +53,7 @@ export default function MobileLoginPage() {
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <form onSubmit={submit} className="cosmos-mobile-card w-full max-w-sm space-y-4">
           <div>
-            <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem', margin: 0 }}>Sign in</h1>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', margin: 0 }}>Sign in</h1>
             <p style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>Warehouse, delivery, and field sales</p>
           </div>
           <input className="cosmos-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

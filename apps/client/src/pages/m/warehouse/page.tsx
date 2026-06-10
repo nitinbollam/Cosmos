@@ -60,7 +60,7 @@ export default function WarehouseMobilePage() {
     <div>
       <OfflineBanner />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h1 style={{ margin: 0, fontSize: '1.25rem', fontFamily: 'var(--font-syne)' }}>Warehouse</h1>
+        <h1 style={{ margin: 0, fontSize: '1.25rem', fontFamily: 'var(--font-display)' }}>Warehouse</h1>
         <button type="button" className="btn-ghost" onClick={() => void load()} disabled={loading}>
           Refresh
         </button>
