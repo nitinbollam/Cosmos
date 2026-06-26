@@ -10,4 +10,4 @@ All product code lives in **`apps/web`**. There are no Nest, Expo, or Python ser
 | POS registers | `/admin/pos` + `POST /api/v1/pos/orders` |
 | Service worker offline sync | `sw.js` + queue replay + Background Sync tag |
 | Postgres unified dev path | CI/production path via `env.ts`; local dev uses SQLite |
-| Native PDF invoices | Print-ready HTML download (`GET /invoices/:id/pdf`) |
+| Native PDF invoices | `GET /invoices/:id/pdf` — native PDF via pdfkit; print preview at `/invoices/:id/html` |

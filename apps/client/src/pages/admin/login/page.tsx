@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 import { PlerosLogo } from '@/components/pleros-logo'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
-import { axiosErr } from '@/lib/axios-error'
+import { axiosErr, isEmailVerificationRequired } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 
 export default function LoginPage() {
@@ -12,10 +12,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [needsVerification, setNeedsVerification] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
+  const [resendBusy, setResendBusy] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setErr(null)
+    setNeedsVerification(false)
+    setResendSent(false)
     setLoading(true)
     try {
       const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
@@ -25,9 +30,27 @@ export default function LoginPage() {
       const next = new URLSearchParams(window.location.search).get('next')
       navigate(next?.startsWith('/') ? next : '/admin')
     } catch (e) {
-      setErr(formatApiReachabilityError(e) || axiosErr(e))
+      if (isEmailVerificationRequired(e)) {
+        setNeedsVerification(true)
+        setErr('Please verify your email before signing in.')
+      } else {
+        setErr(formatApiReachabilityError(e) || axiosErr(e))
+      }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function resendVerification() {
+    setResendBusy(true)
+    setErr(null)
+    try {
+      await api.post('/auth/resend-verification', { email: email.trim() })
+      setResendSent(true)
+    } catch (e) {
+      setErr(formatApiReachabilityError(e) || axiosErr(e))
+    } finally {
+      setResendBusy(false)
     }
   }
 
@@ -48,6 +71,33 @@ export default function LoginPage() {
         <input className="pleros-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <input className="pleros-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {err && <p className="text-sm font-medium" style={{ color: 'var(--c-danger)' }}>{err}</p>}
+        {needsVerification ? (
+          <div className="rounded-lg p-3 space-y-3" style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}>
+            <p className="text-sm" style={{ color: 'var(--c-text-2)' }}>
+              Check your inbox for the verification link, or request a new one.
+            </p>
+            <Link
+              to={`/verify-email${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ''}`}
+              className="text-sm font-medium"
+              style={{ color: 'var(--c-accent)' }}
+            >
+              Open verification page →
+            </Link>
+            <button
+              type="button"
+              className="btn-ghost w-full"
+              disabled={resendBusy || !email.trim()}
+              onClick={() => void resendVerification()}
+            >
+              {resendBusy ? 'Sending…' : 'Resend verification email'}
+            </button>
+            {resendSent ? (
+              <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>
+                If an unverified account exists for that address, a new link was sent.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <button type="submit" className="btn-primary w-full" disabled={loading}>
           {loading ? 'Signing in…' : 'Continue'}
         </button>

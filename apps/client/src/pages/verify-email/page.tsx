@@ -16,6 +16,8 @@ export default function VerifyEmailPage() {
 
   useEffect(() => {
     if (token && !done && !loading) void verify()
+    const prefill = params.get('email')
+    if (prefill) setResendEmail(prefill)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when token is present
   }, [token])
 

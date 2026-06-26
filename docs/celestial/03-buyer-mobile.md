@@ -77,7 +77,7 @@ The B2B shop is the buyer-facing storefront. Logged-in buyers browse catalog, ad
 
 - List AR invoices with status, total, balance
 - Pay balance: record payment or **Stripe card pay** (`POST /invoices/:id/pay/stripe`)
-- Download **invoice PDF** (`GET /invoices/:id/pdf` — print-ready HTML)
+- Download **invoice PDF** (`GET /invoices/:id/pdf` — native PDF)
 
 **Celestial tool:** `list_my_invoices` (buyer-scoped).
 

@@ -18,12 +18,14 @@
     "bcrypt": "^5.1.1",
     "date-fns": "^3.6.0",
     "jose": "^5.9.3",
+    "pdfkit": "^0.19.1",
     "stripe": "^16.5.0",
     "tsconfig-paths": "^4.2.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
     "@types/node": "^20.14.10",
+    "@types/pdfkit": "^0.17.6",
     "eslint": "^9.39.4",
     "prisma": "^6.9.0",
     "typescript": "^5.5.3"

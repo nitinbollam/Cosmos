@@ -207,7 +207,7 @@ function CompanyTab() {
     <div className="space-y-6">
       <div className="pleros-card">
         <h2 className="text-pleros-white font-semibold font-display mb-1">Company profile</h2>
-        <p className="text-pleros-text-3 text-sm mb-4">Updates your tenant via PATCH /tenants/me</p>
+        <p className="text-pleros-text-3 text-sm mb-4">Organization name, billing contact, and timezone for your tenant.</p>
         {tenant.isLoading ? (
           <div className="skeleton h-24 w-full" />
         ) : tenant.error || !tenant.data ? (
@@ -773,7 +773,7 @@ function WarehousesTab() {
       <div className="flex justify-between items-start gap-3 flex-wrap">
         <div>
           <h2 className="text-pleros-white font-semibold font-display">Warehouses</h2>
-          <p className="text-pleros-text-3 text-sm mt-1">POST /warehouses · set default receiving location</p>
+          <p className="text-pleros-text-3 text-sm mt-1">Distribution centers for receiving, picking, and fulfillment.</p>
         </div>
         <button type="button" className="btn-primary" onClick={() => setDrawerOpen(true)}>
           New warehouse
@@ -1094,7 +1094,7 @@ function IntegrationsTab() {
 
       <div className="pleros-card">
         <h3 className="text-pleros-white font-semibold font-display mb-3">Notification delivery</h3>
-        <p className="text-pleros-text-3 text-sm mb-4">GET /notifications/providers/status — env-driven SendGrid, Twilio, or webhook</p>
+        <p className="text-pleros-text-3 text-sm mb-4">Email, SMS, and webhook delivery status for your tenant.</p>
         {notifProvidersQ.isLoading ? (
           <div className="skeleton h-20 w-full" />
         ) : notifProvidersQ.isError ? (
@@ -1140,7 +1140,7 @@ function IntegrationsTab() {
         <div className="flex flex-wrap justify-between gap-3 items-start mb-3">
           <div>
             <h3 className="text-pleros-white font-semibold font-display">Stripe</h3>
-            <p className="text-pleros-text-3 text-sm mt-1">GET /payments/stripe/status</p>
+            <p className="text-pleros-text-3 text-sm mt-1">Card payments and webhook configuration</p>
           </div>
           <button type="button" className="btn-ghost !text-sm" onClick={() => setRotateOpen(true)}>
             Rotate signing secret
@@ -1163,7 +1163,7 @@ function IntegrationsTab() {
       </div>
 
       <PlerosSheet open={addOpen} onOpenChange={setAddOpen} title="Add MSA configuration">
-        <p className="text-xs text-pleros-text-3 mb-3">POST /msa/config — creates or updates tenant MSA row and manufacturer DID.</p>
+        <p className="text-xs text-pleros-text-3 mb-3">Connect manufacturer reporting for regulated product categories.</p>
         <label className="text-xs text-pleros-text-3">Reporter DID</label>
         <input className="pleros-input mb-3 mt-1 font-mono text-sm" value={reporterDid} onChange={(e) => setReporterDid(e.target.value)} />
         <label className="text-xs text-pleros-text-3">Manufacturer DID</label>
@@ -1422,7 +1422,7 @@ function FeaturesTab() {
       <div>
         <h2 className="text-pleros-white font-semibold font-display">Feature flags</h2>
         <p className="text-pleros-text-3 text-sm mt-1">
-          Plan defaults for <span className="font-mono text-pleros-accent">{plan}</span> · overrides saved via PATCH /tenants/me
+          Plan defaults for <span className="font-mono text-pleros-accent">{plan}</span> · toggle overrides for your workspace
         </p>
       </div>
 

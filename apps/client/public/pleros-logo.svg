@@ -4,5 +4,5 @@
   <ellipse cx="26" cy="26" rx="19.5" ry="6.75" stroke="#6B9FD4" stroke-width="1" transform="rotate(-30 26 26)" opacity="0.75"/>
   <circle cx="26" cy="26" r="2.1" fill="#5B8DEF"/>
   <circle cx="41.5" cy="17.5" r="1.35" fill="#6B9FD4" opacity="0.9"/>
-  <text x="58" y="33" fill="#FAFAFA" font-family="Inter, system-ui, sans-serif" font-size="26" font-weight="500" letter-spacing="-0.02em">pleros</text>
+  <text x="58" y="33" fill="#FAFAFA" font-family="Inter, system-ui, sans-serif" font-size="26" font-weight="500" letter-spacing="-0.02em">Pleros</text>
 </svg>

@@ -3,7 +3,7 @@ import { PlerosLogo } from '@/components/pleros-logo'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/lib/api'
-import { axiosErr } from '@/lib/axios-error'
+import { axiosErr, isEmailVerificationRequired } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 import { setB2bSession } from '@/lib/session'
 
@@ -19,10 +19,17 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [needsVerification, setNeedsVerification] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
+  const [resendBusy, setResendBusy] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setErr(null)
+    setNeedsVerification(false)
+    setResendSent(false)
+    setLoading(true)
     try {
       const r = await api.post<LoginRes>('/auth/login', { email, password })
       window.localStorage.setItem('pleros.accessToken', r.accessToken)
@@ -42,7 +49,27 @@ export default function LoginPage() {
       emitStorefrontAuthChanged()
       window.location.href = '/catalog'
     } catch (e: unknown) {
+      if (isEmailVerificationRequired(e)) {
+        setNeedsVerification(true)
+        setErr('Please verify your email before signing in.')
+      } else {
+        setErr(axiosErr(e))
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function resendVerification() {
+    setResendBusy(true)
+    setErr(null)
+    try {
+      await api.post('/auth/resend-verification', { email: email.trim() })
+      setResendSent(true)
+    } catch (e: unknown) {
       setErr(axiosErr(e))
+    } finally {
+      setResendBusy(false)
     }
   }
 
@@ -69,11 +96,46 @@ export default function LoginPage() {
             required
             placeholder="Password"
           />
-          <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: 8 }}>
-            Sign In
+          <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
         {err ? <p style={{ marginTop: 16, color: 'var(--c-danger)', fontSize: 14 }}>{err}</p> : null}
+        {needsVerification ? (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 12,
+              borderRadius: 8,
+              background: 'var(--c-surface-2)',
+              border: '1px solid var(--c-border)',
+            }}
+          >
+            <p style={{ color: 'var(--c-text-2)', fontSize: 14, marginBottom: 12 }}>
+              Check your inbox for the verification link, or request a new one.
+            </p>
+            <Link
+              to={`/verify-email${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ''}`}
+              style={{ color: 'var(--c-accent)', fontSize: 13, display: 'block', marginBottom: 12 }}
+            >
+              Open verification page →
+            </Link>
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ width: '100%' }}
+              disabled={resendBusy || !email.trim()}
+              onClick={() => void resendVerification()}
+            >
+              {resendBusy ? 'Sending…' : 'Resend verification email'}
+            </button>
+            {resendSent ? (
+              <p style={{ marginTop: 10, color: 'var(--c-text-3)', fontSize: 13, textAlign: 'center' }}>
+                If an unverified account exists for that address, a new link was sent.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <p style={{ marginTop: 16, textAlign: 'center' }}>
           <Link to="/forgot-password" style={{ color: 'var(--c-accent)', fontSize: 13 }}>
             Forgot password?

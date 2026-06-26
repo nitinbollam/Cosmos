@@ -326,10 +326,15 @@ export async function recordInvoicePayment(
   return getInvoice(tenantId, invoiceId, opts)
 }
 
-export async function getInvoiceHtmlDocument(tenantId: string, invoiceId: string, opts?: { buyerCustomerId?: string }) {
+type InvoiceDocOpts = { buyerCustomerId?: string }
+
+async function invoiceToDocInput(
+  tenantId: string,
+  invoiceId: string,
+  opts?: InvoiceDocOpts,
+) {
   const inv = await getInvoice(tenantId, invoiceId, opts)
-  const { buildInvoiceHtml } = await import('./invoice-document')
-  return buildInvoiceHtml(tenantId, {
+  return {
     invoiceNumber: inv.invoiceNumber,
     issuedAt: inv.issuedAt,
     dueAt: inv.dueAt,
@@ -350,7 +355,20 @@ export async function getInvoiceHtmlDocument(tenantId: string, invoiceId: string
       totalAmount: Number(cm.totalAmount),
       reason: cm.reason,
     })),
-  })
+  }
+}
+
+export async function getInvoiceHtmlDocument(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
+  const input = await invoiceToDocInput(tenantId, invoiceId, opts)
+  const { buildInvoiceHtml } = await import('./invoice-document')
+  return buildInvoiceHtml(tenantId, input)
+}
+
+export async function getInvoicePdfDocument(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
+  const input = await invoiceToDocInput(tenantId, invoiceId, opts)
+  const { buildInvoicePdf } = await import('./invoice-document')
+  const pdf = await buildInvoicePdf(tenantId, input)
+  return { pdf, invoiceNumber: input.invoiceNumber }
 }
 
 export async function payInvoiceWithStripe(

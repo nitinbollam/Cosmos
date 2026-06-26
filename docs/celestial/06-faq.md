@@ -77,7 +77,7 @@ On admin order detail (`/admin/orders/:id`), use **Process return** modal:
 - Invoices are **auto-created when an order ships**
 - Appear in Finance → AR tab (admin) and `/invoices` (buyer)
 - Buyers can pay balance via record payment or Stripe card
-- PDF download: print-ready HTML at `/invoices/:id/pdf`
+- PDF download: native PDF at `GET /invoices/:id/pdf` (print preview HTML at `/invoices/:id/html`)
 - GL: Dr AR / Cr Revenue on issue; Dr Cash / Cr AR on payment
 
 ---

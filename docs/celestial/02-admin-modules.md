@@ -213,7 +213,7 @@ Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list
 - AP payment: Dr AP / Cr Cash
 - Ship COGS: Dr COGS / Cr Inventory
 
-**Invoices:** Auto-issued on ship; PDF via `GET /invoices/:id/pdf` (print-ready HTML).
+**Invoices:** Auto-issued on ship; PDF via `GET /invoices/:id/pdf` (native PDF).
 
 ---
 

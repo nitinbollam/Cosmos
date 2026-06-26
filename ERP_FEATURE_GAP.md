@@ -44,7 +44,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Multi-subsidiary consolidation | ❌ | Single tenant org model |
 | Fixed assets / depreciation | ❌ | Not implemented |
 | Budgeting / FP&A | ❌ | Not implemented |
-| Native PDF invoices | ⚠️ | Print-ready HTML only (`GET /invoices/:id/pdf`) |
+| Native PDF invoices | ✅ | Native PDF via pdfkit (`GET /invoices/:id/pdf`); HTML preview at `/invoices/:id/html` |
 
 **Verdict:** Good for **single-entity US distributor** finance. Not ready for multi-country or holding-company accounting.
 
@@ -212,7 +212,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 7 | Purchase requisition + approval workflow |
 | 8 | Lot / serial recall & compliance UI (beyond basic tracking) |
 | 9 | Deeper sales tax (nexus, exemptions) |
-| 10 | Native PDF documents |
+| 10 | ~~Native PDF documents~~ | ✅ Invoice PDF via pdfkit |
 | 11 | Fine-grained RBAC per module |
 | 12 | Report builder / export suite |
 

@@ -42,7 +42,6 @@ Status of the go-live blockers identified in the customer/production readiness a
 |------|-------|
 | Multi-replica rate limiting / session cache | Current limiter and session cache are per-process; use Redis when scaling horizontally. |
 | Multi-currency, consolidation, fixed assets | Intentionally out of scope (see `ERP_FEATURE_GAP.md`). |
-| Native PDF invoices | Print-ready HTML only. |
 
 ## Verification
 

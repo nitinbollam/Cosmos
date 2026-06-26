@@ -175,7 +175,10 @@ export default function StorefrontInvoiceDetailPage() {
   async function downloadPdf() {
     const token = localStorage.getItem('pleros.accessToken')
     const res = await fetch(`/api/v1/invoices/${encodeURIComponent(id)}/pdf`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: {
+        Accept: 'application/pdf',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     })
     if (!res.ok) {
       setErr('Could not download invoice')
@@ -185,7 +188,7 @@ export default function StorefrontInvoiceDetailPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${invoice?.invoiceNumber ?? 'invoice'}.html`
+    a.download = `${invoice?.invoiceNumber ?? 'invoice'}.pdf`
     a.click()
     URL.revokeObjectURL(url)
   }

@@ -62,6 +62,7 @@ const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { index: true, element: page(() => import('@/pages/admin/page')) },
+          { path: 'onboarding', element: page(() => import('@/pages/admin/onboarding/page')) },
           { path: 'login', element: page(() => import('@/pages/admin/login/page')) },
           { path: 'compliance', element: page(() => import('@/pages/admin/compliance/page')) },
           {

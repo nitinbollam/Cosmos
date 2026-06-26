@@ -241,7 +241,7 @@ Styles split across `globals-theme.css`, `globals-admin.css`, `globals-shop.css`
 | Static fallbacks | `apps/client/public/pleros-logo.svg`, `pleros-mark.svg`, `pleros-logo-lockup.svg` |
 | Favicons | `favicon-32.png`, `apple-touch-icon.png`, `pleros-icon-512.png` (from `scripts/generate-favicons.mjs`) |
 
-Logo uses inline SVG (orbital rings + lowercase “pleros” wordmark) for reliable rendering; lockup includes “DISTRIBUTION ERP” tagline on login screens.
+Logo uses inline SVG (orbital rings + “Pleros” wordmark) for reliable rendering; lockup includes “DISTRIBUTION ERP” tagline on login screens.
 
 ### Admin shell UX
 
@@ -328,7 +328,7 @@ Summary of major work completed in the current development cycle.
 | Item | What was added |
 |------|----------------|
 | **7.1 Stripe invoice pay** | `POST /invoices/:id/pay/stripe` + card UI on buyer invoice detail |
-| **7.2 Invoice PDF** | `GET /invoices/:id/pdf` — printable HTML download |
+| **7.2 Invoice PDF** | `GET /invoices/:id/pdf` — native PDF (pdfkit); `GET /invoices/:id/html` — print preview |
 | **7.3 Reorder + contract prices** | `GET /orders/:id/reorder-lines` resolves current contract/list prices |
 | **7.4 Offline sync** | Service worker (`public/sw.js`), queue replay (`offline-sync.ts`), mobile sync banner |
 | **7.5 Low-stock PO prefill** | `/admin/purchasing?skuId=` pre-fills PO drawer with `reorderQty` |
@@ -593,7 +593,6 @@ Documented in `MISSING.md`, `ERP_FEATURE_GAP.md`, and backlog:
 - Legacy Nest/Expo/Python microservices not on this branch
 - Redis event bus (stub in `event-bus.ts`; set `REDIS_URL` for production wiring)
 - MSA automation depends on env (`MSA_S3_BUCKET`, `MSA_UPLOAD_WEBHOOK_URL`, manufacturer `ediEndpoint`); local archive + cron (`POST /msa/cron`) implemented in Tier 9
-- Full native PDF generation (invoice download is print-ready HTML)
 - Postgres unified dev path (local uses SQLite; production URL helpers in `env.ts`)
 
 ---

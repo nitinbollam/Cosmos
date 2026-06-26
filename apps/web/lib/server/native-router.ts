@@ -664,12 +664,22 @@ async function routeInvoices(method: string, seg: string[], req: Request): Promi
   if (seg.length === 2 && method === 'GET') {
     return Response.json(await invoices.getInvoice(session.tenantId, seg[1], buyerOpts))
   }
-  if (seg.length === 3 && seg[2] === 'pdf' && method === 'GET') {
+  if (seg.length === 3 && seg[2] === 'html' && method === 'GET') {
     const html = await invoices.getInvoiceHtmlDocument(session.tenantId, seg[1], buyerOpts)
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${seg[1].slice(0, 8)}-invoice.html"`,
+        'Content-Disposition': `inline; filename="${seg[1].slice(0, 8)}-invoice.html"`,
+      },
+    })
+  }
+  if (seg.length === 3 && seg[2] === 'pdf' && method === 'GET') {
+    const { pdf, invoiceNumber } = await invoices.getInvoicePdfDocument(session.tenantId, seg[1], buyerOpts)
+    const safeName = invoiceNumber.replace(/[^\w.-]+/g, '_').slice(0, 64) || seg[1].slice(0, 8)
+    return new Response(pdf, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${safeName}.pdf"`,
       },
     })
   }

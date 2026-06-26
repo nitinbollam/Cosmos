@@ -202,6 +202,6 @@ Settings → Audit log tab. Records actions like `celestial.chat`, order changes
 
 From platform backlog (`MISSING.md`):
 - Redis event bus is stubbed (set `REDIS_URL` for production)
-- Invoice PDF is print-ready HTML, not native PDF library
+- Invoice PDF is generated server-side via pdfkit (`GET /invoices/:id/pdf`); HTML preview at `/invoices/:id/html`
 - Local dev uses SQLite; production may use Postgres via `env.ts`
 - Legacy Nest/Expo/Python microservices not on this branch

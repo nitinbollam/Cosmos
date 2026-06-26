@@ -98,7 +98,7 @@ export function PlerosLogo({
           fontWeight="500"
           letterSpacing="-0.02em"
         >
-          pleros
+          Pleros
         </text>
       </PlerosLogoSvg>
     )
@@ -119,7 +119,7 @@ export function PlerosLogo({
           fontWeight="500"
           letterSpacing="-0.02em"
         >
-          pleros
+          Pleros
         </text>
         <text
           x="59"
@@ -150,7 +150,7 @@ export function PlerosLogo({
         fontWeight="500"
         letterSpacing="-0.02em"
       >
-        pleros
+        Pleros
       </text>
     </PlerosLogoSvg>
   )

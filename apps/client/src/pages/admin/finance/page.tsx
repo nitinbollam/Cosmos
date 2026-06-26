@@ -30,7 +30,32 @@ type InvoiceRow = {
   order?: { status: string; paymentMethod: string }
 }
 
-type InvoiceList = { items: InvoiceRow[]; total: number }
+type InvoiceList = { items: InvoiceRow[]; total: number; page: number; pageSize: number; hasMore?: boolean }
+
+const INVOICES_PAGE_SIZE = 25
+
+function csvEscape(value: unknown): string {
+  const s = value == null ? '' : String(value)
+  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>): void {
+  const lines = [headers.join(','), ...rows.map((r) => r.map(csvEscape).join(','))]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function invoiceStatusQuery(filter: string): string {
+  if (filter === 'ISSUED' || filter === 'PARTIALLY_PAID' || filter === 'PAID' || filter === 'OVERDUE') {
+    return `&status=${encodeURIComponent(filter)}`
+  }
+  return ''
+}
 
 type PoRow = {
   id: string
@@ -142,11 +167,23 @@ export default function FinancePage() {
   const [matchBill, setMatchBill] = useState<BillRow | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
+  const [invoicePage, setInvoicePage] = useState(1)
+  const [exportingInvoices, setExportingInvoices] = useState(false)
+
+  const invoicesSummaryQ = useQuery({
+    queryKey: ['finance', 'invoices-ar-summary'],
+    queryFn: () => api.get<InvoiceList>('/invoices?page=1&pageSize=500'),
+    enabled: tab === 'invoices',
+  })
 
   const invoicesQ = useQuery({
-    queryKey: ['finance', 'invoices-ar'],
-    queryFn: () => api.get<InvoiceList>('/invoices?page=1&pageSize=200'),
+    queryKey: ['finance', 'invoices-ar', invoicePage, invFilter],
+    queryFn: () =>
+      api.get<InvoiceList>(
+        `/invoices?page=${invoicePage}&pageSize=${INVOICES_PAGE_SIZE}${invoiceStatusQuery(invFilter)}`,
+      ),
     enabled: tab === 'invoices',
+    placeholderData: (prev) => prev,
   })
 
   const billsQ = useQuery({
@@ -214,7 +251,7 @@ export default function FinancePage() {
   })
 
   const aging = useMemo(() => {
-    const rows = invoicesQ.data?.items ?? []
+    const rows = invoicesSummaryQ.data?.items ?? []
     const open = rows.filter((inv) => inv.balance > 0.01 && inv.order?.status !== 'CANCELLED')
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
     const now = Date.now()
@@ -228,10 +265,10 @@ export default function FinancePage() {
       else buckets.d90p += b
     }
     return buckets
-  }, [invoicesQ.data])
+  }, [invoicesSummaryQ.data])
 
   const arSummary = useMemo(() => {
-    const rows = (invoicesQ.data?.items ?? []).filter((inv) => inv.order?.status !== 'CANCELLED')
+    const rows = (invoicesSummaryQ.data?.items ?? []).filter((inv) => inv.order?.status !== 'CANCELLED')
     let invoiced = 0
     let collected = 0
     for (const inv of rows) {
@@ -244,7 +281,7 @@ export default function FinancePage() {
       outstanding: rows.reduce((s, inv) => s + inv.balance, 0),
       count: rows.length,
     }
-  }, [invoicesQ.data])
+  }, [invoicesSummaryQ.data])
 
   const filteredInvoices = useMemo(() => {
     const rows = invoicesQ.data?.items ?? []
@@ -255,6 +292,45 @@ export default function FinancePage() {
       return st === invFilter
     })
   }, [invoicesQ.data, invFilter])
+
+  const invoiceTotal = invoicesQ.data?.total ?? 0
+  const invoiceTotalPages = Math.max(1, Math.ceil(invoiceTotal / INVOICES_PAGE_SIZE))
+
+  async function exportInvoicesCsv() {
+    setExportingInvoices(true)
+    try {
+      const all: InvoiceRow[] = []
+      let page = 1
+      const statusParam = invoiceStatusQuery(invFilter)
+      while (true) {
+        const res = await api.get<InvoiceList>(`/invoices?page=${page}&pageSize=100${statusParam}`)
+        all.push(...res.items)
+        if (res.items.length < 100 || page * 100 >= res.total) break
+        page += 1
+      }
+      const rows = all.filter((inv) => {
+        if (invFilter === 'ALL') return inv.order?.status !== 'CANCELLED'
+        if (invFilter === 'FAILED') return inv.order?.status === 'FAILED'
+        return inv.displayStatus === invFilter
+      })
+      downloadCsv(
+        `invoices-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Invoice', 'Order', 'Customer', 'Issued', 'Total', 'Paid', 'Balance', 'Status'],
+        rows.map((inv) => [
+          inv.invoiceNumber,
+          inv.orderId,
+          inv.customerId,
+          new Date(inv.issuedAt).toLocaleDateString(),
+          inv.totalAmount,
+          inv.amountPaid ?? 0,
+          inv.balance,
+          inv.displayStatus,
+        ]),
+      )
+    } finally {
+      setExportingInvoices(false)
+    }
+  }
 
   const filteredBills = useMemo(() => {
     const rows = billsQ.data ?? []
@@ -405,12 +481,30 @@ export default function FinancePage() {
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex flex-wrap gap-2">
             {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'FAILED'].map((s) => (
-              <button key={s} type="button" className={invFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setInvFilter(s)}>
+              <button
+                key={s}
+                type="button"
+                className={invFilter === s ? 'btn-primary' : 'btn-ghost'}
+                onClick={() => {
+                  setInvFilter(s)
+                  setInvoicePage(1)
+                }}
+              >
                 {s}
               </button>
             ))}
+            </div>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={exportingInvoices}
+              onClick={() => void exportInvoicesCsv()}
+            >
+              {exportingInvoices ? 'Exporting…' : 'Export CSV'}
+            </button>
           </div>
           <div className="pleros-card overflow-x-auto">
             {invoicesQ.isLoading ? <div className="skeleton h-40 w-full" /> : invoicesQ.isError ? (
@@ -458,6 +552,31 @@ export default function FinancePage() {
               </table>
             )}
           </div>
+          {invoiceTotal > INVOICES_PAGE_SIZE ? (
+            <div className="flex items-center justify-between gap-3 text-sm" style={{ color: 'var(--c-text-2)' }}>
+              <span>
+                Page {invoicePage} of {invoiceTotalPages} · {invoiceTotal} invoice{invoiceTotal === 1 ? '' : 's'}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  disabled={invoicePage <= 1 || invoicesQ.isFetching}
+                  onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                >
+                  ← Prev
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  disabled={invoicePage >= invoiceTotalPages || invoicesQ.isFetching}
+                  onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
 
