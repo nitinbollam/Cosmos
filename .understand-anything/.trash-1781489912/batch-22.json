@@ -1,0 +1,103 @@
+{
+  "nodes": [
+    {
+      "id": "resource:infra/k8s/base/namespace.yaml",
+      "type": "resource",
+      "name": "namespace.yaml",
+      "filePath": "infra/k8s/base/namespace.yaml",
+      "summary": "Defines the 'cosmos' Kubernetes namespace with standard app.kubernetes.io labels, providing the logical isolation boundary for all Cosmos workloads in the cluster.",
+      "tags": ["infrastructure", "orchestration", "kubernetes"],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:infra/k8s/base/configmap.yaml",
+      "type": "resource",
+      "name": "configmap.yaml",
+      "filePath": "infra/k8s/base/configmap.yaml",
+      "summary": "Kubernetes ConfigMap providing non-sensitive runtime environment variables for the Cosmos application pods, including NODE_ENV, LOG_LEVEL, gateway URL, and OpenTelemetry toggle.",
+      "tags": ["infrastructure", "configuration", "kubernetes"],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:infra/k8s/base/secret.yaml",
+      "type": "resource",
+      "name": "secret.yaml",
+      "filePath": "infra/k8s/base/secret.yaml",
+      "summary": "Placeholder Kubernetes Secret manifest listing all required sensitive keys (DATABASE_URL, REDIS_URL, JWT_SECRET, Stripe keys); production values must be injected via AWS Secrets Manager through the External Secrets Operator at deploy time.",
+      "tags": ["infrastructure", "security", "kubernetes"],
+      "complexity": "simple",
+      "languageNotes": "Uses stringData (plaintext) to document required keys; in production these should be supplied by External Secrets Operator rather than committed values."
+    },
+    {
+      "id": "resource:infra/k8s/base/web.yaml",
+      "type": "resource",
+      "name": "web.yaml",
+      "filePath": "infra/k8s/base/web.yaml",
+      "summary": "Defines the cosmos-web Deployment (2 replicas, port 4000, health probes on /api/v1/health) and its companion ClusterIP Service routing port 80 to 4000, with environment injected from ConfigMap and Secret.",
+      "tags": ["infrastructure", "deployment", "kubernetes", "orchestration"],
+      "complexity": "moderate",
+      "languageNotes": "Single file contains two YAML documents (Deployment + Service separated by ---), which is idiomatic for tightly coupled K8s resources."
+    },
+    {
+      "id": "config:infra/k8s/base/kustomization.yaml",
+      "type": "config",
+      "name": "kustomization.yaml",
+      "filePath": "infra/k8s/base/kustomization.yaml",
+      "summary": "Kustomize base configuration that assembles the core Cosmos Kubernetes manifests (namespace, configmap, secret, web deployment) into a composable base layer for environment overlays.",
+      "tags": ["configuration", "infrastructure", "kubernetes", "build-system"],
+      "complexity": "simple",
+      "languageNotes": "Uses kustomize.config.k8s.io/v1beta1 Kustomization kind to group the four base resources; overlays (staging, production) extend this base."
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:infra/k8s/base/kustomization.yaml",
+      "target": "resource:infra/k8s/base/namespace.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:infra/k8s/base/kustomization.yaml",
+      "target": "resource:infra/k8s/base/configmap.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:infra/k8s/base/kustomization.yaml",
+      "target": "resource:infra/k8s/base/secret.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:infra/k8s/base/kustomization.yaml",
+      "target": "resource:infra/k8s/base/web.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/base/web.yaml",
+      "target": "resource:infra/k8s/base/configmap.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/base/web.yaml",
+      "target": "resource:infra/k8s/base/secret.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/base/web.yaml",
+      "target": "resource:infra/k8s/base/namespace.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

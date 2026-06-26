@@ -1,0 +1,45 @@
+{
+  "batchIndex": 13,
+  "files": [
+    {
+      "path": "apps/web/lib/server/notification-provider.test.ts",
+      "language": "typescript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notification-provider.ts",
+      "language": "typescript",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier6-notifications.test.ts",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/web/lib/server/notification-provider.test.ts": [
+      "apps/web/lib/server/notification-provider.ts"
+    ],
+    "apps/web/lib/server/notification-provider.ts": [],
+    "apps/web/lib/server/tier6-notifications.test.ts": [
+      "apps/web/lib/server/notification-provider.ts"
+    ]
+  },
+  "neighborMap": {
+    "apps/web/lib/server/notification-provider.ts": [
+      {
+        "path": "apps/web/lib/server/notifications.ts",
+        "batchIndex": 3,
+        "symbols": [
+          "send",
+          "list",
+          "retry"
+        ]
+      }
+    ]
+  }
+}

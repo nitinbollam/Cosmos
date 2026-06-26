@@ -1,0 +1,571 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/client/src/lib/auth-events.ts",
+      "type": "file",
+      "name": "auth-events.ts",
+      "filePath": "apps/client/src/lib/auth-events.ts",
+      "summary": "Defines a browser custom event constant and emitter for signaling storefront authentication state changes, enabling decoupled auth-change notification across components.",
+      "tags": ["utility", "event-handler", "authentication"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/auth-session.ts",
+      "type": "file",
+      "name": "auth-session.ts",
+      "filePath": "apps/client/src/lib/auth-session.ts",
+      "summary": "Manages the storefront user session lifecycle — reading and clearing JWT tokens from localStorage, revoking server-side sessions on sign-out, and emitting auth change events.",
+      "tags": ["authentication", "utility", "service"],
+      "complexity": "moderate",
+      "languageNotes": "Uses localStorage for token persistence with SSR guard (typeof window checks) and optionally calls the backend logout endpoint before clearing local state."
+    },
+    {
+      "id": "function:apps/client/src/lib/auth-session.ts:signOut",
+      "type": "function",
+      "name": "signOut",
+      "filePath": "apps/client/src/lib/auth-session.ts",
+      "lineRange": [31, 43],
+      "summary": "Performs full sign-out: revokes the server session, clears local access and refresh tokens, resets B2B session data, emits auth change event, and redirects the user.",
+      "tags": ["authentication", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/lib/jwt.ts",
+      "type": "file",
+      "name": "jwt.ts",
+      "filePath": "apps/client/src/lib/jwt.ts",
+      "summary": "Provides client-side JWT decoding utilities (without verification) for extracting payload claims such as email for UI display purposes.",
+      "tags": ["utility", "authentication", "serialization"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/session.ts",
+      "type": "file",
+      "name": "session.ts",
+      "filePath": "apps/client/src/lib/session.ts",
+      "summary": "Manages B2B buyer session data (tenantId and customerId) in sessionStorage, providing set/clear/get helpers for use after login.",
+      "tags": ["utility", "authentication", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/theme.ts",
+      "type": "file",
+      "name": "theme.ts",
+      "filePath": "apps/client/src/lib/theme.ts",
+      "summary": "Defines theme types, constants, and functions for applying, persisting, and changing the UI theme (Obsidian/Aurora) via localStorage and DOM attributes.",
+      "tags": ["utility", "theme", "configuration"],
+      "complexity": "simple",
+      "languageNotes": "Uses a custom event (cosmos-theme-change) to broadcast theme changes across components without a shared store."
+    },
+    {
+      "id": "file:apps/client/src/main.tsx",
+      "type": "file",
+      "name": "main.tsx",
+      "filePath": "apps/client/src/main.tsx",
+      "summary": "Application entry point that bootstraps the React app, applies the stored theme, registers the service worker, and mounts the root component.",
+      "tags": ["entry-point", "component", "infrastructure"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/accept-invite/page.tsx",
+      "summary": "Accept-invite page allowing invited users to set their name and password using a token from a URL parameter, then redirecting them to the appropriate portal based on their CRM customer status.",
+      "tags": ["component", "authentication", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/celestial/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/celestial/page.tsx",
+      "summary": "Admin Celestial AI page that renders the CelestialChat component in admin page mode.",
+      "tags": ["component", "api-handler"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/login/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/login/page.tsx",
+      "summary": "Admin login page that authenticates ERP staff against the admin API, stores JWT tokens, emits auth change events, and navigates to the next URL or the admin dashboard.",
+      "tags": ["component", "authentication", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/forgot-password/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/forgot-password/page.tsx",
+      "summary": "Forgot-password page that submits the user's email to trigger a password reset email and shows a confirmation message.",
+      "tags": ["component", "authentication", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/home/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/home/page.tsx",
+      "summary": "Public landing page showcasing Cosmos ERP platform features, workspaces, and entry points for different user roles (admin, B2B buyer, warehouse, delivery, field sales).",
+      "tags": ["component", "entry-point"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/legal/privacy/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/legal/privacy/page.tsx",
+      "summary": "Privacy Policy page rendering structured legal content organized into sections covering data collection, usage, security, and user rights.",
+      "tags": ["component", "documentation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/legal/terms/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/legal/terms/page.tsx",
+      "summary": "Terms of Service page rendering structured legal content covering account terms, acceptable use, billing, and liability limitations.",
+      "tags": ["component", "documentation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/login/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/login/page.tsx",
+      "summary": "B2B buyer storefront login page that authenticates the user, fetches their CRM customer association, sets up the B2B session, and redirects to the catalog.",
+      "tags": ["component", "authentication", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/reset-password/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/reset-password/page.tsx",
+      "summary": "Reset-password page allowing users to set a new password using a URL token, with confirmation matching and success state handling.",
+      "tags": ["component", "authentication", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/signup/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/signup/page.tsx",
+      "summary": "Tenant signup page allowing new distributor organizations to create a workspace with company details, handling email verification flow if required.",
+      "tags": ["component", "authentication", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/verify-email/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/verify-email/page.tsx",
+      "summary": "Email verification page that auto-triggers verification using a URL token and also allows users to request a new verification email by providing their address.",
+      "tags": ["component", "authentication", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/providers.tsx",
+      "type": "file",
+      "name": "providers.tsx",
+      "filePath": "apps/client/src/providers.tsx",
+      "summary": "Sets up the React Query client provider with default stale-time and window-focus-refetch configuration for the entire application.",
+      "tags": ["component", "configuration", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/router.tsx",
+      "type": "file",
+      "name": "router.tsx",
+      "filePath": "apps/client/src/router.tsx",
+      "summary": "Defines the complete React Router configuration with lazy-loaded page components organized under root, shop, admin, and mobile layouts.",
+      "tags": ["entry-point", "component", "configuration"],
+      "complexity": "complex",
+      "languageNotes": "Uses lazy() with Suspense for all page imports, enabling code-splitting per route."
+    },
+    {
+      "id": "file:apps/client/src/stores/celestial-store.ts",
+      "type": "file",
+      "name": "celestial-store.ts",
+      "filePath": "apps/client/src/stores/celestial-store.ts",
+      "summary": "Zustand store managing Celestial AI chat state (messages, conversation IDs, floating panel state) for both admin and shop surfaces, with localStorage persistence and cross-tab sync.",
+      "tags": ["service", "singleton", "component"],
+      "complexity": "moderate",
+      "languageNotes": "Uses Zustand's persist middleware for localStorage sync and a storage event listener for cross-tab rehydration."
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/src/lib/auth-session.ts",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/lib/auth-session.ts",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/lib/auth-session.ts",
+      "target": "file:apps/client/src/lib/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/App.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/globals-admin.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/globals-shop.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/globals.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/lib/theme.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "target": "file:apps/client/src/lib/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/celestial/page.tsx",
+      "target": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/login/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/login/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/login/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/login/page.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/login/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/forgot-password/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/forgot-password/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/forgot-password/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/forgot-password/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/home/page.tsx",
+      "target": "file:apps/client/src/components/landing-nav.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/legal/privacy/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/legal/terms/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/login/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/login/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/login/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/login/page.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/login/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/login/page.tsx",
+      "target": "file:apps/client/src/lib/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/reset-password/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/reset-password/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/reset-password/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/reset-password/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/signup/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/verify-email/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/verify-email/page.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/verify-email/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/verify-email/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/router.tsx",
+      "target": "file:apps/client/src/layouts/AdminLayout.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/router.tsx",
+      "target": "file:apps/client/src/layouts/MobileLayout.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/router.tsx",
+      "target": "file:apps/client/src/layouts/RootLayout.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/router.tsx",
+      "target": "file:apps/client/src/layouts/ShopLayout.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/lib/auth-session.ts",
+      "target": "function:apps/client/src/lib/auth-session.ts:signOut",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/auth-session.ts",
+      "target": "function:apps/client/src/lib/auth-session.ts:signOut",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/auth-session.ts",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/lib/theme.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/login/page.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/login/page.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/accept-invite/page.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

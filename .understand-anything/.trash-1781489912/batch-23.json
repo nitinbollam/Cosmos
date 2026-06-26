@@ -1,0 +1,53 @@
+{
+  "nodes": [
+    {
+      "id": "file:scripts/bootstrap.sh",
+      "type": "file",
+      "name": "bootstrap.sh",
+      "filePath": "scripts/bootstrap.sh",
+      "summary": "First-run setup script that installs npm dependencies, copies the .env template, sets up the SQLite database, generates Prisma clients, runs migrations, and seeds a demo tenant in six sequential steps.",
+      "tags": ["infrastructure", "deployment", "build-system", "development"],
+      "complexity": "simple",
+      "languageNotes": "Uses set -euo pipefail for strict error handling; the script is purely imperative with no named functions."
+    },
+    {
+      "id": "file:scripts/diagnose-prisma-engines.ps1",
+      "type": "file",
+      "name": "diagnose-prisma-engines.ps1",
+      "filePath": "scripts/diagnose-prisma-engines.ps1",
+      "summary": "Windows diagnostic script that locates all Prisma query_engine-windows.dll.node files under services/ and reports whether each is currently locked by another process, helping resolve EPERM errors during prisma generate.",
+      "tags": ["infrastructure", "development", "utility"],
+      "complexity": "moderate",
+      "languageNotes": "Uses System.IO.File::Open with FileShare.None to test for file lock — a Windows-specific technique not available on Unix."
+    },
+    {
+      "id": "function:scripts/diagnose-prisma-engines.ps1:Test-EngineLocked",
+      "type": "function",
+      "name": "Test-EngineLocked",
+      "filePath": "scripts/diagnose-prisma-engines.ps1",
+      "lineRange": [31, 45],
+      "summary": "Attempts to open a file with exclusive read-write access and no sharing; returns true if the file is locked by another process, false otherwise.",
+      "tags": ["utility", "diagnostic"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/scaffold-ai.ps1",
+      "type": "file",
+      "name": "scaffold-ai.ps1",
+      "filePath": "scripts/scaffold-ai.ps1",
+      "summary": "PowerShell scaffold generator that creates a new AI microservice directory under ai/ with a FastAPI main.py, requirements.txt, a multi-stage Dockerfile, and a README stub, parameterized by service name, port, and description.",
+      "tags": ["infrastructure", "deployment", "build-system", "development"],
+      "complexity": "moderate",
+      "languageNotes": "Generates Python FastAPI service code inline as heredoc strings; the Dockerfile uses a two-stage build (builder + runner) with a non-root cosmos user for security."
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:scripts/diagnose-prisma-engines.ps1",
+      "target": "function:scripts/diagnose-prisma-engines.ps1:Test-EngineLocked",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    }
+  ]
+}

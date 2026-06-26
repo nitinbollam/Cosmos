@@ -1,0 +1,3202 @@
+{
+  "name": "cosmos",
+  "description": "Cosmos — production-grade ERP/distribution platform Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
+  "languages": [
+    "config",
+    "css",
+    "dockerfile",
+    "html",
+    "javascript",
+    "json",
+    "markdown",
+    "powershell",
+    "prisma",
+    "shell",
+    "sql",
+    "terraform",
+    "txt",
+    "typescript",
+    "unknown",
+    "webmanifest",
+    "yaml"
+  ],
+  "frameworks": [
+    "Docker",
+    "Docker Compose",
+    "Express",
+    "GitHub Actions",
+    "Prisma",
+    "React",
+    "React Query",
+    "React Router",
+    "Tailwind CSS",
+    "Terraform",
+    "Vite",
+    "Zod",
+    "Zustand"
+  ],
+  "files": [
+    {
+      "path": ".env.example",
+      "language": "config",
+      "sizeLines": 55,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".env.production.example",
+      "language": "config",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "language": "yaml",
+      "sizeLines": 60,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/deploy-production.yml",
+      "language": "yaml",
+      "sizeLines": 62,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/deploy-staging.yml",
+      "language": "yaml",
+      "sizeLines": 44,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".npmrc",
+      "language": "unknown",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/.data/msa/test/1780332349092/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780332793234/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333010155/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333192379/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333398883/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333596068/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/client/.env.example",
+      "language": "config",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/client/eslint.config.mjs",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/index.html",
+      "language": "html",
+      "sizeLines": 29,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/package.json",
+      "language": "json",
+      "sizeLines": 61,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/client/postcss.config.js",
+      "language": "javascript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/public/manifest.webmanifest",
+      "language": "webmanifest",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/public/sw.js",
+      "language": "javascript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/server/index.ts",
+      "language": "typescript",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/App.tsx",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/auth/require-auth.tsx",
+      "language": "typescript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/auth/require-mobile-auth.tsx",
+      "language": "typescript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/celestial/celestial-chat.tsx",
+      "language": "typescript",
+      "sizeLines": 411,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/celestial/celestial-markdown.tsx",
+      "language": "typescript",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/celestial/celestial-stream.ts",
+      "language": "typescript",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/checkout-card-capture.tsx",
+      "language": "typescript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/compliance/msa-status-card.tsx",
+      "language": "typescript",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos-img.tsx",
+      "language": "typescript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos-logo.tsx",
+      "language": "typescript",
+      "sizeLines": 157,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "language": "typescript",
+      "sizeLines": 171,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/empty-state.tsx",
+      "language": "typescript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "language": "typescript",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "language": "typescript",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/status-badge.tsx",
+      "language": "typescript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/global-search.tsx",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/inventory/low-stock-alert.tsx",
+      "language": "typescript",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/landing-nav.tsx",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/layout/dashboard-shell.tsx",
+      "language": "typescript",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/layout/sidebar-icons.tsx",
+      "language": "typescript",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/layout/sidebar.tsx",
+      "language": "typescript",
+      "sizeLines": 136,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/mobile/offline-banner.tsx",
+      "language": "typescript",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/mobile/offline-sync-runner.tsx",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/orders/recent-orders.tsx",
+      "language": "typescript",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/settings/webhook-manager.tsx",
+      "language": "typescript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/shop-header.tsx",
+      "language": "typescript",
+      "sizeLines": 131,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/status-badge.tsx",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/storefront-nav.tsx",
+      "language": "typescript",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/theme-switcher.tsx",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/user-menu.tsx",
+      "language": "typescript",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/globals-admin.css",
+      "language": "css",
+      "sizeLines": 971,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/src/globals-shop.css",
+      "language": "css",
+      "sizeLines": 356,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/src/globals-theme.css",
+      "language": "css",
+      "sizeLines": 502,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/src/globals.css",
+      "language": "css",
+      "sizeLines": 824,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/src/layouts/AdminLayout.tsx",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/layouts/MobileLayout.tsx",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/layouts/RootLayout.tsx",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/layouts/ShopLayout.tsx",
+      "language": "typescript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/admin-path.test.ts",
+      "language": "typescript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/admin-path.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/api-admin.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/api-mobile.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/api.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/auth-events.ts",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/auth-session.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/axios-error.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/b2b-cart.ts",
+      "language": "typescript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/jwt.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/offline-queue.ts",
+      "language": "typescript",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/offline-sync.ts",
+      "language": "typescript",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/session.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/spreadsheet-import.ts",
+      "language": "typescript",
+      "sizeLines": 107,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/theme.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/toast.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/use-query-params.ts",
+      "language": "typescript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/main.tsx",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/accept-invite/page.tsx",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/account/page.tsx",
+      "language": "typescript",
+      "sizeLines": 449,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/celestial/page.tsx",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/compliance/page.tsx",
+      "language": "typescript",
+      "sizeLines": 346,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 529,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/crm/page.tsx",
+      "language": "typescript",
+      "sizeLines": 948,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/customers/page.tsx",
+      "language": "typescript",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/dispatch/page.tsx",
+      "language": "typescript",
+      "sizeLines": 895,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/finance/page.tsx",
+      "language": "typescript",
+      "sizeLines": 787,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 323,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/fulfillment/page.tsx",
+      "language": "typescript",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 553,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/inventory/page.tsx",
+      "language": "typescript",
+      "sizeLines": 956,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/login/page.tsx",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/notifications/page.tsx",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 789,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/orders/page.tsx",
+      "language": "typescript",
+      "sizeLines": 283,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/page.tsx",
+      "language": "typescript",
+      "sizeLines": 352,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/pos/page.tsx",
+      "language": "typescript",
+      "sizeLines": 331,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 454,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/purchasing/page.tsx",
+      "language": "typescript",
+      "sizeLines": 523,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/quotes/page.tsx",
+      "language": "typescript",
+      "sizeLines": 331,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/settings/page.tsx",
+      "language": "typescript",
+      "sizeLines": 1554,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+      "language": "typescript",
+      "sizeLines": 1735,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/cart/page.tsx",
+      "language": "typescript",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/catalog/page.tsx",
+      "language": "typescript",
+      "sizeLines": 329,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/checkout/page.tsx",
+      "language": "typescript",
+      "sizeLines": 506,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/forgot-password/page.tsx",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/home/page.tsx",
+      "language": "typescript",
+      "sizeLines": 268,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/invoices/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 288,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/invoices/page.tsx",
+      "language": "typescript",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/legal/privacy/page.tsx",
+      "language": "typescript",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/legal/terms/page.tsx",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/login/page.tsx",
+      "language": "typescript",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/delivery/page.tsx",
+      "language": "typescript",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/login/page.tsx",
+      "language": "typescript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/sales/page.tsx",
+      "language": "typescript",
+      "sizeLines": 192,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/page.tsx",
+      "language": "typescript",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "language": "typescript",
+      "sizeLines": 81,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 175,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/notifications/page.tsx",
+      "language": "typescript",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/orders/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 385,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/orders/page.tsx",
+      "language": "typescript",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/quotes/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 346,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/quotes/new/page.tsx",
+      "language": "typescript",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/quotes/page.tsx",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/reset-password/page.tsx",
+      "language": "typescript",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/signup/page.tsx",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/verify-email/page.tsx",
+      "language": "typescript",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/providers.tsx",
+      "language": "typescript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/router.tsx",
+      "language": "typescript",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/stores/cart.store.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/stores/celestial-store.ts",
+      "language": "typescript",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/vite-env.d.ts",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/tailwind.config.ts",
+      "language": "typescript",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/tsconfig.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/client/tsconfig.node.json",
+      "language": "json",
+      "sizeLines": 12,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/client/vite.config.ts",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/.env.local.example",
+      "language": "config",
+      "sizeLines": 32,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/web/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 37,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "apps/web/eslint.config.mjs",
+      "language": "javascript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/analytics.ts",
+      "language": "typescript",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/ap-bills.ts",
+      "language": "typescript",
+      "sizeLines": 291,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/audit-log.ts",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/auth-security.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/auth.ts",
+      "language": "typescript",
+      "sizeLines": 277,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/background-jobs.ts",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/backorders.ts",
+      "language": "typescript",
+      "sizeLines": 186,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/bank-recon.ts",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/barcode-labels.ts",
+      "language": "typescript",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/billing.ts",
+      "language": "typescript",
+      "sizeLines": 186,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/bin-locations.ts",
+      "language": "typescript",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/buyer-context.ts",
+      "language": "typescript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/compose.test.ts",
+      "language": "typescript",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/compose.ts",
+      "language": "typescript",
+      "sizeLines": 348,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/conversations.ts",
+      "language": "typescript",
+      "sizeLines": 81,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/intent.test.ts",
+      "language": "typescript",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/intent.ts",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/llm.ts",
+      "language": "typescript",
+      "sizeLines": 431,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/orchestrator.ts",
+      "language": "typescript",
+      "sizeLines": 365,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/prompts.ts",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/retrieval.test.ts",
+      "language": "typescript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/retrieval.ts",
+      "language": "typescript",
+      "sizeLines": 260,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/tools.ts",
+      "language": "typescript",
+      "sizeLines": 228,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/compliance-msa.ts",
+      "language": "typescript",
+      "sizeLines": 340,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/compliance-tax.ts",
+      "language": "typescript",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/credit-limit.ts",
+      "language": "typescript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/crm.ts",
+      "language": "typescript",
+      "sizeLines": 289,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/customer-notification-prefs.ts",
+      "language": "typescript",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/cycle-count-adjust.test.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/cycle-count-adjust.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/db-health.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/db.ts",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/demand-planning.ts",
+      "language": "typescript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/dispatch-order.ts",
+      "language": "typescript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/dispatch.ts",
+      "language": "typescript",
+      "sizeLines": 231,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/drop-ship.ts",
+      "language": "typescript",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/edi.ts",
+      "language": "typescript",
+      "sizeLines": 238,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/env.ts",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/erp-features.test.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/event-bus.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/feature-flags.ts",
+      "language": "typescript",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/inventory-lots.ts",
+      "language": "typescript",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/inventory-serials.ts",
+      "language": "typescript",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/inventory.ts",
+      "language": "typescript",
+      "sizeLines": 896,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/invoice-document.ts",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/invoice-gl.ts",
+      "language": "typescript",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/invoice-status.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/invoices.ts",
+      "language": "typescript",
+      "sizeLines": 582,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/landed-cost.test.ts",
+      "language": "typescript",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/landed-cost.ts",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/ledger.ts",
+      "language": "typescript",
+      "sizeLines": 195,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/msa-storage.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/native-router.ts",
+      "language": "typescript",
+      "sizeLines": 1708,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notification-provider-status.test.ts",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notification-provider-status.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notification-provider.test.ts",
+      "language": "typescript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notification-provider.ts",
+      "language": "typescript",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notification-triggers.ts",
+      "language": "typescript",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notifications.ts",
+      "language": "typescript",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/operations-gl.ts",
+      "language": "typescript",
+      "sizeLines": 240,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-orchestration.ts",
+      "language": "typescript",
+      "sizeLines": 418,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-payment-sync.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-saga.ts",
+      "language": "typescript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-shipments.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-status.test.ts",
+      "language": "typescript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-status.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-templates.ts",
+      "language": "typescript",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/orders.ts",
+      "language": "typescript",
+      "sizeLines": 259,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/payment-idempotency.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/payments.ts",
+      "language": "typescript",
+      "sizeLines": 324,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/permissions.ts",
+      "language": "typescript",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/pick-bin-resolver.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/pick-line-status.test.ts",
+      "language": "typescript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/pick-line-status.ts",
+      "language": "typescript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/po-receiving.test.ts",
+      "language": "typescript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/po-receiving.ts",
+      "language": "typescript",
+      "sizeLines": 282,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/pos-receipt.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/pos.ts",
+      "language": "typescript",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/pricing.ts",
+      "language": "typescript",
+      "sizeLines": 214,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/prisma.ts",
+      "language": "typescript",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/purchasing.ts",
+      "language": "typescript",
+      "sizeLines": 214,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/quotes.ts",
+      "language": "typescript",
+      "sizeLines": 239,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/saved-payment-methods.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/search.ts",
+      "language": "typescript",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/session.ts",
+      "language": "typescript",
+      "sizeLines": 111,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/signup.ts",
+      "language": "typescript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/stripe.ts",
+      "language": "typescript",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tenant-tax.ts",
+      "language": "typescript",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tenant.ts",
+      "language": "typescript",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier2.test.ts",
+      "language": "typescript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier4.test.ts",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier5.test.ts",
+      "language": "typescript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier6-notifications.test.ts",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier7.test.ts",
+      "language": "typescript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier8.test.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/tier9.test.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/users.ts",
+      "language": "typescript",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/wave-picking.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/webhooks.ts",
+      "language": "typescript",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/wms-cycle-count.ts",
+      "language": "typescript",
+      "sizeLines": 275,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/wms-fulfillment.ts",
+      "language": "typescript",
+      "sizeLines": 374,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/wms-labor.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/wms-putaway.ts",
+      "language": "typescript",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/wms-receiving.ts",
+      "language": "typescript",
+      "sizeLines": 289,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/package.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/web/postcss.config.js",
+      "language": "javascript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/prisma/analytics/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 49,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/auth/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 65,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/compliance/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 100,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/crm/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 116,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/dispatch/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 54,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/inventory/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 187,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/ledger/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 91,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/notification/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 38,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/order/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 227,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/payment/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 93,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/purchasing/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 129,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/storefront/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 96,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/tenant/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 177,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/wms/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 282,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/server/api-router.ts",
+      "language": "typescript",
+      "sizeLines": 297,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/server/register-paths.mjs",
+      "language": "javascript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/tailwind.config.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/tsconfig.json",
+      "language": "json",
+      "sizeLines": 36,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docker-compose.production.yml",
+      "language": "yaml",
+      "sizeLines": 70,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "docker-compose.yml",
+      "language": "yaml",
+      "sizeLines": 68,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "docs/celestial/01-platform-overview.md",
+      "language": "markdown",
+      "sizeLines": 189,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/02-admin-modules.md",
+      "language": "markdown",
+      "sizeLines": 279,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/03-buyer-mobile.md",
+      "language": "markdown",
+      "sizeLines": 178,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/04-api-finance-integrations.md",
+      "language": "markdown",
+      "sizeLines": 207,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/05-celestial-ai.md",
+      "language": "markdown",
+      "sizeLines": 157,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/06-faq.md",
+      "language": "markdown",
+      "sizeLines": 187,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "ERP_FEATURE_GAP.md",
+      "language": "markdown",
+      "sizeLines": 275,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "infra/docker/otel-config.yaml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "infra/docker/python-service.Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infra/k8s/base/configmap.yaml",
+      "language": "yaml",
+      "sizeLines": 10,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/external-secrets/cluster-secret-store.yaml",
+      "language": "yaml",
+      "sizeLines": 14,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/kustomization.yaml",
+      "language": "yaml",
+      "sizeLines": 9,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 6,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/secret.yaml",
+      "language": "yaml",
+      "sizeLines": 15,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/web.yaml",
+      "language": "yaml",
+      "sizeLines": 56,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/examples/external-secret-redis.yaml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/examples/external-secret-storefront-database.yaml",
+      "language": "yaml",
+      "sizeLines": 24,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/overlays/production/kustomization.yaml",
+      "language": "yaml",
+      "sizeLines": 13,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/overlays/staging/kustomization.yaml",
+      "language": "yaml",
+      "sizeLines": 13,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/sql/init-databases.sql",
+      "language": "sql",
+      "sizeLines": 18,
+      "fileCategory": "data"
+    },
+    {
+      "path": "infra/terraform/environments/production/main.tf",
+      "language": "terraform",
+      "sizeLines": 51,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/environments/staging/main.tf",
+      "language": "terraform",
+      "sizeLines": 56,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/eks/main.tf",
+      "language": "terraform",
+      "sizeLines": 45,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/networking/main.tf",
+      "language": "terraform",
+      "sizeLines": 32,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/rds/main.tf",
+      "language": "terraform",
+      "sizeLines": 60,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/redis/main.tf",
+      "language": "terraform",
+      "sizeLines": 44,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/s3/main.tf",
+      "language": "terraform",
+      "sizeLines": 39,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "MISSING.md",
+      "language": "markdown",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "sizeLines": 48,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/analytics-engine/package.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/analytics-engine/src/anomaly.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/src/cashflow.test.ts",
+      "language": "typescript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/src/cashflow.ts",
+      "language": "typescript",
+      "sizeLines": 114,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/src/stats.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/tsconfig.json",
+      "language": "json",
+      "sizeLines": 8,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/types/package.json",
+      "language": "json",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/types/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/types/tsconfig.json",
+      "language": "json",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/ui/package.json",
+      "language": "json",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/ui/src/Button.tsx",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/src/Card.tsx",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/src/cn.ts",
+      "language": "typescript",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/src/StatsCard.tsx",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/tsconfig.json",
+      "language": "json",
+      "sizeLines": 12,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/web-gateway-client/package.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/web-gateway-client/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/web-gateway-client/src/resolve-gateway.test.ts",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/web-gateway-client/tsconfig.json",
+      "language": "json",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "PLATFORM_FEATURES.md",
+      "language": "markdown",
+      "sizeLines": 624,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "PRODUCTION_READINESS.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 67,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/apply-prisma-provider.mjs",
+      "language": "javascript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/bootstrap.sh",
+      "language": "shell",
+      "sizeLines": 38,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/clean-client-public.mjs",
+      "language": "javascript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/db-urls.mjs",
+      "language": "javascript",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/dev-admin.mjs",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/dev-web.mjs",
+      "language": "javascript",
+      "sizeLines": 19,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/diagnose-prisma-engines.ps1",
+      "language": "powershell",
+      "sizeLines": 61,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/eslint-soft.mjs",
+      "language": "javascript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/generate-all-prisma.mjs",
+      "language": "javascript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/generate-favicons.mjs",
+      "language": "javascript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/generate-types.ts",
+      "language": "typescript",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/migrate-all.ts",
+      "language": "typescript",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/patch-client-after-sync.mjs",
+      "language": "javascript",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/prepare-dev-env.mjs",
+      "language": "javascript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/production-preflight.mjs",
+      "language": "javascript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/scaffold-ai.ps1",
+      "language": "powershell",
+      "sizeLines": 61,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/seed-db.ts",
+      "language": "typescript",
+      "sizeLines": 1447,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/setup-postgres.mjs",
+      "language": "javascript",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/setup-sqlite.mjs",
+      "language": "javascript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/strip-web-ui.mjs",
+      "language": "javascript",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/sync-client-from-web.mjs",
+      "language": "javascript",
+      "sizeLines": 147,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/workspace-run.mjs",
+      "language": "javascript",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    }
+  ],
+  "totalFiles": 348,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "large",
+  "importMap": {
+    ".env.example": [],
+    ".env.production.example": [],
+    ".github/workflows/ci.yml": [],
+    ".github/workflows/deploy-production.yml": [],
+    ".github/workflows/deploy-staging.yml": [],
+    ".npmrc": [],
+    ".understand-anything/.understandignore": [],
+    "apps/.data/msa/test/1780332349092/sample.txt": [],
+    "apps/.data/msa/test/1780332793234/sample.txt": [],
+    "apps/.data/msa/test/1780333010155/sample.txt": [],
+    "apps/.data/msa/test/1780333192379/sample.txt": [],
+    "apps/.data/msa/test/1780333398883/sample.txt": [],
+    "apps/.data/msa/test/1780333596068/sample.txt": [],
+    "apps/client/.env.example": [],
+    "apps/client/eslint.config.mjs": [],
+    "apps/client/index.html": [],
+    "apps/client/package.json": [],
+    "apps/client/postcss.config.js": [],
+    "apps/client/public/manifest.webmanifest": [],
+    "apps/client/public/sw.js": [],
+    "apps/client/server/index.ts": [],
+    "apps/client/src/App.tsx": [
+      "apps/client/src/providers.tsx",
+      "apps/client/src/router.tsx"
+    ],
+    "apps/client/src/components/auth-theme-toolbar.tsx": [
+      "apps/client/src/components/theme-switcher.tsx"
+    ],
+    "apps/client/src/components/auth/require-auth.tsx": [],
+    "apps/client/src/components/auth/require-mobile-auth.tsx": [],
+    "apps/client/src/components/celestial/celestial-chat.tsx": [
+      "apps/client/src/components/celestial/celestial-markdown.tsx",
+      "apps/client/src/components/celestial/celestial-stream.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/stores/celestial-store.ts"
+    ],
+    "apps/client/src/components/celestial/celestial-markdown.tsx": [],
+    "apps/client/src/components/celestial/celestial-stream.ts": [],
+    "apps/client/src/components/checkout-card-capture.tsx": [],
+    "apps/client/src/components/compliance/msa-status-card.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/components/cosmos-img.tsx": [],
+    "apps/client/src/components/cosmos-logo.tsx": [],
+    "apps/client/src/components/cosmos/bento-cards.tsx": [],
+    "apps/client/src/components/cosmos/empty-state.tsx": [],
+    "apps/client/src/components/cosmos/radix-overlays.tsx": [],
+    "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx": [
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/components/cosmos/status-badge.tsx": [],
+    "apps/client/src/components/global-search.tsx": [
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/components/inventory/low-stock-alert.tsx": [
+      "apps/client/src/lib/admin-path.ts"
+    ],
+    "apps/client/src/components/landing-nav.tsx": [
+      "apps/client/src/components/theme-switcher.tsx",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/auth-session.ts"
+    ],
+    "apps/client/src/components/layout/dashboard-shell.tsx": [
+      "apps/client/src/components/celestial/celestial-chat.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/components/global-search.tsx",
+      "apps/client/src/components/layout/sidebar.tsx",
+      "apps/client/src/components/theme-switcher.tsx",
+      "apps/client/src/components/user-menu.tsx"
+    ],
+    "apps/client/src/components/layout/sidebar-icons.tsx": [],
+    "apps/client/src/components/layout/sidebar.tsx": [
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/components/layout/sidebar-icons.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/components/mobile/offline-banner.tsx": [
+      "apps/client/src/lib/offline-queue.ts",
+      "apps/client/src/lib/offline-sync.ts"
+    ],
+    "apps/client/src/components/mobile/offline-sync-runner.tsx": [
+      "apps/client/src/lib/offline-sync.ts"
+    ],
+    "apps/client/src/components/orders/recent-orders.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/components/settings/webhook-manager.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/components/shop-header.tsx": [
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/components/theme-switcher.tsx",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/auth-session.ts",
+      "apps/client/src/lib/jwt.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/components/status-badge.tsx": [],
+    "apps/client/src/components/storefront-nav.tsx": [
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/components/theme-switcher.tsx",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/auth-session.ts",
+      "apps/client/src/lib/b2b-cart.ts"
+    ],
+    "apps/client/src/components/theme-switcher.tsx": [
+      "apps/client/src/lib/theme.ts"
+    ],
+    "apps/client/src/components/user-menu.tsx": [
+      "apps/client/src/components/theme-switcher.tsx",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/auth-session.ts",
+      "apps/client/src/lib/jwt.ts"
+    ],
+    "apps/client/src/globals-admin.css": [],
+    "apps/client/src/globals-shop.css": [],
+    "apps/client/src/globals-theme.css": [],
+    "apps/client/src/globals.css": [],
+    "apps/client/src/layouts/AdminLayout.tsx": [
+      "apps/client/src/components/auth/require-auth.tsx",
+      "apps/client/src/components/layout/dashboard-shell.tsx"
+    ],
+    "apps/client/src/layouts/MobileLayout.tsx": [
+      "apps/client/src/components/auth/require-mobile-auth.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/components/mobile/offline-sync-runner.tsx",
+      "apps/client/src/components/theme-switcher.tsx",
+      "apps/client/src/lib/auth-session.ts"
+    ],
+    "apps/client/src/layouts/RootLayout.tsx": [],
+    "apps/client/src/layouts/ShopLayout.tsx": [
+      "apps/client/src/components/celestial/celestial-chat.tsx",
+      "apps/client/src/components/shop-header.tsx"
+    ],
+    "apps/client/src/lib/admin-path.test.ts": [
+      "apps/client/src/lib/admin-path.ts"
+    ],
+    "apps/client/src/lib/admin-path.ts": [],
+    "apps/client/src/lib/api-admin.ts": [],
+    "apps/client/src/lib/api-mobile.ts": [],
+    "apps/client/src/lib/api.ts": [],
+    "apps/client/src/lib/auth-events.ts": [],
+    "apps/client/src/lib/auth-session.ts": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/session.ts"
+    ],
+    "apps/client/src/lib/axios-error.ts": [],
+    "apps/client/src/lib/b2b-cart.ts": [],
+    "apps/client/src/lib/jwt.ts": [],
+    "apps/client/src/lib/offline-queue.ts": [],
+    "apps/client/src/lib/offline-sync.ts": [
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/lib/session.ts": [],
+    "apps/client/src/lib/spreadsheet-import.ts": [],
+    "apps/client/src/lib/theme.ts": [],
+    "apps/client/src/lib/toast.ts": [],
+    "apps/client/src/lib/use-query-params.ts": [],
+    "apps/client/src/main.tsx": [
+      "apps/client/src/App.tsx",
+      "apps/client/src/globals-admin.css",
+      "apps/client/src/globals-shop.css",
+      "apps/client/src/globals.css",
+      "apps/client/src/lib/theme.ts"
+    ],
+    "apps/client/src/pages/accept-invite/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts"
+    ],
+    "apps/client/src/pages/account/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/admin/celestial/page.tsx": [
+      "apps/client/src/components/celestial/celestial-chat.tsx"
+    ],
+    "apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/compliance/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/pages/admin/crm/customers/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/crm/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/pages/admin/customers/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/customers/page.tsx": [
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/dispatch/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/use-query-params.ts"
+    ],
+    "apps/client/src/pages/admin/finance/journals/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/finance/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/fulfillment/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/inventory/[skuId]/page.tsx": [
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/inventory/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/pages/admin/login/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/admin/notifications/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/orders/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/orders/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/page.tsx": [
+      "apps/client/src/components/cosmos/bento-cards.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/components/inventory/low-stock-alert.tsx",
+      "apps/client/src/components/orders/recent-orders.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/pos/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/purchasing/[poId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/toast.ts"
+    ],
+    "apps/client/src/pages/admin/purchasing/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/quotes/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/settings/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/settings/webhook-manager.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/use-query-params.ts"
+    ],
+    "apps/client/src/pages/admin/warehouse/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts",
+      "apps/client/src/lib/toast.ts"
+    ],
+    "apps/client/src/pages/cart/page.tsx": [
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/catalog/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/checkout/page.tsx": [
+      "apps/client/src/components/checkout-card-capture.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/forgot-password/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/home/page.tsx": [
+      "apps/client/src/components/landing-nav.tsx"
+    ],
+    "apps/client/src/pages/invoices/[id]/page.tsx": [
+      "apps/client/src/components/checkout-card-capture.tsx",
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/invoices/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/legal/privacy/page.tsx": [
+      "apps/client/src/components/cosmos-logo.tsx"
+    ],
+    "apps/client/src/pages/legal/terms/page.tsx": [
+      "apps/client/src/components/cosmos-logo.tsx"
+    ],
+    "apps/client/src/pages/login/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts"
+    ],
+    "apps/client/src/pages/m/delivery/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/pages/m/delivery/route/[id]/page.tsx": [
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/m/login/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/jwt.ts"
+    ],
+    "apps/client/src/pages/m/sales/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/receiving/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/task/[id]/page.tsx": [
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/waves/[id]/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/notifications/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/jwt.ts"
+    ],
+    "apps/client/src/pages/orders/[id]/confirmation/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/orders/[id]/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/orders/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/quotes/[id]/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/quotes/new/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/b2b-cart.ts",
+      "apps/client/src/lib/use-query-params.ts"
+    ],
+    "apps/client/src/pages/quotes/page.tsx": [
+      "apps/client/src/lib/api.ts"
+    ],
+    "apps/client/src/pages/reset-password/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/signup/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx"
+    ],
+    "apps/client/src/pages/verify-email/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/providers.tsx": [],
+    "apps/client/src/router.tsx": [
+      "apps/client/src/layouts/AdminLayout.tsx",
+      "apps/client/src/layouts/MobileLayout.tsx",
+      "apps/client/src/layouts/RootLayout.tsx",
+      "apps/client/src/layouts/ShopLayout.tsx"
+    ],
+    "apps/client/src/stores/cart.store.ts": [],
+    "apps/client/src/stores/celestial-store.ts": [],
+    "apps/client/src/vite-env.d.ts": [],
+    "apps/client/tailwind.config.ts": [],
+    "apps/client/tsconfig.json": [],
+    "apps/client/tsconfig.node.json": [],
+    "apps/client/vite.config.ts": [],
+    "apps/web/.env.local.example": [],
+    "apps/web/Dockerfile": [],
+    "apps/web/eslint.config.mjs": [],
+    "apps/web/lib/server/analytics.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/ap-bills.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/operations-gl.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/audit-log.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/auth-security.ts": [
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/auth.ts": [
+      "apps/web/lib/server/auth-security.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/env.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/background-jobs.ts": [],
+    "apps/web/lib/server/backorders.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory-lots.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/bank-recon.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/barcode-labels.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/billing.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/bin-locations.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/buyer-context.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/celestial/compose.test.ts": [
+      "apps/web/lib/server/celestial/compose.ts"
+    ],
+    "apps/web/lib/server/celestial/compose.ts": [
+      "apps/web/lib/server/celestial/tools.ts"
+    ],
+    "apps/web/lib/server/celestial/conversations.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/celestial/intent.test.ts": [
+      "apps/web/lib/server/celestial/intent.ts"
+    ],
+    "apps/web/lib/server/celestial/intent.ts": [],
+    "apps/web/lib/server/celestial/llm.ts": [],
+    "apps/web/lib/server/celestial/orchestrator.ts": [
+      "apps/web/lib/server/audit-log.ts",
+      "apps/web/lib/server/buyer-context.ts",
+      "apps/web/lib/server/celestial/compose.ts",
+      "apps/web/lib/server/celestial/conversations.ts",
+      "apps/web/lib/server/celestial/intent.ts",
+      "apps/web/lib/server/celestial/llm.ts",
+      "apps/web/lib/server/celestial/prompts.ts",
+      "apps/web/lib/server/celestial/retrieval.ts",
+      "apps/web/lib/server/celestial/tools.ts",
+      "apps/web/lib/server/feature-flags.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/celestial/prompts.ts": [
+      "apps/web/lib/server/buyer-context.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/celestial/retrieval.test.ts": [
+      "apps/web/lib/server/celestial/retrieval.ts"
+    ],
+    "apps/web/lib/server/celestial/retrieval.ts": [],
+    "apps/web/lib/server/celestial/tools.ts": [
+      "apps/web/lib/server/buyer-context.ts",
+      "apps/web/lib/server/celestial/intent.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/invoices.ts",
+      "apps/web/lib/server/orders.ts",
+      "apps/web/lib/server/quotes.ts",
+      "apps/web/lib/server/search.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/compliance-msa.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/msa-storage.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/compliance-tax.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/tenant-tax.ts"
+    ],
+    "apps/web/lib/server/credit-limit.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/crm.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/customer-notification-prefs.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/cycle-count-adjust.test.ts": [
+      "apps/web/lib/server/cycle-count-adjust.ts"
+    ],
+    "apps/web/lib/server/cycle-count-adjust.ts": [],
+    "apps/web/lib/server/db-health.ts": [
+      "apps/web/lib/server/env.ts"
+    ],
+    "apps/web/lib/server/db.ts": [],
+    "apps/web/lib/server/demand-planning.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/dispatch-order.ts": [],
+    "apps/web/lib/server/dispatch.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/dispatch-order.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/drop-ship.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/purchasing.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/edi.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/orders.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/env.ts": [],
+    "apps/web/lib/server/erp-features.test.ts": [
+      "apps/web/lib/server/order-status.ts"
+    ],
+    "apps/web/lib/server/event-bus.ts": [],
+    "apps/web/lib/server/feature-flags.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/inventory-lots.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/inventory-serials.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/inventory.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/invoice-document.ts": [
+      "apps/web/lib/server/crm.ts"
+    ],
+    "apps/web/lib/server/invoice-gl.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/invoice-status.ts": [],
+    "apps/web/lib/server/invoices.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/invoice-gl.ts",
+      "apps/web/lib/server/invoice-status.ts",
+      "apps/web/lib/server/notification-triggers.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/landed-cost.test.ts": [
+      "apps/web/lib/server/landed-cost.ts"
+    ],
+    "apps/web/lib/server/landed-cost.ts": [],
+    "apps/web/lib/server/ledger.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/msa-storage.ts": [],
+    "apps/web/lib/server/native-router.ts": [
+      "apps/web/lib/server/analytics.ts",
+      "apps/web/lib/server/ap-bills.ts",
+      "apps/web/lib/server/audit-log.ts",
+      "apps/web/lib/server/backorders.ts",
+      "apps/web/lib/server/bank-recon.ts",
+      "apps/web/lib/server/barcode-labels.ts",
+      "apps/web/lib/server/bin-locations.ts",
+      "apps/web/lib/server/buyer-context.ts",
+      "apps/web/lib/server/celestial/orchestrator.ts",
+      "apps/web/lib/server/compliance-msa.ts",
+      "apps/web/lib/server/compliance-tax.ts",
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/customer-notification-prefs.ts",
+      "apps/web/lib/server/db-health.ts",
+      "apps/web/lib/server/demand-planning.ts",
+      "apps/web/lib/server/dispatch.ts",
+      "apps/web/lib/server/drop-ship.ts",
+      "apps/web/lib/server/edi.ts",
+      "apps/web/lib/server/feature-flags.ts",
+      "apps/web/lib/server/inventory-lots.ts",
+      "apps/web/lib/server/inventory-serials.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/invoices.ts",
+      "apps/web/lib/server/ledger.ts",
+      "apps/web/lib/server/notification-provider-status.ts",
+      "apps/web/lib/server/notifications.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/order-shipments.ts",
+      "apps/web/lib/server/order-templates.ts",
+      "apps/web/lib/server/orders.ts",
+      "apps/web/lib/server/payment-idempotency.ts",
+      "apps/web/lib/server/payments.ts",
+      "apps/web/lib/server/pos-receipt.ts",
+      "apps/web/lib/server/pos.ts",
+      "apps/web/lib/server/pricing.ts",
+      "apps/web/lib/server/purchasing.ts",
+      "apps/web/lib/server/quotes.ts",
+      "apps/web/lib/server/saved-payment-methods.ts",
+      "apps/web/lib/server/search.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/tenant-tax.ts",
+      "apps/web/lib/server/tenant.ts",
+      "apps/web/lib/server/users.ts",
+      "apps/web/lib/server/wave-picking.ts",
+      "apps/web/lib/server/webhooks.ts",
+      "apps/web/lib/server/wms-cycle-count.ts",
+      "apps/web/lib/server/wms-fulfillment.ts",
+      "apps/web/lib/server/wms-labor.ts",
+      "apps/web/lib/server/wms-putaway.ts",
+      "apps/web/lib/server/wms-receiving.ts"
+    ],
+    "apps/web/lib/server/notification-provider-status.test.ts": [
+      "apps/web/lib/server/notification-provider-status.ts"
+    ],
+    "apps/web/lib/server/notification-provider-status.ts": [],
+    "apps/web/lib/server/notification-provider.test.ts": [
+      "apps/web/lib/server/notification-provider.ts"
+    ],
+    "apps/web/lib/server/notification-provider.ts": [],
+    "apps/web/lib/server/notification-triggers.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/customer-notification-prefs.ts",
+      "apps/web/lib/server/notifications.ts"
+    ],
+    "apps/web/lib/server/notifications.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/notification-provider.ts"
+    ],
+    "apps/web/lib/server/operations-gl.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/order-orchestration.ts": [
+      "apps/web/lib/server/backorders.ts",
+      "apps/web/lib/server/credit-limit.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/drop-ship.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/order-payment-sync.ts",
+      "apps/web/lib/server/order-status.ts",
+      "apps/web/lib/server/payments.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/wms-fulfillment.ts"
+    ],
+    "apps/web/lib/server/order-payment-sync.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/order-saga.ts": [
+      "apps/web/lib/server/order-orchestration.ts"
+    ],
+    "apps/web/lib/server/order-shipments.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/order-status.test.ts": [
+      "apps/web/lib/server/order-status.ts"
+    ],
+    "apps/web/lib/server/order-status.ts": [],
+    "apps/web/lib/server/order-templates.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/orders.ts": [
+      "apps/web/lib/server/compliance-tax.ts",
+      "apps/web/lib/server/credit-limit.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/invoices.ts",
+      "apps/web/lib/server/notification-triggers.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/pricing.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/tenant-tax.ts"
+    ],
+    "apps/web/lib/server/payment-idempotency.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/payments.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/order-payment-sync.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/stripe.ts"
+    ],
+    "apps/web/lib/server/permissions.ts": [
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/pick-bin-resolver.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/pick-line-status.test.ts": [
+      "apps/web/lib/server/pick-line-status.ts"
+    ],
+    "apps/web/lib/server/pick-line-status.ts": [],
+    "apps/web/lib/server/po-receiving.test.ts": [
+      "apps/web/lib/server/po-receiving.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/po-receiving.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/pos-receipt.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/pos.ts": [
+      "apps/web/lib/server/audit-log.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/feature-flags.ts",
+      "apps/web/lib/server/orders.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/pricing.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/prisma.ts": [],
+    "apps/web/lib/server/purchasing.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/po-receiving.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/quotes.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/orders.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/saved-payment-methods.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/search.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/session.ts": [
+      "apps/web/lib/server/env.ts"
+    ],
+    "apps/web/lib/server/signup.ts": [
+      "apps/web/lib/server/auth.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/stripe.ts": [],
+    "apps/web/lib/server/tenant-tax.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/tenant.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/tier2.test.ts": [
+      "apps/web/lib/server/compliance-tax.ts",
+      "apps/web/lib/server/credit-limit.ts",
+      "apps/web/lib/server/dispatch-order.ts"
+    ],
+    "apps/web/lib/server/tier4.test.ts": [
+      "apps/web/lib/server/invoice-status.ts"
+    ],
+    "apps/web/lib/server/tier5.test.ts": [],
+    "apps/web/lib/server/tier6-notifications.test.ts": [
+      "apps/web/lib/server/notification-provider.ts"
+    ],
+    "apps/web/lib/server/tier7.test.ts": [
+      "apps/web/lib/server/invoice-document.ts"
+    ],
+    "apps/web/lib/server/tier8.test.ts": [
+      "apps/web/lib/server/ap-bills.ts",
+      "apps/web/lib/server/compliance-tax.ts",
+      "apps/web/lib/server/operations-gl.ts"
+    ],
+    "apps/web/lib/server/tier9.test.ts": [
+      "apps/web/lib/server/msa-storage.ts"
+    ],
+    "apps/web/lib/server/users.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/wave-picking.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/pick-bin-resolver.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/webhooks.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/wms-cycle-count.ts": [
+      "apps/web/lib/server/cycle-count-adjust.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/wms-fulfillment.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/pick-bin-resolver.ts",
+      "apps/web/lib/server/pick-line-status.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/wms-labor.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/wms-putaway.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/wms-labor.ts"
+    ],
+    "apps/web/lib/server/wms-receiving.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/po-receiving.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/package.json": [],
+    "apps/web/postcss.config.js": [],
+    "apps/web/prisma/analytics/schema.prisma": [],
+    "apps/web/prisma/auth/schema.prisma": [],
+    "apps/web/prisma/compliance/schema.prisma": [],
+    "apps/web/prisma/crm/schema.prisma": [],
+    "apps/web/prisma/dispatch/schema.prisma": [],
+    "apps/web/prisma/inventory/schema.prisma": [],
+    "apps/web/prisma/ledger/schema.prisma": [],
+    "apps/web/prisma/notification/schema.prisma": [],
+    "apps/web/prisma/order/schema.prisma": [],
+    "apps/web/prisma/payment/schema.prisma": [],
+    "apps/web/prisma/purchasing/schema.prisma": [],
+    "apps/web/prisma/storefront/schema.prisma": [],
+    "apps/web/prisma/tenant/schema.prisma": [],
+    "apps/web/prisma/wms/schema.prisma": [],
+    "apps/web/server/api-router.ts": [
+      "apps/web/lib/server/auth-security.ts",
+      "apps/web/lib/server/auth.ts",
+      "apps/web/lib/server/buyer-context.ts",
+      "apps/web/lib/server/env.ts",
+      "apps/web/lib/server/native-router.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/signup.ts"
+    ],
+    "apps/web/server/register-paths.mjs": [],
+    "apps/web/tailwind.config.ts": [],
+    "apps/web/tsconfig.json": [],
+    "docker-compose.production.yml": [],
+    "docker-compose.yml": [],
+    "docs/celestial/01-platform-overview.md": [],
+    "docs/celestial/02-admin-modules.md": [],
+    "docs/celestial/03-buyer-mobile.md": [],
+    "docs/celestial/04-api-finance-integrations.md": [],
+    "docs/celestial/05-celestial-ai.md": [],
+    "docs/celestial/06-faq.md": [],
+    "ERP_FEATURE_GAP.md": [],
+    "infra/docker/otel-config.yaml": [],
+    "infra/docker/python-service.Dockerfile": [],
+    "infra/k8s/base/configmap.yaml": [],
+    "infra/k8s/base/external-secrets/cluster-secret-store.yaml": [],
+    "infra/k8s/base/kustomization.yaml": [],
+    "infra/k8s/base/namespace.yaml": [],
+    "infra/k8s/base/secret.yaml": [],
+    "infra/k8s/base/web.yaml": [],
+    "infra/k8s/examples/external-secret-redis.yaml": [],
+    "infra/k8s/examples/external-secret-storefront-database.yaml": [],
+    "infra/k8s/overlays/production/kustomization.yaml": [],
+    "infra/k8s/overlays/staging/kustomization.yaml": [],
+    "infra/sql/init-databases.sql": [],
+    "infra/terraform/environments/production/main.tf": [],
+    "infra/terraform/environments/staging/main.tf": [],
+    "infra/terraform/modules/eks/main.tf": [],
+    "infra/terraform/modules/networking/main.tf": [],
+    "infra/terraform/modules/rds/main.tf": [],
+    "infra/terraform/modules/redis/main.tf": [],
+    "infra/terraform/modules/s3/main.tf": [],
+    "MISSING.md": [],
+    "package.json": [],
+    "packages/analytics-engine/package.json": [],
+    "packages/analytics-engine/src/anomaly.ts": [
+      "packages/analytics-engine/src/stats.ts"
+    ],
+    "packages/analytics-engine/src/cashflow.test.ts": [
+      "packages/analytics-engine/src/cashflow.ts"
+    ],
+    "packages/analytics-engine/src/cashflow.ts": [
+      "packages/analytics-engine/src/stats.ts"
+    ],
+    "packages/analytics-engine/src/index.ts": [],
+    "packages/analytics-engine/src/stats.ts": [],
+    "packages/analytics-engine/tsconfig.json": [],
+    "packages/types/package.json": [],
+    "packages/types/src/index.ts": [],
+    "packages/types/tsconfig.json": [],
+    "packages/ui/package.json": [],
+    "packages/ui/src/Button.tsx": [
+      "packages/ui/src/cn.ts"
+    ],
+    "packages/ui/src/Card.tsx": [
+      "packages/ui/src/cn.ts"
+    ],
+    "packages/ui/src/cn.ts": [],
+    "packages/ui/src/index.ts": [],
+    "packages/ui/src/StatsCard.tsx": [],
+    "packages/ui/tsconfig.json": [],
+    "packages/web-gateway-client/package.json": [],
+    "packages/web-gateway-client/src/index.ts": [],
+    "packages/web-gateway-client/src/resolve-gateway.test.ts": [
+      "packages/web-gateway-client/src/index.ts"
+    ],
+    "packages/web-gateway-client/tsconfig.json": [],
+    "PLATFORM_FEATURES.md": [],
+    "PRODUCTION_READINESS.md": [],
+    "README.md": [],
+    "scripts/apply-prisma-provider.mjs": [
+      "scripts/db-urls.mjs"
+    ],
+    "scripts/bootstrap.sh": [],
+    "scripts/clean-client-public.mjs": [],
+    "scripts/db-urls.mjs": [],
+    "scripts/dev-admin.mjs": [],
+    "scripts/dev-web.mjs": [],
+    "scripts/diagnose-prisma-engines.ps1": [],
+    "scripts/eslint-soft.mjs": [],
+    "scripts/generate-all-prisma.mjs": [],
+    "scripts/generate-favicons.mjs": [],
+    "scripts/generate-types.ts": [],
+    "scripts/migrate-all.ts": [
+      "scripts/db-urls.mjs"
+    ],
+    "scripts/patch-client-after-sync.mjs": [],
+    "scripts/prepare-dev-env.mjs": [
+      "scripts/db-urls.mjs"
+    ],
+    "scripts/production-preflight.mjs": [],
+    "scripts/scaffold-ai.ps1": [],
+    "scripts/seed-db.ts": [],
+    "scripts/setup-postgres.mjs": [],
+    "scripts/setup-sqlite.mjs": [
+      "scripts/db-urls.mjs"
+    ],
+    "scripts/strip-web-ui.mjs": [],
+    "scripts/sync-client-from-web.mjs": [],
+    "scripts/workspace-run.mjs": [],
+    "tsconfig.base.json": []
+  }
+}

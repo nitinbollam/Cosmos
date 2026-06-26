@@ -1,0 +1,33 @@
+{
+  "batchIndex": 14,
+  "files": [
+    {
+      "path": "packages/ui/src/Button.tsx",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/src/Card.tsx",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/src/cn.ts",
+      "language": "typescript",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "packages/ui/src/Button.tsx": [
+      "packages/ui/src/cn.ts"
+    ],
+    "packages/ui/src/Card.tsx": [
+      "packages/ui/src/cn.ts"
+    ],
+    "packages/ui/src/cn.ts": []
+  },
+  "neighborMap": {}
+}

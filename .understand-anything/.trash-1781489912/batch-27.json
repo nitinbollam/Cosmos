@@ -1,0 +1,527 @@
+{
+  "nodes": [
+    {
+      "id": "config:packages/types/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/types/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the shared types package, extending a root config and including its source files.",
+      "tags": ["configuration", "typescript", "build-system", "monorepo"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/ui/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/ui/package.json",
+      "summary": "Package manifest for the shared UI component library, declaring peer dependencies on React and Tailwind CSS with build and type entry points.",
+      "tags": ["configuration", "monorepo", "build-system", "component"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/ui/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/ui/src/index.ts",
+      "summary": "Barrel entry point for the shared UI package, re-exporting the `cn` class-name utility and component modules.",
+      "tags": ["entry-point", "barrel", "utility", "component"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/ui/src/StatsCard.tsx",
+      "type": "file",
+      "name": "StatsCard.tsx",
+      "filePath": "packages/ui/src/StatsCard.tsx",
+      "summary": "Reusable React stats card component that displays a labelled metric value with optional trend indicator and supports number, currency, and percentage formatting.",
+      "tags": ["component", "utility", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/ui/src/StatsCard.tsx:StatsCard",
+      "type": "function",
+      "name": "StatsCard",
+      "filePath": "packages/ui/src/StatsCard.tsx",
+      "lineRange": [10, 26],
+      "summary": "React functional component rendering a labelled stat with formatted value and optional trend badge.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/ui/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/ui/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the shared UI package, extending the monorepo base config with JSX support.",
+      "tags": ["configuration", "typescript", "build-system", "monorepo"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/web-gateway-client/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/web-gateway-client/package.json",
+      "summary": "Package manifest for the web-gateway-client library, declaring axios as a runtime dependency with TypeScript build tooling.",
+      "tags": ["configuration", "monorepo", "build-system", "api-handler"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/web-gateway-client/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/web-gateway-client/src/index.ts",
+      "summary": "Client library for communicating with the Cosmos web gateway, providing gateway URL resolution, an axios-based HTTP client factory with auth interceptors, and structured API error formatting.",
+      "tags": ["api-handler", "service", "utility", "entry-point"],
+      "complexity": "moderate",
+      "languageNotes": "Uses axios interceptors to inject JWT auth headers from localStorage and redirect to /login on 401 responses."
+    },
+    {
+      "id": "function:packages/web-gateway-client/src/index.ts:resolveGatewayBaseUrl",
+      "type": "function",
+      "name": "resolveGatewayBaseUrl",
+      "filePath": "packages/web-gateway-client/src/index.ts",
+      "lineRange": [14, 23],
+      "summary": "Resolves the base URL for the web gateway, preferring an explicit override, then environment variable, then a default localhost address.",
+      "tags": ["utility", "api-handler", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:packages/web-gateway-client/src/index.ts:formatApiReachabilityError",
+      "type": "function",
+      "name": "formatApiReachabilityError",
+      "filePath": "packages/web-gateway-client/src/index.ts",
+      "lineRange": [25, 47],
+      "summary": "Produces a human-readable error message when the gateway API is unreachable, detecting ECONNREFUSED and CORS errors and suggesting the dev server port.",
+      "tags": ["utility", "api-handler", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:packages/web-gateway-client/src/index.ts:createGatewayApi",
+      "type": "function",
+      "name": "createGatewayApi",
+      "filePath": "packages/web-gateway-client/src/index.ts",
+      "lineRange": [56, 116],
+      "summary": "Factory that creates a configured axios instance targeting the gateway API, with auth token injection, 401 redirect handling, and typed get/post/patch/delete helpers.",
+      "tags": ["factory", "api-handler", "service", "middleware"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:packages/web-gateway-client/src/resolve-gateway.test.ts",
+      "type": "file",
+      "name": "resolve-gateway.test.ts",
+      "filePath": "packages/web-gateway-client/src/resolve-gateway.test.ts",
+      "summary": "Unit tests for the `resolveGatewayBaseUrl` function, verifying URL resolution logic under different environment configurations.",
+      "tags": ["test", "api-handler", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/web-gateway-client/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/web-gateway-client/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the web-gateway-client package, extending the monorepo base with module settings suited for a browser library.",
+      "tags": ["configuration", "typescript", "build-system", "monorepo"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/clean-client-public.mjs",
+      "type": "file",
+      "name": "clean-client-public.mjs",
+      "filePath": "scripts/clean-client-public.mjs",
+      "summary": "Utility script that removes generated static assets from the admin client's public directory to ensure a clean build slate.",
+      "tags": ["utility", "build-system", "script"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/dev-admin.mjs",
+      "type": "file",
+      "name": "dev-admin.mjs",
+      "filePath": "scripts/dev-admin.mjs",
+      "summary": "Development launcher script for the admin app, spawning the Vite dev server with the appropriate configuration.",
+      "tags": ["utility", "build-system", "script"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/dev-web.mjs",
+      "type": "file",
+      "name": "dev-web.mjs",
+      "filePath": "scripts/dev-web.mjs",
+      "summary": "Development launcher script for the web (customer-facing) app, starting the Vite dev server with appropriate environment settings.",
+      "tags": ["utility", "build-system", "script"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/eslint-soft.mjs",
+      "type": "file",
+      "name": "eslint-soft.mjs",
+      "filePath": "scripts/eslint-soft.mjs",
+      "summary": "ESLint wrapper script that runs linting but exits with code 0 even on lint failures, used to surface warnings without blocking CI.",
+      "tags": ["utility", "build-system", "script"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/generate-all-prisma.mjs",
+      "type": "file",
+      "name": "generate-all-prisma.mjs",
+      "filePath": "scripts/generate-all-prisma.mjs",
+      "summary": "Script that runs `prisma generate` across all database schema packages in the monorepo to regenerate Prisma clients.",
+      "tags": ["utility", "build-system", "script", "database"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/generate-favicons.mjs",
+      "type": "file",
+      "name": "generate-favicons.mjs",
+      "filePath": "scripts/generate-favicons.mjs",
+      "summary": "macOS-only script that uses the `sips` command-line tool to generate favicon PNG files at multiple sizes from a source SVG or PNG.",
+      "tags": ["utility", "script", "build-system"],
+      "complexity": "simple",
+      "languageNotes": "Relies on `sips`, the macOS image-processing CLI, making this non-portable outside macOS environments."
+    },
+    {
+      "id": "file:scripts/generate-types.ts",
+      "type": "file",
+      "name": "generate-types.ts",
+      "filePath": "scripts/generate-types.ts",
+      "summary": "TypeScript script that derives shared type definitions from Prisma schema models or other sources and writes them to the shared types package.",
+      "tags": ["utility", "script", "type-definition", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/patch-client-after-sync.mjs",
+      "type": "file",
+      "name": "patch-client-after-sync.mjs",
+      "filePath": "scripts/patch-client-after-sync.mjs",
+      "summary": "Post-sync patching script that walks the synced client source tree and applies path or import adjustments needed after copying files from the web app.",
+      "tags": ["utility", "script", "build-system"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/production-preflight.mjs",
+      "type": "file",
+      "name": "production-preflight.mjs",
+      "filePath": "scripts/production-preflight.mjs",
+      "summary": "Pre-production checklist script that validates required environment variables and build artifacts are present before a deployment.",
+      "tags": ["utility", "script", "deployment", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/seed-db.ts",
+      "type": "file",
+      "name": "seed-db.ts",
+      "filePath": "scripts/seed-db.ts",
+      "summary": "Comprehensive database seeding script that populates all ERP domains — auth, inventory, CRM, orders, WMS, dispatch, compliance, ledger, payments, and notifications — with realistic demo data across multiple Prisma clients.",
+      "tags": ["utility", "script", "database", "entry-point"],
+      "complexity": "complex",
+      "languageNotes": "Dynamically imports each domain's Prisma client at runtime via `loadPrisma`, allowing the single script to target independent SQLite databases per domain."
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedAuth",
+      "type": "function",
+      "name": "seedAuth",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [103, 156],
+      "summary": "Seeds the auth database with a default tenant and two users (admin and viewer) with bcrypt-hashed passwords.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedInventory",
+      "type": "function",
+      "name": "seedInventory",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [229, 339],
+      "summary": "Seeds the inventory database with warehouses, bin locations, SKUs, and stock levels for a demo tenant.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedCrm",
+      "type": "function",
+      "name": "seedCrm",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [341, 456],
+      "summary": "Seeds the CRM database with customers, leads, activity records, and customer-specific pricing for a demo tenant.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedOrders",
+      "type": "function",
+      "name": "seedOrders",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [458, 520],
+      "summary": "Seeds the orders database with realistic sales orders and line items, upserting or creating as needed.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedWms",
+      "type": "function",
+      "name": "seedWms",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [791, 921],
+      "summary": "Seeds the WMS database with fulfillment tasks, pick waves, receiving sessions, and cycle counts for a demo tenant.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedCompliance",
+      "type": "function",
+      "name": "seedCompliance",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [982, 1061],
+      "summary": "Seeds the compliance database with MSA tenant records, manufacturer DIDs, transactions, and reports.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedTier8Extras",
+      "type": "function",
+      "name": "seedTier8Extras",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [1105, 1212],
+      "summary": "Seeds additional tier-8 ERP features including volume price breaks, order templates, extra bin locations, bank accounts, bank statement lines, and POS registers.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedNotifications",
+      "type": "function",
+      "name": "seedNotifications",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [1240, 1369],
+      "summary": "Seeds notification requests and updates tenant organization email settings for demo notification scenarios.",
+      "tags": ["database", "utility", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [1380, 1442],
+      "summary": "Top-level orchestrator that bootstraps environment variables and invokes all domain seed functions in dependency order.",
+      "tags": ["entry-point", "utility", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/setup-postgres.mjs",
+      "type": "file",
+      "name": "setup-postgres.mjs",
+      "filePath": "scripts/setup-postgres.mjs",
+      "summary": "Script that creates or verifies a PostgreSQL database and role for local development, using the psql CLI.",
+      "tags": ["utility", "script", "database", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/strip-web-ui.mjs",
+      "type": "file",
+      "name": "strip-web-ui.mjs",
+      "filePath": "scripts/strip-web-ui.mjs",
+      "summary": "Script that removes UI-only packages and components from the web app to produce a stripped distribution suitable for embedding in the admin shell.",
+      "tags": ["utility", "script", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/sync-client-from-web.mjs",
+      "type": "file",
+      "name": "sync-client-from-web.mjs",
+      "filePath": "scripts/sync-client-from-web.mjs",
+      "summary": "Synchronisation script that copies and transforms selected pages and components from the web app into the admin client, rewriting import paths as needed.",
+      "tags": ["utility", "script", "build-system"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/sync-client-from-web.mjs:transformSource",
+      "type": "function",
+      "name": "transformSource",
+      "filePath": "scripts/sync-client-from-web.mjs",
+      "lineRange": [33, 60],
+      "summary": "Rewrites import path aliases and package references in source file content to make copied web-app files compatible with the admin client layout.",
+      "tags": ["utility", "build-system"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/workspace-run.mjs",
+      "type": "file",
+      "name": "workspace-run.mjs",
+      "filePath": "scripts/workspace-run.mjs",
+      "summary": "Utility script that runs a given npm script across one or all workspace packages using `spawnSync`, supporting selective execution by package name.",
+      "tags": ["utility", "script", "build-system", "monorepo"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/workspace-run.mjs:run",
+      "type": "function",
+      "name": "run",
+      "filePath": "scripts/workspace-run.mjs",
+      "lineRange": [32, 41],
+      "summary": "Spawns an npm script in a specific workspace package directory, logging the package name and exiting the process on failure.",
+      "tags": ["utility", "build-system"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/ui/src/StatsCard.tsx",
+      "target": "function:packages/ui/src/StatsCard.tsx:StatsCard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/ui/src/StatsCard.tsx",
+      "target": "function:packages/ui/src/StatsCard.tsx:StatsCard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/index.ts",
+      "target": "function:packages/web-gateway-client/src/index.ts:resolveGatewayBaseUrl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/index.ts",
+      "target": "function:packages/web-gateway-client/src/index.ts:formatApiReachabilityError",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/index.ts",
+      "target": "function:packages/web-gateway-client/src/index.ts:createGatewayApi",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/index.ts",
+      "target": "function:packages/web-gateway-client/src/index.ts:resolveGatewayBaseUrl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/index.ts",
+      "target": "function:packages/web-gateway-client/src/index.ts:formatApiReachabilityError",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/index.ts",
+      "target": "function:packages/web-gateway-client/src/index.ts:createGatewayApi",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/resolve-gateway.test.ts",
+      "target": "file:packages/web-gateway-client/src/index.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/web-gateway-client/src/index.ts",
+      "target": "file:packages/web-gateway-client/src/resolve-gateway.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:packages/ui/tsconfig.json",
+      "target": "file:packages/ui/src/index.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:packages/web-gateway-client/tsconfig.json",
+      "target": "file:packages/web-gateway-client/src/index.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedAuth",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedInventory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedCrm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedOrders",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedWms",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedCompliance",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedTier8Extras",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedNotifications",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/sync-client-from-web.mjs",
+      "target": "function:scripts/sync-client-from-web.mjs:transformSource",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/workspace-run.mjs",
+      "target": "function:scripts/workspace-run.mjs:run",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    }
+  ]
+}

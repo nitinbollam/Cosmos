@@ -1,0 +1,42 @@
+{
+  "batchIndex": 11,
+  "files": [
+    {
+      "path": "packages/analytics-engine/src/anomaly.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/src/cashflow.test.ts",
+      "language": "typescript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/src/cashflow.ts",
+      "language": "typescript",
+      "sizeLines": 114,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/src/stats.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "packages/analytics-engine/src/anomaly.ts": [
+      "packages/analytics-engine/src/stats.ts"
+    ],
+    "packages/analytics-engine/src/cashflow.test.ts": [
+      "packages/analytics-engine/src/cashflow.ts"
+    ],
+    "packages/analytics-engine/src/cashflow.ts": [
+      "packages/analytics-engine/src/stats.ts"
+    ],
+    "packages/analytics-engine/src/stats.ts": []
+  },
+  "neighborMap": {}
+}

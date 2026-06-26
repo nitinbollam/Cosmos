@@ -1,0 +1,249 @@
+{
+  "batchIndex": 24,
+  "files": [
+    {
+      "path": ".npmrc",
+      "language": "unknown",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/.data/msa/test/1780332349092/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780332793234/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333010155/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333192379/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333398883/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/.data/msa/test/1780333596068/sample.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "apps/client/eslint.config.mjs",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/postcss.config.js",
+      "language": "javascript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/public/manifest.webmanifest",
+      "language": "webmanifest",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/public/sw.js",
+      "language": "javascript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/server/index.ts",
+      "language": "typescript",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos-img.tsx",
+      "language": "typescript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/vite-env.d.ts",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/tailwind.config.ts",
+      "language": "typescript",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/vite.config.ts",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/eslint.config.mjs",
+      "language": "javascript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/background-jobs.ts",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/retrieval.test.ts",
+      "language": "typescript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/celestial/retrieval.ts",
+      "language": "typescript",
+      "sizeLines": 260,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/cycle-count-adjust.test.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/cycle-count-adjust.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/event-bus.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/invoice-document.ts",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    ".npmrc": [],
+    ".understand-anything/.understandignore": [],
+    "apps/.data/msa/test/1780332349092/sample.txt": [],
+    "apps/.data/msa/test/1780332793234/sample.txt": [],
+    "apps/.data/msa/test/1780333010155/sample.txt": [],
+    "apps/.data/msa/test/1780333192379/sample.txt": [],
+    "apps/.data/msa/test/1780333398883/sample.txt": [],
+    "apps/.data/msa/test/1780333596068/sample.txt": [],
+    "apps/client/eslint.config.mjs": [],
+    "apps/client/postcss.config.js": [],
+    "apps/client/public/manifest.webmanifest": [],
+    "apps/client/public/sw.js": [],
+    "apps/client/server/index.ts": [],
+    "apps/client/src/components/cosmos-img.tsx": [],
+    "apps/client/src/vite-env.d.ts": [],
+    "apps/client/tailwind.config.ts": [],
+    "apps/client/vite.config.ts": [],
+    "apps/web/eslint.config.mjs": [],
+    "apps/web/lib/server/background-jobs.ts": [],
+    "apps/web/lib/server/celestial/retrieval.test.ts": [
+      "apps/web/lib/server/celestial/retrieval.ts"
+    ],
+    "apps/web/lib/server/celestial/retrieval.ts": [],
+    "apps/web/lib/server/cycle-count-adjust.test.ts": [
+      "apps/web/lib/server/cycle-count-adjust.ts"
+    ],
+    "apps/web/lib/server/cycle-count-adjust.ts": [],
+    "apps/web/lib/server/event-bus.ts": [],
+    "apps/web/lib/server/invoice-document.ts": [
+      "apps/web/lib/server/crm.ts"
+    ]
+  },
+  "neighborMap": {
+    "apps/web/lib/server/celestial/retrieval.ts": [
+      {
+        "path": "apps/web/lib/server/celestial/orchestrator.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "getCelestialModelInfo",
+          "chat",
+          "chatStream",
+          "listCelestialConversations",
+          "getCelestialConversation"
+        ]
+      }
+    ],
+    "apps/web/lib/server/cycle-count-adjust.ts": [
+      {
+        "path": "apps/web/lib/server/wms-cycle-count.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listCycleCounts",
+          "createCycleCount",
+          "getCycleCount",
+          "importCycleLineCounts",
+          "updateCycleLineCountedQty",
+          "submitCycleCountForApproval",
+          "approveCycleCount"
+        ]
+      }
+    ],
+    "apps/web/lib/server/invoice-document.ts": [
+      {
+        "path": "apps/web/lib/server/crm.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "LEAD_KANBAN_STATUSES",
+          "listCustomers",
+          "listCustomersPaged",
+          "getCustomer",
+          "findCustomerByExternalRef",
+          "findCustomerByEmail",
+          "createCustomer",
+          "importCustomers",
+          "patchCustomer",
+          "patchCustomerProfile",
+          "listLeads",
+          "getLead",
+          "createLead",
+          "importLeads",
+          "patchLead",
+          "convertLead",
+          "listActivities",
+          "createActivity"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/tier7.test.ts",
+        "batchIndex": 25,
+        "symbols": []
+      }
+    ]
+  }
+}

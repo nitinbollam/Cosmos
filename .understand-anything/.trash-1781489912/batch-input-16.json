@@ -1,0 +1,29 @@
+{
+  "batchIndex": 16,
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "language": "yaml",
+      "sizeLines": 60,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/deploy-production.yml",
+      "language": "yaml",
+      "sizeLines": 62,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/deploy-staging.yml",
+      "language": "yaml",
+      "sizeLines": 44,
+      "fileCategory": "infra"
+    }
+  ],
+  "batchImportData": {
+    ".github/workflows/ci.yml": [],
+    ".github/workflows/deploy-production.yml": [],
+    ".github/workflows/deploy-staging.yml": []
+  },
+  "neighborMap": {}
+}

@@ -1,0 +1,756 @@
+{
+  "batchIndex": 6,
+  "files": [
+    {
+      "path": "apps/client/src/components/compliance/msa-status-card.tsx",
+      "language": "typescript",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "language": "typescript",
+      "sizeLines": 171,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/empty-state.tsx",
+      "language": "typescript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "language": "typescript",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "language": "typescript",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/cosmos/status-badge.tsx",
+      "language": "typescript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/inventory/low-stock-alert.tsx",
+      "language": "typescript",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/orders/recent-orders.tsx",
+      "language": "typescript",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/settings/webhook-manager.tsx",
+      "language": "typescript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/admin-path.test.ts",
+      "language": "typescript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/admin-path.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/api-admin.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/spreadsheet-import.ts",
+      "language": "typescript",
+      "sizeLines": 107,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/toast.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/use-query-params.ts",
+      "language": "typescript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/compliance/page.tsx",
+      "language": "typescript",
+      "sizeLines": 346,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 529,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/crm/page.tsx",
+      "language": "typescript",
+      "sizeLines": 948,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/client/src/components/compliance/msa-status-card.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/components/cosmos/bento-cards.tsx": [],
+    "apps/client/src/components/cosmos/empty-state.tsx": [],
+    "apps/client/src/components/cosmos/radix-overlays.tsx": [],
+    "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx": [
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/components/cosmos/status-badge.tsx": [],
+    "apps/client/src/components/inventory/low-stock-alert.tsx": [
+      "apps/client/src/lib/admin-path.ts"
+    ],
+    "apps/client/src/components/orders/recent-orders.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/components/settings/webhook-manager.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/lib/admin-path.test.ts": [
+      "apps/client/src/lib/admin-path.ts"
+    ],
+    "apps/client/src/lib/admin-path.ts": [],
+    "apps/client/src/lib/api-admin.ts": [],
+    "apps/client/src/lib/spreadsheet-import.ts": [],
+    "apps/client/src/lib/toast.ts": [],
+    "apps/client/src/lib/use-query-params.ts": [],
+    "apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/compliance/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/pages/admin/crm/customers/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/crm/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/pages/admin/customers/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ]
+  },
+  "neighborMap": {
+    "apps/client/src/components/cosmos/bento-cards.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DashboardPage"
+        ]
+      }
+    ],
+    "apps/client/src/components/cosmos/empty-state.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/dispatch/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DispatchPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/finance/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FinancePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/fulfillment/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FulfillmentTasksPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/inventory/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "InventoryPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/notifications/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "NotificationsPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/orders/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "OrdersPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/pos/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PosPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/purchasing/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PurchasingPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/quotes/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "AdminQuotesPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/settings/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SettingsPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/notifications/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "BuyerNotificationsPage"
+        ]
+      }
+    ],
+    "apps/client/src/components/cosmos/radix-overlays.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SkuDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/inventory/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "InventoryPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/settings/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SettingsPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      }
+    ],
+    "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/inventory/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "InventoryPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      }
+    ],
+    "apps/client/src/components/cosmos/status-badge.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DispatchRouteDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/dispatch/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DispatchPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "JournalDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/finance/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FinancePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FulfillmentTaskDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/fulfillment/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FulfillmentTasksPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SkuDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/notifications/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "NotificationsPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/orders/[id]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "OrderDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/orders/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "OrdersPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DashboardPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PurchaseOrderDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/purchasing/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PurchasingPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/quotes/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "AdminQuotesPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      }
+    ],
+    "apps/client/src/components/inventory/low-stock-alert.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DashboardPage"
+        ]
+      }
+    ],
+    "apps/client/src/components/orders/recent-orders.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DashboardPage"
+        ]
+      }
+    ],
+    "apps/client/src/components/settings/webhook-manager.tsx": [
+      {
+        "path": "apps/client/src/pages/admin/settings/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SettingsPage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/admin-path.ts": [
+      {
+        "path": "apps/client/src/pages/admin/customers/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "CustomersPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/finance/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FinancePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FulfillmentTaskDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/fulfillment/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FulfillmentTasksPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/inventory/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "InventoryPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/orders/[id]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "OrderDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/orders/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "OrdersPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/purchasing/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PurchasingPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/orders/[id]/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "StorefrontOrderDetailPage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/api-admin.ts": [
+      {
+        "path": "apps/client/src/components/celestial/celestial-chat.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CelestialChat"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/global-search.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "GlobalSearch"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/layout/sidebar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "SIDEBAR_NAV",
+          "Sidebar"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/customers/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "CustomersPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DispatchRouteDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/dispatch/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DispatchPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "JournalDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/finance/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FinancePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FulfillmentTaskDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/fulfillment/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "FulfillmentTasksPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SkuDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/inventory/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "InventoryPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/login/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "LoginPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/notifications/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "NotificationsPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/orders/[id]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "OrderDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/orders/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "OrdersPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DashboardPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/pos/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PosPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PurchaseOrderDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/purchasing/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PurchasingPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/quotes/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "AdminQuotesPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/settings/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SettingsPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/spreadsheet-import.ts": [
+      {
+        "path": "apps/client/src/pages/admin/inventory/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "InventoryPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/toast.ts": [
+      {
+        "path": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "PurchaseOrderDetailPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "WarehousePage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/use-query-params.ts": [
+      {
+        "path": "apps/client/src/pages/admin/dispatch/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "DispatchPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/settings/page.tsx",
+        "batchIndex": 8,
+        "symbols": [
+          "SettingsPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/quotes/new/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "NewQuotePage"
+        ]
+      }
+    ]
+  }
+}

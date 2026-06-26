@@ -1,0 +1,141 @@
+[
+  {
+    "order": 1,
+    "title": "Platform Overview",
+    "description": "Start with the README to understand what Cosmos is: a production-grade ERP and distribution platform that serves a Vite+React SPA and an Express+Prisma API backend on a single port (4000). This document covers the single-port architecture, two UI themes (Obsidian and Aurora), SQLite-for-dev / Postgres-for-prod database strategy, multi-tenant workspace model, and the quickstart commands you need to spin up the platform locally. Reading it first gives you the mental map for everything that follows.",
+    "nodeIds": ["document:README.md"]
+  },
+  {
+    "order": 2,
+    "title": "Frontend Entry & Router",
+    "description": "The React application bootstraps in main.tsx — it applies the stored theme, registers the service worker for offline PWA support, and mounts the root React tree. App.tsx wraps the entire tree in a Providers component (React Query client) before rendering AppRouter. The router.tsx file is the architectural map of every UI surface: it lazy-loads page components under four layout roots — the public shop, the admin dashboard, the mobile PWA, and unauthenticated pages — making it the single best file for understanding the scope of the frontend.",
+    "nodeIds": [
+      "file:apps/client/src/main.tsx",
+      "file:apps/client/src/App.tsx",
+      "file:apps/client/src/router.tsx",
+      "file:apps/client/src/providers.tsx"
+    ],
+    "languageLesson": "React Router v6 uses lazy() with dynamic import() to code-split each page into its own chunk. This means the initial JS bundle is small and each route's code is only downloaded when a user navigates to it — a critical optimization for a large app like this ERP with 40+ distinct pages."
+  },
+  {
+    "order": 3,
+    "title": "Admin Shell & Layout System",
+    "description": "AdminLayout.tsx is the route-level wrapper that enforces authentication (via RequireAuth) before rendering the DashboardShell. The dashboard-shell.tsx is the workhorse: it implements the collapsible sidebar, mobile navigation overlay, derives the page title from the current route, and embeds the floating Celestial AI chat panel. The sidebar.tsx component reads tenant feature flags from the API to dynamically filter which navigation items are visible — so tenants on different plans see different capabilities. These three files define the structural skeleton that every admin page renders inside.",
+    "nodeIds": [
+      "file:apps/client/src/layouts/AdminLayout.tsx",
+      "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "file:apps/client/src/components/layout/sidebar.tsx"
+    ]
+  },
+  {
+    "order": 4,
+    "title": "Design Tokens & Theming",
+    "description": "Cosmos ships two complete themes — Obsidian (dark enterprise) and Aurora (light lavender) — implemented as CSS custom property sets in globals-theme.css. The globals.css entry point imports the theme, admin, and shop surface stylesheets in sequence. The theme.ts utility reads and writes the chosen theme key in localStorage, while index.html contains an inline script that applies the theme attribute before first paint to prevent a flash of the wrong theme. Understanding this layer explains why every component uses CSS variables rather than hardcoded color values.",
+    "nodeIds": [
+      "file:apps/client/src/globals-theme.css",
+      "file:apps/client/src/globals.css",
+      "file:apps/client/src/lib/theme.ts",
+      "file:apps/client/index.html"
+    ],
+    "languageLesson": "CSS custom properties (variables) enable runtime theme switching without JavaScript re-renders. Setting `data-theme='obsidian'` on the `<html>` element activates a different set of `--cosmos-*` property values, and every component that references those variables immediately reflects the new theme."
+  },
+  {
+    "order": 5,
+    "title": "Key Admin Pages",
+    "description": "The admin dashboard (admin/page.tsx) is the operational nerve center: it renders KPI bento cards with sparklines, donut charts, a recent-orders widget, and low-stock alerts — all pulling live data from the analytics and inventory APIs. The inventory page (admin/inventory/page.tsx) provides SKU listing, stock editing, adjustment modals, and spreadsheet import. The orders page (admin/orders/page.tsx) exposes search, status filtering, pagination, and inline order creation — each order linking to its detail page showing the fulfillment timeline and actions. Together these three pages demonstrate how the admin UI surfaces the core ERP business objects.",
+    "nodeIds": [
+      "file:apps/client/src/pages/admin/page.tsx",
+      "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "file:apps/client/src/pages/admin/orders/page.tsx",
+      "file:apps/client/src/pages/admin/orders/[id]/page.tsx"
+    ]
+  },
+  {
+    "order": 6,
+    "title": "API Server Entry Point",
+    "description": "The Express server starts in apps/client/server/index.ts — it serves the compiled Vite SPA for non-API routes and bridges all /api/* requests to the web app's fetch-based API router, adding security headers in one place. The actual routing logic lives in apps/web/server/api-router.ts, which handles authentication flows, analytics endpoints, rate limiting, and delegates all other domain requests to the native-router.ts. That native router is the central dispatcher covering every ERP domain from inventory and orders to payments, WMS, dispatch, EDI, and AI — making it the index of the entire backend API surface.",
+    "nodeIds": [
+      "file:apps/client/server/index.ts",
+      "file:apps/web/server/api-router.ts",
+      "file:apps/web/lib/server/native-router.ts"
+    ],
+    "languageLesson": "This architecture uses a single-port design: the Express server in apps/client/server/index.ts serves both the static SPA files and proxies /api/* to the backend handler. This eliminates CORS issues in development and production, since UI and API share the same origin."
+  },
+  {
+    "order": 7,
+    "title": "Core Server Modules",
+    "description": "Four modules form the load-bearing core of the backend. db.ts is the most-imported file in the entire server layer: it initializes and exports all 14 named Prisma client instances — one per domain database (auth, tenant, inventory, orders, CRM, storefront, WMS, dispatch, purchasing, payments, compliance, notifications, ledger, analytics). session.ts provides JWT verification, role-assertion helpers, and an ApiError class used by every protected handler. orders.ts manages the full sales order lifecycle from creation through confirmation, fulfillment, and cancellation. inventory.ts covers SKUs, warehouses, stock levels, reservations, receipts, and low-stock alerts. Every other server module depends on at least two of these four.",
+    "nodeIds": [
+      "file:apps/web/lib/server/db.ts",
+      "file:apps/web/lib/server/session.ts",
+      "file:apps/web/lib/server/orders.ts",
+      "file:apps/web/lib/server/inventory.ts"
+    ]
+  },
+  {
+    "order": 8,
+    "title": "Order Fulfillment Saga",
+    "description": "Placing an order in Cosmos triggers a multi-step saga orchestrated by order-orchestration.ts: it reserves stock, creates drop-ship purchase orders for supplier-fulfilled lines, captures payment via Stripe, creates WMS pick tasks, handles backorders for unmet demand, and ships confirmed lines — with compensation logic to roll back each step if a later step fails. The order-status.ts module enforces this lifecycle as a strict finite state machine: a map of valid next-states means an order can never jump illegally from CONFIRMED directly to SHIPPED without passing through PROCESSING. These two files together explain how Cosmos maintains data consistency across its 14 separate databases without a traditional distributed transaction.",
+    "nodeIds": [
+      "file:apps/web/lib/server/order-orchestration.ts",
+      "file:apps/web/lib/server/order-status.ts",
+      "file:apps/web/lib/server/auth.ts",
+      "file:apps/web/lib/server/permissions.ts"
+    ],
+    "languageLesson": "The saga pattern replaces ACID transactions across service boundaries. Each step in order-orchestration.ts is paired with a compensating action (e.g., release stock reservation if payment capture fails). This ensures the system reaches a consistent state even when individual steps fail, without requiring a distributed two-phase commit."
+  },
+  {
+    "order": 9,
+    "title": "Celestial AI Subsystem",
+    "description": "The Celestial AI assistant is a hybrid RAG + live-data system implemented across five focused modules. orchestrator.ts is the entry point: it detects user intent, runs the relevant ERP data-fetch tools, retrieves relevant documentation chunks, assembles the LLM context, dispatches to the configured provider, and persists the conversation. intent.ts uses regex pattern matching to classify messages into tool selections without an LLM call. retrieval.ts implements the RAG layer: it chunks the six platform Markdown docs in docs/celestial/, scores chunks by keyword + synonym expansion, and returns the most relevant passages. tools.ts executes the actual ERP queries (orders, inventory, invoices, quotes, search). llm.ts is provider-agnostic: it supports OpenAI-compatible APIs (Groq, OpenRouter), Google Gemini, Ollama, and a mock mode for development.",
+    "nodeIds": [
+      "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "file:apps/web/lib/server/celestial/intent.ts",
+      "file:apps/web/lib/server/celestial/retrieval.ts",
+      "file:apps/web/lib/server/celestial/tools.ts",
+      "file:apps/web/lib/server/celestial/llm.ts"
+    ],
+    "languageLesson": "RAG (Retrieval-Augmented Generation) avoids fine-tuning by injecting relevant document chunks into the LLM prompt at query time. The retrieval.ts module scores chunks using TF-IDF-style keyword matching rather than vector embeddings, making it dependency-free and fast — a practical choice when the document corpus is small and well-structured."
+  },
+  {
+    "order": 10,
+    "title": "Data Schemas",
+    "description": "Cosmos separates its data into 14 domain-isolated Prisma schemas, each backed by its own database connection. The order schema defines the complete order lifecycle: orders, line items, backorders, sagas, invoices, credit memos, and shipments. The inventory schema covers stock ledger, stock levels, SKUs, warehouses, bin locations, reservations, lots, and serial units. The auth schema holds User and Tenant models with RBAC enums. The tenant schema manages multi-tenant organization lifecycle, Stripe billing, onboarding steps, invites, POS registers, and EDI trading partners. The init-databases.sql script bootstraps all 15 PostgreSQL databases at first deploy. This domain separation is the architectural decision that most distinguishes Cosmos from a monolithic ERP database.",
+    "nodeIds": [
+      "file:apps/web/lib/server/db.ts",
+      "schema:apps/web/prisma/order/schema.prisma",
+      "schema:apps/web/prisma/inventory/schema.prisma",
+      "schema:apps/web/prisma/auth/schema.prisma",
+      "schema:apps/web/prisma/tenant/schema.prisma",
+      "table:infra/sql/init-databases.sql"
+    ],
+    "languageLesson": "Prisma supports multiple separate schema files by running `prisma generate` with the `--schema` flag pointing to each domain's schema file. The apps/web/package.json `generate` script chains 14 such commands, producing 14 separate client packages under `@/generated/prisma-*` — one per domain database — preventing cross-domain queries at the type level."
+  },
+  {
+    "order": 11,
+    "title": "Shared Packages",
+    "description": "Four monorepo workspace packages provide cross-cutting capabilities to both the client and server. The @cosmos/types package (packages/types/src/index.ts) exports domain primitives shared across the entire codebase: Role, Plan, JwtPayload, AuthenticatedUser, OrderStatus, MoneyAmount, and ApiError. The @cosmos/ui package exports Button, Card, and StatsCard components plus the cn() Tailwind class-merging utility. The @cosmos/analytics-engine package provides cashflow forecasting (EWMA with seasonal deseasonalization) and IQR-based anomaly detection used in the admin dashboard. The @cosmos/web-gateway-client package provides an axios factory with auth interceptors used by both the admin and storefront API clients.",
+    "nodeIds": [
+      "file:packages/types/src/index.ts",
+      "file:packages/ui/src/index.ts",
+      "file:packages/analytics-engine/src/index.ts",
+      "file:packages/analytics-engine/src/cashflow.ts",
+      "file:packages/web-gateway-client/src/index.ts"
+    ],
+    "languageLesson": "npm workspaces allow packages in the monorepo to reference each other by name (e.g., `@cosmos/ui`) without publishing to a registry. The root package.json `workspaces` field tells npm to symlink them into node_modules, so any workspace can import another as if it were an external dependency."
+  },
+  {
+    "order": 12,
+    "title": "Infrastructure & CI/CD",
+    "description": "The Dockerfile uses a three-stage multi-stage build: the builder stage installs all dependencies and compiles the Vite+React client and Prisma types; the production stage copies only the compiled output into a minimal Node.js 20 Alpine image running on port 4000 as a non-root user. The docker-compose.production.yml orchestrates Postgres, Redis, and the app container, wiring all 14 domain database URLs as environment variables. For Kubernetes, the base manifests in infra/k8s/base/ define the namespace, ConfigMap, Secret, Deployment (2 replicas, health probes on /api/v1/health), and Service — with Kustomize overlays scaling to 3 replicas in production. The Terraform modules provision the full AWS stack: VPC, EKS (t3.medium nodes with optional GPU group), RDS PostgreSQL, ElastiCache Redis, and S3 for document storage. The CI workflow runs lint, tests, and a full build against a live Postgres 16 service container on every PR, then validates the Docker image builds before the deploy workflow pushes to ECR and rolls out to EKS.",
+    "nodeIds": [
+      "service:apps/web/Dockerfile",
+      "service:docker-compose.production.yml",
+      "resource:infra/k8s/base/web.yaml",
+      "resource:infra/terraform/modules/eks/main.tf",
+      "pipeline:.github/workflows/ci.yml",
+      "pipeline:.github/workflows/deploy-production.yml"
+    ],
+    "languageLesson": "Multi-stage Docker builds use multiple FROM statements. The builder stage contains dev tools (TypeScript compiler, Prisma CLI) needed only at build time; the final stage starts fresh from a slim base image and COPYs only the compiled artifacts. This keeps the production image small (typically under 200MB) and free of build-time attack surface."
+  }
+]

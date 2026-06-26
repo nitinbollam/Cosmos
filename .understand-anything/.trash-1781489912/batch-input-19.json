@@ -1,0 +1,58 @@
+{
+  "batchIndex": 19,
+  "files": [
+    {
+      "path": "apps/client/src/globals-admin.css",
+      "language": "css",
+      "sizeLines": 971,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/src/globals-shop.css",
+      "language": "css",
+      "sizeLines": 356,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/src/globals-theme.css",
+      "language": "css",
+      "sizeLines": 502,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "apps/client/src/globals.css",
+      "language": "css",
+      "sizeLines": 824,
+      "fileCategory": "markup"
+    }
+  ],
+  "batchImportData": {
+    "apps/client/src/globals-admin.css": [],
+    "apps/client/src/globals-shop.css": [],
+    "apps/client/src/globals-theme.css": [],
+    "apps/client/src/globals.css": []
+  },
+  "neighborMap": {
+    "apps/client/src/globals-admin.css": [
+      {
+        "path": "apps/client/src/main.tsx",
+        "batchIndex": 7,
+        "symbols": []
+      }
+    ],
+    "apps/client/src/globals-shop.css": [
+      {
+        "path": "apps/client/src/main.tsx",
+        "batchIndex": 7,
+        "symbols": []
+      }
+    ],
+    "apps/client/src/globals.css": [
+      {
+        "path": "apps/client/src/main.tsx",
+        "batchIndex": 7,
+        "symbols": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,1643 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/web/lib/server/analytics.ts",
+      "type": "file",
+      "name": "analytics.ts",
+      "filePath": "apps/web/lib/server/analytics.ts",
+      "summary": "Provides daily KPI snapshot computation and dashboard analytics for the ERP, aggregating order revenue, inventory counts, pick metrics, and MSA compliance status into time-series snapshots.",
+      "tags": ["analytics", "service", "utility", "dashboard"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/analytics.ts:rollupDaySnapshot",
+      "type": "function",
+      "name": "rollupDaySnapshot",
+      "filePath": "apps/web/lib/server/analytics.ts",
+      "lineRange": [23, 55],
+      "summary": "Aggregates order and SKU data for a given UTC day into a persistent KPI snapshot record.",
+      "tags": ["analytics", "data-aggregation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/analytics.ts:dashboardKpis",
+      "type": "function",
+      "name": "dashboardKpis",
+      "filePath": "apps/web/lib/server/analytics.ts",
+      "lineRange": [142, 167],
+      "summary": "Computes high-level dashboard KPIs by assembling today vs prior day order metrics, pick performance, and MSA status.",
+      "tags": ["analytics", "dashboard", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/analytics.ts:upsertSnapshot",
+      "type": "function",
+      "name": "upsertSnapshot",
+      "filePath": "apps/web/lib/server/analytics.ts",
+      "lineRange": [177, 208],
+      "summary": "Validates and upserts an externally-provided daily KPI snapshot record, enforcing role-based access.",
+      "tags": ["analytics", "validation", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/ap-bills.ts",
+      "type": "file",
+      "name": "ap-bills.ts",
+      "filePath": "apps/web/lib/server/ap-bills.ts",
+      "summary": "Handles accounts-payable vendor bill lifecycle including three-way match validation (PO, receipt, bill), bill creation from purchase orders, and payment recording with GL journal posting.",
+      "tags": ["service", "accounting", "finance", "procurement"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/ap-bills.ts:computeThreeWayMatch",
+      "type": "function",
+      "name": "computeThreeWayMatch",
+      "filePath": "apps/web/lib/server/ap-bills.ts",
+      "lineRange": [35, 69],
+      "summary": "Performs three-way match validation comparing PO quantities, received quantities, and bill amounts to detect discrepancies.",
+      "tags": ["validation", "accounting", "finance"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/ap-bills.ts:runThreeWayMatch",
+      "type": "function",
+      "name": "runThreeWayMatch",
+      "filePath": "apps/web/lib/server/ap-bills.ts",
+      "lineRange": [71, 107],
+      "summary": "Loads bill and PO from database, runs three-way match computation, and persists match results to the vendor bill record.",
+      "tags": ["validation", "accounting", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/ap-bills.ts:createBillFromPurchaseOrder",
+      "type": "function",
+      "name": "createBillFromPurchaseOrder",
+      "filePath": "apps/web/lib/server/ap-bills.ts",
+      "lineRange": [147, 248],
+      "summary": "Creates or updates a vendor bill from a purchase order, computing landed cost allocations, posting PO receipt GL journal, and triggering three-way match.",
+      "tags": ["accounting", "procurement", "finance"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/ap-bills.ts:recordBillPayment",
+      "type": "function",
+      "name": "recordBillPayment",
+      "filePath": "apps/web/lib/server/ap-bills.ts",
+      "lineRange": [250, 291],
+      "summary": "Records a partial or full payment against a vendor bill, updates balance and status, and posts the AP payment GL journal.",
+      "tags": ["accounting", "finance", "payment"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/audit-log.ts",
+      "type": "file",
+      "name": "audit-log.ts",
+      "filePath": "apps/web/lib/server/audit-log.ts",
+      "summary": "Provides lightweight audit event creation and retrieval, writing structured action records with entity context to the database for compliance and traceability.",
+      "tags": ["audit", "utility", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/audit-log.ts:auditLog",
+      "type": "function",
+      "name": "auditLog",
+      "filePath": "apps/web/lib/server/audit-log.ts",
+      "lineRange": [11, 22],
+      "summary": "Creates a structured audit event record in the database with action, entity type, entity ID, user ID, and optional metadata.",
+      "tags": ["audit", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/backorders.ts",
+      "type": "file",
+      "name": "backorders.ts",
+      "filePath": "apps/web/lib/server/backorders.ts",
+      "summary": "Manages backorder lifecycle: reserves available stock across FEFO lot allocations, creates backorder lines for unmet demand, and fills open backorders when new stock arrives.",
+      "tags": ["service", "inventory", "fulfillment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/backorders.ts:reserveLineWithBackorder",
+      "type": "function",
+      "name": "reserveLineWithBackorder",
+      "filePath": "apps/web/lib/server/backorders.ts",
+      "lineRange": [14, 115],
+      "summary": "Reserves as much stock as available across FEFO lot allocations and creates a backorder line for any unmet quantity, updating the order line item accordingly.",
+      "tags": ["inventory", "fulfillment", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/backorders.ts:fillBackordersOnReceipt",
+      "type": "function",
+      "name": "fillBackordersOnReceipt",
+      "filePath": "apps/web/lib/server/backorders.ts",
+      "lineRange": [125, 186],
+      "summary": "When new stock is received for a SKU/warehouse, fills pending backorder lines in order priority and triggers fulfillment tasks for newly satisfied orders.",
+      "tags": ["inventory", "fulfillment", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/bank-recon.ts",
+      "type": "file",
+      "name": "bank-recon.ts",
+      "filePath": "apps/web/lib/server/bank-recon.ts",
+      "summary": "Provides bank reconciliation capabilities: managing bank accounts, importing bank statement lines, matching unreconciled lines, and producing reconciliation summaries.",
+      "tags": ["service", "finance", "accounting"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/bank-recon.ts:importStatementLines",
+      "type": "function",
+      "name": "importStatementLines",
+      "filePath": "apps/web/lib/server/bank-recon.ts",
+      "lineRange": [32, 55],
+      "summary": "Validates the bank account exists and bulk-inserts bank statement lines within a transaction for later reconciliation.",
+      "tags": ["finance", "import", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/bank-recon.ts:reconcileStatementLine",
+      "type": "function",
+      "name": "reconcileStatementLine",
+      "filePath": "apps/web/lib/server/bank-recon.ts",
+      "lineRange": [70, 91],
+      "summary": "Marks a bank statement line as reconciled and updates the bank account's cleared balance within a database transaction.",
+      "tags": ["finance", "accounting", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/barcode-labels.ts",
+      "type": "file",
+      "name": "barcode-labels.ts",
+      "filePath": "apps/web/lib/server/barcode-labels.ts",
+      "summary": "Generates printable barcode label HTML for a given SKU, supporting configurable quantity and using Code128-style barcode formatting.",
+      "tags": ["utility", "markup", "inventory"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/billing.ts",
+      "type": "file",
+      "name": "billing.ts",
+      "filePath": "apps/web/lib/server/billing.ts",
+      "summary": "Manages Stripe-based subscription billing: creating checkout and portal sessions, applying plan changes from webhook events, and syncing plan status to the tenant and auth databases.",
+      "tags": ["service", "billing", "stripe", "subscription"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/billing.ts:createCheckoutSession",
+      "type": "function",
+      "name": "createCheckoutSession",
+      "filePath": "apps/web/lib/server/billing.ts",
+      "lineRange": [74, 102],
+      "summary": "Creates a Stripe checkout session for a tenant upgrading to a paid plan, configuring success/cancel URLs and ensuring a Stripe customer exists.",
+      "tags": ["billing", "stripe", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/billing.ts:handleBillingWebhookEvent",
+      "type": "function",
+      "name": "handleBillingWebhookEvent",
+      "filePath": "apps/web/lib/server/billing.ts",
+      "lineRange": [146, 175],
+      "summary": "Handles Stripe webhook events for subscription lifecycle changes, applying or downgrading tenant plans based on subscription status.",
+      "tags": ["billing", "stripe", "event-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/bin-locations.ts",
+      "type": "file",
+      "name": "bin-locations.ts",
+      "filePath": "apps/web/lib/server/bin-locations.ts",
+      "summary": "Provides CRUD operations for warehouse bin locations, supporting zone and aisle metadata used by WMS putaway and pick tasks.",
+      "tags": ["service", "inventory", "warehouse"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/buyer-context.ts",
+      "type": "file",
+      "name": "buyer-context.ts",
+      "filePath": "apps/web/lib/server/buyer-context.ts",
+      "summary": "Resolves buyer identity context from a session, distinguishing portal buyers from admin staff and providing helper functions to enforce buyer-scoped access and retrieve auth profiles.",
+      "tags": ["service", "middleware", "authentication"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/compose.test.ts",
+      "type": "file",
+      "name": "compose.test.ts",
+      "filePath": "apps/web/lib/server/celestial/compose.test.ts",
+      "summary": "Unit tests for the Celestial AI response composition module, verifying formatting of tool results and fallback reply generation.",
+      "tags": ["test", "celestial", "ai"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/compose.ts",
+      "type": "file",
+      "name": "compose.ts",
+      "filePath": "apps/web/lib/server/celestial/compose.ts",
+      "summary": "Composes AI assistant replies from structured tool execution results, formatting warehouses, orders, invoices, quotes, low-stock alerts, and catalog results into Markdown, with doc-based fallback replies.",
+      "tags": ["celestial", "ai", "formatting", "utility"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/compose.ts:composeFromToolResults",
+      "type": "function",
+      "name": "composeFromToolResults",
+      "filePath": "apps/web/lib/server/celestial/compose.ts",
+      "lineRange": [47, 58],
+      "summary": "Filters tool results that contain data and maps them through section formatters to build a unified Markdown reply.",
+      "tags": ["celestial", "ai", "formatting"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/compose.ts:buildDocFallbackReply",
+      "type": "function",
+      "name": "buildDocFallbackReply",
+      "filePath": "apps/web/lib/server/celestial/compose.ts",
+      "lineRange": [99, 152],
+      "summary": "Constructs a fallback Markdown reply from platform documentation chunks when tool results are empty, filtering technical docs for consumer-facing responses.",
+      "tags": ["celestial", "ai", "formatting"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/conversations.ts",
+      "type": "file",
+      "name": "conversations.ts",
+      "filePath": "apps/web/lib/server/celestial/conversations.ts",
+      "summary": "Manages Celestial AI chat conversation persistence: creating or retrieving conversations, appending messages, listing conversation history, and updating timestamps.",
+      "tags": ["celestial", "ai", "service", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/intent.test.ts",
+      "type": "file",
+      "name": "intent.test.ts",
+      "filePath": "apps/web/lib/server/celestial/intent.test.ts",
+      "summary": "Unit tests for the Celestial AI intent detection module, verifying classification of user messages into tool selection intents.",
+      "tags": ["test", "celestial", "ai"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/intent.ts",
+      "type": "file",
+      "name": "intent.ts",
+      "filePath": "apps/web/lib/server/celestial/intent.ts",
+      "summary": "Pure intent detection module for the Celestial AI assistant — classifies natural-language messages into sets of ERP tool names using regex patterns for orders, invoices, inventory, quotes, and search.",
+      "tags": ["celestial", "ai", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/intent.ts:detectIntent",
+      "type": "function",
+      "name": "detectIntent",
+      "filePath": "apps/web/lib/server/celestial/intent.ts",
+      "lineRange": [54, 112],
+      "summary": "Classifies a user message into a set of ERP tool names by matching regex patterns for orders, invoices, quotes, catalog, search, low-stock, and warehouse queries.",
+      "tags": ["celestial", "ai", "utility"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/llm.ts",
+      "type": "file",
+      "name": "llm.ts",
+      "filePath": "apps/web/lib/server/celestial/llm.ts",
+      "summary": "Provider-agnostic LLM client for the Celestial AI feature, supporting OpenAI-compatible APIs (Groq, OpenRouter), Google Gemini, Ollama local models, and a mock fallback for development and testing.",
+      "tags": ["celestial", "ai", "service", "llm"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/llm.ts:completeChat",
+      "type": "function",
+      "name": "completeChat",
+      "filePath": "apps/web/lib/server/celestial/llm.ts",
+      "lineRange": [60, 91],
+      "summary": "Routes a chat completion request to the configured LLM provider (OpenAI-compatible, Gemini, Ollama, or mock) based on environment configuration.",
+      "tags": ["celestial", "ai", "llm", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/llm.ts:callOpenAiCompatible",
+      "type": "function",
+      "name": "callOpenAiCompatible",
+      "filePath": "apps/web/lib/server/celestial/llm.ts",
+      "lineRange": [305, 331],
+      "summary": "Sends a chat completion request to an OpenAI-compatible endpoint (Groq, OpenRouter, etc.) and returns the text response.",
+      "tags": ["celestial", "ai", "llm", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/llm.ts:callGemini",
+      "type": "function",
+      "name": "callGemini",
+      "filePath": "apps/web/lib/server/celestial/llm.ts",
+      "lineRange": [333, 362],
+      "summary": "Calls the Google Gemini API for chat completion, converting chat history format and extracting the text response.",
+      "tags": ["celestial", "ai", "llm"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/llm.ts:mockComplete",
+      "type": "function",
+      "name": "mockComplete",
+      "filePath": "apps/web/lib/server/celestial/llm.ts",
+      "lineRange": [381, 431],
+      "summary": "Provides a deterministic mock LLM response for development/testing by generating formatted replies based on the tool block embedded in the system prompt.",
+      "tags": ["celestial", "ai", "test", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "type": "file",
+      "name": "orchestrator.ts",
+      "filePath": "apps/web/lib/server/celestial/orchestrator.ts",
+      "summary": "Central Celestial AI orchestration layer: prepares chat context by running intent-detected tools and doc retrieval, dispatches chat or streaming LLM completion, persists conversation messages, and enforces feature-flag access.",
+      "tags": ["celestial", "ai", "service", "orchestration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/orchestrator.ts:prepareChat",
+      "type": "function",
+      "name": "prepareChat",
+      "filePath": "apps/web/lib/server/celestial/orchestrator.ts",
+      "lineRange": [88, 151],
+      "summary": "Validates feature flag access, resolves buyer identity, detects intent, retrieves docs and tool results, builds the full prompt context, and optionally pre-composes a direct reply.",
+      "tags": ["celestial", "ai", "orchestration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/orchestrator.ts:chat",
+      "type": "function",
+      "name": "chat",
+      "filePath": "apps/web/lib/server/celestial/orchestrator.ts",
+      "lineRange": [178, 216],
+      "summary": "Executes a non-streaming Celestial AI chat turn: prepares context, completes via LLM, finalizes reply, and persists results.",
+      "tags": ["celestial", "ai", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/orchestrator.ts:chatStream",
+      "type": "function",
+      "name": "chatStream",
+      "filePath": "apps/web/lib/server/celestial/orchestrator.ts",
+      "lineRange": [218, 306],
+      "summary": "Executes a streaming Celestial AI chat turn, emitting SSE chunks for direct compose replies or incrementally streamed LLM content, then persists the completed conversation.",
+      "tags": ["celestial", "ai", "service", "streaming"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/prompts.ts",
+      "type": "file",
+      "name": "prompts.ts",
+      "filePath": "apps/web/lib/server/celestial/prompts.ts",
+      "summary": "Constructs system and context prompts for the Celestial AI assistant, adapting tone and capabilities based on whether the session user is a portal buyer or admin staff.",
+      "tags": ["celestial", "ai", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/tools.ts",
+      "type": "file",
+      "name": "tools.ts",
+      "filePath": "apps/web/lib/server/celestial/tools.ts",
+      "summary": "Executes named ERP data-fetch tools for the Celestial AI assistant, dispatching to orders, invoices, inventory, quotes, global search, low-stock alerts, and warehouse queries to populate context for LLM responses.",
+      "tags": ["celestial", "ai", "service", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/tools.ts:runTool",
+      "type": "function",
+      "name": "runTool",
+      "filePath": "apps/web/lib/server/celestial/tools.ts",
+      "lineRange": [42, 199],
+      "summary": "Dispatches a named tool to the appropriate ERP service (orders, invoices, inventory, quotes, search, low-stock, warehouses) and returns structured result data with navigation links.",
+      "tags": ["celestial", "ai", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/compliance-msa.ts",
+      "type": "file",
+      "name": "compliance-msa.ts",
+      "filePath": "apps/web/lib/server/compliance-msa.ts",
+      "summary": "Implements MSA (Manufacturer Sales Authorization) compliance reporting: configuring tenant DID settings, importing transactions, generating weekly MULTICAT EDI files, storing them, and submitting via EDI endpoint with automated cron support.",
+      "tags": ["service", "compliance", "edi", "automation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/compliance-msa.ts:generateReportForTenant",
+      "type": "function",
+      "name": "generateReportForTenant",
+      "filePath": "apps/web/lib/server/compliance-msa.ts",
+      "lineRange": [152, 230],
+      "summary": "Aggregates weekly MSA transactions, builds the MULTICAT EDI file, hashes and stores the file, and creates an MSA report database record.",
+      "tags": ["compliance", "edi", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/compliance-msa.ts:submitReportEdi",
+      "type": "function",
+      "name": "submitReportEdi",
+      "filePath": "apps/web/lib/server/compliance-msa.ts",
+      "lineRange": [263, 305],
+      "summary": "Retrieves a pending MSA report, reads its file from storage, and POSTs it to the configured EDI endpoint, updating the report status on success or failure.",
+      "tags": ["compliance", "edi", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/compliance-msa.ts:runMsaAutomationCron",
+      "type": "function",
+      "name": "runMsaAutomationCron",
+      "filePath": "apps/web/lib/server/compliance-msa.ts",
+      "lineRange": [308, 340],
+      "summary": "Cron entry point that generates, uploads, and submits pending weekly MSA reports for a tenant, collecting results and errors.",
+      "tags": ["compliance", "automation", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/compliance-tax.ts",
+      "type": "file",
+      "name": "compliance-tax.ts",
+      "filePath": "apps/web/lib/server/compliance-tax.ts",
+      "summary": "Provides sales tax computation utilities — calculating tax amounts from rates, resolving per-order tax based on ship-to state with tenant-configured rate fallback, and recording tax liabilities.",
+      "tags": ["service", "compliance", "finance", "tax"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/credit-limit.ts",
+      "type": "file",
+      "name": "credit-limit.ts",
+      "filePath": "apps/web/lib/server/credit-limit.ts",
+      "summary": "Enforces customer credit limit checks before order placement, tracks outstanding credit usage, and provides release mechanics for cancelled or paid orders.",
+      "tags": ["service", "finance", "customer", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/crm.ts",
+      "type": "file",
+      "name": "crm.ts",
+      "filePath": "apps/web/lib/server/crm.ts",
+      "summary": "Core CRM service providing customer and lead management: CRUD and bulk import for customers and leads, Kanban-style lead status tracking, lead-to-customer conversion, and customer activity logging.",
+      "tags": ["service", "crm", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/crm.ts:listCustomersPaged",
+      "type": "function",
+      "name": "listCustomersPaged",
+      "filePath": "apps/web/lib/server/crm.ts",
+      "lineRange": [24, 48],
+      "summary": "Returns a paginated and optionally filtered list of customers with total count for cursor-based pagination.",
+      "tags": ["crm", "service", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/crm.ts:createCustomer",
+      "type": "function",
+      "name": "createCustomer",
+      "filePath": "apps/web/lib/server/crm.ts",
+      "lineRange": [66, 90],
+      "summary": "Creates a new customer record with address, credit limit, net terms, and contact details, normalizing all string fields.",
+      "tags": ["crm", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/crm.ts:importLeads",
+      "type": "function",
+      "name": "importLeads",
+      "filePath": "apps/web/lib/server/crm.ts",
+      "lineRange": [182, 217],
+      "summary": "Bulk imports lead records from external data, validating required fields and Kanban status values, collecting per-row errors.",
+      "tags": ["crm", "import", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/crm.ts:convertLead",
+      "type": "function",
+      "name": "convertLead",
+      "filePath": "apps/web/lib/server/crm.ts",
+      "lineRange": [236, 255],
+      "summary": "Atomically converts a CRM lead to a customer record within a transaction, updating the lead status to CONVERTED.",
+      "tags": ["crm", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/customer-notification-prefs.ts",
+      "type": "file",
+      "name": "customer-notification-prefs.ts",
+      "filePath": "apps/web/lib/server/customer-notification-prefs.ts",
+      "summary": "Manages per-customer notification preference settings stored as JSON on the tenant organization record, providing read, patch, and gating functions to filter notification sends by channel and template.",
+      "tags": ["service", "notifications", "customer"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/db.ts",
+      "type": "file",
+      "name": "db.ts",
+      "filePath": "apps/web/lib/server/db.ts",
+      "summary": "Initializes and exports all named Prisma database client instances for the platform's 14 domain databases (auth, tenant, inventory, orders, CRM, storefront, WMS, dispatch, purchasing, payments, compliance, notifications, ledger, analytics).",
+      "tags": ["data-model", "singleton", "service"],
+      "complexity": "simple",
+      "languageNotes": "Uses separate Prisma clients per domain database, enabling independent schema evolution across ERP domains."
+    },
+    {
+      "id": "file:apps/web/lib/server/demand-planning.ts",
+      "type": "file",
+      "name": "demand-planning.ts",
+      "filePath": "apps/web/lib/server/demand-planning.ts",
+      "summary": "Computes SKU demand forecasts from historical stock ledger outbound events, generating days-of-supply, reorder recommendations, and suggested PO quantities for demand planning.",
+      "tags": ["service", "inventory", "analytics", "planning"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/demand-planning.ts:getSkuDemandPlan",
+      "type": "function",
+      "name": "getSkuDemandPlan",
+      "filePath": "apps/web/lib/server/demand-planning.ts",
+      "lineRange": [42, 92],
+      "summary": "Computes a demand plan for a single SKU/warehouse including daily usage rate, days of supply remaining, and recommended reorder quantity based on lead time.",
+      "tags": ["inventory", "analytics", "planning"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/demand-planning.ts:listDemandPlans",
+      "type": "function",
+      "name": "listDemandPlans",
+      "filePath": "apps/web/lib/server/demand-planning.ts",
+      "lineRange": [94, 123],
+      "summary": "Lists demand plans for all SKU/warehouse combinations, deduplicating and sorting by most critical days-of-supply to surface reorder priorities.",
+      "tags": ["inventory", "analytics", "planning"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "function:apps/web/lib/server/analytics.ts:rollupDaySnapshot",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "function:apps/web/lib/server/analytics.ts:dashboardKpis",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "function:apps/web/lib/server/analytics.ts:upsertSnapshot",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "function:apps/web/lib/server/analytics.ts:rollupDaySnapshot",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "function:apps/web/lib/server/analytics.ts:dashboardKpis",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/analytics.ts",
+      "target": "function:apps/web/lib/server/analytics.ts:upsertSnapshot",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "file:apps/web/lib/server/operations-gl.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:computeThreeWayMatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:runThreeWayMatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:createBillFromPurchaseOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:recordBillPayment",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:computeThreeWayMatch",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:runThreeWayMatch",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:createBillFromPurchaseOrder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/ap-bills.ts:recordBillPayment",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/operations-gl.ts:postApPaymentJournal",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/ap-bills.ts",
+      "target": "function:apps/web/lib/server/operations-gl.ts:postPoReceiptJournal",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/audit-log.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/audit-log.ts",
+      "target": "function:apps/web/lib/server/audit-log.ts:auditLog",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/audit-log.ts",
+      "target": "function:apps/web/lib/server/audit-log.ts:auditLog",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "file:apps/web/lib/server/inventory-lots.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "function:apps/web/lib/server/backorders.ts:reserveLineWithBackorder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "function:apps/web/lib/server/backorders.ts:fillBackordersOnReceipt",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "function:apps/web/lib/server/backorders.ts:reserveLineWithBackorder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "function:apps/web/lib/server/backorders.ts:fillBackordersOnReceipt",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "function:apps/web/lib/server/inventory-lots.ts:allocateBatchesFefo",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/backorders.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:reserveStock",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/bank-recon.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/bank-recon.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/bank-recon.ts",
+      "target": "function:apps/web/lib/server/bank-recon.ts:importStatementLines",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/bank-recon.ts",
+      "target": "function:apps/web/lib/server/bank-recon.ts:reconcileStatementLine",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/bank-recon.ts",
+      "target": "function:apps/web/lib/server/bank-recon.ts:importStatementLines",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/bank-recon.ts",
+      "target": "function:apps/web/lib/server/bank-recon.ts:reconcileStatementLine",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/barcode-labels.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/barcode-labels.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/billing.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/billing.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/billing.ts",
+      "target": "function:apps/web/lib/server/billing.ts:createCheckoutSession",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/billing.ts",
+      "target": "function:apps/web/lib/server/billing.ts:handleBillingWebhookEvent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/billing.ts",
+      "target": "function:apps/web/lib/server/billing.ts:createCheckoutSession",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/billing.ts",
+      "target": "function:apps/web/lib/server/billing.ts:handleBillingWebhookEvent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/bin-locations.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/bin-locations.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/buyer-context.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/buyer-context.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/buyer-context.ts",
+      "target": "function:apps/web/lib/server/crm.ts:findCustomerByEmail",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/compose.test.ts",
+      "target": "file:apps/web/lib/server/celestial/compose.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/compose.test.ts",
+      "target": "file:apps/web/lib/server/celestial/compose.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/compose.ts",
+      "target": "file:apps/web/lib/server/celestial/tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/compose.ts",
+      "target": "function:apps/web/lib/server/celestial/compose.ts:composeFromToolResults",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/compose.ts",
+      "target": "function:apps/web/lib/server/celestial/compose.ts:buildDocFallbackReply",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/compose.ts",
+      "target": "function:apps/web/lib/server/celestial/compose.ts:composeFromToolResults",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/compose.ts",
+      "target": "function:apps/web/lib/server/celestial/compose.ts:buildDocFallbackReply",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/conversations.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/conversations.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/intent.test.ts",
+      "target": "file:apps/web/lib/server/celestial/intent.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/intent.test.ts",
+      "target": "file:apps/web/lib/server/celestial/intent.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/intent.ts",
+      "target": "function:apps/web/lib/server/celestial/intent.ts:detectIntent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/intent.ts",
+      "target": "function:apps/web/lib/server/celestial/intent.ts:detectIntent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/llm.ts",
+      "target": "function:apps/web/lib/server/celestial/llm.ts:completeChat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/llm.ts",
+      "target": "function:apps/web/lib/server/celestial/llm.ts:callOpenAiCompatible",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/llm.ts",
+      "target": "function:apps/web/lib/server/celestial/llm.ts:callGemini",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/llm.ts",
+      "target": "function:apps/web/lib/server/celestial/llm.ts:mockComplete",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/llm.ts",
+      "target": "function:apps/web/lib/server/celestial/llm.ts:completeChat",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/audit-log.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/buyer-context.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/celestial/compose.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/celestial/conversations.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/celestial/intent.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/celestial/llm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/celestial/prompts.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/celestial/tools.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/feature-flags.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/orchestrator.ts:prepareChat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/orchestrator.ts:chat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/orchestrator.ts:chatStream",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/orchestrator.ts:chat",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/orchestrator.ts:chatStream",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/audit-log.ts:auditLog",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/llm.ts:completeChat",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/intent.ts:detectIntent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/compose.ts:composeFromToolResults",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/compose.ts:buildDocFallbackReply",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/feature-flags.ts:assertFeature",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "target": "function:apps/web/lib/server/celestial/retrieval.ts:retrievePlatformDocs",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/prompts.ts",
+      "target": "file:apps/web/lib/server/buyer-context.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/prompts.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/buyer-context.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/celestial/intent.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/invoices.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/orders.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/quotes.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/search.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/celestial/tools.ts:runTool",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/celestial/tools.ts:runTool",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/orders.ts:listOrders",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/orders.ts:findOrderById",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/invoices.ts:listInvoices",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:listSkus",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:lowStockAlerts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:listWarehouses",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/quotes.ts:listQuotes",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/tools.ts",
+      "target": "function:apps/web/lib/server/search.ts:globalSearch",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "file:apps/web/lib/server/msa-storage.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/compliance-msa.ts:generateReportForTenant",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/compliance-msa.ts:submitReportEdi",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/compliance-msa.ts:runMsaAutomationCron",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/compliance-msa.ts:generateReportForTenant",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/compliance-msa.ts:submitReportEdi",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/compliance-msa.ts:runMsaAutomationCron",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/msa-storage.ts:persistMsaFile",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-msa.ts",
+      "target": "function:apps/web/lib/server/msa-storage.ts:uploadMsaReport",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-tax.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-tax.ts",
+      "target": "file:apps/web/lib/server/tenant-tax.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/compliance-tax.ts",
+      "target": "function:apps/web/lib/server/tenant-tax.ts:getTenantSalesTaxRate",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/credit-limit.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/credit-limit.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/credit-limit.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/credit-limit.ts",
+      "target": "function:apps/web/lib/server/crm.ts:getCustomer",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:listCustomersPaged",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:createCustomer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:importLeads",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:convertLead",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:listCustomersPaged",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:createCustomer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:importLeads",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/crm.ts",
+      "target": "function:apps/web/lib/server/crm.ts:convertLead",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/customer-notification-prefs.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/customer-notification-prefs.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "function:apps/web/lib/server/demand-planning.ts:getSkuDemandPlan",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "function:apps/web/lib/server/demand-planning.ts:listDemandPlans",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "function:apps/web/lib/server/demand-planning.ts:getSkuDemandPlan",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "function:apps/web/lib/server/demand-planning.ts:listDemandPlans",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:findSkuById",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/demand-planning.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:listWarehouses",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

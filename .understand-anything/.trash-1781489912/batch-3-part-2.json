@@ -1,0 +1,1032 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/web/lib/server/native-router.ts",
+      "type": "file",
+      "name": "native-router.ts",
+      "filePath": "apps/web/lib/server/native-router.ts",
+      "summary": "The central API request dispatcher that routes all native HTTP requests to the appropriate domain handler modules, covering every ERP domain from inventory and orders to payments, WMS, dispatch, EDI, accounting, and AI.",
+      "tags": ["api-handler", "middleware", "entry-point"],
+      "complexity": "complex",
+      "languageNotes": "Pattern-matches URL path segments in a giant switch/chain of route sub-functions; the only exported symbol is handleNativeApi. Imports 49 domain modules making it the integration hub."
+    },
+    {
+      "id": "function:apps/web/lib/server/native-router.ts:handleNativeApi",
+      "type": "function",
+      "name": "handleNativeApi",
+      "filePath": "apps/web/lib/server/native-router.ts",
+      "lineRange": [61, 115],
+      "summary": "Top-level request handler that resolves the URL path to a specific route sub-function and returns the JSON response or appropriate error.",
+      "tags": ["api-handler", "middleware", "entry-point"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/notification-triggers.ts",
+      "type": "file",
+      "name": "notification-triggers.ts",
+      "filePath": "apps/web/lib/server/notification-triggers.ts",
+      "summary": "Defines domain event notification triggers (order created, shipped, invoice issued, payment received, low stock) that check customer preferences before dispatching notifications via the notifications service.",
+      "tags": ["service", "notifications", "event-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/notifications.ts",
+      "type": "file",
+      "name": "notifications.ts",
+      "filePath": "apps/web/lib/server/notifications.ts",
+      "summary": "Core notification delivery service: enqueues notification requests with idempotency, delivers via the notification provider, and supports listing and retrying failed notifications.",
+      "tags": ["service", "notifications", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/operations-gl.ts",
+      "type": "file",
+      "name": "operations-gl.ts",
+      "filePath": "apps/web/lib/server/operations-gl.ts",
+      "summary": "Posts operational general ledger journal entries for AR payments, AR refunds, PO receipts, AP payments, COGS recognition, and COGS reversals by resolving chart-of-accounts codes.",
+      "tags": ["service", "accounting", "general-ledger"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/operations-gl.ts:postArPaymentJournal",
+      "type": "function",
+      "name": "postArPaymentJournal",
+      "filePath": "apps/web/lib/server/operations-gl.ts",
+      "lineRange": [21, 51],
+      "summary": "Creates a double-entry journal entry for an accounts-receivable payment, debiting cash and crediting the AR account.",
+      "tags": ["service", "accounting", "general-ledger"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/operations-gl.ts:postCogsJournal",
+      "type": "function",
+      "name": "postCogsJournal",
+      "filePath": "apps/web/lib/server/operations-gl.ts",
+      "lineRange": [151, 181],
+      "summary": "Records a COGS journal entry debiting cost-of-goods-sold and crediting inventory asset when goods are shipped.",
+      "tags": ["service", "accounting", "general-ledger"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/order-orchestration.ts",
+      "type": "file",
+      "name": "order-orchestration.ts",
+      "filePath": "apps/web/lib/server/order-orchestration.ts",
+      "summary": "Implements the order fulfillment saga pattern: orchestrates stock reservation, drop-ship PO creation, payment capture, WMS task creation, backorder handling, shipping, and order cancellation with compensation.",
+      "tags": ["service", "orchestration", "saga"],
+      "complexity": "complex",
+      "languageNotes": "Uses a saga pattern with explicit step tracking in an orderSaga DB record to enable idempotent re-runs of the fulfillment pipeline."
+    },
+    {
+      "id": "function:apps/web/lib/server/order-orchestration.ts:runOrderFulfillmentPipeline",
+      "type": "function",
+      "name": "runOrderFulfillmentPipeline",
+      "filePath": "apps/web/lib/server/order-orchestration.ts",
+      "lineRange": [60, 211],
+      "summary": "Drives the full order fulfillment saga: reserves stock, creates drop-ship POs, triggers WMS fulfillment task creation, and transitions order status at each step.",
+      "tags": ["service", "orchestration", "saga"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/order-orchestration.ts:cancelOrderWithCompensation",
+      "type": "function",
+      "name": "cancelOrderWithCompensation",
+      "filePath": "apps/web/lib/server/order-orchestration.ts",
+      "lineRange": [371, 418],
+      "summary": "Cancels an order with saga compensation: releases stock reservations, voids authorized payments, cancels WMS fulfillment tasks, and transitions the order to CANCELLED.",
+      "tags": ["service", "saga", "compensation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/order-orchestration.ts:onFulfillmentDispatched",
+      "type": "function",
+      "name": "onFulfillmentDispatched",
+      "filePath": "apps/web/lib/server/order-orchestration.ts",
+      "lineRange": [329, 358],
+      "summary": "Handles the dispatched fulfillment event: commits shipped inventory, posts COGS journal, triggers shipment invoicing, and marks short-picked lines as backordered.",
+      "tags": ["service", "event-handler", "fulfillment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/order-payment-sync.ts",
+      "type": "file",
+      "name": "order-payment-sync.ts",
+      "filePath": "apps/web/lib/server/order-payment-sync.ts",
+      "summary": "Provides a lightweight utility to sync order payment totals from the payment ledger, keeping the order's amountPaid field consistent with actual recorded payments.",
+      "tags": ["service", "payments", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/order-saga.ts",
+      "type": "file",
+      "name": "order-saga.ts",
+      "filePath": "apps/web/lib/server/order-saga.ts",
+      "summary": "Thin re-export barrel that exposes the order orchestration module as the public order saga entry point.",
+      "tags": ["barrel", "service", "orchestration"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/order-shipments.ts",
+      "type": "file",
+      "name": "order-shipments.ts",
+      "filePath": "apps/web/lib/server/order-shipments.ts",
+      "summary": "Manages order shipment records: listing and creating shipments, marking them shipped, and providing order tracking information including carrier and dispatch route stop data.",
+      "tags": ["service", "fulfillment", "shipments"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/order-templates.ts",
+      "type": "file",
+      "name": "order-templates.ts",
+      "filePath": "apps/web/lib/server/order-templates.ts",
+      "summary": "Handles reusable order templates for storefront customers: CRUD operations and template-to-cart-line expansion with current pricing.",
+      "tags": ["service", "storefront", "order-templates"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/orders.ts",
+      "type": "file",
+      "name": "orders.ts",
+      "filePath": "apps/web/lib/server/orders.ts",
+      "summary": "Core sales order service managing order creation (with tax, pricing, credit limit checks), listing, confirmation, fulfillment, cancellation, payment recording, and reorder line generation.",
+      "tags": ["service", "orders", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/orders.ts:createOrder",
+      "type": "function",
+      "name": "createOrder",
+      "filePath": "apps/web/lib/server/orders.ts",
+      "lineRange": [32, 88],
+      "summary": "Creates a new sales order after validating prices, checking credit limits, computing sales tax, and asynchronously kicking off the fulfillment pipeline and customer notification.",
+      "tags": ["service", "factory", "orders"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/orders.ts:recordOrderPayment",
+      "type": "function",
+      "name": "recordOrderPayment",
+      "filePath": "apps/web/lib/server/orders.ts",
+      "lineRange": [192, 228],
+      "summary": "Records a manual payment against an order, updates the amountPaid field, releases credit exposure, syncs the invoice, posts the AR journal entry, and notifies the customer.",
+      "tags": ["service", "payments", "event-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/payment-idempotency.ts",
+      "type": "file",
+      "name": "payment-idempotency.ts",
+      "filePath": "apps/web/lib/server/payment-idempotency.ts",
+      "summary": "Provides idempotency key checking and registration for payment operations, preventing duplicate charge processing.",
+      "tags": ["service", "payments", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/payments.ts",
+      "type": "file",
+      "name": "payments.ts",
+      "filePath": "apps/web/lib/server/payments.ts",
+      "summary": "Payment processing service integrating with Stripe: authorizes, captures, voids, and refunds payments; records payment and refund ledger entries; handles Stripe webhook events for async payment state updates.",
+      "tags": ["service", "payments", "stripe"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/payments.ts:handleStripeWebhook",
+      "type": "function",
+      "name": "handleStripeWebhook",
+      "filePath": "apps/web/lib/server/payments.ts",
+      "lineRange": [238, 324],
+      "summary": "Verifies and processes inbound Stripe webhook events (payment_intent.succeeded, payment_intent.payment_failed, charge.refunded) updating payment intent state and posting corresponding ledger entries.",
+      "tags": ["service", "payments", "event-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/permissions.ts",
+      "type": "file",
+      "name": "permissions.ts",
+      "filePath": "apps/web/lib/server/permissions.ts",
+      "summary": "Defines role-to-permission mappings and provides hasPermission and assertPermission helpers used for fine-grained access control checks within API handlers.",
+      "tags": ["service", "security", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/pick-bin-resolver.ts",
+      "type": "file",
+      "name": "pick-bin-resolver.ts",
+      "filePath": "apps/web/lib/server/pick-bin-resolver.ts",
+      "summary": "Resolves bin location codes for pick list lines by querying stock levels and bin locations, enriching WMS pick items with their warehouse bin addresses.",
+      "tags": ["service", "wms", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/pick-bin-resolver.ts:resolvePickBinCodes",
+      "type": "function",
+      "name": "resolvePickBinCodes",
+      "filePath": "apps/web/lib/server/pick-bin-resolver.ts",
+      "lineRange": [8, 47],
+      "summary": "Looks up the optimal bin location code for each pick line by matching stock levels to bin records and selecting the bin with the highest on-hand quantity.",
+      "tags": ["service", "wms", "utility"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/analytics.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/ap-bills.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/audit-log.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/backorders.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/bank-recon.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/barcode-labels.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/bin-locations.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/buyer-context.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/compliance-msa.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/compliance-tax.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/customer-notification-prefs.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/db-health.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/demand-planning.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/dispatch.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/drop-ship.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/edi.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/feature-flags.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/inventory-lots.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/inventory-serials.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/invoices.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/ledger.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/notification-provider-status.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/notifications.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/order-orchestration.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/order-shipments.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/order-templates.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/orders.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/payment-idempotency.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/payments.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/pos-receipt.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/pos.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/pricing.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/purchasing.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/quotes.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/saved-payment-methods.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/search.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/tenant-tax.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/tenant.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/users.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/wave-picking.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/webhooks.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/wms-labor.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/wms-putaway.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "file:apps/web/lib/server/wms-receiving.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/notification-triggers.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/notification-triggers.ts",
+      "target": "file:apps/web/lib/server/customer-notification-prefs.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/notification-triggers.ts",
+      "target": "file:apps/web/lib/server/notifications.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/notifications.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/notifications.ts",
+      "target": "file:apps/web/lib/server/notification-provider.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/operations-gl.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/backorders.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/credit-limit.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/drop-ship.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/order-payment-sync.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/order-status.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/payments.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-payment-sync.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-saga.ts",
+      "target": "file:apps/web/lib/server/order-orchestration.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-shipments.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-shipments.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-templates.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-templates.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/compliance-tax.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/credit-limit.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/invoices.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/notification-triggers.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/order-orchestration.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/pricing.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "file:apps/web/lib/server/tenant-tax.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/payment-idempotency.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/payments.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/payments.ts",
+      "target": "file:apps/web/lib/server/order-payment-sync.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/payments.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/payments.ts",
+      "target": "file:apps/web/lib/server/stripe.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/permissions.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pick-bin-resolver.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "function:apps/web/lib/server/native-router.ts:handleNativeApi",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/native-router.ts",
+      "target": "function:apps/web/lib/server/native-router.ts:handleNativeApi",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/operations-gl.ts",
+      "target": "function:apps/web/lib/server/operations-gl.ts:postArPaymentJournal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/operations-gl.ts",
+      "target": "function:apps/web/lib/server/operations-gl.ts:postCogsJournal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/operations-gl.ts",
+      "target": "function:apps/web/lib/server/operations-gl.ts:postArPaymentJournal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/operations-gl.ts",
+      "target": "function:apps/web/lib/server/operations-gl.ts:postCogsJournal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:runOrderFulfillmentPipeline",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:cancelOrderWithCompensation",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:onFulfillmentDispatched",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:runOrderFulfillmentPipeline",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:cancelOrderWithCompensation",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/order-orchestration.ts",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:onFulfillmentDispatched",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "function:apps/web/lib/server/orders.ts:createOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "function:apps/web/lib/server/orders.ts:recordOrderPayment",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "function:apps/web/lib/server/orders.ts:createOrder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/orders.ts",
+      "target": "function:apps/web/lib/server/orders.ts:recordOrderPayment",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/payments.ts",
+      "target": "function:apps/web/lib/server/payments.ts:handleStripeWebhook",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/payments.ts",
+      "target": "function:apps/web/lib/server/payments.ts:handleStripeWebhook",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/pick-bin-resolver.ts",
+      "target": "function:apps/web/lib/server/pick-bin-resolver.ts:resolvePickBinCodes",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/pick-bin-resolver.ts",
+      "target": "function:apps/web/lib/server/pick-bin-resolver.ts:resolvePickBinCodes",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/order-orchestration.ts:runOrderFulfillmentPipeline",
+      "target": "function:apps/web/lib/server/drop-ship.ts:createDropShipPurchaseOrders",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/order-orchestration.ts:onFulfillmentDispatched",
+      "target": "function:apps/web/lib/server/inventory.ts:commitShipmentForOrder",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/orders.ts:createOrder",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:runOrderFulfillmentPipeline",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/orders.ts:recordOrderPayment",
+      "target": "function:apps/web/lib/server/operations-gl.ts:postArPaymentJournal",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/native-router.ts:handleNativeApi",
+      "target": "file:apps/web/lib/server/orders.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/native-router.ts:handleNativeApi",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "batchIndex": 23,
+  "files": [
+    {
+      "path": "scripts/bootstrap.sh",
+      "language": "shell",
+      "sizeLines": 38,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/diagnose-prisma-engines.ps1",
+      "language": "powershell",
+      "sizeLines": 61,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/scaffold-ai.ps1",
+      "language": "powershell",
+      "sizeLines": 61,
+      "fileCategory": "script"
+    }
+  ],
+  "batchImportData": {
+    "scripts/bootstrap.sh": [],
+    "scripts/diagnose-prisma-engines.ps1": [],
+    "scripts/scaffold-ai.ps1": []
+  },
+  "neighborMap": {}
+}

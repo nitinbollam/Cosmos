@@ -1,0 +1,171 @@
+{
+  "batchIndex": 27,
+  "files": [
+    {
+      "path": "packages/types/tsconfig.json",
+      "language": "json",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/ui/package.json",
+      "language": "json",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/src/StatsCard.tsx",
+      "language": "typescript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/ui/tsconfig.json",
+      "language": "json",
+      "sizeLines": 12,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/web-gateway-client/package.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/web-gateway-client/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/web-gateway-client/src/resolve-gateway.test.ts",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/web-gateway-client/tsconfig.json",
+      "language": "json",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "scripts/clean-client-public.mjs",
+      "language": "javascript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/dev-admin.mjs",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/dev-web.mjs",
+      "language": "javascript",
+      "sizeLines": 19,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/eslint-soft.mjs",
+      "language": "javascript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/generate-all-prisma.mjs",
+      "language": "javascript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/generate-favicons.mjs",
+      "language": "javascript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/generate-types.ts",
+      "language": "typescript",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/patch-client-after-sync.mjs",
+      "language": "javascript",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/production-preflight.mjs",
+      "language": "javascript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/seed-db.ts",
+      "language": "typescript",
+      "sizeLines": 1447,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/setup-postgres.mjs",
+      "language": "javascript",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/strip-web-ui.mjs",
+      "language": "javascript",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/sync-client-from-web.mjs",
+      "language": "javascript",
+      "sizeLines": 147,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/workspace-run.mjs",
+      "language": "javascript",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "packages/types/tsconfig.json": [],
+    "packages/ui/package.json": [],
+    "packages/ui/src/index.ts": [],
+    "packages/ui/src/StatsCard.tsx": [],
+    "packages/ui/tsconfig.json": [],
+    "packages/web-gateway-client/package.json": [],
+    "packages/web-gateway-client/src/index.ts": [],
+    "packages/web-gateway-client/src/resolve-gateway.test.ts": [
+      "packages/web-gateway-client/src/index.ts"
+    ],
+    "packages/web-gateway-client/tsconfig.json": [],
+    "scripts/clean-client-public.mjs": [],
+    "scripts/dev-admin.mjs": [],
+    "scripts/dev-web.mjs": [],
+    "scripts/eslint-soft.mjs": [],
+    "scripts/generate-all-prisma.mjs": [],
+    "scripts/generate-favicons.mjs": [],
+    "scripts/generate-types.ts": [],
+    "scripts/patch-client-after-sync.mjs": [],
+    "scripts/production-preflight.mjs": [],
+    "scripts/seed-db.ts": [],
+    "scripts/setup-postgres.mjs": [],
+    "scripts/strip-web-ui.mjs": [],
+    "scripts/sync-client-from-web.mjs": [],
+    "scripts/workspace-run.mjs": []
+  },
+  "neighborMap": {}
+}

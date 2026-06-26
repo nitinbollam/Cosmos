@@ -1,0 +1,80 @@
+{
+  "nodes": [
+    {
+      "id": "config:apps/client/.env.example",
+      "type": "config",
+      "name": ".env.example",
+      "filePath": "apps/client/.env.example",
+      "summary": "Environment variable template for the client app, documenting the required VITE_GATEWAY_URL and optional Stripe publishable key and admin origin overrides for the unified Vite+Express server on port 4000.",
+      "tags": ["configuration", "environment", "security"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/index.html",
+      "type": "file",
+      "name": "index.html",
+      "filePath": "apps/client/index.html",
+      "summary": "Root HTML entry point for the Cosmos SPA, including a theme initialization inline script that reads the 'cosmos.theme' key from localStorage and applies the 'obsidian' or 'aurora' data-theme attribute before first paint to prevent flash of wrong theme.",
+      "tags": ["entry-point", "markup", "configuration"],
+      "complexity": "simple",
+      "languageNotes": "Contains an inline blocking script for early theme injection, a common pattern to prevent FOUC (Flash of Unstyled Content) with multi-theme apps."
+    },
+    {
+      "id": "config:apps/client/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "apps/client/package.json",
+      "summary": "Package manifest for the @cosmos/client workspace, defining scripts for dev, build, test, and lint alongside a rich dependency set including React 19, TanStack Query/Table, react-router-dom, Zustand, Zod, Stripe, DnD Kit, Recharts, and Tailwind CSS.",
+      "tags": ["configuration", "build-system", "dependency-management"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:apps/client/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "apps/client/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the client app source, enabling strict mode, bundler module resolution, react-jsx transform, and a path alias mapping '@/*' to './src/*' for clean imports.",
+      "tags": ["configuration", "typescript", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/client/tsconfig.node.json",
+      "type": "config",
+      "name": "tsconfig.node.json",
+      "filePath": "apps/client/tsconfig.node.json",
+      "summary": "Separate TypeScript configuration scoped to vite.config.ts, targeting ES2022 with bundler module resolution for type-checking Vite configuration files outside the main app source tree.",
+      "tags": ["configuration", "typescript", "build-system"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:apps/client/tsconfig.json",
+      "target": "file:apps/client/src/main.tsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:apps/client/tsconfig.node.json",
+      "target": "file:apps/client/vite.config.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:apps/client/package.json",
+      "target": "file:apps/client/src/main.tsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:apps/client/.env.example",
+      "target": "file:apps/client/src/main.tsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}
