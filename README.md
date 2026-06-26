@@ -1,4 +1,4 @@
-# Cosmos
+# Pleros
 
 ERP and distribution platform — **Vite** (UI + API) on **one port**.
 
@@ -24,7 +24,7 @@ npm run dev
 ```
 
 - **App:** http://localhost:4000 (landing page with role-based entry points)
-- **Admin:** http://localhost:4000/admin/login — `admin@cosmos.local` / `admin1234`
+- **Admin:** http://localhost:4000/admin/login — `admin@pleros.local` / `admin1234`
 - **B2B buyer:** http://localhost:4000/login — `buyer@acme-retail.com` / `buyer1234`
 - **Mobile (warehouse/delivery/sales):** http://localhost:4000/m/login
 
@@ -46,7 +46,7 @@ Two switchable themes (toggle in any header; persisted per browser):
 Local dev uses **SQLite** (`apps/web/.data/*.db`). For Postgres:
 
 ```bash
-COSMOS_DB_PROVIDER=postgres npm run db:setup:postgres
+PLEROS_DB_PROVIDER=postgres npm run db:setup:postgres
 ```
 
 Health check: `GET /api/v1/health/db`.
@@ -58,7 +58,7 @@ Health check: `GET /api/v1/health/db`.
 | `npm run dev` | Vite dev server + API on **:4000** |
 | `npm run sync:client` | Re-sync UI from legacy `apps/web` sources → `apps/client` |
 | `npm run build` | Production Vite build + Prisma generate |
-| `npm run start -w @cosmos/client` | Serve `dist/` + API (after build) |
+| `npm run start -w @pleros/client` | Serve `dist/` + API (after build) |
 
 Requires **Node.js ≥ 20** and **npm ≥ 10**. Database: `apps/web/.data/*.db`.
 

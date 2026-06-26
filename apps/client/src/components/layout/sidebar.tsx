@@ -1,4 +1,4 @@
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { Link } from 'react-router-dom'
 import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -55,26 +55,26 @@ export function Sidebar({
   return (
     <aside
       className={[
-        'cosmos-sidebar',
-        collapsed && !mobileOpen ? 'cosmos-sidebar--collapsed' : '',
-        mobileOpen ? 'cosmos-sidebar--mobile-open' : '',
+        'pleros-sidebar',
+        collapsed && !mobileOpen ? 'pleros-sidebar--collapsed' : '',
+        mobileOpen ? 'pleros-sidebar--mobile-open' : '',
       ]
         .filter(Boolean)
         .join(' ')}
     >
-      <div className="cosmos-sidebar-brand">
+      <div className="pleros-sidebar-brand">
         <Link
           to="/admin"
-          className="cosmos-sidebar-brand-link"
-          title="Cosmos"
+          className="pleros-sidebar-brand-link"
+          title="Pleros"
           onClick={() => onMobileClose?.()}
         >
-          {showLabels ? <CosmosLogo size="md" /> : <CosmosLogo variant="mark" size="sm" />}
+          {showLabels ? <PlerosLogo size="md" /> : <PlerosLogo variant="mark" size="sm" />}
         </Link>
         {mobileOpen ? (
           <button
             type="button"
-            className="cosmos-sidebar-close"
+            className="pleros-sidebar-close"
             aria-label="Close navigation menu"
             onClick={() => onMobileClose?.()}
           >
@@ -85,7 +85,7 @@ export function Sidebar({
         ) : null}
       </div>
 
-      <nav className="cosmos-sidebar-nav" aria-label="Admin navigation">
+      <nav className="pleros-sidebar-nav" aria-label="Admin navigation">
         {navItems.map((item) => {
           const active =
             item.href === '/admin'
@@ -96,21 +96,21 @@ export function Sidebar({
               key={item.href}
               to={item.href}
               title={item.label}
-              className={`cosmos-nav-link${active ? ' cosmos-nav-link--active' : ''}`}
+              className={`pleros-nav-link${active ? ' pleros-nav-link--active' : ''}`}
               onClick={() => onMobileClose?.()}
             >
-              <span className="cosmos-nav-icon-wrap">
+              <span className="pleros-nav-icon-wrap">
                 <SidebarIcon name={item.icon} />
               </span>
-              {showLabels && <span className="cosmos-nav-label">{item.label}</span>}
+              {showLabels && <span className="pleros-nav-label">{item.label}</span>}
             </Link>
           )
         })}
       </nav>
 
-      <div className="cosmos-sidebar-foot">
+      <div className="pleros-sidebar-foot">
         {showLabels && (
-          <Link to="/catalog" className="cosmos-sidebar-shop" onClick={() => onMobileClose?.()}>
+          <Link to="/catalog" className="pleros-sidebar-shop" onClick={() => onMobileClose?.()}>
             B2B storefront
           </Link>
         )}
@@ -119,7 +119,7 @@ export function Sidebar({
           aria-expanded={!collapsed}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           onClick={onToggleCollapsed}
-          className="cosmos-sidebar-toggle cosmos-sidebar-toggle--desktop"
+          className="pleros-sidebar-toggle pleros-sidebar-toggle--desktop"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
             {collapsed ? (

@@ -4,22 +4,22 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 export const WEB_ROOT = path.join(root, 'apps', 'web')
 
-/** Schema folder name → SQLite file basename (e.g. cosmos_auth.db). */
+/** Schema folder name → SQLite file basename (e.g. pleros_auth.db). */
 export const DB_BY_SCHEMA = {
-  auth: 'cosmos_auth',
-  tenant: 'cosmos_tenant',
-  inventory: 'cosmos_inventory',
-  order: 'cosmos_order',
-  crm: 'cosmos_crm',
-  storefront: 'cosmos_storefront',
-  purchasing: 'cosmos_purchasing',
-  payment: 'cosmos_payment',
-  wms: 'cosmos_wms',
-  dispatch: 'cosmos_dispatch',
-  compliance: 'cosmos_compliance',
-  ledger: 'cosmos_ledger',
-  notification: 'cosmos_notification',
-  analytics: 'cosmos_analytics',
+  auth: 'pleros_auth',
+  tenant: 'pleros_tenant',
+  inventory: 'pleros_inventory',
+  order: 'pleros_order',
+  crm: 'pleros_crm',
+  storefront: 'pleros_storefront',
+  purchasing: 'pleros_purchasing',
+  payment: 'pleros_payment',
+  wms: 'pleros_wms',
+  dispatch: 'pleros_dispatch',
+  compliance: 'pleros_compliance',
+  ledger: 'pleros_ledger',
+  notification: 'pleros_notification',
+  analytics: 'pleros_analytics',
 }
 
 export const WEB_DATABASE_ENV_KEYS = Object.keys(DB_BY_SCHEMA).map(
@@ -31,7 +31,7 @@ export function envKeyForSchema(schemaName) {
 }
 
 export function getDbProvider() {
-  return process.env.COSMOS_DB_PROVIDER === 'postgres' ? 'postgresql' : 'sqlite'
+  return process.env.PLEROS_DB_PROVIDER === 'postgres' ? 'postgresql' : 'sqlite'
 }
 
 /** Absolute file: URL for an embedded SQLite database under apps/web/.data */
@@ -60,11 +60,11 @@ export function databaseUrlForSchema(schemaName, options = {}) {
   if (getDbProvider() === 'postgresql') {
     const base =
       process.env.DATABASE_URL?.trim() ||
-      'postgresql://cosmos:cosmos@localhost:5432/postgres'
+      'postgresql://pleros:pleros@localhost:5432/postgres'
     return postgresDatabaseUrl(base, dbName)
   }
 
-  const dataDir = options.dataDir ?? process.env.COSMOS_DATA_DIR ?? '.data'
+  const dataDir = options.dataDir ?? process.env.PLEROS_DATA_DIR ?? '.data'
   return sqliteDatabaseUrl(dbName, dataDir)
 }
 

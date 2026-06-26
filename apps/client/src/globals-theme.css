@@ -1,4 +1,4 @@
-/* Cosmos themes — shared tokens */
+/* Pleros themes — shared tokens */
 :root {
   --font-display: 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
@@ -71,18 +71,18 @@ h6 {
   --c-chart-line: #5b8def;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
 
-  --cosmos-bg: var(--c-bg);
-  --cosmos-surface: var(--c-surface);
-  --cosmos-surface-2: var(--c-surface-2);
-  --cosmos-border: var(--c-border);
-  --cosmos-primary: var(--c-primary);
-  --cosmos-accent: var(--c-accent);
-  --cosmos-success: var(--c-success);
-  --cosmos-warning: var(--c-warning);
-  --cosmos-danger: var(--c-danger);
-  --cosmos-white: var(--c-heading);
-  --cosmos-muted: var(--c-text-3);
-  --cosmos-text: var(--c-text);
+  --pleros-bg: var(--c-bg);
+  --pleros-surface: var(--c-surface);
+  --pleros-surface-2: var(--c-surface-2);
+  --pleros-border: var(--c-border);
+  --pleros-primary: var(--c-primary);
+  --pleros-accent: var(--c-accent);
+  --pleros-success: var(--c-success);
+  --pleros-warning: var(--c-warning);
+  --pleros-danger: var(--c-danger);
+  --pleros-white: var(--c-heading);
+  --pleros-muted: var(--c-text-3);
+  --pleros-text: var(--c-text);
 }
 
 /* Aurora — light wholesale theme */
@@ -136,18 +136,18 @@ h6 {
   --c-chart-line: var(--palette-medium-slate-blue);
   --shadow-card: 0 1px 3px rgba(45, 38, 64, 0.06);
 
-  --cosmos-bg: var(--c-bg);
-  --cosmos-surface: var(--c-surface);
-  --cosmos-surface-2: var(--c-surface-2);
-  --cosmos-border: var(--c-border);
-  --cosmos-primary: var(--c-primary);
-  --cosmos-accent: var(--c-accent);
-  --cosmos-success: var(--c-success);
-  --cosmos-warning: var(--c-warning);
-  --cosmos-danger: var(--c-danger);
-  --cosmos-white: var(--c-heading);
-  --cosmos-muted: var(--c-text-3);
-  --cosmos-text: var(--c-text);
+  --pleros-bg: var(--c-bg);
+  --pleros-surface: var(--c-surface);
+  --pleros-surface-2: var(--c-surface-2);
+  --pleros-border: var(--c-border);
+  --pleros-primary: var(--c-primary);
+  --pleros-accent: var(--c-accent);
+  --pleros-success: var(--c-success);
+  --pleros-warning: var(--c-warning);
+  --pleros-danger: var(--c-danger);
+  --pleros-white: var(--c-heading);
+  --pleros-muted: var(--c-text-3);
+  --pleros-text: var(--c-text);
 }
 
 /* Celestial AI assistant */
@@ -353,7 +353,7 @@ h6 {
   background: var(--c-surface);
   flex-shrink: 0;
 }
-.celestial-input-row .cosmos-input,
+.celestial-input-row .pleros-input,
 .celestial-input { flex: 1; min-width: 0; }
 .celestial-send { flex-shrink: 0; }
 

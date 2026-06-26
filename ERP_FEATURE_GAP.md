@@ -1,16 +1,16 @@
-# Cosmos vs Established ERP Platforms — Feature Gap Analysis
+# Pleros vs Established ERP Platforms — Feature Gap Analysis
 
-Comparison of **Cosmos** against well-established wholesale/distribution ERP systems (NetSuite Wholesale Distribution, Microsoft Dynamics 365 Business Central, Acumatica Distribution, Epicor Prophet 21, Infor CloudSuite, SAP Business One) as commonly evaluated in 2025–2026.
+Comparison of **Pleros** against well-established wholesale/distribution ERP systems (NetSuite Wholesale Distribution, Microsoft Dynamics 365 Business Central, Acumatica Distribution, Epicor Prophet 21, Infor CloudSuite, SAP Business One) as commonly evaluated in 2025–2026.
 
 **Sources:** Industry guides for wholesale distribution ERP ([Gestisoft 2026](https://www.gestisoft.com/en/blog/erp-distribution), [NetSuite editions](https://netsuite.folio3.com/blog/netsuite-edition-for-wholesale-distributors/), [Anchor Group 2025](https://www.anchorgroup.tech/blog/wholesale-distribution-erp-systems-2025), [ERP Software Blog 2026](https://erpsoftwareblog.com/2025/11/top-11-erp-for-distribution/)).
 
-**Cosmos reference:** `PLATFORM_FEATURES.md`, `MISSING.md`, and the live codebase (Tiers 4–18).
+**Pleros reference:** `PLATFORM_FEATURES.md`, `MISSING.md`, and the live codebase (Tiers 4–18).
 
 ---
 
 ## Executive summary
 
-Cosmos is **not a full enterprise ERP replacement yet**, but it **covers most core SMB wholesale/distribution workflows** that established products prioritize in “phase 1” implementations: order-to-cash, procure-to-pay, multi-warehouse inventory, B2B portal, basic WMS, AR/AP/GL, and field mobile apps.
+Pleros is **not a full enterprise ERP replacement yet**, but it **covers most core SMB wholesale/distribution workflows** that established products prioritize in “phase 1” implementations: order-to-cash, procure-to-pay, multi-warehouse inventory, B2B portal, basic WMS, AR/AP/GL, and field mobile apps.
 
 | Segment | Coverage vs established ERPs |
 |---------|------------------------------|
@@ -19,7 +19,7 @@ Cosmos is **not a full enterprise ERP replacement yet**, but it **covers most co
 | **Advanced supply chain** (demand planning, EDI hub, drop ship, landed cost) | **~70%** — EDI hub (850/810/856), demand planning, landed cost on PO receive |
 | **Enterprise scale** (multi-entity, high volume, deep BI, HR/payroll) | **~15%** — intentionally out of scope today |
 
-Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not include natively. It complements but does not replace gaps like general EDI or demand planning.
+Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not include natively. It complements but does not replace gaps like general EDI or demand planning.
 
 **Suggested positioning today:** Single-warehouse to few-warehouse **US SMB distributors** (roughly NetSuite “Starter” / Business Central profile) with modern UX + AI — not yet a Prophet 21 / Enterprise NetSuite replacement.
 
@@ -29,7 +29,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### Financials & accounting
 
-| Feature (industry standard) | Cosmos | Notes |
+| Feature (industry standard) | Pleros | Notes |
 |----------------------------|--------|-------|
 | General ledger | ✅ | Chart of accounts, journal entries, trial balance |
 | AR (invoicing, payments) | ✅ | Auto-invoice on ship, buyer pay, Stripe |
@@ -39,7 +39,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 3-way match (PO / receipt / bill) | ✅ | Tier 8 / 12 |
 | Sales tax | ⚠️ Partial | State jurisdiction rates; not full nexus / multi-state engine |
 | Credit memos / returns GL | ✅ | RMA flow |
-| Cashflow forecasting | ✅ | `@cosmos/analytics-engine` (EWMA) |
+| Cashflow forecasting | ✅ | `@pleros/analytics-engine` (EWMA) |
 | Multi-currency / FX | ❌ | Not implemented |
 | Multi-subsidiary consolidation | ❌ | Single tenant org model |
 | Fixed assets / depreciation | ❌ | Not implemented |
@@ -52,7 +52,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### Inventory & warehouse (WMS)
 
-| Feature | Cosmos | Notes |
+| Feature | Pleros | Notes |
 |---------|--------|-------|
 | Multi-warehouse stock | ✅ | Warehouses, transfers, stock by location |
 | Stock ledger / adjustments | ✅ | |
@@ -76,7 +76,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### Sales & order management
 
-| Feature | Cosmos | Notes |
+| Feature | Pleros | Notes |
 |---------|--------|-------|
 | Order entry (admin) | ✅ | |
 | B2B self-service portal | ✅ | Catalog, cart, checkout, account |
@@ -100,7 +100,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### Purchasing & supply chain
 
-| Feature | Cosmos | Notes |
+| Feature | Pleros | Notes |
 |---------|--------|-------|
 | Suppliers | ✅ | |
 | Purchase orders | ✅ | |
@@ -117,7 +117,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### CRM & customer management
 
-| Feature | Cosmos | Notes |
+| Feature | Pleros | Notes |
 |---------|--------|-------|
 | Customers, leads, activities | ✅ | Admin + mobile sales |
 | Import | ✅ | Spreadsheet import |
@@ -135,7 +135,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### Delivery & field operations
 
-| Feature | Cosmos | Notes |
+| Feature | Pleros | Notes |
 |---------|--------|-------|
 | Delivery routes / stops | ✅ | Dispatch module |
 | Driver mobile / POD | ✅ | `/m/delivery` |
@@ -150,7 +150,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### Integrations & compliance
 
-| Feature | Cosmos | Notes |
+| Feature | Pleros | Notes |
 |---------|--------|-------|
 | REST API | ✅ | `/api/v1` |
 | Webhooks | ✅ | Settings → Webhooks |
@@ -167,7 +167,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ### Platform, analytics & admin
 
-| Feature | Cosmos | Notes |
+| Feature | Pleros | Notes |
 |---------|--------|-------|
 | Dashboard KPIs | ✅ | Admin dashboard |
 | Audit log | ✅ | Settings → Audit log |
@@ -181,7 +181,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 ---
 
-## What Cosmos has that many ERPs lack (or charge extra for)
+## What Pleros has that many ERPs lack (or charge extra for)
 
 1. **Celestial AI** — in-app copilot with live orders, warehouses, invoices + documentation RAG
 2. **Modern single-port SPA** — React 19, SSE streaming, mobile PWAs on one origin
@@ -202,7 +202,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 2 | ~~**Backorder management**~~ | ✅ Shipped — partial allocate, queue, auto-fill on receipt |
 | 3 | ~~**Demand planning**~~ | ✅ Usage forecast from ledger + lead time on stock levels |
 | 4 | ~~**Drop shipping**~~ | ✅ Shipped — DROP_SHIP lines, vendor PO, admin ship |
-| 5 | ~~**Production database path**~~ | ✅ `COSMOS_DB_PROVIDER=postgres`, migrate-all, `db:setup:postgres`, health check |
+| 5 | ~~**Production database path**~~ | ✅ `PLEROS_DB_PROVIDER=postgres`, migrate-all, `db:setup:postgres`, health check |
 
 ### Medium priority — mid-market
 
@@ -236,7 +236,7 @@ Cosmos also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 
 Reference: what NetSuite, Business Central, and mid-market distributors typically implement first.
 
-| Core module (industry) | Cosmos status |
+| Core module (industry) | Pleros status |
 |------------------------|---------------|
 | Financials (GL, AR, AP) | ✅ In place |
 | Inventory (multi-location) | ✅ In place |
@@ -258,7 +258,7 @@ Reference: what NetSuite, Business Central, and mid-market distributors typicall
 |----------|--------|
 | **Do we have everything established ERPs offer?** | **No** — enterprise finance, advanced supply chain, EDI hub, rebates, and deep BI are gaps. |
 | **Do we have core SMB wholesale workflows?** | **Yes, largely** — order-to-cash, procure-to-pay, inventory, WMS basics, B2B, AR/AP/GL, dispatch, CRM pricing, MSA, POS, and Celestial are wired together. |
-| **Who is Cosmos best for today?** | US SMB distributors with 1–few warehouses, B2B-heavy sales, and a need for modern UX + AI — not yet high-volume multi-entity international operations. |
+| **Who is Pleros best for today?** | US SMB distributors with 1–few warehouses, B2B-heavy sales, and a need for modern UX + AI — not yet high-volume multi-entity international operations. |
 
 ---
 
@@ -266,10 +266,10 @@ Reference: what NetSuite, Business Central, and mid-market distributors typicall
 
 | Document | Purpose |
 |----------|---------|
-| `PLATFORM_FEATURES.md` | Full Cosmos feature reference and tier changelog |
+| `PLATFORM_FEATURES.md` | Full Pleros feature reference and tier changelog |
 | `MISSING.md` | Short backlog of known deferred items |
 | `docs/celestial/` | LLM knowledge base for Celestial AI |
 
 ---
 
-*Last updated: June 2026 — based on Cosmos Tiers 4–18 and wholesale ERP industry benchmarks.*
+*Last updated: June 2026 — based on Pleros Tiers 4–18 and wholesale ERP industry benchmarks.*

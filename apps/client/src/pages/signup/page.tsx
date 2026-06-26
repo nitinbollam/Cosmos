@@ -43,8 +43,8 @@ export default function SignupPage() {
         setVerifyEmail(data.email ?? form.email)
         return
       }
-      if (data.accessToken) localStorage.setItem('cosmos.accessToken', data.accessToken)
-      if (data.refreshToken) localStorage.setItem('cosmos.refreshToken', data.refreshToken)
+      if (data.accessToken) localStorage.setItem('pleros.accessToken', data.accessToken)
+      if (data.refreshToken) localStorage.setItem('pleros.refreshToken', data.refreshToken)
       navigate('/admin')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed')
@@ -54,17 +54,17 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="cosmos-auth-page" style={{ display: 'block', paddingTop: 48 }}>
+    <div className="pleros-auth-page" style={{ display: 'block', paddingTop: 48 }}>
       <AuthThemeToolbar />
       <div className="mx-auto max-w-md p-8">
-      <h1 className="text-2xl font-semibold mb-2">Start your Cosmos workspace</h1>
+      <h1 className="text-2xl font-semibold mb-2">Start your Pleros workspace</h1>
       {verifyEmail ? (
         <div className="space-y-4">
           <p className="text-sm" style={{ color: 'var(--c-text-2)' }}>
             We sent a verification link to <strong>{verifyEmail}</strong>. Confirm your email, then sign in to finish
             setup.
           </p>
-          <Link to="/verify-email" className="cosmos-btn cosmos-btn-primary w-full inline-block text-center">
+          <Link to="/verify-email" className="pleros-btn pleros-btn-primary w-full inline-block text-center">
             Open verification page
           </Link>
           <Link to="/admin/login" className="text-sm" style={{ color: 'var(--c-accent)' }}>
@@ -80,7 +80,7 @@ export default function SignupPage() {
         {(['companyName', 'slug', 'email', 'password', 'firstName', 'lastName'] as const).map((key) => (
           <input
             key={key}
-            className="cosmos-input w-full"
+            className="pleros-input w-full"
             placeholder={
               key === 'slug'
                 ? 'company-slug'
@@ -108,7 +108,7 @@ export default function SignupPage() {
           </span>
         </label>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        <button type="submit" className="cosmos-btn cosmos-btn-primary w-full" disabled={loading}>
+        <button type="submit" className="pleros-btn pleros-btn-primary w-full" disabled={loading}>
           {loading ? 'Creating…' : 'Create workspace'}
         </button>
       </form>

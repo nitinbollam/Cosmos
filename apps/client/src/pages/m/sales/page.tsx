@@ -100,17 +100,17 @@ export default function SalesMobilePage() {
 
       {tab === 'leads' && (
         <>
-          <form onSubmit={(e) => void createLead(e)} className="cosmos-mobile-card" style={{ marginBottom: 12 }}>
+          <form onSubmit={(e) => void createLead(e)} className="pleros-mobile-card" style={{ marginBottom: 12 }}>
             <strong style={{ display: 'block', marginBottom: 8 }}>New lead</strong>
             <input
-              className="cosmos-input"
+              className="pleros-input"
               placeholder="Company name"
               value={leadForm.companyName}
               onChange={(e) => setLeadForm((f) => ({ ...f, companyName: e.target.value }))}
               style={{ width: '100%', marginBottom: 8 }}
             />
             <input
-              className="cosmos-input"
+              className="pleros-input"
               placeholder="Email (optional)"
               value={leadForm.email}
               onChange={(e) => setLeadForm((f) => ({ ...f, email: e.target.value }))}
@@ -121,7 +121,7 @@ export default function SalesMobilePage() {
             </button>
           </form>
           {leads.map((l) => (
-            <div key={l.id} className="cosmos-mobile-card">
+            <div key={l.id} className="pleros-mobile-card">
               <strong>{l.companyName}</strong>
               <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.7 }}>
                 {l.status} {l.email ? `· ${l.email}` : ''}
@@ -133,7 +133,7 @@ export default function SalesMobilePage() {
 
       {tab === 'customers' &&
         customers.map((c) => (
-          <div key={c.id} className="cosmos-mobile-card">
+          <div key={c.id} className="pleros-mobile-card">
             <strong>{c.name}</strong>
             {c.email && <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.7 }}>{c.email}</p>}
           </div>
@@ -141,10 +141,10 @@ export default function SalesMobilePage() {
 
       {tab === 'activities' && (
         <>
-          <form onSubmit={(e) => void logActivity(e)} className="cosmos-mobile-card" style={{ marginBottom: 12 }}>
+          <form onSubmit={(e) => void logActivity(e)} className="pleros-mobile-card" style={{ marginBottom: 12 }}>
             <strong style={{ display: 'block', marginBottom: 8 }}>Log activity</strong>
             <select
-              className="cosmos-input"
+              className="pleros-input"
               value={activityForm.customerId}
               onChange={(e) => setActivityForm((f) => ({ ...f, customerId: e.target.value }))}
               style={{ width: '100%', marginBottom: 8 }}
@@ -157,7 +157,7 @@ export default function SalesMobilePage() {
               ))}
             </select>
             <select
-              className="cosmos-input"
+              className="pleros-input"
               value={activityForm.type}
               onChange={(e) => setActivityForm((f) => ({ ...f, type: e.target.value }))}
               style={{ width: '100%', marginBottom: 8 }}
@@ -167,7 +167,7 @@ export default function SalesMobilePage() {
               <option value="NOTE">Note</option>
             </select>
             <input
-              className="cosmos-input"
+              className="pleros-input"
               placeholder="Subject"
               value={activityForm.subject}
               onChange={(e) => setActivityForm((f) => ({ ...f, subject: e.target.value }))}
@@ -178,7 +178,7 @@ export default function SalesMobilePage() {
             </button>
           </form>
           {activities.slice(0, 30).map((a) => (
-            <div key={a.id} className="cosmos-mobile-card">
+            <div key={a.id} className="pleros-mobile-card">
               <strong>{a.subject}</strong>
               <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.7 }}>
                 {a.type} · {new Date(a.occurredAt).toLocaleString()}

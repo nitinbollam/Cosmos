@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api-admin'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type Register = { id: string; name: string; warehouseId: string | null }
 type Customer = { id: string; name: string; email?: string | null }
@@ -44,7 +44,7 @@ export default function PosPage() {
   const [submitErr, setSubmitErr] = useState<string | null>(null)
 
   async function printReceipt(orderId: string) {
-    const token = window.localStorage.getItem('cosmos.accessToken')
+    const token = window.localStorage.getItem('pleros.accessToken')
     const res = await fetch(`/api/v1/pos/orders/${encodeURIComponent(orderId)}/receipt`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -94,7 +94,7 @@ export default function PosPage() {
     ''
 
   const walkInCustomerId = useMemo(
-    () => customersQ.data?.find((c) => c.email === 'walkin@cosmos.local')?.id ?? customersQ.data?.[0]?.id ?? '',
+    () => customersQ.data?.find((c) => c.email === 'walkin@pleros.local')?.id ?? customersQ.data?.[0]?.id ?? '',
     [customersQ.data],
   )
 
@@ -151,8 +151,8 @@ export default function PosPage() {
     <div className="p-6 space-y-6 max-w-6xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white font-display">Point of sale</h1>
-          <p className="text-sm mt-1 text-cosmos-text-3">
+          <h1 className="text-2xl font-bold text-pleros-white font-display">Point of sale</h1>
+          <p className="text-sm mt-1 text-pleros-text-3">
             Register checkout via <span className="font-mono">POST /pos/orders</span> · requires POS feature flag
           </p>
         </div>
@@ -167,9 +167,9 @@ export default function PosPage() {
       </div>
 
       {lastOrderId ? (
-        <div className="cosmos-card border border-emerald-500/30">
+        <div className="pleros-card border border-emerald-500/30">
           <p className="text-emerald-400 font-medium">Sale complete</p>
-          <p className="text-sm text-cosmos-text-2 mt-1">
+          <p className="text-sm text-pleros-text-2 mt-1">
             Order <span className="font-mono">{lastOrderId.slice(-10)}</span>
             {lastOrderTotal != null ? ` · ${money(lastOrderTotal)}` : ''}
           </p>
@@ -177,7 +177,7 @@ export default function PosPage() {
             <button type="button" className="btn-primary !text-sm" onClick={() => void printReceipt(lastOrderId)}>
               Print receipt
             </button>
-            <Link to={`/admin/orders/${encodeURIComponent(lastOrderId)}`} className="cosmos-shop-link-accent text-sm">
+            <Link to={`/admin/orders/${encodeURIComponent(lastOrderId)}`} className="pleros-shop-link-accent text-sm">
               View order →
             </Link>
           </div>
@@ -186,11 +186,11 @@ export default function PosPage() {
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3 space-y-4">
-          <div className="cosmos-card grid gap-4 sm:grid-cols-2">
+          <div className="pleros-card grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="text-xs text-cosmos-text-3">Register</label>
+              <label className="text-xs text-pleros-text-3">Register</label>
               <select
-                className="cosmos-input mt-1"
+                className="pleros-input mt-1"
                 value={registerId}
                 onChange={(e) => setRegisterId(e.target.value)}
               >
@@ -203,9 +203,9 @@ export default function PosPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-cosmos-text-3">Customer</label>
+              <label className="text-xs text-pleros-text-3">Customer</label>
               <select
-                className="cosmos-input mt-1"
+                className="pleros-input mt-1"
                 value={effectiveCustomerId}
                 onChange={(e) => setCustomerId(e.target.value)}
               >
@@ -218,10 +218,10 @@ export default function PosPage() {
             </div>
           </div>
 
-          <div className="cosmos-card">
-            <label className="text-xs text-cosmos-text-3">Add products</label>
+          <div className="pleros-card">
+            <label className="text-xs text-pleros-text-3">Add products</label>
             <input
-              className="cosmos-input mt-1 mb-4"
+              className="pleros-input mt-1 mb-4"
               placeholder="Search SKU name or code…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -229,20 +229,20 @@ export default function PosPage() {
             {skusQ.isLoading ? (
               <div className="skeleton h-24 w-full" />
             ) : (skusQ.data?.items ?? []).length === 0 ? (
-              <p className="text-sm text-cosmos-text-3">No in-stock SKUs match your search.</p>
+              <p className="text-sm text-pleros-text-3">No in-stock SKUs match your search.</p>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {(skusQ.data?.items ?? []).map((sku) => (
                   <button
                     key={sku.id}
                     type="button"
-                    className="text-left rounded-xl border p-3 transition-colors hover:border-cosmos-accent/50"
+                    className="text-left rounded-xl border p-3 transition-colors hover:border-pleros-accent/50"
                     style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}
                     onClick={() => addToCart(sku)}
                   >
-                    <p className="font-mono text-xs text-cosmos-accent">{sku.code}</p>
-                    <p className="text-sm text-cosmos-white font-medium mt-1">{sku.name}</p>
-                    <p className="text-xs text-cosmos-text-3 mt-1">
+                    <p className="font-mono text-xs text-pleros-accent">{sku.code}</p>
+                    <p className="text-sm text-pleros-white font-medium mt-1">{sku.name}</p>
+                    <p className="text-xs text-pleros-text-3 mt-1">
                       {money(toPrice(sku.price))} · {sku.quantityAvailable ?? 0} avail
                     </p>
                   </button>
@@ -253,8 +253,8 @@ export default function PosPage() {
         </div>
 
         <div className="lg:col-span-2">
-          <div className="cosmos-card sticky top-4 space-y-4">
-            <h2 className="text-cosmos-white font-semibold font-display">Cart</h2>
+          <div className="pleros-card sticky top-4 space-y-4">
+            <h2 className="text-pleros-white font-semibold font-display">Cart</h2>
             {cart.length === 0 ? (
               <EmptyState icon="🛒" title="Cart is empty" description="Tap a product to add it to the sale." />
             ) : (
@@ -262,42 +262,42 @@ export default function PosPage() {
                 {cart.map((line) => (
                   <li key={line.skuId} className="flex gap-3 items-start border-b pb-3" style={{ borderColor: 'var(--c-border)' }}>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-cosmos-white truncate">{line.name}</p>
-                      <p className="font-mono text-xs text-cosmos-text-3">{line.code}</p>
-                      <p className="text-xs text-cosmos-text-3 mt-1">{money(line.unitPrice)} each</p>
+                      <p className="text-sm text-pleros-white truncate">{line.name}</p>
+                      <p className="font-mono text-xs text-pleros-text-3">{line.code}</p>
+                      <p className="text-xs text-pleros-text-3 mt-1">{money(line.unitPrice)} each</p>
                     </div>
                     <input
-                      className="cosmos-input w-16 !py-1 text-center"
+                      className="pleros-input w-16 !py-1 text-center"
                       type="number"
                       min={1}
                       value={line.quantity}
                       onChange={(e) => updateQty(line.skuId, Number(e.target.value))}
                     />
-                    <p className="text-sm text-cosmos-white w-16 text-right">{money(line.quantity * line.unitPrice)}</p>
+                    <p className="text-sm text-pleros-white w-16 text-right">{money(line.quantity * line.unitPrice)}</p>
                   </li>
                 ))}
               </ul>
             )}
 
             <div className="space-y-1 text-sm border-t pt-3" style={{ borderColor: 'var(--c-border)' }}>
-              <div className="flex justify-between text-cosmos-text-2">
+              <div className="flex justify-between text-pleros-text-2">
                 <span>Subtotal</span>
                 <span>{money(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-cosmos-text-2">
+              <div className="flex justify-between text-pleros-text-2">
                 <span>Tax (est.)</span>
                 <span>{money(tax)}</span>
               </div>
-              <div className="flex justify-between text-cosmos-white font-semibold text-base pt-1">
+              <div className="flex justify-between text-pleros-white font-semibold text-base pt-1">
                 <span>Total</span>
                 <span>{money(total)}</span>
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-cosmos-text-3">Payment method</label>
+              <label className="text-xs text-pleros-text-3">Payment method</label>
               <select
-                className="cosmos-input mt-1"
+                className="pleros-input mt-1"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'CARD' | 'CHECK')}
               >

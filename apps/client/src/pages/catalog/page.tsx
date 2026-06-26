@@ -153,7 +153,7 @@ export default function CatalogPage() {
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 14, color: 'var(--c-heading)', margin: '0 0 16px' }}>Filters</h2>
         <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginBottom: 8 }}>Category</label>
         <select
-          className="cosmos-input"
+          className="pleros-input"
           value={category}
           onChange={(e) => {
             setCategory(e.target.value)
@@ -170,7 +170,7 @@ export default function CatalogPage() {
         </select>
         <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginBottom: 8 }}>Warehouse</label>
         <select
-          className="cosmos-input"
+          className="pleros-input"
           value={warehouseId}
           onChange={(e) => {
             setWarehouseId(e.target.value)
@@ -191,8 +191,8 @@ export default function CatalogPage() {
         <div style={{ marginBottom: 16 }}>
           <span style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Price range</span>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <input className="cosmos-input" placeholder="Min" value={priceMin} onChange={(e) => setPriceMin(e.target.value)} />
-            <input className="cosmos-input" placeholder="Max" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} />
+            <input className="pleros-input" placeholder="Min" value={priceMin} onChange={(e) => setPriceMin(e.target.value)} />
+            <input className="pleros-input" placeholder="Max" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} />
           </div>
         </div>
         <button
@@ -213,7 +213,7 @@ export default function CatalogPage() {
       <div style={{ flex: 1, padding: 24 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 20 }}>
           <input
-            className="cosmos-input"
+            className="pleros-input"
             style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
             placeholder="Search…"
             value={q}
@@ -222,7 +222,7 @@ export default function CatalogPage() {
               setPage(1)
             }}
           />
-          <select className="cosmos-input" style={{ width: 200 }} value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+          <select className="pleros-input" style={{ width: 200 }} value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
             <option value="name">Name A–Z</option>
             <option value="price-asc">Price ↑</option>
             <option value="price-desc">Price ↓</option>
@@ -247,7 +247,7 @@ export default function CatalogPage() {
           {sorted.map((sku) => {
             const oos = (sku.quantityAvailable ?? 0) === 0
             return (
-              <div key={sku.id} className="cosmos-card relative" style={{ padding: 16 }}>
+              <div key={sku.id} className="pleros-card relative" style={{ padding: 16 }}>
                 {oos ? (
                   <div
                     style={{
@@ -297,7 +297,7 @@ export default function CatalogPage() {
                 <input
                   type="number"
                   min={1}
-                  className="cosmos-input mt-3"
+                  className="pleros-input mt-3"
                   value={qtyBySku[sku.id] ?? '1'}
                   onChange={(e) => setQtyBySku((prev) => ({ ...prev, [sku.id]: e.target.value }))}
                 />

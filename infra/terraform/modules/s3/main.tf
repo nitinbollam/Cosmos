@@ -7,10 +7,10 @@ terraform {
 variable "environment" { type = string }
 
 resource "aws_s3_bucket" "documents" {
-  bucket        = "cosmos-documents-${var.environment}"
+  bucket        = "pleros-documents-${var.environment}"
   force_destroy = var.environment != "production"
 
-  tags = { Environment = var.environment, Project = "cosmos" }
+  tags = { Environment = var.environment, Project = "pleros" }
 }
 
 resource "aws_s3_bucket_versioning" "documents" {

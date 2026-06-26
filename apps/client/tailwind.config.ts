@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        cosmos: {
+        pleros: {
           bg: '#09090B',
           surface: '#141416',
           blush: '#18181B',

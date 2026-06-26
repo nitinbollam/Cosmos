@@ -1,6 +1,6 @@
 /**
  * Wraps `prisma generate` for every service that has a schema, then re-builds
- * @cosmos/types so consumers get the latest exports.
+ * @pleros/types so consumers get the latest exports.
  */
 import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -30,6 +30,6 @@ for (const svc of services) {
   })
 }
 
-console.log('[build] @cosmos/types')
-execSync('npm run build -w @cosmos/types', { cwd: ROOT, stdio: 'inherit' })
+console.log('[build] @pleros/types')
+execSync('npm run build -w @pleros/types', { cwd: ROOT, stdio: 'inherit' })
 console.log('Done.')

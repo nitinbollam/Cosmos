@@ -19,7 +19,7 @@ Status of the go-live blockers identified in the customer/production readiness a
 - **Session revalidation** — JWTs are re-checked against the user row (active flag + current role) with a 60-second cache, so deactivations and demotions take effect within a minute.
 - **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS in production.
 - **XSS** — invoice HTML escapes all user-controlled values.
-- **SSRF** — webhook URLs are validated against private/link-local/metadata IP ranges (at create time and again at send time) and payloads are HMAC-signed (`X-Cosmos-Signature`).
+- **SSRF** — webhook URLs are validated against private/link-local/metadata IP ranges (at create time and again at send time) and payloads are HMAC-signed (`X-Pleros-Signature`).
 - **Idempotency** — payment capture/refund and Stripe webhook processing are tenant-scoped idempotent.
 
 ## Identity & onboarding

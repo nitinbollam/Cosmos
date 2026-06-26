@@ -45,9 +45,9 @@ test('composeFromToolResults reports empty order results', () => {
 })
 
 test('buildDocFallbackReply provides helpful default', () => {
-  const reply = buildDocFallbackReply('What is Cosmos?', [])
+  const reply = buildDocFallbackReply('What is Pleros?', [])
   assert.match(reply, /Celestial/)
-  assert.match(reply, /What is Cosmos/)
+  assert.match(reply, /What is Pleros/)
 })
 
 test('buildDocFallbackReply uses documentation excerpts', () => {
@@ -59,11 +59,11 @@ test('buildDocFallbackReply uses documentation excerpts', () => {
 
 test('buildDocFallbackReply uses plain language intro for overview questions', () => {
   const reply = buildDocFallbackReply(
-    'How cosmos works?',
+    'How pleros works?',
     [
       {
-        heading: 'How Cosmos works (plain language)',
-        body: 'Cosmos helps wholesale businesses take orders, ship from the warehouse, and get paid.',
+        heading: 'How Pleros works (plain language)',
+        body: 'Pleros helps wholesale businesses take orders, ship from the warehouse, and get paid.',
       },
       {
         heading: 'Local development quickstart',

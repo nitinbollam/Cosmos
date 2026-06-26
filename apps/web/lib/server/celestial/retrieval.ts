@@ -134,8 +134,8 @@ function loadDocChunks(): DocChunk[] {
     cachedChunks = [
       {
         id: 'fallback',
-        heading: 'Cosmos',
-        body: 'Cosmos is a wholesale ERP with catalog, orders, invoices, quotes, warehouse, finance, POS, and Celestial AI assistant.',
+        heading: 'Pleros',
+        body: 'Pleros is a wholesale ERP with catalog, orders, invoices, quotes, warehouse, finance, POS, and Celestial AI assistant.',
         source: 'fallback',
       },
     ]
@@ -158,8 +158,8 @@ function loadDocChunks(): DocChunk[] {
       : [
           {
             id: 'fallback',
-            heading: 'Cosmos',
-            body: 'Cosmos is a wholesale ERP with catalog, orders, invoices, quotes, warehouse, and finance modules.',
+            heading: 'Pleros',
+            body: 'Pleros is a wholesale ERP with catalog, orders, invoices, quotes, warehouse, and finance modules.',
             source: 'fallback',
           },
         ]

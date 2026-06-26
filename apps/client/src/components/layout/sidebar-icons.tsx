@@ -17,7 +17,7 @@ type SidebarIconName =
 
 export function SidebarIcon({ name }: { name: SidebarIconName }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden className="cosmos-nav-icon">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden className="pleros-nav-icon">
       {icons[name]}
     </svg>
   )

@@ -1,5 +1,5 @@
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/lib/api'
@@ -25,16 +25,16 @@ export default function LoginPage() {
     setErr(null)
     try {
       const r = await api.post<LoginRes>('/auth/login', { email, password })
-      window.localStorage.setItem('cosmos.accessToken', r.accessToken)
-      window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
+      window.localStorage.setItem('pleros.accessToken', r.accessToken)
+      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
 
       const me = await api.get<AuthMe>('/auth/me')
       if (!me.customerId) {
         setErr(
           'No CRM customer record matches your email. Ask your tenant admin to create a customer with this address.',
         )
-        window.localStorage.removeItem('cosmos.accessToken')
-        window.localStorage.removeItem('cosmos.refreshToken')
+        window.localStorage.removeItem('pleros.accessToken')
+        window.localStorage.removeItem('pleros.refreshToken')
         return
       }
 
@@ -47,12 +47,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="cosmos-auth-page">
+    <main className="pleros-auth-page">
       <AuthThemeToolbar />
-      <div className="cosmos-card cosmos-auth-card">
+      <div className="pleros-card pleros-auth-card">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
-            <CosmosLogo size="lg" />
+            <PlerosLogo size="lg" />
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 28, color: 'var(--c-heading)', margin: '16px 0 0' }}>
             Welcome back
@@ -60,9 +60,9 @@ export default function LoginPage() {
           <p style={{ color: 'var(--c-text-2)', fontSize: 14, marginTop: 8 }}>B2B buyer portal</p>
         </div>
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input className="cosmos-input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="Email" />
+          <input className="pleros-input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="Email" />
           <input
-            className="cosmos-input"
+            className="pleros-input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"

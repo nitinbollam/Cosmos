@@ -1,4 +1,4 @@
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { Link, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { useCartStore } from '@/stores/cart.store'
@@ -16,16 +16,16 @@ export function ShopHeader() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const refreshAuth = useCallback(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('cosmos.accessToken') : null
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('pleros.accessToken') : null
     setUserEmail(jwtEmail(token))
-    const tid = typeof window !== 'undefined' ? window.sessionStorage.getItem('cosmos.tenantId') : null
+    const tid = typeof window !== 'undefined' ? window.sessionStorage.getItem('pleros.tenantId') : null
     if (tid) setTenantLabel(tid.slice(0, 8))
   }, [])
 
   useEffect(() => {
     refreshAuth()
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'cosmos.accessToken' || e.key === null) refreshAuth()
+      if (e.key === 'pleros.accessToken' || e.key === null) refreshAuth()
     }
     const onAuthEvt = () => refreshAuth()
     window.addEventListener('storage', onStorage)
@@ -37,21 +37,21 @@ export function ShopHeader() {
   }, [refreshAuth])
 
   useEffect(() => {
-    document.body.classList.toggle('cosmos-shop-menu-open', navOpen)
-    return () => document.body.classList.remove('cosmos-shop-menu-open')
+    document.body.classList.toggle('pleros-shop-menu-open', navOpen)
+    return () => document.body.classList.remove('pleros-shop-menu-open')
   }, [navOpen])
 
   function navClass(path: string) {
     const active = location.pathname === path || location.pathname.startsWith(`${path}/`)
-    return `cosmos-shop-link${active ? ' cosmos-shop-link--active' : ''}`
+    return `pleros-shop-link${active ? ' pleros-shop-link--active' : ''}`
   }
 
   return (
-    <header className="cosmos-shop-header">
-      <div className="cosmos-shop-header-row">
+    <header className="pleros-shop-header">
+      <div className="pleros-shop-header-row">
         <button
           type="button"
-          className="cosmos-shop-menu-btn"
+          className="pleros-shop-menu-btn"
           aria-label={navOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={navOpen}
           onClick={() => setNavOpen((o) => !o)}
@@ -64,11 +64,11 @@ export function ShopHeader() {
             )}
           </svg>
         </button>
-        <Link to="/catalog" className="cosmos-shop-brand">
-          <CosmosLogo variant="mark" size="sm" />
-          <span className="cosmos-shop-brand-label">{tenantLabel}</span>
+        <Link to="/catalog" className="pleros-shop-brand">
+          <PlerosLogo variant="mark" size="sm" />
+          <span className="pleros-shop-brand-label">{tenantLabel}</span>
         </Link>
-        <nav className={`cosmos-shop-nav${navOpen ? ' cosmos-shop-nav--open' : ''}`}>
+        <nav className={`pleros-shop-nav${navOpen ? ' pleros-shop-nav--open' : ''}`}>
           <Link to="/catalog" className={navClass('/catalog')} onClick={() => setNavOpen(false)}>
             Catalog
           </Link>
@@ -89,31 +89,31 @@ export function ShopHeader() {
           </Link>
         </nav>
       </div>
-      <div className="cosmos-shop-header-actions">
+      <div className="pleros-shop-header-actions">
         <ThemeSwitcher compact />
-        <Link to="/cart" className="cosmos-shop-link cosmos-shop-cart-link">
+        <Link to="/cart" className="pleros-shop-link pleros-shop-cart-link">
           Cart
-          {count > 0 ? <span className="cosmos-shop-cart-badge">{count}</span> : null}
+          {count > 0 ? <span className="pleros-shop-cart-badge">{count}</span> : null}
         </Link>
         {userEmail ? (
-          <div className="cosmos-shop-user-menu">
+          <div className="pleros-shop-user-menu">
             <button
               type="button"
-              className="btn-ghost cosmos-shop-user-btn"
+              className="btn-ghost pleros-shop-user-btn"
               onClick={() => setUserMenuOpen((o) => !o)}
             >
               {userEmail}
             </button>
             {userMenuOpen ? (
-              <div className="cosmos-card cosmos-shop-user-dropdown">
-                <button type="button" className="cosmos-shop-signout" onClick={() => void signOut()}>
+              <div className="pleros-card pleros-shop-user-dropdown">
+                <button type="button" className="pleros-shop-signout" onClick={() => void signOut()}>
                   Sign out
                 </button>
               </div>
             ) : null}
           </div>
         ) : (
-          <Link to="/login" className="btn-primary cosmos-shop-signin">
+          <Link to="/login" className="btn-primary pleros-shop-signin">
             Sign in
           </Link>
         )}
@@ -121,7 +121,7 @@ export function ShopHeader() {
       {navOpen ? (
         <button
           type="button"
-          className="cosmos-shop-nav-backdrop"
+          className="pleros-shop-nav-backdrop"
           aria-label="Close menu"
           onClick={() => setNavOpen(false)}
         />

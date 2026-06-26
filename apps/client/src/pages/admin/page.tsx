@@ -17,10 +17,10 @@ import {
   BentoHeroCard,
   BentoMetricCard,
   BentoTrendPill,
-} from '@/components/cosmos/bento-cards'
+} from '@/components/pleros/bento-cards'
 import { LowStockAlert } from '@/components/inventory/low-stock-alert'
 import { RecentOrders } from '@/components/orders/recent-orders'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 interface Kpis {
   todayRevenue: number

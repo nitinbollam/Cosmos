@@ -1,5 +1,5 @@
 {
-  "name": "@cosmos/types",
+  "name": "@pleros/types",
   "version": "1.0.0",
   "private": true,
   "main": "dist/index.js",
@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "node ../../scripts/eslint-soft.mjs",
-    "test": "echo 'no tests in @cosmos/types'",
+    "test": "echo 'no tests in @pleros/types'",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

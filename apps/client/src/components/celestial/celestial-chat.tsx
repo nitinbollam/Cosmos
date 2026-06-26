@@ -71,7 +71,7 @@ export function CelestialChat({
 
   useEffect(() => {
     const refreshAuth = () =>
-      setHasToken(Boolean(typeof window !== 'undefined' && window.localStorage.getItem('cosmos.accessToken')))
+      setHasToken(Boolean(typeof window !== 'undefined' && window.localStorage.getItem('pleros.accessToken')))
     refreshAuth()
     window.addEventListener('storage', refreshAuth)
     return () => window.removeEventListener('storage', refreshAuth)
@@ -255,7 +255,7 @@ export function CelestialChat({
     if (isPage) {
       return (
         <div className="celestial-page">
-          <div className="cosmos-card p-8 text-center">
+          <div className="pleros-card p-8 text-center">
             <h2 className="text-lg font-semibold mb-2">Celestial is not enabled</h2>
             <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
               Enable the Celestial AI feature in Settings → Features, or upgrade your plan.
@@ -284,7 +284,7 @@ export function CelestialChat({
 
   const panel = (
     <div
-      className={`celestial-panel cosmos-card${isPage ? ' celestial-panel--page' : ''}`}
+      className={`celestial-panel pleros-card${isPage ? ' celestial-panel--page' : ''}`}
       role={isPage ? 'main' : 'dialog'}
       aria-label="Celestial assistant"
     >
@@ -292,7 +292,7 @@ export function CelestialChat({
         <div className="celestial-panel-header-main">
           {!isPage ? <h2 className="celestial-panel-title">Celestial</h2> : null}
           <p className="celestial-panel-sub">
-            {isPage ? 'Cosmos AI copilot' : surface === 'shop' ? 'Buyer assistant' : 'Admin copilot'}
+            {isPage ? 'Pleros AI copilot' : surface === 'shop' ? 'Buyer assistant' : 'Admin copilot'}
             {providerInfo ? (
               <span className="celestial-provider-badge">{providerInfo}</span>
             ) : null}
@@ -329,8 +329,8 @@ export function CelestialChat({
             <h3 className="celestial-empty-title">How can I help?</h3>
             <p className="celestial-empty-text">
               {isPage
-                ? 'Ask how Cosmos works, or about your orders, stock, and invoices.'
-                : 'Ask how Cosmos works, or look up orders, inventory, warehouses, and finance.'}
+                ? 'Ask how Pleros works, or about your orders, stock, and invoices.'
+                : 'Ask how Pleros works, or look up orders, inventory, warehouses, and finance.'}
             </p>
             <div className="celestial-suggestions">
               {suggestions.map((s) => (
@@ -377,7 +377,7 @@ export function CelestialChat({
         }}
       >
         <input
-          className="cosmos-input celestial-input"
+          className="pleros-input celestial-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask Celestial…"

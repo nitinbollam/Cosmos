@@ -1,7 +1,7 @@
 {
-  "name": "Cosmos",
-  "short_name": "Cosmos",
-  "description": "Cosmos ERP — admin, B2B shop, and mobile warehouse/delivery/sales",
+  "name": "Pleros",
+  "short_name": "Pleros",
+  "description": "Pleros ERP — admin, B2B shop, and mobile warehouse/delivery/sales",
   "start_url": "/m/warehouse",
   "display": "standalone",
   "background_color": "#09090B",
@@ -19,7 +19,7 @@
       "type": "image/png"
     },
     {
-      "src": "/cosmos-icon-512.png",
+      "src": "/pleros-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

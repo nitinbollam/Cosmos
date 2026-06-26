@@ -100,72 +100,72 @@ const FLOW = [
 
 export default function HomePage() {
   return (
-    <main className="cosmos-landing">
-      <div className="cosmos-landing-ambient" aria-hidden="true">
-        <span className="cosmos-landing-orb cosmos-landing-orb--1" />
-        <span className="cosmos-landing-orb cosmos-landing-orb--2" />
+    <main className="pleros-landing">
+      <div className="pleros-landing-ambient" aria-hidden="true">
+        <span className="pleros-landing-orb pleros-landing-orb--1" />
+        <span className="pleros-landing-orb pleros-landing-orb--2" />
       </div>
 
-      <header className="cosmos-landing-header">
-        <Link to="/" className="cosmos-landing-logo">
-          <span className="cosmos-landing-logo-mark" aria-hidden="true" />
-          Cosmos
+      <header className="pleros-landing-header">
+        <Link to="/" className="pleros-landing-logo">
+          <span className="pleros-landing-logo-mark" aria-hidden="true" />
+          Pleros
         </Link>
         <LandingNav />
       </header>
 
-      <section className="cosmos-landing-hero">
-        <div className="cosmos-landing-hero-copy">
-          <p className="cosmos-landing-eyebrow">ERP for wholesale distributors</p>
-          <h1 className="cosmos-landing-headline">
+      <section className="pleros-landing-hero">
+        <div className="pleros-landing-hero-copy">
+          <p className="pleros-landing-eyebrow">ERP for wholesale distributors</p>
+          <h1 className="pleros-landing-headline">
             Everything your distribution business needs — office, warehouse, shop, and field.
           </h1>
-          <p className="cosmos-landing-lede">
-            Cosmos is a modern platform for SMB wholesalers: order-to-cash, procure-to-pay, multi-warehouse
+          <p className="pleros-landing-lede">
+            Pleros is a modern platform for SMB wholesalers: order-to-cash, procure-to-pay, multi-warehouse
             inventory, B2B self-service, mobile warehouse & delivery, and Celestial AI to answer questions and
             look up live data.
           </p>
-          <div className="cosmos-landing-hero-actions">
-            <Link to="/signup" className="cosmos-landing-btn cosmos-landing-btn--primary">
+          <div className="pleros-landing-hero-actions">
+            <Link to="/signup" className="pleros-landing-btn pleros-landing-btn--primary">
               Create account
             </Link>
-            <Link to="/catalog" className="cosmos-landing-btn cosmos-landing-btn--ghost">
+            <Link to="/catalog" className="pleros-landing-btn pleros-landing-btn--ghost">
               Browse B2B catalog
             </Link>
           </div>
         </div>
 
-        <aside className="cosmos-landing-quickstart" aria-label="Start by role">
-          <p className="cosmos-landing-quickstart-title">Start here</p>
-          <ul className="cosmos-landing-quickstart-list">
+        <aside className="pleros-landing-quickstart" aria-label="Start by role">
+          <p className="pleros-landing-quickstart-title">Start here</p>
+          <ul className="pleros-landing-quickstart-list">
             {ROLE_STARTS.map((r) => (
               <li key={r.label}>
-                <Link to={r.href} className="cosmos-landing-quickstart-link">
-                  <span className="cosmos-landing-quickstart-label">{r.label}</span>
-                  <span className="cosmos-landing-quickstart-hint">{r.hint}</span>
+                <Link to={r.href} className="pleros-landing-quickstart-link">
+                  <span className="pleros-landing-quickstart-label">{r.label}</span>
+                  <span className="pleros-landing-quickstart-hint">{r.hint}</span>
                 </Link>
               </li>
             ))}
           </ul>
-          <p className="cosmos-landing-demo-note">
+          <p className="pleros-landing-demo-note">
             New here? <Link to="/signup">Create a workspace</Link> in under a minute — no card required.
           </p>
         </aside>
       </section>
 
-      <section id="features" className="cosmos-landing-features">
-        <div className="cosmos-landing-section-head">
-          <h2 className="cosmos-landing-section-title">What&apos;s included</h2>
-          <p className="cosmos-landing-section-sub">
+      <section id="features" className="pleros-landing-features">
+        <div className="pleros-landing-section-head">
+          <h2 className="pleros-landing-section-title">What&apos;s included</h2>
+          <p className="pleros-landing-section-sub">
             Core modules wired together — not separate tools stitched with exports.
           </p>
         </div>
-        <div className="cosmos-landing-feature-grid">
+        <div className="pleros-landing-feature-grid">
           {MODULES.map((m) => (
-            <article key={m.title} className="cosmos-landing-feature-card">
-              <h3 className="cosmos-landing-feature-title">{m.title}</h3>
-              <p className="cosmos-landing-feature-desc">{m.desc}</p>
-              <ul className="cosmos-landing-feature-list">
+            <article key={m.title} className="pleros-landing-feature-card">
+              <h3 className="pleros-landing-feature-title">{m.title}</h3>
+              <p className="pleros-landing-feature-desc">{m.desc}</p>
+              <ul className="pleros-landing-feature-list">
                 {m.items.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
@@ -175,66 +175,66 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="cosmos-landing-celestial">
-        <div className="cosmos-landing-celestial-inner">
+      <section className="pleros-landing-celestial">
+        <div className="pleros-landing-celestial-inner">
           <div>
-            <p className="cosmos-landing-eyebrow">Built-in AI</p>
-            <h2 className="cosmos-landing-section-title">Meet Celestial</h2>
-            <p className="cosmos-landing-celestial-text">
+            <p className="pleros-landing-eyebrow">Built-in AI</p>
+            <h2 className="pleros-landing-section-title">Meet Celestial</h2>
+            <p className="pleros-landing-celestial-text">
               Ask how features work, find pending orders, check stock, or get warehouse counts — in plain
               language. Celestial combines live tenant data with platform documentation.
             </p>
           </div>
-          <Link to="/admin/celestial" className="cosmos-landing-btn cosmos-landing-btn--primary">
+          <Link to="/admin/celestial" className="pleros-landing-btn pleros-landing-btn--primary">
             Open Celestial
           </Link>
         </div>
       </section>
 
-      <section className="cosmos-landing-flow" aria-label="How Cosmos works">
-        <div className="cosmos-landing-section-head">
-          <h2 className="cosmos-landing-section-title">How it flows</h2>
-          <p className="cosmos-landing-section-sub">From first order to cash in the bank</p>
+      <section className="pleros-landing-flow" aria-label="How Pleros works">
+        <div className="pleros-landing-section-head">
+          <h2 className="pleros-landing-section-title">How it flows</h2>
+          <p className="pleros-landing-section-sub">From first order to cash in the bank</p>
         </div>
-        <ol className="cosmos-landing-flow-list">
+        <ol className="pleros-landing-flow-list">
           {FLOW.map((f) => (
-            <li key={f.step} className="cosmos-landing-flow-item">
-              <span className="cosmos-landing-flow-step">{f.step}</span>
+            <li key={f.step} className="pleros-landing-flow-item">
+              <span className="pleros-landing-flow-step">{f.step}</span>
               <div>
-                <p className="cosmos-landing-flow-title">{f.title}</p>
-                <p className="cosmos-landing-flow-text">{f.text}</p>
+                <p className="pleros-landing-flow-title">{f.title}</p>
+                <p className="pleros-landing-flow-text">{f.text}</p>
               </div>
             </li>
           ))}
         </ol>
       </section>
 
-      <section id="workspaces" className="cosmos-landing-workspaces">
-        <div className="cosmos-landing-section-head">
-          <h2 className="cosmos-landing-section-title">Workspaces</h2>
-          <p className="cosmos-landing-section-sub">Each role has its own surface — same data, right tools</p>
+      <section id="workspaces" className="pleros-landing-workspaces">
+        <div className="pleros-landing-section-head">
+          <h2 className="pleros-landing-section-title">Workspaces</h2>
+          <p className="pleros-landing-section-sub">Each role has its own surface — same data, right tools</p>
         </div>
-        <ul className="cosmos-landing-ws-grid">
+        <ul className="pleros-landing-ws-grid">
           {WORKSPACES.map((w) => (
             <li key={w.href}>
               <article
-                className="cosmos-landing-ws-card"
+                className="pleros-landing-ws-card"
                 style={{ '--card-accent': w.accent } as CSSProperties}
               >
-                <span className="cosmos-landing-card-bar" aria-hidden="true" />
-                <p className="cosmos-landing-ws-role">{w.role}</p>
-                <h3 className="cosmos-landing-ws-title">{w.title}</h3>
-                <p className="cosmos-landing-ws-desc">{w.desc}</p>
-                <ul className="cosmos-landing-ws-features">
+                <span className="pleros-landing-card-bar" aria-hidden="true" />
+                <p className="pleros-landing-ws-role">{w.role}</p>
+                <h3 className="pleros-landing-ws-title">{w.title}</h3>
+                <p className="pleros-landing-ws-desc">{w.desc}</p>
+                <ul className="pleros-landing-ws-features">
                   {w.features.map((f) => (
                     <li key={f}>{f}</li>
                   ))}
                 </ul>
-                <div className="cosmos-landing-ws-actions">
-                  <Link to={w.href} className="cosmos-landing-ws-open">
+                <div className="pleros-landing-ws-actions">
+                  <Link to={w.href} className="pleros-landing-ws-open">
                     Open workspace →
                   </Link>
-                  <Link to={w.login} className="cosmos-landing-ws-signin">
+                  <Link to={w.login} className="pleros-landing-ws-signin">
                     Sign in
                   </Link>
                 </div>
@@ -244,15 +244,15 @@ export default function HomePage() {
         </ul>
       </section>
 
-      <footer className="cosmos-landing-footer">
-        <div className="cosmos-landing-footer-grid">
+      <footer className="pleros-landing-footer">
+        <div className="pleros-landing-footer-grid">
           <div>
-            <p className="cosmos-landing-footer-brand">Cosmos</p>
-            <p className="cosmos-landing-footer-tag">
+            <p className="pleros-landing-footer-brand">Pleros</p>
+            <p className="pleros-landing-footer-tag">
               Modern ERP for US SMB wholesalers · B2B-heavy · 1–few warehouses
             </p>
           </div>
-          <div className="cosmos-landing-footer-links">
+          <div className="pleros-landing-footer-links">
             <Link to="/admin">Admin</Link>
             <Link to="/catalog">Shop</Link>
             <Link to="/signup">Sign up</Link>
@@ -261,7 +261,7 @@ export default function HomePage() {
             <Link to="/privacy">Privacy</Link>
           </div>
         </div>
-        <p className="cosmos-landing-footer-copy">© {new Date().getFullYear()} Cosmos</p>
+        <p className="pleros-landing-footer-copy">© {new Date().getFullYear()} Pleros</p>
       </footer>
     </main>
   )

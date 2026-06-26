@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 
 const sections: Array<{ title: string; body: string[] }> = [
   {
@@ -66,7 +66,7 @@ export default function PrivacyPage() {
     <main style={{ minHeight: '100vh', background: 'var(--c-bg)', padding: '48px 24px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <Link to="/" style={{ display: 'inline-flex' }}>
-          <CosmosLogo size="md" />
+          <PlerosLogo size="md" />
         </Link>
         <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 32, color: 'var(--c-heading)', margin: '24px 0 4px' }}>
           Privacy Policy

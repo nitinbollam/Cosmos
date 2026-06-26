@@ -64,13 +64,13 @@ export default function DeliveryRoutePage() {
 
   return (
     <div>
-      <Link to="/m/delivery" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+      <Link to="/m/delivery" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Routes
       </Link>
       <h1 style={{ fontFamily: 'var(--font-display)' }}>Route {id?.slice(-8)}</h1>
       {err && <p style={{ color: 'var(--c-danger)' }}>{err}</p>}
       <textarea
-        className="cosmos-input"
+        className="pleros-input"
         placeholder="POD notes"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
@@ -78,7 +78,7 @@ export default function DeliveryRoutePage() {
         style={{ width: '100%', marginBottom: 12 }}
       />
       {(route?.stops ?? []).map((s) => (
-        <div key={s.id} className="cosmos-mobile-card">
+        <div key={s.id} className="pleros-mobile-card">
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <strong>Stop #{s.sequence}</strong>
             <span style={{ fontSize: 12 }}>{s.status}</span>

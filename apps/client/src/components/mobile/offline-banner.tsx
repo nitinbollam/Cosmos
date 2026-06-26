@@ -16,11 +16,11 @@ export function OfflineBanner() {
     sync()
     window.addEventListener('online', sync)
     window.addEventListener('offline', sync)
-    window.addEventListener('cosmos-offline-queue-changed', sync)
+    window.addEventListener('pleros-offline-queue-changed', sync)
     return () => {
       window.removeEventListener('online', sync)
       window.removeEventListener('offline', sync)
-      window.removeEventListener('cosmos-offline-queue-changed', sync)
+      window.removeEventListener('pleros-offline-queue-changed', sync)
     }
   }, [])
 

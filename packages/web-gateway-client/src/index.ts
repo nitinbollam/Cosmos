@@ -60,8 +60,8 @@ export function createGatewayApi(options: CreateGatewayApiOptions = {}): {
   client: AxiosInstance
 } {
   const gatewayApiBaseUrl = resolveGatewayBaseUrl(options.baseUrl)
-  const accessKey = options.accessTokenStorageKey ?? 'cosmos.accessToken'
-  const refreshKey = options.refreshTokenStorageKey ?? 'cosmos.refreshToken'
+  const accessKey = options.accessTokenStorageKey ?? 'pleros.accessToken'
+  const refreshKey = options.refreshTokenStorageKey ?? 'pleros.refreshToken'
   const loginPath = options.loginPath ?? '/login'
 
   function token(): string | null {

@@ -3,7 +3,7 @@ import { WEB_DATABASE_ENV_KEYS } from './env'
 type DbCheck = { key: string; ok: boolean; message?: string }
 
 export function getDatabaseProvider(): 'sqlite' | 'postgresql' {
-  return process.env.COSMOS_DB_PROVIDER === 'postgres' ? 'postgresql' : 'sqlite'
+  return process.env.PLEROS_DB_PROVIDER === 'postgres' ? 'postgresql' : 'sqlite'
 }
 
 export async function checkDatabaseConnections(): Promise<{

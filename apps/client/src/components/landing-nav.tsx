@@ -14,7 +14,7 @@ export function LandingNav() {
   useEffect(() => {
     refresh()
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'cosmos.accessToken' || e.key === null) refresh()
+      if (e.key === 'pleros.accessToken' || e.key === null) refresh()
     }
     const onAuth = () => refresh()
     window.addEventListener('storage', onStorage)
@@ -26,28 +26,28 @@ export function LandingNav() {
   }, [refresh])
 
   return (
-    <nav className="cosmos-landing-nav" aria-label="Primary">
-      <a href="#features" className="cosmos-landing-nav-link">
+    <nav className="pleros-landing-nav" aria-label="Primary">
+      <a href="#features" className="pleros-landing-nav-link">
         Features
       </a>
-      <a href="#workspaces" className="cosmos-landing-nav-link">
+      <a href="#workspaces" className="pleros-landing-nav-link">
         Workspaces
       </a>
       <ThemeSwitcher compact />
       {signedIn ? (
         <button
           type="button"
-          className="cosmos-landing-nav-link"
+          className="pleros-landing-nav-link"
           onClick={() => void signOut()}
         >
           Sign out
         </button>
       ) : (
-        <Link to="/login" className="cosmos-landing-nav-link">
+        <Link to="/login" className="pleros-landing-nav-link">
           Sign in
         </Link>
       )}
-      <Link to="/signup" className="cosmos-landing-nav-cta">
+      <Link to="/signup" className="pleros-landing-nav-cta">
         Get started
       </Link>
     </nav>

@@ -8,11 +8,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@cosmos/web-gateway-client': path.resolve(
+      '@pleros/web-gateway-client': path.resolve(
         __dirname,
         '../../packages/web-gateway-client/src/index.ts',
       ),
-      '@cosmos/ui': path.resolve(__dirname, '../../packages/ui/src/index.ts'),
+      '@pleros/ui': path.resolve(__dirname, '../../packages/ui/src/index.ts'),
     },
   },
   build: {

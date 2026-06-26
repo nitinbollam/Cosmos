@@ -31,10 +31,10 @@ function buildContextBlock(
   const parts: string[] = []
 
   if (toolResults.some(toolResultHasData)) {
-    parts.push(`LIVE COSMOS DATA (use this in your answer):\n${composeFromToolResults(toolResults)}`)
+    parts.push(`LIVE PLEROS DATA (use this in your answer):\n${composeFromToolResults(toolResults)}`)
   } else if (toolResults.length > 0) {
     parts.push(
-      `LIVE COSMOS DATA (queries ran, no matching records):\n${formatToolResultsForPrompt(toolResults)}`,
+      `LIVE PLEROS DATA (queries ran, no matching records):\n${formatToolResultsForPrompt(toolResults)}`,
     )
   }
 
@@ -178,13 +178,13 @@ async function persistChatResult(
 export async function chat(session: SessionUser, input: CelestialChatInput): Promise<CelestialChatResult> {
   const prepared = await prepareChat(session, input)
   if (prepared.directReply) {
-    await persistChatResult(session, prepared, prepared.directReply, 'cosmos', 'structured')
+    await persistChatResult(session, prepared, prepared.directReply, 'pleros', 'structured')
     return {
       conversationId: prepared.conversationId,
       reply: prepared.directReply,
       links: prepared.links,
       toolsUsed: prepared.toolsUsed,
-      provider: 'cosmos',
+      provider: 'pleros',
       model: 'structured',
     }
   }
@@ -199,7 +199,7 @@ export async function chat(session: SessionUser, input: CelestialChatInput): Pro
     model = llm.model
   } catch {
     reply = buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage)
-    provider = 'cosmos'
+    provider = 'pleros'
     model = 'fallback'
   }
 
@@ -244,7 +244,7 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
 
       try {
         if (prepared.directReply) {
-          await streamText(prepared.directReply, 'cosmos', 'structured')
+          await streamText(prepared.directReply, 'pleros', 'structured')
           return
         }
 
@@ -264,7 +264,7 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
           if (!streamed) {
             await streamText(
               buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
-              'cosmos',
+              'pleros',
               'fallback',
             )
             return
@@ -283,7 +283,7 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
         } catch {
           await streamText(
             buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
-            'cosmos',
+            'pleros',
             'fallback',
           )
         }

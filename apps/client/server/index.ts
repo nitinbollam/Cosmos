@@ -118,7 +118,7 @@ async function main() {
   }
 
   app.listen(port, () => {
-    console.log(`[cosmos] Vite + API @ http://localhost:${port}`)
+    console.log(`[pleros] Vite + API @ http://localhost:${port}`)
   })
 }
 

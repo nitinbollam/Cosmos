@@ -21,18 +21,18 @@ body {
   color: var(--c-heading);
 }
 
-.cosmos-shop,
-.cosmos-mobile,
-.cosmos-hub {
+.pleros-shop,
+.pleros-mobile,
+.pleros-hub {
   color: var(--c-text);
 }
 
-.cosmos-shop h1,
-.cosmos-shop h2,
-.cosmos-shop h3,
-.cosmos-mobile h1,
-.cosmos-mobile h2,
-.cosmos-hub h1 {
+.pleros-shop h1,
+.pleros-shop h2,
+.pleros-shop h3,
+.pleros-mobile h1,
+.pleros-mobile h2,
+.pleros-hub h1 {
   color: var(--c-heading);
 }
 
@@ -41,17 +41,17 @@ a {
 }
 
 /* Landing / hub */
-.cosmos-hub,
-.cosmos-landing {
+.pleros-hub,
+.pleros-landing {
   color: var(--c-heading);
   font-family: var(--font-body);
 }
 
-html:has(.cosmos-landing) {
+html:has(.pleros-landing) {
   scroll-behavior: smooth;
 }
 
-.cosmos-landing {
+.pleros-landing {
   position: relative;
   min-height: 100dvh;
   overflow-x: hidden;
@@ -59,21 +59,21 @@ html:has(.cosmos-landing) {
   background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg-elevated) 55%, var(--c-bg) 100%);
 }
 
-.cosmos-landing-ambient {
+.pleros-landing-ambient {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
 }
 
-.cosmos-landing-orb {
+.pleros-landing-orb {
   position: absolute;
   border-radius: 50%;
   filter: blur(96px);
   opacity: 0.35;
 }
 
-.cosmos-landing-orb--1 {
+.pleros-landing-orb--1 {
   width: 480px;
   height: 480px;
   top: -160px;
@@ -82,7 +82,7 @@ html:has(.cosmos-landing) {
   opacity: 0.07;
 }
 
-.cosmos-landing-orb--2 {
+.pleros-landing-orb--2 {
   width: 360px;
   height: 360px;
   bottom: 8%;
@@ -91,18 +91,18 @@ html:has(.cosmos-landing) {
   opacity: 0.05;
 }
 
-.cosmos-landing-header,
-.cosmos-landing-hero,
-.cosmos-landing-features,
-.cosmos-landing-celestial,
-.cosmos-landing-flow,
-.cosmos-landing-workspaces,
-.cosmos-landing-footer {
+.pleros-landing-header,
+.pleros-landing-hero,
+.pleros-landing-features,
+.pleros-landing-celestial,
+.pleros-landing-flow,
+.pleros-landing-workspaces,
+.pleros-landing-footer {
   position: relative;
   z-index: 1;
 }
 
-.cosmos-landing-header {
+.pleros-landing-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -111,7 +111,7 @@ html:has(.cosmos-landing) {
   padding: 28px 24px 0;
 }
 
-.cosmos-landing-logo {
+.pleros-landing-logo {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -123,7 +123,7 @@ html:has(.cosmos-landing) {
   text-decoration: none;
 }
 
-.cosmos-landing-logo-mark {
+.pleros-landing-logo-mark {
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -131,13 +131,13 @@ html:has(.cosmos-landing) {
   box-shadow: 0 0 0 4px var(--c-primary-dim);
 }
 
-.cosmos-landing-nav {
+.pleros-landing-nav {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.cosmos-landing-nav-link {
+.pleros-landing-nav-link {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--c-text-2);
@@ -147,12 +147,12 @@ html:has(.cosmos-landing) {
   transition: color 0.15s ease, background 0.15s ease;
 }
 
-.cosmos-landing-nav-link:hover {
+.pleros-landing-nav-link:hover {
   color: var(--c-heading);
   background: var(--c-surface-2);
 }
 
-.cosmos-landing-nav-cta {
+.pleros-landing-nav-cta {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--c-on-primary);
@@ -164,12 +164,12 @@ html:has(.cosmos-landing) {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.cosmos-landing-nav-cta:hover {
+.pleros-landing-nav-cta:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-.cosmos-landing-hero {
+.pleros-landing-hero {
   display: grid;
   gap: 40px;
   max-width: 1120px;
@@ -179,14 +179,14 @@ html:has(.cosmos-landing) {
 }
 
 @media (min-width: 900px) {
-  .cosmos-landing-hero {
+  .pleros-landing-hero {
     grid-template-columns: 1.15fr 0.85fr;
     gap: 48px;
     padding-top: 64px;
   }
 }
 
-.cosmos-landing-eyebrow {
+.pleros-landing-eyebrow {
   margin: 0 0 20px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -195,7 +195,7 @@ html:has(.cosmos-landing) {
   color: var(--c-text-3);
 }
 
-.cosmos-landing-headline {
+.pleros-landing-headline {
   margin: 0;
   font-family: var(--font-body);
   font-size: clamp(1.875rem, 4.2vw, 2.75rem);
@@ -206,7 +206,7 @@ html:has(.cosmos-landing) {
   max-width: 22ch;
 }
 
-.cosmos-landing-lede {
+.pleros-landing-lede {
   margin: 20px 0 0;
   max-width: 52ch;
   font-size: 1rem;
@@ -214,14 +214,14 @@ html:has(.cosmos-landing) {
   color: var(--c-text-2);
 }
 
-.cosmos-landing-hero-actions {
+.pleros-landing-hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 36px;
 }
 
-.cosmos-landing-btn {
+.pleros-landing-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -234,30 +234,30 @@ html:has(.cosmos-landing) {
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.cosmos-landing-btn--primary {
+.pleros-landing-btn--primary {
   color: var(--c-on-primary);
   background: var(--c-primary);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
-.cosmos-landing-btn--primary:hover {
+.pleros-landing-btn--primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
 }
 
-.cosmos-landing-btn--ghost {
+.pleros-landing-btn--ghost {
   color: var(--c-heading);
   background: var(--c-surface-2);
   border: 1px solid var(--c-border-card);
 }
 
-.cosmos-landing-btn--ghost:hover {
+.pleros-landing-btn--ghost:hover {
   background: var(--c-surface-3);
   transform: translateY(-1px);
 }
 
 /* Quick start panel */
-.cosmos-landing-quickstart {
+.pleros-landing-quickstart {
   padding: 24px;
   border-radius: 12px;
   background: var(--c-surface);
@@ -265,7 +265,7 @@ html:has(.cosmos-landing) {
   box-shadow: var(--shadow-card);
 }
 
-.cosmos-landing-quickstart-title {
+.pleros-landing-quickstart-title {
   margin: 0 0 14px;
   font-size: 0.6875rem;
   font-weight: 700;
@@ -274,7 +274,7 @@ html:has(.cosmos-landing) {
   color: var(--c-text-3);
 }
 
-.cosmos-landing-quickstart-list {
+.pleros-landing-quickstart-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -283,7 +283,7 @@ html:has(.cosmos-landing) {
   gap: 6px;
 }
 
-.cosmos-landing-quickstart-link {
+.pleros-landing-quickstart-link {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -293,22 +293,22 @@ html:has(.cosmos-landing) {
   transition: background 0.15s ease;
 }
 
-.cosmos-landing-quickstart-link:hover {
+.pleros-landing-quickstart-link:hover {
   background: var(--c-surface-2);
 }
 
-.cosmos-landing-quickstart-label {
+.pleros-landing-quickstart-label {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--c-heading);
 }
 
-.cosmos-landing-quickstart-hint {
+.pleros-landing-quickstart-hint {
   font-size: 0.75rem;
   color: var(--c-text-3);
 }
 
-.cosmos-landing-demo-note {
+.pleros-landing-demo-note {
   margin: 18px 0 0;
   padding-top: 16px;
   border-top: 1px solid var(--c-border);
@@ -317,7 +317,7 @@ html:has(.cosmos-landing) {
   color: var(--c-text-3);
 }
 
-.cosmos-landing-demo-note code {
+.pleros-landing-demo-note code {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   padding: 2px 5px;
@@ -327,11 +327,11 @@ html:has(.cosmos-landing) {
 }
 
 /* Sections */
-.cosmos-landing-section-head {
+.pleros-landing-section-head {
   margin-bottom: 28px;
 }
 
-.cosmos-landing-section-title {
+.pleros-landing-section-title {
   margin: 0;
   font-family: var(--font-body);
   font-size: 1.375rem;
@@ -340,7 +340,7 @@ html:has(.cosmos-landing) {
   color: var(--c-heading);
 }
 
-.cosmos-landing-section-sub {
+.pleros-landing-section-sub {
   margin: 8px 0 0;
   font-size: 0.9375rem;
   line-height: 1.5;
@@ -348,40 +348,40 @@ html:has(.cosmos-landing) {
   max-width: 48ch;
 }
 
-.cosmos-landing-features {
+.pleros-landing-features {
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 24px 56px;
 }
 
-.cosmos-landing-feature-grid {
+.pleros-landing-feature-grid {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
-.cosmos-landing-feature-card {
+.pleros-landing-feature-card {
   padding: 22px 22px 20px;
   border-radius: var(--bento-radius);
   background: var(--c-surface);
   border: 1px solid var(--c-border);
 }
 
-.cosmos-landing-feature-title {
+.pleros-landing-feature-title {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
   color: var(--c-heading);
 }
 
-.cosmos-landing-feature-desc {
+.pleros-landing-feature-desc {
   margin: 8px 0 0;
   font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--c-text-2);
 }
 
-.cosmos-landing-feature-list {
+.pleros-landing-feature-list {
   margin: 14px 0 0;
   padding: 0 0 0 18px;
   font-size: 0.75rem;
@@ -389,13 +389,13 @@ html:has(.cosmos-landing) {
   color: var(--c-text-3);
 }
 
-.cosmos-landing-celestial {
+.pleros-landing-celestial {
   max-width: 1120px;
   margin: 0 auto;
   padding: 0 24px 48px;
 }
 
-.cosmos-landing-celestial-inner {
+.pleros-landing-celestial-inner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -407,7 +407,7 @@ html:has(.cosmos-landing) {
   border: 1px solid var(--c-border-card);
 }
 
-.cosmos-landing-celestial-text {
+.pleros-landing-celestial-text {
   margin: 12px 0 0;
   max-width: 52ch;
   font-size: 0.9375rem;
@@ -415,13 +415,13 @@ html:has(.cosmos-landing) {
   color: var(--c-text-2);
 }
 
-.cosmos-landing-flow {
+.pleros-landing-flow {
   max-width: 1120px;
   margin: 0 auto;
   padding: 0 24px 56px;
 }
 
-.cosmos-landing-flow-list {
+.pleros-landing-flow-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -430,19 +430,19 @@ html:has(.cosmos-landing) {
 }
 
 @media (min-width: 768px) {
-  .cosmos-landing-flow-list {
+  .pleros-landing-flow-list {
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
   }
 }
 
 @media (min-width: 1024px) {
-  .cosmos-landing-flow-list {
+  .pleros-landing-flow-list {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
-.cosmos-landing-flow-item {
+.pleros-landing-flow-item {
   display: flex;
   gap: 14px;
   padding: 18px 18px 16px;
@@ -451,7 +451,7 @@ html:has(.cosmos-landing) {
   border: 1px solid var(--c-border);
 }
 
-.cosmos-landing-flow-step {
+.pleros-landing-flow-step {
   flex-shrink: 0;
   width: 28px;
   height: 28px;
@@ -464,14 +464,14 @@ html:has(.cosmos-landing) {
   border-radius: 8px;
 }
 
-.cosmos-landing-flow-title {
+.pleros-landing-flow-title {
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--c-heading);
 }
 
-.cosmos-landing-flow-text {
+.pleros-landing-flow-text {
   margin: 4px 0 0;
   font-size: 0.75rem;
   line-height: 1.55;
@@ -479,13 +479,13 @@ html:has(.cosmos-landing) {
 }
 
 /* Workspaces */
-.cosmos-landing-workspaces {
+.pleros-landing-workspaces {
   max-width: 1120px;
   margin: 0 auto;
   padding: 0 24px 72px;
 }
 
-.cosmos-landing-ws-grid {
+.pleros-landing-ws-grid {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -494,18 +494,18 @@ html:has(.cosmos-landing) {
 }
 
 @media (min-width: 640px) {
-  .cosmos-landing-ws-grid {
+  .pleros-landing-ws-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (min-width: 1024px) {
-  .cosmos-landing-ws-grid {
+  .pleros-landing-ws-grid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
-.cosmos-landing-ws-card {
+.pleros-landing-ws-card {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -516,7 +516,7 @@ html:has(.cosmos-landing) {
   border: 1px solid var(--c-border);
 }
 
-.cosmos-landing-card-bar {
+.pleros-landing-card-bar {
   position: absolute;
   top: 0;
   left: 0;
@@ -527,7 +527,7 @@ html:has(.cosmos-landing) {
   opacity: 0.9;
 }
 
-.cosmos-landing-ws-role {
+.pleros-landing-ws-role {
   margin: 6px 0 0;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -536,14 +536,14 @@ html:has(.cosmos-landing) {
   color: var(--c-text-3);
 }
 
-.cosmos-landing-ws-title {
+.pleros-landing-ws-title {
   margin: 6px 0 0;
   font-size: 1.0625rem;
   font-weight: 700;
   color: var(--c-heading);
 }
 
-.cosmos-landing-ws-desc {
+.pleros-landing-ws-desc {
   margin: 10px 0 0;
   font-size: 0.8125rem;
   line-height: 1.6;
@@ -551,7 +551,7 @@ html:has(.cosmos-landing) {
   flex: 1;
 }
 
-.cosmos-landing-ws-features {
+.pleros-landing-ws-features {
   margin: 14px 0 0;
   padding: 0;
   list-style: none;
@@ -560,7 +560,7 @@ html:has(.cosmos-landing) {
   gap: 6px;
 }
 
-.cosmos-landing-ws-features li {
+.pleros-landing-ws-features li {
   font-size: 0.6875rem;
   font-weight: 500;
   padding: 4px 10px;
@@ -569,7 +569,7 @@ html:has(.cosmos-landing) {
   color: var(--c-text-2);
 }
 
-.cosmos-landing-ws-actions {
+.pleros-landing-ws-actions {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -578,49 +578,49 @@ html:has(.cosmos-landing) {
   border-top: 1px solid var(--c-border);
 }
 
-.cosmos-landing-ws-open {
+.pleros-landing-ws-open {
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--c-primary);
   text-decoration: none;
 }
 
-.cosmos-landing-ws-open:hover {
+.pleros-landing-ws-open:hover {
   text-decoration: underline;
 }
 
-.cosmos-landing-ws-signin {
+.pleros-landing-ws-signin {
   font-size: 0.8125rem;
   color: var(--c-text-3);
   text-decoration: none;
 }
 
-.cosmos-landing-ws-signin:hover {
+.pleros-landing-ws-signin:hover {
   color: var(--c-heading);
 }
 
-.cosmos-landing-footer {
+.pleros-landing-footer {
   max-width: 1120px;
   margin: 0 auto;
   padding: 32px 24px 48px;
   border-top: 1px solid var(--c-border);
 }
 
-.cosmos-landing-footer-grid {
+.pleros-landing-footer-grid {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 24px;
 }
 
-.cosmos-landing-footer-brand {
+.pleros-landing-footer-brand {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
   color: var(--c-heading);
 }
 
-.cosmos-landing-footer-tag {
+.pleros-landing-footer-tag {
   margin: 6px 0 0;
   max-width: 36ch;
   font-size: 0.8125rem;
@@ -628,39 +628,39 @@ html:has(.cosmos-landing) {
   color: var(--c-text-3);
 }
 
-.cosmos-landing-footer-links {
+.pleros-landing-footer-links {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   align-items: flex-start;
 }
 
-.cosmos-landing-footer-links a {
+.pleros-landing-footer-links a {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--c-text-2);
   text-decoration: none;
 }
 
-.cosmos-landing-footer-links a:hover {
+.pleros-landing-footer-links a:hover {
   color: var(--c-primary);
 }
 
-.cosmos-landing-footer-copy {
+.pleros-landing-footer-copy {
   margin: 28px 0 0;
   font-size: 0.75rem;
   color: var(--c-text-3);
 }
 
 /* Mobile PWA */
-.cosmos-mobile {
+.pleros-mobile {
   min-height: 100dvh;
   background: var(--c-bg);
   color: var(--c-text);
   font-family: var(--font-body);
 }
 
-.cosmos-mobile-header {
+.pleros-mobile-header {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
@@ -670,7 +670,7 @@ html:has(.cosmos-landing) {
   background: var(--c-surface);
 }
 
-.cosmos-mobile-back {
+.pleros-mobile-back {
   font-size: 13px;
   font-weight: 600;
   color: var(--c-primary);
@@ -682,7 +682,7 @@ html:has(.cosmos-landing) {
   flex-shrink: 0;
 }
 
-.cosmos-mobile-brand {
+.pleros-mobile-brand {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -696,7 +696,7 @@ html:has(.cosmos-landing) {
   min-height: 44px;
 }
 
-.cosmos-mobile-nav {
+.pleros-mobile-nav {
   display: flex;
   gap: 8px;
   padding: 10px 12px;
@@ -706,7 +706,7 @@ html:has(.cosmos-landing) {
   background: var(--c-bg);
 }
 
-.cosmos-mobile-tab {
+.pleros-mobile-tab {
   padding: 10px 16px;
   border-radius: var(--bento-radius-sm);
   font-size: 13px;
@@ -721,22 +721,22 @@ html:has(.cosmos-landing) {
   align-items: center;
 }
 
-.cosmos-mobile-tab--active {
+.pleros-mobile-tab--active {
   background: var(--c-primary-dim);
   border-color: var(--c-accent);
   color: var(--c-heading);
 }
 
-.cosmos-mobile-tab:hover {
+.pleros-mobile-tab:hover {
   background: var(--c-surface-2);
 }
 
-.cosmos-mobile-main {
+.pleros-mobile-main {
   padding: 16px;
   padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
-.cosmos-mobile-card {
+.pleros-mobile-card {
   border: var(--border-width) solid var(--c-border);
   border-radius: var(--bento-radius);
   padding: 14px 16px;
@@ -745,35 +745,35 @@ html:has(.cosmos-landing) {
 }
 
 /* Shop area — override legacy inline dark styles */
-.cosmos-shop {
+.pleros-shop {
   min-height: 100dvh;
   background: var(--c-bg);
   color: var(--c-text);
 }
 
-.cosmos-shop main {
+.pleros-shop main {
   color: var(--c-text) !important;
 }
 
-.cosmos-shop input,
-.cosmos-shop textarea,
-.cosmos-shop select {
+.pleros-shop input,
+.pleros-shop textarea,
+.pleros-shop select {
   background: var(--c-surface) !important;
   border: var(--border-width) solid var(--c-border) !important;
   color: var(--c-text) !important;
   border-radius: var(--bento-radius-sm) !important;
 }
 
-.cosmos-shop table {
+.pleros-shop table {
   border-collapse: collapse;
 }
 
-.cosmos-shop th,
-.cosmos-shop td {
+.pleros-shop th,
+.pleros-shop td {
   border-bottom: 1px solid var(--c-border);
 }
 
-.cosmos-auth-page {
+.pleros-auth-page {
   min-height: 100vh;
   background: var(--c-bg);
   display: flex;
@@ -782,26 +782,26 @@ html:has(.cosmos-landing) {
   padding: 24px;
 }
 
-.cosmos-auth-card {
+.pleros-auth-card {
   width: 100%;
   max-width: 400px;
 }
 
-.cosmos-auth-toolbar {
+.pleros-auth-toolbar {
   position: fixed;
   top: 16px;
   right: 16px;
   z-index: 20;
 }
 
-.cosmos-mobile-header-actions {
+.pleros-mobile-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
 
-.cosmos-mobile-signout {
+.pleros-mobile-signout {
   border: none;
   background: none;
   cursor: pointer;
@@ -809,16 +809,16 @@ html:has(.cosmos-landing) {
 }
 
 /* Aurora landing overrides */
-[data-theme='aurora'] .cosmos-landing {
+[data-theme='aurora'] .pleros-landing {
   background: linear-gradient(165deg, var(--palette-mauve) 0%, #e8d8f4 38%, var(--palette-powder-petal) 100%);
 }
 
-[data-theme='aurora'] .cosmos-landing-orb--1 {
+[data-theme='aurora'] .pleros-landing-orb--1 {
   background: var(--palette-soft-periwinkle);
   opacity: 0.35;
 }
 
-[data-theme='aurora'] .cosmos-landing-orb--2 {
+[data-theme='aurora'] .pleros-landing-orb--2 {
   background: var(--palette-wisteria);
   opacity: 0.28;
 }

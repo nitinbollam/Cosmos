@@ -1,6 +1,6 @@
-# Cosmos Platform — Features & Recent Additions
+# Pleros Platform — Features & Recent Additions
 
-Comprehensive reference for the Cosmos ERP/distribution platform: what the product does today, what was added in recent development, and how to run it locally.
+Comprehensive reference for the Pleros ERP/distribution platform: what the product does today, what was added in recent development, and how to run it locally.
 
 > **Celestial AI knowledge base:** LLM-optimized documentation lives in [`docs/celestial/`](docs/celestial/) (indexed automatically by Celestial RAG). This file is the full human + machine reference; celestial docs use Q&A-friendly sections with keywords, workflows, and FAQ.
 
@@ -29,7 +29,7 @@ Comprehensive reference for the Cosmos ERP/distribution platform: what the produ
 
 ## Overview
 
-**Cosmos** is a production-oriented ERP and distribution platform for SMB wholesalers and distributors. It covers inventory, orders, warehouse operations, purchasing, CRM, dispatch, compliance, finance, and a buyer-facing B2B portal — plus mobile apps for warehouse, delivery, and sales.
+**Pleros** is a production-oriented ERP and distribution platform for SMB wholesalers and distributors. It covers inventory, orders, warehouse operations, purchasing, CRM, dispatch, compliance, finance, and a buyer-facing B2B portal — plus mobile apps for warehouse, delivery, and sales.
 
 **Stack:** React 19 + Vite (UI), Express + Prisma + SQLite (API), npm workspaces monorepo.
 
@@ -44,7 +44,7 @@ Comprehensive reference for the Cosmos ERP/distribution platform: what the produ
 | **Client UI** | `apps/client` | Vite SPA, React Router, TanStack Query, Tailwind, Zustand |
 | **API server** | `apps/web` | Express handlers in `apps/web/lib/server/`, entry `apps/web/server/api-router.ts` |
 | **Dev server** | `apps/client/server/index.ts` | Vite middleware (HMR) + `/api/*` proxy to web API |
-| **Shared packages** | `packages/*` | `@cosmos/types`, `@cosmos/ui`, `@cosmos/web-gateway-client`, `@cosmos/analytics-engine` |
+| **Shared packages** | `packages/*` | `@pleros/types`, `@pleros/ui`, `@pleros/web-gateway-client`, `@pleros/analytics-engine` |
 | **Database** | `apps/web/.data/*.db` | 14 separate SQLite databases (one Prisma schema each) |
 | **Seed & migrations** | `scripts/seed-db.ts`, `scripts/migrate-all.ts` | Multi-DB setup |
 
@@ -204,7 +204,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 |------------|-------|
 | Dashboard KPIs | `GET /api/v1/analytics/kpis`, admin dashboard |
 | KPI snapshots | `GET /api/v1/kpi/snapshots` — feeds revenue chart |
-| Cashflow forecast | `POST /api/cashflow` — `@cosmos/analytics-engine` |
+| Cashflow forecast | `POST /api/cashflow` — `@pleros/analytics-engine` |
 | Anomaly detection | `POST /api/anomaly` |
 | Trial balance | Finance page + ledger API |
 | **AR invoicing** | Auto-issue on ship, invoice list/detail, balance & overdue |
@@ -225,7 +225,7 @@ Two switchable themes defined as `[data-theme]` token sets in `apps/client/src/g
 | **Aurora** | Light wholesale (original palette) | Mauve `#DEC0F1` bg, Powder Petal `#EFD9CE` surfaces, primary `#7161EF` |
 
 - **Switcher** (`components/theme-switcher.tsx`) in landing, admin, shop, and mobile headers plus all auth pages
-- Persisted in `localStorage` (`cosmos.theme`); applied pre-paint by an inline script in `index.html` (no flash)
+- Persisted in `localStorage` (`pleros.theme`); applied pre-paint by an inline script in `index.html` (no flash)
 - `lib/theme.ts` — storage, `applyTheme`, change events; meta `theme-color` updated per theme
 - Typography: **Inter** (body + display), JetBrains Mono (code)
 
@@ -235,13 +235,13 @@ Styles split across `globals-theme.css`, `globals-admin.css`, `globals-shop.css`
 
 | Asset / component | Path |
 |-------------------|------|
-| Source SVG | `cosmos_logo.svg` (repo root) |
-| React component | `apps/client/src/components/cosmos-logo.tsx` |
+| Source SVG | `pleros_logo.svg` (repo root) |
+| React component | `apps/client/src/components/pleros-logo.tsx` |
 | Variants | `full` (mark + wordmark), `mark`, `wordmark`; sizes `sm` / `md` / `lg` |
-| Static fallbacks | `apps/client/public/cosmos-logo.svg`, `cosmos-mark.svg`, `cosmos-logo-lockup.svg` |
-| Favicons | `favicon-32.png`, `apple-touch-icon.png`, `cosmos-icon-512.png` (from `scripts/generate-favicons.mjs`) |
+| Static fallbacks | `apps/client/public/pleros-logo.svg`, `pleros-mark.svg`, `pleros-logo-lockup.svg` |
+| Favicons | `favicon-32.png`, `apple-touch-icon.png`, `pleros-icon-512.png` (from `scripts/generate-favicons.mjs`) |
 
-Logo uses inline SVG (orbital rings + lowercase “cosmos” wordmark) for reliable rendering; lockup includes “DISTRIBUTION ERP” tagline on login screens.
+Logo uses inline SVG (orbital rings + lowercase “pleros” wordmark) for reliable rendering; lockup includes “DISTRIBUTION ERP” tagline on login screens.
 
 ### Admin shell UX
 
@@ -253,7 +253,7 @@ Logo uses inline SVG (orbital rings + lowercase “cosmos” wordmark) for relia
 ### Text & contrast
 
 - Semantic text tokens (`--c-heading`, `--c-text`, `--c-text-2`, `--c-text-3`)
-- Tailwind utility remaps for light theme (`text-cosmos-white` → dark heading color)
+- Tailwind utility remaps for light theme (`text-pleros-white` → dark heading color)
 - Fixed white-on-light bugs across admin, shop, and mobile pages
 
 ---
@@ -281,7 +281,7 @@ Summary of major work completed in the current development cycle.
 
 ### Logo & sidebar redesign
 
-- Replaced legacy PNG/black-box logo with `cosmos_logo.svg`-based design
+- Replaced legacy PNG/black-box logo with `pleros_logo.svg`-based design
 - Inline SVG component with proper viewBox padding (no clipping)
 - Sidebar: icon nav, brand footer, B2B storefront link, collapse control
 - Regenerated PWA/favicon assets from orbital mark
@@ -290,7 +290,7 @@ Summary of major work completed in the current development cycle.
 
 - Darkened secondary text tokens for contrast on light backgrounds
 - Global fixes for dashboard headers, checkout steps, warehouse tabs, fulfillment buttons
-- `@cosmos/ui` secondary button text fix
+- `@pleros/ui` secondary button text fix
 - Chart tooltip colors; mobile error/success message tokens
 
 ### Mobile-friendly layout
@@ -437,7 +437,7 @@ Summary of major work completed in the current development cycle.
 | **15.2 Knowledge base (RAG)** | `docs/celestial/*.md` (6 LLM-optimized files) + `PLATFORM_FEATURES.md` · chunked `##`/`###` retrieval with synonym scoring |
 | **15.3 Chat API** | `POST /celestial/chat` (JSON or SSE via `Accept: text/event-stream` / `X-Celestial-Stream: 1`), `POST /celestial/chat/stream`, `GET /celestial/status` (`enabled` + provider/model) · gated by `celestial` feature flag |
 | **15.4 Conversation history API** | `GET /celestial/conversations?surface=&limit=`, `GET /celestial/conversations/:id` — server-side thread restore across devices |
-| **15.5 Buyer + admin UI** | Floating ✦ panel on shop/admin layouts · full page `/admin/celestial` · shared Zustand store `cosmos-celestial-v1` |
+| **15.5 Buyer + admin UI** | Floating ✦ panel on shop/admin layouts · full page `/admin/celestial` · shared Zustand store `pleros-celestial-v1` |
 | **15.6 Live data tools** | `get_my_orders`, `get_order_detail`, `list_my_invoices`, `search_catalog`, `list_my_quotes`, `list_warehouses`, `global_search`, `list_low_stock` — buyer-scoped where applicable |
 | **15.7 Answer pipeline** | Intent detection → tools + doc retrieval → direct Markdown tables when data exists → LLM synthesis for how-to/general → doc fallback if LLM empty/fails (always returns an answer) |
 | **15.8 Streaming UI** | SSE token streaming · `react-markdown` + GFM + syntax highlighting · contextual deep links from tool results |
@@ -479,7 +479,7 @@ Summary of major work completed in the current development cycle.
 | **17.1 EDI** | Trading partners (Settings → Integrations), inbound 850 → orders, outbound 810/856 documents, `OrderChannel.EDI` |
 | **17.2 Demand planning** | Usage from stock ledger + lead times; `GET /inventory/demand-plan`, `GET /skus/:id/demand-plan`; replenishment table on inventory page |
 | **17.3 Landed cost** | Freight/duty/other on PO allocated into inventory unit cost on receive; PO detail UI |
-| **17.4 Postgres hardening** | `COSMOS_DB_PROVIDER=postgres`, `npm run db:setup:postgres`, dual-mode `migrate-all.ts`, `GET /health/db` |
+| **17.4 Postgres hardening** | `PLEROS_DB_PROVIDER=postgres`, `npm run db:setup:postgres`, dual-mode `migrate-all.ts`, `GET /health/db` |
 
 **Key files:** `apps/web/lib/server/edi.ts`, `demand-planning.ts`, `landed-cost.ts`, `db-health.ts`, `scripts/setup-postgres.mjs`, `scripts/db-urls.mjs`.
 
@@ -488,7 +488,7 @@ Summary of major work completed in the current development cycle.
 | Item | What was added |
 |------|----------------|
 | **18.1 Obsidian theme** | New default matte-black enterprise theme; Inter typography; flat surfaces, hairline borders, steel-blue accent |
-| **18.2 Theme switcher** | Obsidian ↔ Aurora toggle in landing/admin/shop/mobile headers and auth pages; persisted `cosmos.theme`; pre-paint apply (no flash) |
+| **18.2 Theme switcher** | Obsidian ↔ Aurora toggle in landing/admin/shop/mobile headers and auth pages; persisted `pleros.theme`; pre-paint apply (no flash) |
 | **18.3 Landing page** | `/` — role-based quick start, 6 feature modules, Celestial section, order-to-cash flow, workspace cards, demo credentials |
 | **18.4 Logout everywhere** | Central `signOut()` (`lib/auth-session.ts`) — revokes server session (`POST /auth/logout`), clears tokens + B2B session; admin avatar menu, shop dropdown, mobile header, landing nav |
 | **18.5 Celestial plain language** | Intent-aware plain-language answers for non-technical users; technical URLs/commands stripped unless asked |
@@ -556,7 +556,7 @@ Open **http://localhost:4000**.
 |---------|-------------|
 | `npm run dev` | Vite HMR + API on port 4000 |
 | `npm run build` | Production build (all workspaces) |
-| `npm run start -w @cosmos/client` | Serve built SPA + API |
+| `npm run start -w @pleros/client` | Serve built SPA + API |
 | `npm run seed` | Load demo tenant, SKUs, orders, invoices, etc. |
 | `npm run db:migrate` | Run all Prisma migrations |
 | `npm run sync:client` | Sync UI from legacy web app sources |
@@ -566,15 +566,15 @@ Open **http://localhost:4000**.
 
 ## Demo accounts & seed data
 
-After `npm run seed`, the following accounts are available (demo tenant: **Cosmos Demo Distributors**, slug `demo`):
+After `npm run seed`, the following accounts are available (demo tenant: **Pleros Demo Distributors**, slug `demo`):
 
 | Role | Email | Password | URL |
 |------|-------|----------|-----|
-| **Admin** | `admin@cosmos.local` | `admin1234` | http://localhost:4000/admin/login |
+| **Admin** | `admin@pleros.local` | `admin1234` | http://localhost:4000/admin/login |
 | **B2B buyer** | `buyer@acme-retail.com` | `buyer1234` | http://localhost:4000/login |
-| **Driver** | `driver@cosmos.local` | `driver1234` | http://localhost:4000/m/delivery |
-| **Warehouse** | `warehouse@cosmos.local` | `warehouse1234` | http://localhost:4000/m/warehouse |
-| **Sales** | `sales@cosmos.local` | `sales1234` | http://localhost:4000/m/sales |
+| **Driver** | `driver@pleros.local` | `driver1234` | http://localhost:4000/m/delivery |
+| **Warehouse** | `warehouse@pleros.local` | `warehouse1234` | http://localhost:4000/m/warehouse |
+| **Sales** | `sales@pleros.local` | `sales1234` | http://localhost:4000/m/sales |
 
 **Seed includes:** catalog SKUs, sample orders (various statuses), open quote, POs, fulfillment tasks, dispatch route, MSA report, journal entry, **seed invoices**, KPI snapshots for dashboard charts.
 
@@ -582,7 +582,7 @@ After `npm run seed`, the following accounts are available (demo tenant: **Cosmo
 
 ## ERP industry comparison
 
-See **[ERP_FEATURE_GAP.md](ERP_FEATURE_GAP.md)** for a full comparison of Cosmos vs established wholesale/distribution ERP platforms (NetSuite, Business Central, Acumatica, Prophet 21, etc.) — module coverage, gaps, and suggested roadmap priorities.
+See **[ERP_FEATURE_GAP.md](ERP_FEATURE_GAP.md)** for a full comparison of Pleros vs established wholesale/distribution ERP platforms (NetSuite, Business Central, Acumatica, Prophet 21, etc.) — module coverage, gaps, and suggested roadmap priorities.
 
 ---
 
@@ -607,7 +607,7 @@ Documented in `MISSING.md`, `ERP_FEATURE_GAP.md`, and backlog:
 | Shop pages | `apps/client/src/pages/catalog/`, `cart/`, `checkout/`, `orders/`, `quotes/` |
 | Mobile pages | `apps/client/src/pages/m/` |
 | Theme | `apps/client/src/globals-theme.css` |
-| Logo | `apps/client/src/components/cosmos-logo.tsx`, `cosmos_logo.svg` |
+| Logo | `apps/client/src/components/pleros-logo.tsx`, `pleros_logo.svg` |
 | Sidebar / shell | `apps/client/src/components/layout/` |
 | API router | `apps/web/lib/server/native-router.ts` |
 | Celestial AI | `apps/web/lib/server/celestial/`, `apps/client/src/components/celestial/`, `apps/client/src/stores/celestial-store.ts` |

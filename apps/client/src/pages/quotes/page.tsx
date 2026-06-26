@@ -26,38 +26,38 @@ export default function QuotesPage() {
   }, [])
 
   return (
-    <main className="cosmos-shop-page-main">
+    <main className="pleros-shop-page-main">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <h1 style={{ color: 'var(--c-heading)', margin: 0 }}>Quotes</h1>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13 }}>
-          <Link to="/quotes/new" className="cosmos-shop-link-accent">
+          <Link to="/quotes/new" className="pleros-shop-link-accent">
             + New quote →
           </Link>
-          <Link to="/login" className="cosmos-shop-link-accent">
+          <Link to="/login" className="pleros-shop-link-accent">
             Re-authenticate →
           </Link>
         </div>
       </div>
-      {err ? <p className="cosmos-shop-error">{err}</p> : null}
-      {rows?.length === 0 && <p className="cosmos-shop-muted" style={{ marginTop: 16 }}>No quotes yet — try New quote.</p>}
+      {err ? <p className="pleros-shop-error">{err}</p> : null}
+      {rows?.length === 0 && <p className="pleros-shop-muted" style={{ marginTop: 16 }}>No quotes yet — try New quote.</p>}
       <ul style={{ padding: 0, listStyle: 'none', marginTop: 20 }}>
         {(rows ?? []).map((q) => (
-          <li key={q.id} className="cosmos-shop-list-card">
+          <li key={q.id} className="pleros-shop-list-card">
             <Link
               to={`/quotes/${q.id}`}
-              className="cosmos-shop-link-accent"
+              className="pleros-shop-link-accent"
               style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
             >
               {q.id.slice(0, 14)}… →
             </Link>
             <div>{q.customerRef}</div>
-            <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>
+            <div className="pleros-shop-muted" style={{ fontSize: 12 }}>
               Status <strong style={{ color: 'var(--c-text)' }}>{q.status}</strong>
             </div>
           </li>
         ))}
       </ul>
-      {!rows && !err ? <p className="cosmos-shop-muted">Loading…</p> : null}
+      {!rows && !err ? <p className="pleros-shop-muted">Loading…</p> : null}
     </main>
   )
 }

@@ -2,11 +2,11 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Card, CardTitle } from '@cosmos/ui'
+import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type PoStatus = 'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'CLOSED' | 'CANCELLED'
 
@@ -114,20 +114,20 @@ export default function PurchasingPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white">Purchasing</h1>
-          <p className="text-cosmos-muted text-sm mt-1">Purchase orders and suppliers.</p>
+          <h1 className="text-2xl font-bold text-pleros-white">Purchasing</h1>
+          <p className="text-pleros-muted text-sm mt-1">Purchase orders and suppliers.</p>
         </div>
-        <div className="flex rounded-lg border border-cosmos-border overflow-hidden">
+        <div className="flex rounded-lg border border-pleros-border overflow-hidden">
           <button
             type="button"
-            className={`px-4 py-2 text-sm ${tab === 'pos' ? 'bg-cosmos-primary text-white' : 'text-cosmos-text'}`}
+            className={`px-4 py-2 text-sm ${tab === 'pos' ? 'bg-pleros-primary text-white' : 'text-pleros-text'}`}
             onClick={() => setTab('pos')}
           >
             Purchase orders
           </button>
           <button
             type="button"
-            className={`px-4 py-2 text-sm ${tab === 'suppliers' ? 'bg-cosmos-primary text-white' : 'text-cosmos-text'}`}
+            className={`px-4 py-2 text-sm ${tab === 'suppliers' ? 'bg-pleros-primary text-white' : 'text-pleros-text'}`}
             onClick={() => setTab('suppliers')}
           >
             Suppliers
@@ -145,8 +145,8 @@ export default function PurchasingPage() {
                 onClick={() => setStatusFilter(f.value)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
                   statusFilter === f.value
-                    ? 'border-cosmos-primary bg-cosmos-primary/20 text-cosmos-white'
-                    : 'border-cosmos-border text-cosmos-muted'
+                    ? 'border-pleros-primary bg-pleros-primary/20 text-pleros-white'
+                    : 'border-pleros-border text-pleros-muted'
                 }`}
               >
                 {f.label}
@@ -155,7 +155,7 @@ export default function PurchasingPage() {
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              className="ml-auto h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm"
+              className="ml-auto h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
             >
               New PO
             </button>
@@ -164,7 +164,7 @@ export default function PurchasingPage() {
           <Card>
             <CardTitle>Orders</CardTitle>
             {posQuery.isLoading ? (
-              <p className="text-sm text-cosmos-muted mt-3">Loading…</p>
+              <p className="text-sm text-pleros-muted mt-3">Loading…</p>
             ) : posQuery.isError ? (
               <p className="text-sm text-red-400 mt-3">Could not load purchase orders.</p>
             ) : (posQuery.data ?? []).length === 0 ? (
@@ -176,7 +176,7 @@ export default function PurchasingPage() {
                   <button
                     type="button"
                     onClick={() => setDrawerOpen(true)}
-                    className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm"
+                    className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
                   >
                     New PO
                   </button>
@@ -186,7 +186,7 @@ export default function PurchasingPage() {
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
+                    <tr className="text-left text-pleros-muted border-b border-pleros-border">
                       <th className="pb-2 pr-4">PO #</th>
                       <th className="pb-2 pr-4">Supplier</th>
                       <th className="pb-2 pr-4">Status</th>
@@ -196,17 +196,17 @@ export default function PurchasingPage() {
                   </thead>
                   <tbody>
                     {(posQuery.data ?? []).map((po) => (
-                      <tr key={po.id} className="border-b border-cosmos-border/60">
-                        <td className="py-2 pr-4 font-mono text-cosmos-white">{po.number}</td>
-                        <td className="py-2 pr-4 text-cosmos-text">{po.supplier?.name ?? '—'}</td>
+                      <tr key={po.id} className="border-b border-pleros-border/60">
+                        <td className="py-2 pr-4 font-mono text-pleros-white">{po.number}</td>
+                        <td className="py-2 pr-4 text-pleros-text">{po.supplier?.name ?? '—'}</td>
                         <td className="py-2 pr-4">
                           <StatusBadge status={po.status} />
                         </td>
-                        <td className="py-2 pr-4 text-cosmos-muted">
+                        <td className="py-2 pr-4 text-pleros-muted">
                           {new Date(po.createdAt).toLocaleDateString()}
                         </td>
                         <td className="py-2">
-                          <Link to={adminPath(`/purchasing/${po.id}`)} className="text-cosmos-primary text-xs">
+                          <Link to={adminPath(`/purchasing/${po.id}`)} className="text-pleros-primary text-xs">
                             View
                           </Link>
                         </td>
@@ -226,7 +226,7 @@ export default function PurchasingPage() {
             <button
               type="button"
               onClick={() => setSupplierDrawer(true)}
-              className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm"
+              className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
             >
               New supplier
             </button>
@@ -234,7 +234,7 @@ export default function PurchasingPage() {
           <Card>
             <CardTitle>Suppliers</CardTitle>
             {suppliers.isLoading ? (
-              <p className="text-sm text-cosmos-muted mt-3">Loading…</p>
+              <p className="text-sm text-pleros-muted mt-3">Loading…</p>
             ) : suppliers.isError ? (
               <p className="text-sm text-red-400 mt-3">Could not load suppliers.</p>
             ) : (suppliers.data ?? []).length === 0 ? (
@@ -246,7 +246,7 @@ export default function PurchasingPage() {
                   <button
                     type="button"
                     onClick={() => setSupplierDrawer(true)}
-                    className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm"
+                    className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
                   >
                     New supplier
                   </button>
@@ -256,7 +256,7 @@ export default function PurchasingPage() {
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
+                    <tr className="text-left text-pleros-muted border-b border-pleros-border">
                       <th className="pb-2 pr-4">Name</th>
                       <th className="pb-2 pr-4">Code</th>
                       <th className="pb-2 pr-4">Email</th>
@@ -265,11 +265,11 @@ export default function PurchasingPage() {
                   </thead>
                   <tbody>
                     {(suppliers.data ?? []).map((s) => (
-                      <tr key={s.id} className="border-b border-cosmos-border/60">
-                        <td className="py-2 pr-4 text-cosmos-white">{s.name}</td>
-                        <td className="py-2 pr-4 font-mono text-cosmos-muted">{s.code}</td>
-                        <td className="py-2 pr-4 text-cosmos-muted">{s.email ?? '—'}</td>
-                        <td className="py-2 text-cosmos-muted">{s.phone ?? '—'}</td>
+                      <tr key={s.id} className="border-b border-pleros-border/60">
+                        <td className="py-2 pr-4 text-pleros-white">{s.name}</td>
+                        <td className="py-2 pr-4 font-mono text-pleros-muted">{s.code}</td>
+                        <td className="py-2 pr-4 text-pleros-muted">{s.email ?? '—'}</td>
+                        <td className="py-2 text-pleros-muted">{s.phone ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -331,11 +331,11 @@ function PoDrawer(props: {
   return (
     <div className="fixed inset-0 z-50 flex">
       <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="w-full max-w-lg bg-cosmos-surface border-l border-cosmos-border p-6 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-cosmos-white">New purchase order</h2>
-        <label className="block mt-4 text-xs text-cosmos-muted">Supplier</label>
+      <div className="w-full max-w-lg bg-pleros-surface border-l border-pleros-border p-6 overflow-y-auto">
+        <h2 className="text-lg font-semibold text-pleros-white">New purchase order</h2>
+        <label className="block mt-4 text-xs text-pleros-muted">Supplier</label>
         <select
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={supplierId}
           onChange={(e) => setSupplierId(e.target.value)}
         >
@@ -346,9 +346,9 @@ function PoDrawer(props: {
             </option>
           ))}
         </select>
-        <label className="block mt-4 text-xs text-cosmos-muted">Warehouse (for notes)</label>
+        <label className="block mt-4 text-xs text-pleros-muted">Warehouse (for notes)</label>
         <select
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={warehouseNote}
           onChange={(e) => setWarehouseNote(e.target.value)}
         >
@@ -359,17 +359,17 @@ function PoDrawer(props: {
             </option>
           ))}
         </select>
-        <label className="block mt-4 text-xs text-cosmos-muted">PO number</label>
+        <label className="block mt-4 text-xs text-pleros-muted">PO number</label>
         <input
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={number}
           onChange={(e) => setNumber(e.target.value)}
         />
         {lines.map((ln, idx) => (
-          <div key={ln.lineNo} className="mt-4 grid grid-cols-2 gap-2 border border-cosmos-border rounded-md p-3">
+          <div key={ln.lineNo} className="mt-4 grid grid-cols-2 gap-2 border border-pleros-border rounded-md p-3">
             <input
               placeholder="SKU code"
-              className="rounded-md bg-cosmos-surface-2 border border-cosmos-border px-2 py-1.5 text-xs text-cosmos-text"
+              className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
               value={ln.skuCode}
               onChange={(e) => {
                 const next = [...lines]
@@ -380,7 +380,7 @@ function PoDrawer(props: {
             <input
               type="number"
               min={1}
-              className="rounded-md bg-cosmos-surface-2 border border-cosmos-border px-2 py-1.5 text-xs text-cosmos-text"
+              className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
               value={ln.qtyOrdered}
               onChange={(e) => {
                 const next = [...lines]
@@ -390,7 +390,7 @@ function PoDrawer(props: {
             />
             <input
               placeholder="Description"
-              className="col-span-2 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-2 py-1.5 text-xs text-cosmos-text"
+              className="col-span-2 rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
               value={ln.description}
               onChange={(e) => {
                 const next = [...lines]
@@ -402,16 +402,16 @@ function PoDrawer(props: {
         ))}
         <button
           type="button"
-          className="mt-2 text-xs text-cosmos-primary"
+          className="mt-2 text-xs text-pleros-primary"
           onClick={() =>
             setLines((l) => [...l, { lineNo: l.length + 1, skuCode: '', description: '', qtyOrdered: 1 }])
           }
         >
           + Add line
         </button>
-        <label className="block mt-4 text-xs text-cosmos-muted">Notes</label>
+        <label className="block mt-4 text-xs text-pleros-muted">Notes</label>
         <textarea
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -420,7 +420,7 @@ function PoDrawer(props: {
         <div className="mt-6 flex gap-2">
           <button
             type="button"
-            className="flex-1 h-10 rounded-md border border-cosmos-border text-cosmos-text text-sm"
+            className="flex-1 h-10 rounded-md border border-pleros-border text-pleros-text text-sm"
             onClick={props.onClose}
           >
             Cancel
@@ -428,7 +428,7 @@ function PoDrawer(props: {
           <button
             type="button"
             disabled={props.loading || !supplierId}
-            className="flex-1 h-10 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+            className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() => {
               const wh = props.warehouses.find((w) => w.id === warehouseNote)
               const mergedNotes = [notes, wh ? `Warehouse: ${wh.name}` : ''].filter(Boolean).join('\n')
@@ -466,29 +466,29 @@ function SupplierDrawer(props: {
   return (
     <div className="fixed inset-0 z-50 flex">
       <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="w-full max-w-md bg-cosmos-surface border-l border-cosmos-border p-6">
-        <h2 className="text-lg font-semibold text-cosmos-white">New supplier</h2>
+      <div className="w-full max-w-md bg-pleros-surface border-l border-pleros-border p-6">
+        <h2 className="text-lg font-semibold text-pleros-white">New supplier</h2>
         <input
           placeholder="Code"
-          className="mt-4 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-4 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={code}
           onChange={(e) => setCode(e.target.value)}
         />
         <input
           placeholder="Name"
-          className="mt-2 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <input
           placeholder="Email"
-          className="mt-2 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <input
           placeholder="Phone (optional)"
-          className="mt-2 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
@@ -496,7 +496,7 @@ function SupplierDrawer(props: {
         <div className="mt-6 flex gap-2">
           <button
             type="button"
-            className="flex-1 h-10 rounded-md border border-cosmos-border text-sm text-cosmos-text"
+            className="flex-1 h-10 rounded-md border border-pleros-border text-sm text-pleros-text"
             onClick={props.onClose}
           >
             Cancel
@@ -504,7 +504,7 @@ function SupplierDrawer(props: {
           <button
             type="button"
             disabled={props.loading || !code || !name}
-            className="flex-1 h-10 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+            className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() =>
               props.onSubmit({
                 code,

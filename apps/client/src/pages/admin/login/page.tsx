@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
 import { axiosErr } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
@@ -19,8 +19,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
-      window.localStorage.setItem('cosmos.accessToken', r.accessToken)
-      window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
+      window.localStorage.setItem('pleros.accessToken', r.accessToken)
+      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
       emitStorefrontAuthChanged()
       const next = new URLSearchParams(window.location.search).get('next')
       navigate(next?.startsWith('/') ? next : '/admin')
@@ -36,7 +36,7 @@ export default function LoginPage() {
       <AuthThemeToolbar />
       <form onSubmit={submit} className="bento-cell bento-tone-white w-full max-w-sm space-y-4">
         <div className="flex justify-center pb-2">
-          <CosmosLogo size="lg" />
+          <PlerosLogo size="lg" />
         </div>
         <div>
           <p className="bento-kpi-label">Admin</p>
@@ -45,8 +45,8 @@ export default function LoginPage() {
           </h1>
           <p className="bento-section-sub">Access your distribution command center</p>
         </div>
-        <input className="cosmos-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input className="cosmos-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <input className="pleros-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input className="pleros-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {err && <p className="text-sm font-medium" style={{ color: 'var(--c-danger)' }}>{err}</p>}
         <button type="submit" className="btn-primary w-full" disabled={loading}>
           {loading ? 'Signing in…' : 'Continue'}

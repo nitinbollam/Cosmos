@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 
-export function CosmosSheet({
+export function PlerosSheet({
   open,
   onOpenChange,
   title,
@@ -22,7 +22,7 @@ export function CosmosSheet({
         />
         <Dialog.Content
           className={clsx(
-            'fixed z-[101] right-0 top-0 h-full w-full max-w-lg overflow-y-auto border-l p-5 cosmos-card rounded-none shadow-xl outline-none',
+            'fixed z-[101] right-0 top-0 h-full w-full max-w-lg overflow-y-auto border-l p-5 pleros-card rounded-none shadow-xl outline-none',
           )}
           style={{ borderRadius: 0, borderColor: 'var(--c-border)' }}
         >
@@ -35,7 +35,7 @@ export function CosmosSheet({
   )
 }
 
-export function CosmosDialogModal({
+export function PlerosDialogModal({
   open,
   onOpenChange,
   title,
@@ -57,7 +57,7 @@ export function CosmosDialogModal({
         <Dialog.Overlay className="fixed inset-0 z-[100]" style={{ background: 'rgba(0,0,0,0.65)' }} />
         <Dialog.Content
           className={clsx(
-            'fixed z-[101] left-1/2 top-1/2 w-full max-h-[85vh] -translate-x-1/2 -translate-y-1/2 overflow-hidden flex flex-col p-5 cosmos-card outline-none',
+            'fixed z-[101] left-1/2 top-1/2 w-full max-h-[85vh] -translate-x-1/2 -translate-y-1/2 overflow-hidden flex flex-col p-5 pleros-card outline-none',
             maxWidthClass,
           )}
         >

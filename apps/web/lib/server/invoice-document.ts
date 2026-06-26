@@ -88,7 +88,7 @@ export async function buildInvoiceHtml(tenantId: string, inv: InvoiceDocInput): 
     <div class="balance"><span>Balance due</span><span>${money(inv.balance)}</span></div>
   </div>
   ${credits}
-  <p style="margin-top:48px;font-size:12px;color:#888">Cosmos Distribution ERP — print or Save as PDF from your browser.</p>
+  <p style="margin-top:48px;font-size:12px;color:#888">Pleros Distribution ERP — print or Save as PDF from your browser.</p>
 </body>
 </html>`
 }

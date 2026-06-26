@@ -124,7 +124,7 @@ export function SpreadsheetImportPanel({
 
       {preview.length > 0 ? (
         <div className="overflow-x-auto max-h-40 border rounded-lg" style={{ borderColor: 'var(--c-border)' }}>
-          <table className="cosmos-table text-xs">
+          <table className="pleros-table text-xs">
             <thead>
               <tr>
                 {previewHeaders.map((header) => (

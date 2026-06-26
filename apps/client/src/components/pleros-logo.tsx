@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-type CosmosLogoProps = {
+type PlerosLogoProps = {
   variant?: 'full' | 'mark' | 'wordmark'
   size?: 'sm' | 'md' | 'lg'
   className?: string
@@ -15,7 +15,7 @@ const INK = '#FAFAFA'
 const MUTED = '#A1A1AA'
 
 /** Orbital mark — 52×52 artboard with safe padding */
-function CosmosMarkGraphic() {
+function PlerosMarkGraphic() {
   return (
     <>
       <circle cx="26" cy="26" r="13.5" stroke={MARK} strokeWidth="1.25" />
@@ -36,7 +36,7 @@ function CosmosMarkGraphic() {
   )
 }
 
-function CosmosLogoSvg({
+function PlerosLogoSvg({
   viewBox,
   height,
   className,
@@ -70,25 +70,25 @@ function CosmosLogoSvg({
   )
 }
 
-export function CosmosLogo({
+export function PlerosLogo({
   variant = 'full',
   size = 'md',
   className,
-  title = 'Cosmos',
-}: CosmosLogoProps) {
+  title = 'Pleros',
+}: PlerosLogoProps) {
   const height = heights[size]
 
   if (variant === 'mark') {
     return (
-      <CosmosLogoSvg viewBox="0 0 52 52" height={height} className={className} title={title}>
-        <CosmosMarkGraphic />
-      </CosmosLogoSvg>
+      <PlerosLogoSvg viewBox="0 0 52 52" height={height} className={className} title={title}>
+        <PlerosMarkGraphic />
+      </PlerosLogoSvg>
     )
   }
 
   if (variant === 'wordmark') {
     return (
-      <CosmosLogoSvg viewBox="0 0 108 32" height={height} className={className} title={title}>
+      <PlerosLogoSvg viewBox="0 0 108 32" height={height} className={className} title={title}>
         <text
           x="0"
           y="24"
@@ -98,17 +98,17 @@ export function CosmosLogo({
           fontWeight="500"
           letterSpacing="-0.02em"
         >
-          cosmos
+          pleros
         </text>
-      </CosmosLogoSvg>
+      </PlerosLogoSvg>
     )
   }
 
   if (size === 'lg') {
     return (
-      <CosmosLogoSvg viewBox="0 0 188 56" height={height} className={className} title={title}>
+      <PlerosLogoSvg viewBox="0 0 188 56" height={height} className={className} title={title}>
         <g transform="translate(2 2)">
-          <CosmosMarkGraphic />
+          <PlerosMarkGraphic />
         </g>
         <text
           x="58"
@@ -119,7 +119,7 @@ export function CosmosLogo({
           fontWeight="500"
           letterSpacing="-0.02em"
         >
-          cosmos
+          pleros
         </text>
         <text
           x="59"
@@ -132,14 +132,14 @@ export function CosmosLogo({
         >
           DISTRIBUTION ERP
         </text>
-      </CosmosLogoSvg>
+      </PlerosLogoSvg>
     )
   }
 
   return (
-    <CosmosLogoSvg viewBox="0 0 168 56" height={height} className={className} title={title}>
+    <PlerosLogoSvg viewBox="0 0 168 56" height={height} className={className} title={title}>
       <g transform="translate(0 2)">
-        <CosmosMarkGraphic />
+        <PlerosMarkGraphic />
       </g>
       <text
         x="58"
@@ -150,8 +150,8 @@ export function CosmosLogo({
         fontWeight="500"
         letterSpacing="-0.02em"
       >
-        cosmos
+        pleros
       </text>
-    </CosmosLogoSvg>
+    </PlerosLogoSvg>
   )
 }

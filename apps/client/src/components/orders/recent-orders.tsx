@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CardTitle } from '@cosmos/ui'
+import { CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type OrderRow = {
   id: string
@@ -39,7 +39,7 @@ export function RecentOrders() {
   const rows = data?.items ?? []
 
   return (
-    <div className="cosmos-card">
+    <div className="pleros-card">
       <div className="flex items-center justify-between gap-4">
         <CardTitle>Recent orders</CardTitle>
         <button type="button" className="btn-ghost !py-1.5 !px-3 !text-xs" onClick={() => void refetch()}>
@@ -65,7 +65,7 @@ export function RecentOrders() {
         />
       ) : (
         <div className="mt-4 overflow-x-auto">
-          <table className="cosmos-table">
+          <table className="pleros-table">
             <thead>
               <tr>
                 <th>Order</th>

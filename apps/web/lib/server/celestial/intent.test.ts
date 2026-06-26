@@ -30,9 +30,9 @@ test('detectIntent picks pending order filter', () => {
 })
 
 test('detectIntent skips tools for how-to POS question', () => {
-  const intent = detectIntent('How POS works in cosmos?', false)
+  const intent = detectIntent('How POS works in pleros?', false)
   assert.deepEqual(intent.tools, [])
-  assert.ok(isHowToQuestion('How POS works in cosmos?'))
+  assert.ok(isHowToQuestion('How POS works in pleros?'))
 })
 
 test('isHowToQuestion allows data questions', () => {
@@ -40,8 +40,8 @@ test('isHowToQuestion allows data questions', () => {
   assert.equal(isHowToQuestion('show pending orders'), false)
 })
 
-test('isPlainLanguagePreferred for general Cosmos overview', () => {
-  assert.equal(isPlainLanguagePreferred('How cosmos works?'), true)
-  assert.equal(isPlainLanguagePreferred('What is Cosmos?'), true)
+test('isPlainLanguagePreferred for general Pleros overview', () => {
+  assert.equal(isPlainLanguagePreferred('How pleros works?'), true)
+  assert.equal(isPlainLanguagePreferred('What is Pleros?'), true)
   assert.equal(isPlainLanguagePreferred('show pending orders'), false)
 })

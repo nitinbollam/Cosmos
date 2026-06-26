@@ -12,8 +12,8 @@ import {
 } from 'recharts'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type InvoiceRow = {
   id: string
@@ -321,7 +321,7 @@ export default function FinancePage() {
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `cosmos-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`
+    a.download = `pleros-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -344,7 +344,7 @@ export default function FinancePage() {
   return (
     <div className="p-6 space-y-6" style={{ fontFamily: 'var(--font-body)' }}>
       <div>
-        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
           Finance
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
@@ -381,7 +381,7 @@ export default function FinancePage() {
               { label: 'Collected', v: arSummary.collected, hint: 'Payments received' },
               { label: 'Outstanding AR', v: arSummary.outstanding, hint: 'Unpaid balance' },
             ].map((c) => (
-              <div key={c.label} className="cosmos-card">
+              <div key={c.label} className="pleros-card">
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
                 <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{c.hint}</div>
@@ -399,7 +399,7 @@ export default function FinancePage() {
               { k: 'd90', label: '91–120 Days', v: aging.d90, color: 'var(--c-danger)' },
               { k: 'd90p', label: '120+ Days', v: aging.d90p, color: '#b91c1c' },
             ].map((c) => (
-              <div key={c.k} className="cosmos-card metric-accent" style={{ borderLeftColor: c.color }}>
+              <div key={c.k} className="pleros-card metric-accent" style={{ borderLeftColor: c.color }}>
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
                 <div className="text-lg font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
               </div>
@@ -412,13 +412,13 @@ export default function FinancePage() {
               </button>
             ))}
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {invoicesQ.isLoading ? <div className="skeleton h-40 w-full" /> : invoicesQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>Could not load invoices</p>
             ) : filteredInvoices.length === 0 ? (
               <EmptyState icon="📄" title="No invoices" description="Invoices are issued when orders ship." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Invoice</th>
@@ -470,13 +470,13 @@ export default function FinancePage() {
               </button>
             ))}
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {billsQ.isLoading ? <div className="skeleton h-40 w-full" /> : billsQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>Could not load vendor bills</p>
             ) : filteredBills.length === 0 ? (
               <EmptyState icon="📥" title="No bills" description="Vendor bills are created when goods are received against POs." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Bill #</th>
@@ -512,7 +512,7 @@ export default function FinancePage() {
                             <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
                           </button>
                         ) : (
-                          <span className="text-xs text-cosmos-text-3">—</span>
+                          <span className="text-xs text-pleros-text-3">—</span>
                         )}
                       </td>
                       <td className="space-x-2 whitespace-nowrap">
@@ -539,7 +539,7 @@ export default function FinancePage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {(bankSummaryQ.data?.accounts ?? []).map((acct) => (
-              <div key={acct.id} className="cosmos-card">
+              <div key={acct.id} className="pleros-card">
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{acct.name}</div>
                 <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
                   {money(Number(acct.currentBalance))}
@@ -547,18 +547,18 @@ export default function FinancePage() {
                 <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{acct.accountNumber ?? '—'}</div>
               </div>
             ))}
-            <div className="cosmos-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
+            <div className="pleros-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
               <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled lines</div>
               <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
                 {bankSummaryQ.data?.unreconciledCount ?? 0}
               </div>
             </div>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {bankLinesQ.isLoading ? <div className="skeleton h-40 w-full" /> : (bankLinesQ.data ?? []).length === 0 ? (
               <EmptyState icon="🏦" title="All caught up" description="No unreconciled bank statement lines." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -595,16 +595,16 @@ export default function FinancePage() {
       )}
 
       {tab === 'trial' && (
-        <div className="cosmos-card space-y-4">
+        <div className="pleros-card space-y-4">
           <div className="flex flex-wrap gap-3 items-center">
             <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
-            <select className="cosmos-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
+            <select className="pleros-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
               ))}
             </select>
             <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Year</label>
-            <select className="cosmos-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
+            <select className="pleros-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
               {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <button type="button" className="btn-ghost" onClick={() => void trialQ.refetch()}>Load</button>
@@ -615,7 +615,7 @@ export default function FinancePage() {
           ) : (trialQ.data?.length ?? 0) === 0 ? (
             <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this month to see balances." />
           ) : (
-            <table className="cosmos-table">
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>Code</th>
@@ -654,7 +654,7 @@ export default function FinancePage() {
               </button>
             ))}
           </div>
-          <div className="cosmos-card">
+          <div className="pleros-card">
             {!cashInput ? (
               <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Need KPI snapshots from analytics to run cashflow. Open dashboard once data exists.</p>
             ) : cashQ.isLoading ? <div className="skeleton h-64 w-full" /> : cashQ.isError ? (
@@ -700,12 +700,12 @@ export default function FinancePage() {
 
       {(payOrder || payBill) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
-          <div className="cosmos-card max-w-md w-full space-y-4">
+          <div className="pleros-card max-w-md w-full space-y-4">
             <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Record payment</h3>
             <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
-            <input className="cosmos-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            <input className="pleros-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
             <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
-            <select className="cosmos-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
+            <select className="pleros-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
               {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
             <div className="flex gap-2 justify-end">
@@ -726,7 +726,7 @@ export default function FinancePage() {
 
       {matchBill ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setMatchBill(null)}>
-          <div className="cosmos-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start gap-3">
               <div>
                 <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)', margin: 0 }}>3-way match</h3>

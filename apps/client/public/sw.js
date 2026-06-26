@@ -1,4 +1,4 @@
-const CACHE = 'cosmos-mobile-v1'
+const CACHE = 'pleros-mobile-v1'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting())
@@ -19,13 +19,13 @@ self.addEventListener('fetch', (event) => {
 })
 
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'cosmos-offline-queue') {
+  if (event.tag === 'pleros-offline-queue') {
     event.waitUntil(notifyClientsSync())
   }
 })
 
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'COSMOS_REGISTER_SYNC') {
+  if (event.data?.type === 'PLEROS_REGISTER_SYNC') {
     event.waitUntil(notifyClientsSync())
   }
 })
@@ -33,6 +33,6 @@ self.addEventListener('message', (event) => {
 async function notifyClientsSync() {
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
   for (const client of clients) {
-    client.postMessage({ type: 'COSMOS_SYNC_QUEUE' })
+    client.postMessage({ type: 'PLEROS_SYNC_QUEUE' })
   }
 }

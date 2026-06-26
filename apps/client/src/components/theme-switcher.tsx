@@ -4,7 +4,7 @@ import {
   setTheme,
   THEME_CHANGE_EVENT,
   THEME_LABELS,
-  type CosmosTheme,
+  type PlerosTheme,
 } from '@/lib/theme'
 
 type ThemeSwitcherProps = {
@@ -13,7 +13,7 @@ type ThemeSwitcherProps = {
 }
 
 export function ThemeSwitcher({ compact = false, className = '' }: ThemeSwitcherProps) {
-  const [theme, setLocalTheme] = useState<CosmosTheme>(() => getStoredTheme())
+  const [theme, setLocalTheme] = useState<PlerosTheme>(() => getStoredTheme())
 
   const sync = useCallback(() => {
     setLocalTheme(getStoredTheme())
@@ -22,7 +22,7 @@ export function ThemeSwitcher({ compact = false, className = '' }: ThemeSwitcher
   useEffect(() => {
     window.addEventListener(THEME_CHANGE_EVENT, sync)
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'cosmos.theme' || e.key === null) sync()
+      if (e.key === 'pleros.theme' || e.key === null) sync()
     }
     window.addEventListener('storage', onStorage)
     return () => {
@@ -31,7 +31,7 @@ export function ThemeSwitcher({ compact = false, className = '' }: ThemeSwitcher
     }
   }, [sync])
 
-  function pick(next: CosmosTheme) {
+  function pick(next: PlerosTheme) {
     if (next === theme) return
     setLocalTheme(next)
     setTheme(next)
@@ -39,7 +39,7 @@ export function ThemeSwitcher({ compact = false, className = '' }: ThemeSwitcher
 
   return (
     <div
-      className={`cosmos-theme-switcher${compact ? ' cosmos-theme-switcher--compact' : ''}${className ? ` ${className}` : ''}`}
+      className={`pleros-theme-switcher${compact ? ' pleros-theme-switcher--compact' : ''}${className ? ` ${className}` : ''}`}
       role="group"
       aria-label="Theme"
     >
@@ -47,7 +47,7 @@ export function ThemeSwitcher({ compact = false, className = '' }: ThemeSwitcher
         <button
           key={id}
           type="button"
-          className={`cosmos-theme-switcher-btn${theme === id ? ' cosmos-theme-switcher-btn--active' : ''}`}
+          className={`pleros-theme-switcher-btn${theme === id ? ' pleros-theme-switcher-btn--active' : ''}`}
           aria-pressed={theme === id}
           onClick={() => pick(id)}
         >

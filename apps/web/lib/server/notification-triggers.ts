@@ -131,7 +131,7 @@ export async function notifyLowStock(
   reorderPoint: number,
   adminEmail?: string,
 ) {
-  const recipient = adminEmail?.trim() || process.env.COSMOS_OPS_EMAIL?.trim()
+  const recipient = adminEmail?.trim() || process.env.PLEROS_OPS_EMAIL?.trim()
   if (!recipient) return
   void notifications
     .send(

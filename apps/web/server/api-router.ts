@@ -1,4 +1,4 @@
-import { detectSeriesAnomalies, forecastCashFlow, type DetectRequest, type ForecastRequest } from '@cosmos/analytics-engine'
+import { detectSeriesAnomalies, forecastCashFlow, type DetectRequest, type ForecastRequest } from '@pleros/analytics-engine'
 import { jwtVerify } from 'jose'
 import {
   acceptInvite,
@@ -33,7 +33,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
   if (pathname === '/api/v1/health' && req.method === 'GET') {
     return json({
       status: 'ok',
-      service: 'cosmos',
+      service: 'pleros',
       api: 'native',
       timestamp: new Date().toISOString(),
     })

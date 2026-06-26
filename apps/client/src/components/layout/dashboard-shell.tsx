@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { CelestialChat } from '@/components/celestial/celestial-chat'
 import { Sidebar } from '@/components/layout/sidebar'
 import { GlobalSearch } from '@/components/global-search'
@@ -26,16 +26,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   useEffect(() => {
-    document.body.classList.toggle('cosmos-nav-open', mobileNavOpen)
-    return () => document.body.classList.remove('cosmos-nav-open')
+    document.body.classList.toggle('pleros-nav-open', mobileNavOpen)
+    return () => document.body.classList.remove('pleros-nav-open')
   }, [mobileNavOpen])
 
   return (
-    <div className="cosmos-admin-shell">
+    <div className="pleros-admin-shell">
       {mobileNavOpen ? (
         <button
           type="button"
-          className="cosmos-sidebar-backdrop"
+          className="pleros-sidebar-backdrop"
           aria-label="Close navigation menu"
           onClick={() => setMobileNavOpen(false)}
         />
@@ -48,12 +48,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         onMobileClose={() => setMobileNavOpen(false)}
       />
 
-      <div className="cosmos-admin-main">
-        <header className="cosmos-admin-header">
-          <div className="cosmos-admin-header-start">
+      <div className="pleros-admin-main">
+        <header className="pleros-admin-header">
+          <div className="pleros-admin-header-start">
             <button
               type="button"
-              className="cosmos-mobile-menu-btn"
+              className="pleros-mobile-menu-btn"
               aria-label="Open navigation menu"
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
@@ -62,18 +62,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </button>
-            <Link to="/admin" className="cosmos-admin-header-logo" title="Cosmos">
-              <CosmosLogo variant="mark" size="sm" />
+            <Link to="/admin" className="pleros-admin-header-logo" title="Pleros">
+              <PlerosLogo variant="mark" size="sm" />
             </Link>
-            <div className="cosmos-admin-header-titles">
-              <p className="cosmos-admin-header-label">Cosmos Admin</p>
-              <h1 className="cosmos-admin-header-title">{titleFromPath(pathname)}</h1>
+            <div className="pleros-admin-header-titles">
+              <p className="pleros-admin-header-label">Pleros Admin</p>
+              <h1 className="pleros-admin-header-title">{titleFromPath(pathname)}</h1>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <GlobalSearch />
             <ThemeSwitcher compact className="hidden sm:flex" />
-            <Link to="/admin/notifications" className="cosmos-icon-btn" title="Alerts" aria-label="Notifications">
+            <Link to="/admin/notifications" className="pleros-icon-btn" title="Alerts" aria-label="Notifications">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path
                   d="M12 3a5 5 0 0 0-5 5v3.5L5 14.5V16h14v-1.5l-2-3V8a5 5 0 0 0-5-5Z"
@@ -88,7 +88,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <UserMenu afterLogout="/admin/login" />
           </div>
         </header>
-        <main className="cosmos-admin-content">{children}</main>
+        <main className="pleros-admin-content">{children}</main>
       </div>
       {!pathname.startsWith('/admin/celestial') ? <CelestialChat surface="admin" variant="floating" /> : null}
     </div>

@@ -4,16 +4,16 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
-    networks: [cosmos-net]
+    networks: [pleros-net]
     environment:
-      POSTGRES_USER: cosmos
+      POSTGRES_USER: pleros
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: cosmos
+      POSTGRES_DB: pleros
     volumes:
-      - cosmos-pg-data:/var/lib/postgresql/data
+      - pleros-pg-data:/var/lib/postgresql/data
       - ./infra/sql/init-databases.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cosmos -d cosmos"]
+      test: ["CMD-SHELL", "pg_isready -U pleros -d pleros"]
       interval: 5s
       timeout: 5s
       retries: 15
@@ -22,9 +22,9 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    networks: [cosmos-net]
+    networks: [pleros-net]
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
-    volumes: [cosmos-redis-data:/data]
+    volumes: [pleros-redis-data:/data]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
@@ -33,7 +33,7 @@ services:
 
   web:
     restart: unless-stopped
-    networks: [cosmos-net]
+    networks: [pleros-net]
     build:
       context: .
       dockerfile: apps/web/Dockerfile
@@ -42,29 +42,29 @@ services:
       PORT: "4000"
       HOSTNAME: "0.0.0.0"
       NEXT_PUBLIC_GATEWAY_URL: /api/v1
-      AUTH_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_auth
-      TENANT_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_tenant
-      INVENTORY_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_inventory
-      ORDER_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_order
-      CRM_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_crm
-      STOREFRONT_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_storefront
-      PURCHASING_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_purchasing
-      PAYMENT_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_payment
-      WMS_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_wms
-      DISPATCH_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_dispatch
-      COMPLIANCE_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_compliance
-      LEDGER_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_ledger
-      NOTIFICATION_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_notification
-      ANALYTICS_DATABASE_URL: postgresql://cosmos:${POSTGRES_PASSWORD}@postgres:5432/cosmos_analytics
+      AUTH_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_auth
+      TENANT_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_tenant
+      INVENTORY_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_inventory
+      ORDER_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_order
+      CRM_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_crm
+      STOREFRONT_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_storefront
+      PURCHASING_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_purchasing
+      PAYMENT_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_payment
+      WMS_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_wms
+      DISPATCH_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_dispatch
+      COMPLIANCE_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_compliance
+      LEDGER_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_ledger
+      NOTIFICATION_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_notification
+      ANALYTICS_DATABASE_URL: postgresql://pleros:${POSTGRES_PASSWORD}@postgres:5432/pleros_analytics
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     ports: ["4000:4000"]
     depends_on:
       postgres: { condition: service_healthy }
 
 networks:
-  cosmos-net:
+  pleros-net:
     driver: bridge
 
 volumes:
-  cosmos-pg-data:
-  cosmos-redis-data:
+  pleros-pg-data:
+  pleros-redis-data:

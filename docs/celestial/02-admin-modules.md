@@ -1,6 +1,6 @@
 # Admin Module Guides (LLM Knowledge Base)
 
-Detailed how-to guides for each Cosmos admin module. Use these to answer "how does X work" and "where do I find Y" questions.
+Detailed how-to guides for each Pleros admin module. Use these to answer "how does X work" and "where do I find Y" questions.
 
 **Keywords:** admin, ERP, module guide, how to, dashboard, inventory, orders, warehouse, finance, settings
 
@@ -225,7 +225,7 @@ Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list
 
 POS is an **admin in-store checkout** for walk-in or counter sales (not the B2B buyer portal).
 
-**How to use POS in Cosmos:**
+**How to use POS in Pleros:**
 1. Go to **Admin → POS** (`/admin/pos`)
 2. Select a **register** (seed includes a default register)
 3. Select or create a **customer** (seed includes walk-in customer)

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 
@@ -33,12 +33,12 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="cosmos-auth-page">
+    <main className="pleros-auth-page">
       <AuthThemeToolbar />
-      <div className="cosmos-card cosmos-auth-card">
+      <div className="pleros-card pleros-auth-card">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
-            <CosmosLogo size="lg" />
+            <PlerosLogo size="lg" />
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 24, color: 'var(--c-heading)', margin: '16px 0 0' }}>
             Choose a new password
@@ -61,7 +61,7 @@ export default function ResetPasswordPage() {
         ) : (
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input
-              className="cosmos-input"
+              className="pleros-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
@@ -70,7 +70,7 @@ export default function ResetPasswordPage() {
               placeholder="New password"
             />
             <input
-              className="cosmos-input"
+              className="pleros-input"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               type="password"

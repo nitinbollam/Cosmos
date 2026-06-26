@@ -88,7 +88,7 @@ export const useCelestialStore = create<CelestialStore>()(
         set((s) => ({ [surface]: { ...s[surface], skipHistoryRestore: skip } })),
     }),
     {
-      name: 'cosmos-celestial-v1',
+      name: 'pleros-celestial-v1',
       partialize: (s) => ({ admin: s.admin, shop: s.shop }),
     },
   ),
@@ -96,7 +96,7 @@ export const useCelestialStore = create<CelestialStore>()(
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event) => {
-    if (event.key === 'cosmos-celestial-v1') {
+    if (event.key === 'pleros-celestial-v1') {
       void useCelestialStore.persist.rehydrate()
     }
   })

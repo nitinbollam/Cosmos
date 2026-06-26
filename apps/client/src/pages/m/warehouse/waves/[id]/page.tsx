@@ -79,7 +79,7 @@ export default function WarehouseWaveDetailPage() {
   return (
     <div>
       <OfflineBanner />
-      <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+      <Link to="/m/warehouse" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Warehouse
       </Link>
       {loading ? <p style={{ opacity: 0.6, marginTop: 16 }}>Loading…</p> : null}
@@ -113,7 +113,7 @@ export default function WarehouseWaveDetailPage() {
               <Link
                 key={line.lineId}
                 to={`/m/warehouse/task/${line.taskId}`}
-                className="cosmos-mobile-card"
+                className="pleros-mobile-card"
                 style={{ display: 'block', color: 'inherit', textDecoration: 'none', marginBottom: 8 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -137,7 +137,7 @@ export default function WarehouseWaveDetailPage() {
               <Link
                 key={taskId}
                 to={`/m/warehouse/task/${taskId}`}
-                className="cosmos-mobile-card"
+                className="pleros-mobile-card"
                 style={{ display: 'block', color: 'inherit', textDecoration: 'none', marginBottom: 10 }}
               >
                 <strong style={{ fontSize: 14 }}>Task …{taskId.slice(-8)}</strong>

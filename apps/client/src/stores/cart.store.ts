@@ -64,6 +64,6 @@ export const useCartStore = create<CartStore>()(
       subtotal: () => get().items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
       count: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
     }),
-    { name: 'cosmos-cart-v1' },
+    { name: 'pleros-cart-v1' },
   ),
 )

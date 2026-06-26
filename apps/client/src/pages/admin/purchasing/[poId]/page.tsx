@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Card, CardTitle } from '@cosmos/ui'
+import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 type PoLine = {
   id: string
@@ -134,20 +134,20 @@ export default function PurchaseOrderDetailPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/admin/purchasing" className="text-sm text-cosmos-muted hover:text-cosmos-white">
+        <Link to="/admin/purchasing" className="text-sm text-pleros-muted hover:text-pleros-white">
           ← Purchasing
         </Link>
       </div>
       {po.isLoading ? (
-        <p className="text-cosmos-muted">Loading…</p>
+        <p className="text-pleros-muted">Loading…</p>
       ) : po.error || !po.data ? (
         <p className="text-red-400">Order not found</p>
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-cosmos-white">PO {po.data.number}</h1>
-              <p className="text-cosmos-muted text-sm mt-1">{po.data.supplier?.name}</p>
+              <h1 className="text-2xl font-bold text-pleros-white">PO {po.data.number}</h1>
+              <p className="text-pleros-muted text-sm mt-1">{po.data.supplier?.name}</p>
               <div className="mt-2">
                 <StatusBadge status={po.data.status} />
               </div>
@@ -158,7 +158,7 @@ export default function PurchaseOrderDetailPage() {
                   type="button"
                   disabled={submit.isPending}
                   onClick={() => submit.mutate()}
-                  className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+                  className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
                 >
                   {submit.isPending ? 'Submitting…' : 'Submit PO'}
                 </button>
@@ -181,7 +181,7 @@ export default function PurchaseOrderDetailPage() {
                 <button
                   type="button"
                   onClick={() => setReceiveOpen(true)}
-                  className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm"
+                  className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
                 >
                   Record receipt
                 </button>
@@ -197,7 +197,7 @@ export default function PurchaseOrderDetailPage() {
                       ? 'Submit the PO before WMS receiving'
                       : undefined
                 }
-                className="h-9 px-4 rounded-md border border-cosmos-border text-cosmos-text text-sm disabled:opacity-40"
+                className="h-9 px-4 rounded-md border border-pleros-border text-pleros-text text-sm disabled:opacity-40"
               >
                 {startReceiving.isPending ? 'Starting…' : 'Start WMS session'}
               </button>
@@ -209,34 +209,34 @@ export default function PurchaseOrderDetailPage() {
             </p>
           )}
           {po.data.notes && (
-            <p className="text-sm text-cosmos-muted whitespace-pre-wrap">{po.data.notes}</p>
+            <p className="text-sm text-pleros-muted whitespace-pre-wrap">{po.data.notes}</p>
           )}
           <Card>
             <CardTitle>Landed costs</CardTitle>
-            <p className="text-xs text-cosmos-muted mt-2">
+            <p className="text-xs text-pleros-muted mt-2">
               Freight, duty, and other charges are allocated to received unit cost by line value.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <label className="text-xs text-cosmos-muted">
+              <label className="text-xs text-pleros-muted">
                 Freight ($)
                 <input
-                  className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm"
                   value={freight}
                   onChange={(e) => setFreight(e.target.value)}
                 />
               </label>
-              <label className="text-xs text-cosmos-muted">
+              <label className="text-xs text-pleros-muted">
                 Duty ($)
                 <input
-                  className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm"
                   value={duty}
                   onChange={(e) => setDuty(e.target.value)}
                 />
               </label>
-              <label className="text-xs text-cosmos-muted">
+              <label className="text-xs text-pleros-muted">
                 Other ($)
                 <input
-                  className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm"
                   value={otherLanded}
                   onChange={(e) => setOtherLanded(e.target.value)}
                 />
@@ -244,14 +244,14 @@ export default function PurchaseOrderDetailPage() {
             </div>
             <button
               type="button"
-              className="mt-3 h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-50"
+              className="mt-3 h-9 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-50"
               disabled={saveLanded.isPending}
               onClick={() => saveLanded.mutate()}
             >
               {saveLanded.isPending ? 'Saving…' : 'Save landed costs'}
             </button>
             {landedPreviewQ.data?.lines?.length ? (
-              <div className="mt-4 text-xs text-cosmos-muted space-y-1">
+              <div className="mt-4 text-xs text-pleros-muted space-y-1">
                 {landedPreviewQ.data.lines.map((l) => (
                   <div key={l.lineNo}>
                     Line {l.lineNo}: landed unit cost ${l.landedUnitCost.toFixed(2)}
@@ -265,7 +265,7 @@ export default function PurchaseOrderDetailPage() {
             <div className="mt-4 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
+                  <tr className="text-left text-pleros-muted border-b border-pleros-border">
                     <th className="pb-2 pr-4">#</th>
                     <th className="pb-2 pr-4">SKU</th>
                     <th className="pb-2 pr-4">Description</th>
@@ -279,20 +279,20 @@ export default function PurchaseOrderDetailPage() {
                     const received = l.qtyReceived ?? 0
                     const open = Math.max(0, l.qtyOrdered - received)
                     return (
-                      <tr key={l.id} className="border-b border-cosmos-border/60">
-                        <td className="py-2 pr-4 text-cosmos-muted">{l.lineNo}</td>
-                        <td className="py-2 pr-4 font-mono text-cosmos-text">{l.skuCode ?? '—'}</td>
-                        <td className="py-2 pr-4 text-cosmos-text">{l.description}</td>
-                        <td className="py-2 pr-4 text-cosmos-white">{l.qtyOrdered}</td>
-                        <td className="py-2 pr-4 text-cosmos-muted">{received}</td>
-                        <td className="py-2 text-cosmos-white">{open}</td>
+                      <tr key={l.id} className="border-b border-pleros-border/60">
+                        <td className="py-2 pr-4 text-pleros-muted">{l.lineNo}</td>
+                        <td className="py-2 pr-4 font-mono text-pleros-text">{l.skuCode ?? '—'}</td>
+                        <td className="py-2 pr-4 text-pleros-text">{l.description}</td>
+                        <td className="py-2 pr-4 text-pleros-white">{l.qtyOrdered}</td>
+                        <td className="py-2 pr-4 text-pleros-muted">{received}</td>
+                        <td className="py-2 text-pleros-white">{open}</td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-xs text-cosmos-muted">
+            <p className="mt-3 text-xs text-pleros-muted">
               Recording a receipt updates PO quantities and posts stock to the selected warehouse in one step.
             </p>
           </Card>
@@ -373,13 +373,13 @@ function ReceiveDrawer(props: {
   return (
     <div className="fixed inset-0 z-50 flex">
       <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="w-full max-w-xl bg-cosmos-surface border-l border-cosmos-border p-6 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-cosmos-white">Record receipt</h2>
-        <p className="text-xs text-cosmos-muted mt-1">PO {props.po.number}</p>
+      <div className="w-full max-w-xl bg-pleros-surface border-l border-pleros-border p-6 overflow-y-auto">
+        <h2 className="text-lg font-semibold text-pleros-white">Record receipt</h2>
+        <p className="text-xs text-pleros-muted mt-1">PO {props.po.number}</p>
 
-        <label className="block mt-4 text-xs text-cosmos-muted">Warehouse (inventory)</label>
+        <label className="block mt-4 text-xs text-pleros-muted">Warehouse (inventory)</label>
         <select
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={warehouseId}
           disabled={props.warehousesLoading}
           onChange={(e) => setWarehouseId(e.target.value)}
@@ -401,22 +401,22 @@ function ReceiveDrawer(props: {
             const open = Math.max(0, l.qtyOrdered - received)
             const v = qtyByLine[l.id] ?? 0
             return (
-              <div key={l.id} className="border border-cosmos-border rounded-md p-3 text-sm">
+              <div key={l.id} className="border border-pleros-border rounded-md p-3 text-sm">
                 <div className="flex justify-between gap-2">
-                  <span className="text-cosmos-text font-medium">
+                  <span className="text-pleros-text font-medium">
                     Line {l.lineNo} · {l.description}
                   </span>
-                  <span className="text-cosmos-muted shrink-0">Open: {open}</span>
+                  <span className="text-pleros-muted shrink-0">Open: {open}</span>
                 </div>
                 {l.skuCode && (
-                  <p className="text-xs font-mono text-cosmos-muted mt-1">{l.skuCode}</p>
+                  <p className="text-xs font-mono text-pleros-muted mt-1">{l.skuCode}</p>
                 )}
-                <label className="block mt-2 text-xs text-cosmos-muted">Qty this receipt (max {open})</label>
+                <label className="block mt-2 text-xs text-pleros-muted">Qty this receipt (max {open})</label>
                 <input
                   type="number"
                   min={0}
                   max={open}
-                  className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+                  className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
                   value={v}
                   onChange={(e) => {
                     const n = Math.max(0, Math.min(open, Number(e.target.value) || 0))
@@ -433,7 +433,7 @@ function ReceiveDrawer(props: {
         <div className="mt-6 flex gap-2">
           <button
             type="button"
-            className="flex-1 h-10 rounded-md border border-cosmos-border text-cosmos-text text-sm"
+            className="flex-1 h-10 rounded-md border border-pleros-border text-pleros-text text-sm"
             onClick={props.onClose}
             disabled={busy}
           >
@@ -442,7 +442,7 @@ function ReceiveDrawer(props: {
           <button
             type="button"
             disabled={busy || props.warehouses.length === 0}
-            className="flex-1 h-10 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+            className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() => void submitReceive()}
           >
             {busy ? 'Saving…' : 'Save receipt'}

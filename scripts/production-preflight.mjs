@@ -1,5 +1,5 @@
 /**
- * Preflight: lint → test → build for @cosmos/web and workspace deps.
+ * Preflight: lint → test → build for @pleros/web and workspace deps.
  */
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'

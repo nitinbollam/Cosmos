@@ -1,5 +1,5 @@
 /**
- * Push all @cosmos/web Prisma schemas (SQLite local dev or Postgres production).
+ * Push all @pleros/web Prisma schemas (SQLite local dev or Postgres production).
  */
 import { execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -18,7 +18,7 @@ const { DB_BY_SCHEMA, envKeyForSchema, databaseUrlForSchema, getDbProvider } = r
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WEB = path.join(ROOT, 'apps', 'web')
 const PRISMA_DIR = path.join(WEB, 'prisma')
-const dataDir = process.env.COSMOS_DATA_DIR ?? '.data'
+const dataDir = process.env.PLEROS_DATA_DIR ?? '.data'
 const provider = getDbProvider()
 
 if (provider === 'sqlite') {
@@ -43,4 +43,4 @@ for (const [name] of Object.entries(DB_BY_SCHEMA)) {
   })
 }
 
-console.log(`\nAll @cosmos/web schemas pushed (${provider}).`)
+console.log(`\nAll @pleros/web schemas pushed (${provider}).`)

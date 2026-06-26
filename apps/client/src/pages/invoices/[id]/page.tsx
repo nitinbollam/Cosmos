@@ -101,7 +101,7 @@ function InvoicePayPanel({
   }
 
   return (
-    <div className="cosmos-card" style={{ marginTop: 16, padding: 16 }}>
+    <div className="pleros-card" style={{ marginTop: 16, padding: 16 }}>
       <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Pay invoice</h2>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <button type="button" className={mode === 'CARD' ? 'btn-primary' : 'btn-ghost'} onClick={() => setMode('CARD')}>
@@ -112,7 +112,7 @@ function InvoicePayPanel({
         </button>
       </div>
       <input
-        className="cosmos-input"
+        className="pleros-input"
         type="number"
         min="0.01"
         step="0.01"
@@ -122,7 +122,7 @@ function InvoicePayPanel({
       />
       {mode === 'MANUAL' ? (
         <>
-          <select className="cosmos-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)} style={{ maxWidth: 160, marginBottom: 12 }}>
+          <select className="pleros-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)} style={{ maxWidth: 160, marginBottom: 12 }}>
             <option value="ACH">ACH</option>
             <option value="CHECK">Check</option>
             <option value="CASH">Cash</option>
@@ -139,9 +139,9 @@ function InvoicePayPanel({
           </button>
         </Elements>
       ) : (
-        <p className="cosmos-shop-muted" style={{ fontSize: 13 }}>Set VITE_STRIPE_PUBLISHABLE_KEY for card payments.</p>
+        <p className="pleros-shop-muted" style={{ fontSize: 13 }}>Set VITE_STRIPE_PUBLISHABLE_KEY for card payments.</p>
       )}
-      {err ? <p className="cosmos-shop-error" style={{ marginTop: 8 }}>{err}</p> : null}
+      {err ? <p className="pleros-shop-error" style={{ marginTop: 8 }}>{err}</p> : null}
     </div>
   )
 }
@@ -173,7 +173,7 @@ export default function StorefrontInvoiceDetailPage() {
   }, [load])
 
   async function downloadPdf() {
-    const token = localStorage.getItem('cosmos.accessToken')
+    const token = localStorage.getItem('pleros.accessToken')
     const res = await fetch(`/api/v1/invoices/${encodeURIComponent(id)}/pdf`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -193,12 +193,12 @@ export default function StorefrontInvoiceDetailPage() {
   const inv = invoice
 
   return (
-    <main className="cosmos-shop-page-main">
-      <Link to="/invoices" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+    <main className="pleros-shop-page-main">
+      <Link to="/invoices" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← All invoices
       </Link>
-      {loading ? <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
-      {err ? <p className="cosmos-shop-error" style={{ marginTop: 24 }}>{err}</p> : null}
+      {loading ? <p className="pleros-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
+      {err ? <p className="pleros-shop-error" style={{ marginTop: 24 }}>{err}</p> : null}
       {inv ? (
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
@@ -210,31 +210,31 @@ export default function StorefrontInvoiceDetailPage() {
               </button>
             </div>
           </div>
-          <p className="cosmos-shop-muted" style={{ marginTop: 10, fontSize: 14 }}>
+          <p className="pleros-shop-muted" style={{ marginTop: 10, fontSize: 14 }}>
             Issued {new Date(inv.issuedAt).toLocaleDateString()}
             {inv.dueAt ? ` · Due ${new Date(inv.dueAt).toLocaleDateString()}` : ''}
             {' · '}
-            <Link to={`/orders/${inv.orderId}`} className="cosmos-shop-link-accent">
+            <Link to={`/orders/${inv.orderId}`} className="pleros-shop-link-accent">
               View order
             </Link>
           </p>
 
-          <div className="cosmos-card" style={{ marginTop: 20, padding: 16 }}>
+          <div className="pleros-card" style={{ marginTop: 20, padding: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Subtotal</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Subtotal</div>
                 <div style={{ fontWeight: 600 }}>{money(Number(inv.subtotal))}</div>
               </div>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Tax</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Tax</div>
                 <div style={{ fontWeight: 600 }}>{money(Number(inv.taxAmount))}</div>
               </div>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Total</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Total</div>
                 <div style={{ fontWeight: 600 }}>{money(Number(inv.totalAmount))}</div>
               </div>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Balance due</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Balance due</div>
                 <div style={{ fontWeight: 700, color: inv.balance > 0 ? 'var(--c-warning)' : 'var(--c-success)' }}>
                   {money(inv.balance)}
                 </div>
@@ -247,7 +247,7 @@ export default function StorefrontInvoiceDetailPage() {
           ) : null}
 
           <h2 style={{ fontSize: 16, marginTop: 28, color: 'var(--c-heading)' }}>Line items</h2>
-          <table className="cosmos-shop-table">
+          <table className="pleros-shop-table">
             <thead>
               <tr>
                 <th>SKU</th>

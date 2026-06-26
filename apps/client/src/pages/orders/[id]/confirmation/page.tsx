@@ -48,7 +48,7 @@ export default function OrderConfirmationPage() {
         <>
           <p style={{ color: 'var(--c-text-2)', marginTop: 12 }}>Order number</p>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--c-accent)' }}>{order.id}</p>
-          <div className="cosmos-card mt-6 text-left">
+          <div className="pleros-card mt-6 text-left">
             <h3 style={{ marginTop: 0 }}>Summary</h3>
             {order.lineItems.map((li) => (
               <div key={li.skuId} style={{ fontSize: 14, marginBottom: 8 }}>

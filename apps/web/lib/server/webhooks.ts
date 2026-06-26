@@ -64,7 +64,7 @@ export function signWebhookPayload(secret: string, body: string): string {
 }
 
 function webhookSigningSecret(tenantId: string): string {
-  const base = process.env.WEBHOOK_SIGNING_SECRET?.trim() || 'cosmos-webhook-signing'
+  const base = process.env.WEBHOOK_SIGNING_SECRET?.trim() || 'pleros-webhook-signing'
   return `${base}:${tenantId}`
 }
 
@@ -130,7 +130,7 @@ export async function testWebhook(tenantId: string, id: string) {
     event: 'webhook.test',
     tenantId,
     timestamp: new Date().toISOString(),
-    data: { message: 'This is a test webhook from Cosmos.' },
+    data: { message: 'This is a test webhook from Pleros.' },
   })
 
   try {
@@ -140,8 +140,8 @@ export async function testWebhook(tenantId: string, id: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Cosmos-Event': 'webhook.test',
-        'X-Cosmos-Signature': signWebhookPayload(webhookSigningSecret(tenantId), body),
+        'X-Pleros-Event': 'webhook.test',
+        'X-Pleros-Signature': signWebhookPayload(webhookSigningSecret(tenantId), body),
       },
       body,
       signal: AbortSignal.timeout(8000),

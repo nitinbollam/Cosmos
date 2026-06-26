@@ -84,14 +84,14 @@ export default function WarehouseTaskPage() {
 
   return (
     <div>
-      <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+      <Link to="/m/warehouse" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Tasks
       </Link>
       <h1 style={{ fontFamily: 'var(--font-display)' }}>Task {id?.slice(-8)}</h1>
       {err && <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p>}
       {task && (
         <>
-          <div className="cosmos-mobile-card">
+          <div className="pleros-mobile-card">
             <p style={{ margin: 0 }}>Status: {task.status}</p>
             <p style={{ margin: '6px 0 0', fontSize: 13, opacity: 0.8 }}>Order: {task.orderId}</p>
             {canPick && !allDone && (
@@ -113,7 +113,7 @@ export default function WarehouseTaskPage() {
           </div>
 
           {pickItems.map((li) => (
-            <div key={li.id} className="cosmos-mobile-card" style={{ marginTop: 10 }}>
+            <div key={li.id} className="pleros-mobile-card" style={{ marginTop: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong style={{ fontSize: 14 }}>SKU …{li.skuId.slice(-6)}</strong>
                 <span style={{ fontSize: 12, opacity: 0.85 }}>{li.status}</span>
@@ -139,7 +139,7 @@ export default function WarehouseTaskPage() {
                   </button>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input
-                      className="cosmos-input"
+                      className="pleros-input"
                       type="number"
                       min={1}
                       max={li.quantity - 1}

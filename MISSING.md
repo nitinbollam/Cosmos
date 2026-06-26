@@ -1,4 +1,4 @@
-# Notes (@cosmos/web)
+# Notes (@pleros/web)
 
 All product code lives in **`apps/web`**. There are no Nest, Expo, or Python service folders on this branch.
 

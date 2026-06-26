@@ -235,27 +235,27 @@ export default function CheckoutPage() {
       {err ? <p style={{ color: 'var(--c-danger)', marginBottom: 16 }}>{err}</p> : null}
 
       {step === 1 ? (
-        <div className="cosmos-card">
+        <div className="pleros-card">
           <h2 style={{ marginTop: 0 }}>Shipping</h2>
           <p style={{ color: 'var(--c-text-3)', fontSize: 14 }}>Customer: {customer?.name ?? '…'}</p>
           <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}>Company</label>
-          <input className="cosmos-input" style={{ marginTop: 8 }} value={company} onChange={(e) => setCompany(e.target.value)} />
+          <input className="pleros-input" style={{ marginTop: 8 }} value={company} onChange={(e) => setCompany(e.target.value)} />
           <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block' }}>Address line 1</label>
-          <input className="cosmos-input" style={{ marginTop: 8 }} value={line1} onChange={(e) => setLine1(e.target.value)} required />
+          <input className="pleros-input" style={{ marginTop: 8 }} value={line1} onChange={(e) => setLine1(e.target.value)} required />
           <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}>Address line 2</label>
-          <input className="cosmos-input" style={{ marginTop: 8 }} value={line2} onChange={(e) => setLine2(e.target.value)} />
+          <input className="pleros-input" style={{ marginTop: 8 }} value={line2} onChange={(e) => setLine2(e.target.value)} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
             <div>
               <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>City</label>
-              <input className="cosmos-input" style={{ marginTop: 8 }} value={city} onChange={(e) => setCity(e.target.value)} />
+              <input className="pleros-input" style={{ marginTop: 8 }} value={city} onChange={(e) => setCity(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>State</label>
-              <input className="cosmos-input" style={{ marginTop: 8 }} value={state} onChange={(e) => setState(e.target.value)} />
+              <input className="pleros-input" style={{ marginTop: 8 }} value={state} onChange={(e) => setState(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>ZIP</label>
-              <input className="cosmos-input" style={{ marginTop: 8 }} value={zip} onChange={(e) => setZip(e.target.value)} />
+              <input className="pleros-input" style={{ marginTop: 8 }} value={zip} onChange={(e) => setZip(e.target.value)} />
             </div>
           </div>
           <button type="button" className="btn-primary" style={{ marginTop: 24 }} onClick={() => setStep(2)} disabled={!line1.trim()}>
@@ -289,7 +289,7 @@ export default function CheckoutPage() {
       ) : null}
 
       {step === 3 ? (
-        <div className="cosmos-card">
+        <div className="pleros-card">
           <h2 style={{ marginTop: 0 }}>Review</h2>
           <ul style={{ paddingLeft: 18, color: 'var(--c-text-2)' }}>
             {items.map((i) => (
@@ -381,7 +381,7 @@ function PaymentStep2({
   const inner = (
     <>
       <h2 style={{ marginTop: 0 }}>Payment</h2>
-      <select className="cosmos-input" value={payment} onChange={(e) => setPayment(e.target.value as PaymentMethod)}>
+      <select className="pleros-input" value={payment} onChange={(e) => setPayment(e.target.value as PaymentMethod)}>
         <option value="NET_TERMS">Net terms</option>
         <option value="CASH">Cash</option>
         <option value="CHECK">Check</option>
@@ -494,7 +494,7 @@ function PaymentStep2({
 
   if (showStripe && stripePromise && payment === 'CARD' && (cardMode === 'new' || savedCards.length === 0)) {
     return (
-      <div className="cosmos-card">
+      <div className="pleros-card">
         <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>
           {inner}
         </Elements>
@@ -502,5 +502,5 @@ function PaymentStep2({
     )
   }
 
-  return <div className="cosmos-card">{inner}</div>
+  return <div className="pleros-card">{inner}</div>
 }

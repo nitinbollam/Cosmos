@@ -46,7 +46,7 @@ export function registerOfflineSyncListeners(onDone?: (result: { synced: number;
   window.addEventListener('online', run)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (ev) => {
-      if (ev.data?.type === 'COSMOS_SYNC_QUEUE') run()
+      if (ev.data?.type === 'PLEROS_SYNC_QUEUE') run()
     })
   }
   run()

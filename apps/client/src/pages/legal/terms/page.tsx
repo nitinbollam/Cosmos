@@ -1,17 +1,17 @@
 import { Link } from 'react-router-dom'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 
 const sections: Array<{ title: string; body: string[] }> = [
   {
     title: '1. Acceptance of Terms',
     body: [
-      'By creating an account or using the Cosmos platform ("Service"), you agree to be bound by these Terms of Service. If you are using the Service on behalf of an organization, you represent that you have authority to bind that organization.',
+      'By creating an account or using the Pleros platform ("Service"), you agree to be bound by these Terms of Service. If you are using the Service on behalf of an organization, you represent that you have authority to bind that organization.',
     ],
   },
   {
     title: '2. The Service',
     body: [
-      'Cosmos provides a multi-tenant distribution ERP including order management, warehouse management, purchasing, finance, and B2B commerce capabilities. Features may change as the Service evolves; we will not materially reduce core functionality during a paid term without notice.',
+      'Pleros provides a multi-tenant distribution ERP including order management, warehouse management, purchasing, finance, and B2B commerce capabilities. Features may change as the Service evolves; we will not materially reduce core functionality during a paid term without notice.',
     ],
   },
   {
@@ -76,7 +76,7 @@ export default function TermsPage() {
     <main style={{ minHeight: '100vh', background: 'var(--c-bg)', padding: '48px 24px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <Link to="/" style={{ display: 'inline-flex' }}>
-          <CosmosLogo size="md" />
+          <PlerosLogo size="md" />
         </Link>
         <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 32, color: 'var(--c-heading)', margin: '24px 0 4px' }}>
           Terms of Service

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 
@@ -48,12 +48,12 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <main className="cosmos-auth-page">
+    <main className="pleros-auth-page">
       <AuthThemeToolbar />
-      <div className="cosmos-card cosmos-auth-card">
+      <div className="pleros-card pleros-auth-card">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
-            <CosmosLogo size="lg" />
+            <PlerosLogo size="lg" />
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 24, color: 'var(--c-heading)', margin: '16px 0 0' }}>
             Verify your email
@@ -84,7 +84,7 @@ export default function VerifyEmailPage() {
         {!done ? (
           <form onSubmit={resend} style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input
-              className="cosmos-input"
+              className="pleros-input"
               type="email"
               placeholder="Your email"
               value={resendEmail}

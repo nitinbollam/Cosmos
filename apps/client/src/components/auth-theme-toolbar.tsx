@@ -2,7 +2,7 @@ import { ThemeSwitcher } from '@/components/theme-switcher'
 
 export function AuthThemeToolbar() {
   return (
-    <div className="cosmos-auth-toolbar">
+    <div className="pleros-auth-toolbar">
       <ThemeSwitcher />
     </div>
   )

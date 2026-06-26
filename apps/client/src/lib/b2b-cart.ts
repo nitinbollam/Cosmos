@@ -1,4 +1,4 @@
-export const B2B_CART_KEY = 'cosmos_b2b_cart'
+export const B2B_CART_KEY = 'pleros_b2b_cart'
 
 export type B2bCartLine = {
   skuCode: string
@@ -39,13 +39,13 @@ export function readCart(): B2bCartLine[] {
 export function writeCart(lines: B2bCartLine[]) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(B2B_CART_KEY, JSON.stringify(lines))
-  window.dispatchEvent(new Event('cosmos-cart-changed'))
+  window.dispatchEvent(new Event('pleros-cart-changed'))
 }
 
 export function clearCart() {
   if (typeof window === 'undefined') return
   window.localStorage.removeItem(B2B_CART_KEY)
-  window.dispatchEvent(new Event('cosmos-cart-changed'))
+  window.dispatchEvent(new Event('pleros-cart-changed'))
 }
 
 /** Merge by skuCode: add qty, refresh description and unit price from latest add. */

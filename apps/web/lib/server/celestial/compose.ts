@@ -103,16 +103,16 @@ export function buildDocFallbackReply(
 ): string {
   if (docs.length === 0) {
     return [
-      `I'm **Celestial**, your Cosmos assistant.`,
+      `I'm **Celestial**, your Pleros assistant.`,
       '',
       plainLanguage
-        ? 'I can explain how Cosmos helps you sell, ship, and get paid — or look up your orders, stock, and invoices.'
-        : 'I can help with **orders**, **inventory**, **warehouses**, **finance**, **POS**, **quotes**, and how Cosmos features work.',
+        ? 'I can explain how Pleros helps you sell, ship, and get paid — or look up your orders, stock, and invoices.'
+        : 'I can help with **orders**, **inventory**, **warehouses**, **finance**, **POS**, **quotes**, and how Pleros features work.',
       '',
       `You asked: "${message}"`,
       '',
       plainLanguage
-        ? 'Try: "How does Cosmos work?", "Any orders waiting to ship?", or "What\'s low on stock?"'
+        ? 'Try: "How does Pleros work?", "Any orders waiting to ship?", or "What\'s low on stock?"'
         : 'Try questions like "What warehouses do we have?", "Any orders pending?", or "How does POS work?"',
     ].join('\n')
   }
@@ -140,8 +140,8 @@ export function buildDocFallbackReply(
 
   return [
     plainLanguage
-      ? 'Here’s a simple explanation based on how Cosmos is set up for your business:'
-      : 'Here is what Cosmos documentation says about your question:',
+      ? 'Here’s a simple explanation based on how Pleros is set up for your business:'
+      : 'Here is what Pleros documentation says about your question:',
     '',
     ...sections,
     '',
@@ -184,7 +184,7 @@ function formatToolSection(result: ToolResult): string | null {
 function formatWarehouses(result: ToolResult): string {
   const rows = result.data as WarehouseRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Warehouses:** No active warehouses found in Cosmos.'
+    return '**Warehouses:** No active warehouses found in Pleros.'
   }
   const tableRows = rows.map(
     (w) => `| \`${w.code}\` | ${w.name} | ${w.address ?? w.city ?? '—'} | ${w.isDefault ? '**Yes**' : '—'} |`,
@@ -206,7 +206,7 @@ function formatWarehouses(result: ToolResult): string {
 function formatOrders(result: ToolResult): string {
   const rows = result.data as OrderRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Orders:** No matching orders found in Cosmos.'
+    return '**Orders:** No matching orders found in Pleros.'
   }
   const listPath = result.links[0]?.href?.replace(/\/[^/]+$/, '') ?? '/admin/orders'
   const tableRows = rows.map((o) => {

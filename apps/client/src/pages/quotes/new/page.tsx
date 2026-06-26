@@ -17,7 +17,7 @@ export default function NewQuotePage() {
   return (
     <Suspense
       fallback={
-        <main className="cosmos-shop-page" style={{ color: 'var(--c-text-3)' }}>
+        <main className="pleros-shop-page" style={{ color: 'var(--c-text-3)' }}>
           Loading…
         </main>
       }
@@ -88,36 +88,36 @@ function NewQuoteForm() {
   }
 
   return (
-    <main className="cosmos-shop-page" style={{ color: 'var(--c-text)' }}>
-      <Link to="/quotes" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+    <main className="pleros-shop-page" style={{ color: 'var(--c-text)' }}>
+      <Link to="/quotes" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← All quotes
       </Link>
       <h1 style={{ marginTop: 20, color: 'var(--c-heading)' }}>New quote</h1>
-      <p className="cosmos-shop-muted" style={{ fontSize: 14 }}>
+      <p className="pleros-shop-muted" style={{ fontSize: 14 }}>
         Use{' '}
-        <Link to="/catalog" className="cosmos-shop-link-accent">
+        <Link to="/catalog" className="pleros-shop-link-accent">
           Catalog
         </Link>{' '}
         +{' '}
-        <Link to="/cart" className="cosmos-shop-link-accent">
+        <Link to="/cart" className="pleros-shop-link-accent">
           Cart
         </Link>{' '}
         to pre-fill lines. Submit-to-order <strong style={{ color: 'var(--c-text)' }}>requires a SKU code on every line.</strong>
       </p>
-      {err ? <p className="cosmos-shop-error" style={{ marginTop: 12 }}>{err}</p> : null}
+      {err ? <p className="pleros-shop-error" style={{ marginTop: 12 }}>{err}</p> : null}
       <label style={{ display: 'block', marginTop: 20, fontSize: 13 }}>
         Customer account
-        <input readOnly className="cosmos-shop-field cosmos-shop-field--mono cosmos-shop-field--readonly" value={customerRef} />
+        <input readOnly className="pleros-shop-field pleros-shop-field--mono pleros-shop-field--readonly" value={customerRef} />
       </label>
       <label style={{ display: 'block', marginTop: 16, fontSize: 13 }}>
         Notes
-        <textarea rows={3} className="cosmos-shop-field" style={{ resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <textarea rows={3} className="pleros-shop-field" style={{ resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </label>
       <div style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: 15, color: 'var(--c-heading)' }}>Lines</h2>
         {lines.map((l, idx) => (
-          <div key={l.lineNo} className="cosmos-shop-line-card">
-            <span className="cosmos-shop-muted" style={{ fontSize: 12 }}>
+          <div key={l.lineNo} className="pleros-shop-line-card">
+            <span className="pleros-shop-muted" style={{ fontSize: 12 }}>
               Line #{l.lineNo}
               <button
                 type="button"
@@ -130,7 +130,7 @@ function NewQuoteForm() {
             </span>
             <input
               placeholder="SKU (optional)"
-              className="cosmos-shop-field cosmos-shop-field--mono"
+              className="pleros-shop-field pleros-shop-field--mono"
               style={{ marginTop: 0, padding: 8 }}
               value={l.skuCode}
               onChange={(e) => {
@@ -141,7 +141,7 @@ function NewQuoteForm() {
             />
             <input
               placeholder="Description"
-              className="cosmos-shop-field"
+              className="pleros-shop-field"
               style={{ marginTop: 0, padding: 8 }}
               value={l.description}
               onChange={(e) => {
@@ -155,7 +155,7 @@ function NewQuoteForm() {
                 type="number"
                 min={1}
                 placeholder="Qty"
-                className="cosmos-shop-field"
+                className="pleros-shop-field"
                 style={{ flex: 1, marginTop: 0, padding: 8 }}
                 value={l.qty}
                 onChange={(e) => {
@@ -168,7 +168,7 @@ function NewQuoteForm() {
                 type="number"
                 step="0.01"
                 placeholder="Unit price"
-                className="cosmos-shop-field"
+                className="pleros-shop-field"
                 style={{ flex: 1, marginTop: 0, padding: 8 }}
                 value={l.unitPrice}
                 onChange={(e) => {
@@ -182,7 +182,7 @@ function NewQuoteForm() {
         ))}
         <button
           type="button"
-          className="cosmos-shop-btn-dashed"
+          className="pleros-shop-btn-dashed"
           onClick={() =>
             setLines([...lines, { lineNo: lines.length + 1, skuCode: '', description: '', qty: '1', unitPrice: '0' }])
           }

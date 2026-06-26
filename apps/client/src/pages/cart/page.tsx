@@ -33,7 +33,7 @@ export default function CartPage() {
     <div style={{ padding: 24, display: 'flex', gap: 24, flexWrap: 'wrap', maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ flex: '2 1 400px' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--c-heading)', marginBottom: 20 }}>Cart</h1>
-        <table className="cosmos-table">
+        <table className="pleros-table">
           <thead>
             <tr>
               <th>Product</th>
@@ -59,7 +59,7 @@ export default function CartPage() {
                       −
                     </button>
                     <input
-                      className="cosmos-input"
+                      className="pleros-input"
                       style={{ width: 56, padding: '6px 8px' }}
                       value={i.quantity}
                       onChange={(e) => setQty(i.skuId, Number.parseInt(e.target.value, 10) || 0)}
@@ -84,7 +84,7 @@ export default function CartPage() {
           Continue shopping
         </Link>
       </div>
-      <aside className="cosmos-card" style={{ flex: '1 1 260px', alignSelf: 'flex-start' }}>
+      <aside className="pleros-card" style={{ flex: '1 1 260px', alignSelf: 'flex-start' }}>
         <h3 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Summary</h3>
         <p style={{ color: 'var(--c-text-3)', fontSize: 14 }}>Subtotal</p>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18 }}>${subtotal.toFixed(2)}</p>

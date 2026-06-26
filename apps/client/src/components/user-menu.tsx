@@ -22,14 +22,14 @@ export function UserMenu({ afterLogout = '/', showTheme = true }: UserMenuProps)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('cosmos.accessToken') : null
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('pleros.accessToken') : null
     setEmail(jwtEmail(token))
   }, [])
 
   useEffect(() => {
     refresh()
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'cosmos.accessToken' || e.key === null) refresh()
+      if (e.key === 'pleros.accessToken' || e.key === null) refresh()
     }
     const onAuth = () => refresh()
     window.addEventListener('storage', onStorage)
@@ -49,17 +49,17 @@ export function UserMenu({ afterLogout = '/', showTheme = true }: UserMenuProps)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
-  const token = typeof window !== 'undefined' ? window.localStorage.getItem('cosmos.accessToken') : null
+  const token = typeof window !== 'undefined' ? window.localStorage.getItem('pleros.accessToken') : null
   if (!token) return null
 
   const label = email ?? 'Account'
   const initials = email ? initialsFromEmail(email) : 'AC'
 
   return (
-    <div className="cosmos-user-menu" ref={rootRef}>
+    <div className="pleros-user-menu" ref={rootRef}>
       <button
         type="button"
-        className="cosmos-icon-btn cosmos-avatar-btn"
+        className="pleros-icon-btn pleros-avatar-btn"
         aria-label="Account menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
@@ -67,17 +67,17 @@ export function UserMenu({ afterLogout = '/', showTheme = true }: UserMenuProps)
         {initials}
       </button>
       {open ? (
-        <div className="cosmos-user-menu-dropdown">
-          <p className="cosmos-user-menu-email">{label}</p>
+        <div className="pleros-user-menu-dropdown">
+          <p className="pleros-user-menu-email">{label}</p>
           {showTheme ? (
-            <div className="cosmos-user-menu-section">
-              <p className="cosmos-user-menu-label">Theme</p>
+            <div className="pleros-user-menu-section">
+              <p className="pleros-user-menu-label">Theme</p>
               <ThemeSwitcher compact />
             </div>
           ) : null}
           <button
             type="button"
-            className="cosmos-user-menu-signout"
+            className="pleros-user-menu-signout"
             onClick={() => void signOut({ redirectTo: afterLogout })}
           >
             Sign out

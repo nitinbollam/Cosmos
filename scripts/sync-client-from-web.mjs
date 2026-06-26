@@ -39,7 +39,7 @@ function transformSource(content) {
   s = s.replace(/\busePathname\b/g, 'useLocation')
   s = s.replace(/useLocation\(\)\s*\?\?\s*'[^']*'/g, (m) => m) // keep
   s = s.replace(/const pathname = useLocation\(\)/g, 'const pathname = useLocation().pathname')
-  s = s.replace(/from ['"]next\/image['"]/g, "from '@/components/cosmos-img'")
+  s = s.replace(/from ['"]next\/image['"]/g, "from '@/components/pleros-img'")
   s = s.replace(/\bhref=\{/g, 'to={')
   s = s.replace(/\bhref="/g, 'to="')
   s = s.replace(/\bhref='/g, "to='")

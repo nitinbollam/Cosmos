@@ -48,7 +48,7 @@ export async function buildPosReceiptHtml(tenantId: string, orderId: string) {
   .total { font-weight: 700; font-size: 14px; border-top: 1px solid #111; padding-top: 8px; margin-top: 8px; }
   @media print { body { margin: 8px; } }
 </style></head><body>
-  <h1>${escapeHtml(org?.displayName ?? 'Cosmos POS')}</h1>
+  <h1>${escapeHtml(org?.displayName ?? 'Pleros POS')}</h1>
   <div class="meta">
     Receipt #${escapeHtml(order.id.slice(-8).toUpperCase())}<br>
     ${new Date(order.createdAt).toLocaleString()}<br>

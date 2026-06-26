@@ -23,7 +23,7 @@ export function GlobalSearch() {
   return (
     <div className="relative hidden md:block">
       <input
-        className="cosmos-input text-sm w-56 lg:w-72"
+        className="pleros-input text-sm w-56 lg:w-72"
         placeholder="Search orders, SKUs, customers…"
         value={q}
         onChange={(e) => setQ(e.target.value)}

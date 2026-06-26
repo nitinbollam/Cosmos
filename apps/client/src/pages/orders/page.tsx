@@ -123,7 +123,7 @@ export default function StorefrontOrdersPage() {
       ) : null}
       {data && data.items.length > 0 ? (
         <div style={{ marginTop: 24, overflowX: 'auto' }}>
-          <table className="cosmos-table cosmos-shop-table">
+          <table className="pleros-table pleros-shop-table">
             <thead>
               <tr>
                 <th>Order</th>

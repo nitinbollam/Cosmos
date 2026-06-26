@@ -36,7 +36,7 @@ All endpoints require tenant-scoped auth (JWT/session) unless noted (public sign
 | Celestial | `POST /celestial/chat`, stream, status | `celestial/` |
 | MSA | reports, submit, cron | `compliance-msa.ts`, `msa-storage.ts` |
 
-**Analytics (non-v1):** `POST /api/cashflow`, `POST /api/anomaly` — `@cosmos/analytics-engine`.
+**Analytics (non-v1):** `POST /api/cashflow`, `POST /api/anomaly` — `@pleros/analytics-engine`.
 
 ---
 

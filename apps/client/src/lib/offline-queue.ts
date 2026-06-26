@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'cosmos.offlineQueue'
+const STORAGE_KEY = 'pleros.offlineQueue'
 
 export type OfflineAction = {
   id: string
@@ -30,17 +30,17 @@ export function enqueueAction(type: string, payload: unknown): void {
     createdAt: new Date().toISOString(),
   })
   writeQueue(q)
-  window.dispatchEvent(new CustomEvent('cosmos-offline-queue-changed'))
+  window.dispatchEvent(new CustomEvent('pleros-offline-queue-changed'))
 }
 
 export function removeAction(id: string): void {
   writeQueue(readQueue().filter((a) => a.id !== id))
-  window.dispatchEvent(new CustomEvent('cosmos-offline-queue-changed'))
+  window.dispatchEvent(new CustomEvent('pleros-offline-queue-changed'))
 }
 
 export function clearQueue(): void {
   localStorage.removeItem(STORAGE_KEY)
-  window.dispatchEvent(new CustomEvent('cosmos-offline-queue-changed'))
+  window.dispatchEvent(new CustomEvent('pleros-offline-queue-changed'))
 }
 
 export function queueLength(): number {

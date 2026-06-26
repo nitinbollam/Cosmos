@@ -30,7 +30,7 @@ export function getNotificationProviderStatus(): NotificationProviderStatus {
     email: {
       provider: sendgrid ? 'sendgrid' : webhook ? 'webhook' : 'console',
       configured: sendgrid,
-      fromEmail: process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@cosmos.local',
+      fromEmail: process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@pleros.local',
     },
     sms: {
       provider: twilio ? 'twilio' : webhook ? 'webhook' : 'console',

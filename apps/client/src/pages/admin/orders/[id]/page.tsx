@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 type LineItem = {
   id: string
@@ -301,7 +301,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
-      <Link to={adminPath('/orders')} className="text-sm text-cosmos-accent hover:underline">
+      <Link to={adminPath('/orders')} className="text-sm text-pleros-accent hover:underline">
         ← Orders
       </Link>
 
@@ -316,7 +316,7 @@ export default function OrderDetailPage() {
         <>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-cosmos-white font-display font-mono tracking-tight">#{data.id.slice(-12)}</h1>
+              <h1 className="text-3xl font-bold text-pleros-white font-display font-mono tracking-tight">#{data.id.slice(-12)}</h1>
               <div className="flex flex-wrap gap-3 mt-3 items-center">
                 <StatusBadge status={data.status} />
                 <span
@@ -325,7 +325,7 @@ export default function OrderDetailPage() {
                 >
                   {data.channel.replace(/_/g, ' ')}
                 </span>
-                <span className="text-sm text-cosmos-text-3">Created {new Date(data.createdAt).toLocaleString()}</span>
+                <span className="text-sm text-pleros-text-3">Created {new Date(data.createdAt).toLocaleString()}</span>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -371,35 +371,35 @@ export default function OrderDetailPage() {
           </div>
 
           {invoiceQ.data && (
-            <div className="cosmos-card flex flex-wrap items-center justify-between gap-3">
+            <div className="pleros-card flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs text-cosmos-text-3 uppercase tracking-wider">Invoice</p>
-                <p className="font-mono text-cosmos-white">{invoiceQ.data.invoiceNumber}</p>
+                <p className="text-xs text-pleros-text-3 uppercase tracking-wider">Invoice</p>
+                <p className="font-mono text-pleros-white">{invoiceQ.data.invoiceNumber}</p>
               </div>
               <StatusBadge status={invoiceQ.data.displayStatus} />
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="cosmos-card">
-              <h3 className="text-cosmos-white font-semibold font-display mb-3">Customer</h3>
+            <div className="pleros-card">
+              <h3 className="text-pleros-white font-semibold font-display mb-3">Customer</h3>
               {customerQ.data ? (
                 <div className="text-sm space-y-1" style={{ color: 'var(--c-text-2)' }}>
-                  <p className="text-cosmos-white font-medium">{customerQ.data.name}</p>
+                  <p className="text-pleros-white font-medium">{customerQ.data.name}</p>
                   {customerQ.data.email && <p>{customerQ.data.email}</p>}
                   {customerQ.data.phone && <p>{customerQ.data.phone}</p>}
-                  <p className="font-mono text-xs text-cosmos-text-3">ID {data.customerId.slice(-12)}</p>
+                  <p className="font-mono text-xs text-pleros-text-3">ID {data.customerId.slice(-12)}</p>
                 </div>
               ) : customerQ.isLoading ? (
-                <p className="text-sm text-cosmos-text-3">Loading customer…</p>
+                <p className="text-sm text-pleros-text-3">Loading customer…</p>
               ) : (
-                <p className="text-sm text-cosmos-text-3 font-mono">{data.customerId}</p>
+                <p className="text-sm text-pleros-text-3 font-mono">{data.customerId}</p>
               )}
               {formatAddress(data.shippingAddress ?? undefined).length > 0 && (
                 <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--c-border)' }}>
-                  <p className="text-[11px] uppercase tracking-wider text-cosmos-text-3 mb-1">Ship to</p>
+                  <p className="text-[11px] uppercase tracking-wider text-pleros-text-3 mb-1">Ship to</p>
                   {formatAddress(data.shippingAddress ?? undefined).map((line) => (
-                    <p key={line} className="text-sm text-cosmos-text">
+                    <p key={line} className="text-sm text-pleros-text">
                       {line}
                     </p>
                   ))}
@@ -407,15 +407,15 @@ export default function OrderDetailPage() {
               )}
             </div>
 
-            <div className="cosmos-card">
-              <h3 className="text-cosmos-white font-semibold font-display mb-3">Payment</h3>
+            <div className="pleros-card">
+              <h3 className="text-pleros-white font-semibold font-display mb-3">Payment</h3>
               <dl className="text-sm space-y-2">
                 <div className="flex justify-between gap-4">
-                  <dt className="text-cosmos-text-3">Method</dt>
+                  <dt className="text-pleros-text-3">Method</dt>
                   <dd className="font-mono">{data.paymentMethod}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-cosmos-text-3">Intent</dt>
+                  <dt className="text-pleros-text-3">Intent</dt>
                   <dd className="font-mono text-xs truncate max-w-[200px]">{data.paymentIntentId ?? '—'}</dd>
                 </div>
               </dl>
@@ -424,7 +424,7 @@ export default function OrderDetailPage() {
                   href={`https://dashboard.stripe.com/payments/${encodeURIComponent(data.paymentIntentId)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block mt-3 text-sm text-cosmos-accent hover:underline"
+                  className="inline-block mt-3 text-sm text-pleros-accent hover:underline"
                 >
                   Open in Stripe →
                 </a>
@@ -432,9 +432,9 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
-          <div className="cosmos-card overflow-x-auto">
-            <h3 className="text-cosmos-white font-semibold font-display mb-3">Line items</h3>
-            <table className="cosmos-table">
+          <div className="pleros-card overflow-x-auto">
+            <h3 className="text-pleros-white font-semibold font-display mb-3">Line items</h3>
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>SKU</th>
@@ -481,13 +481,13 @@ export default function OrderDetailPage() {
                   <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
                     Carrier
                   </div>
-                  <input className="cosmos-input" value={dropShipCarrier} onChange={(e) => setDropShipCarrier(e.target.value)} />
+                  <input className="pleros-input" value={dropShipCarrier} onChange={(e) => setDropShipCarrier(e.target.value)} />
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
                     Tracking
                   </div>
-                  <input className="cosmos-input" value={dropShipTracking} onChange={(e) => setDropShipTracking(e.target.value)} placeholder="Optional" />
+                  <input className="pleros-input" value={dropShipTracking} onChange={(e) => setDropShipTracking(e.target.value)} placeholder="Optional" />
                 </div>
                 <button type="button" className="btn-primary" disabled={dropShipMut.isPending} onClick={() => dropShipMut.mutate()}>
                   Mark drop-ship shipped
@@ -495,15 +495,15 @@ export default function OrderDetailPage() {
               </div>
             ) : null}
             <div className="mt-4 text-right text-sm space-y-1 max-w-xs ml-auto">
-              <div className="flex justify-between gap-6 text-cosmos-text-2">
+              <div className="flex justify-between gap-6 text-pleros-text-2">
                 <span>Subtotal</span>
                 <span className="font-mono">${subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between gap-6 text-cosmos-text-2">
+              <div className="flex justify-between gap-6 text-pleros-text-2">
                 <span>Tax</span>
                 <span className="font-mono">${tax.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between gap-6 text-cosmos-white font-semibold pt-2 border-t" style={{ borderColor: 'var(--c-border)' }}>
+              <div className="flex justify-between gap-6 text-pleros-white font-semibold pt-2 border-t" style={{ borderColor: 'var(--c-border)' }}>
                 <span>Total</span>
                 <span className="font-mono">${Number(data.totalAmount).toFixed(2)}</span>
               </div>
@@ -511,16 +511,16 @@ export default function OrderDetailPage() {
           </div>
 
           {task && (
-            <div className="cosmos-card">
-              <h3 className="text-cosmos-white font-semibold font-display mb-3">Fulfillment</h3>
+            <div className="pleros-card">
+              <h3 className="text-pleros-white font-semibold font-display mb-3">Fulfillment</h3>
               <div className="flex flex-wrap items-center gap-3 mb-3">
                 <StatusBadge status={task.status} />
-                <span className="text-sm text-cosmos-text-2">{task.warehouseCode}</span>
-                <Link to={adminPath(`/fulfillment/${encodeURIComponent(task.id)}`)} className="text-sm text-cosmos-accent hover:underline">
+                <span className="text-sm text-pleros-text-2">{task.warehouseCode}</span>
+                <Link to={adminPath(`/fulfillment/${encodeURIComponent(task.id)}`)} className="text-sm text-pleros-accent hover:underline">
                   Open pick task →
                 </Link>
               </div>
-              <p className="text-xs text-cosmos-text-3 mb-1">
+              <p className="text-xs text-pleros-text-3 mb-1">
                 Pick progress: {picked}/{pickTotal}
               </p>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--c-surface-2)' }}>
@@ -530,9 +530,9 @@ export default function OrderDetailPage() {
           )}
 
           {(shipmentsQ.data?.length ?? 0) > 0 ? (
-            <div className="cosmos-card">
+            <div className="pleros-card">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <h3 className="text-cosmos-white font-semibold font-display">Shipments</h3>
+                <h3 className="text-pleros-white font-semibold font-display">Shipments</h3>
                 <button type="button" className="btn-ghost !py-1 !px-2 !text-xs" onClick={openShipEditor}>
                   Edit
                 </button>
@@ -548,11 +548,11 @@ export default function OrderDetailPage() {
                       <span className="font-mono">Shipment #{s.shipmentNo}</span>
                       <StatusBadge status={s.status} />
                     </div>
-                    <p className="text-cosmos-text-3 mt-1">
+                    <p className="text-pleros-text-3 mt-1">
                       {s.carrier ?? 'Carrier TBD'}
                       {s.trackingNumber ? ` · ${s.trackingNumber}` : ''}
                     </p>
-                    <p className="text-xs text-cosmos-text-3 mt-1">
+                    <p className="text-xs text-pleros-text-3 mt-1">
                       {(s.lineItems ?? []).map((li) => `${li.quantity}× ${li.skuId.slice(-8)}`).join(' · ')}
                     </p>
                   </li>
@@ -562,16 +562,16 @@ export default function OrderDetailPage() {
           ) : null}
 
           {data.saga && (
-            <div className="cosmos-card">
-              <h3 className="text-cosmos-white font-semibold font-display mb-3">Saga timeline</h3>
+            <div className="pleros-card">
+              <h3 className="text-pleros-white font-semibold font-display mb-3">Saga timeline</h3>
               <p className="text-sm mb-2">
-                Orchestration <span className="font-mono text-cosmos-text-2">{data.saga.status}</span> · updated{' '}
+                Orchestration <span className="font-mono text-pleros-text-2">{data.saga.status}</span> · updated{' '}
                 {new Date(data.saga.updatedAt).toLocaleString()}
               </p>
               {data.saga.failureReason && <p className="text-sm text-red-400 mb-2">{data.saga.failureReason}</p>}
-              <ol className="list-decimal list-inside space-y-1 text-sm text-cosmos-text-2">
+              <ol className="list-decimal list-inside space-y-1 text-sm text-pleros-text-2">
                 {(data.saga.completedSteps ?? []).length === 0 ? (
-                  <li className="list-none text-cosmos-text-3">No completed steps recorded yet.</li>
+                  <li className="list-none text-pleros-text-3">No completed steps recorded yet.</li>
                 ) : (
                   data.saga.completedSteps.map((step) => (
                     <li key={step} className="font-mono text-xs">
@@ -591,10 +591,10 @@ export default function OrderDetailPage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setCancelOpen(false)}
         >
-          <div className="cosmos-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-3">Cancel order</h3>
-            <label className="text-xs text-cosmos-text-3">Reason</label>
-            <input className="cosmos-input mb-4" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+          <div className="pleros-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-3">Cancel order</h3>
+            <label className="text-xs text-pleros-text-3">Reason</label>
+            <input className="pleros-input mb-4" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
             <div className="flex gap-2 justify-end">
               <button type="button" className="btn-ghost" onClick={() => setCancelOpen(false)}>
                 Back
@@ -619,11 +619,11 @@ export default function OrderDetailPage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setReturnOpen(false)}
         >
-          <div className="cosmos-card max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-3">Process return (RMA)</h3>
-            <p className="text-xs text-cosmos-text-3 mb-4">Restocks inventory and issues a credit memo against the invoice.</p>
-            <label className="text-xs text-cosmos-text-3">Reason</label>
-            <input className="cosmos-input mb-4" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+          <div className="pleros-card max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-3">Process return (RMA)</h3>
+            <p className="text-xs text-pleros-text-3 mb-4">Restocks inventory and issues a credit memo against the invoice.</p>
+            <label className="text-xs text-pleros-text-3">Reason</label>
+            <input className="pleros-input mb-4" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
             <ul className="space-y-3">
               {(data.lineItems ?? []).map((li) => {
                 const remaining = li.quantity - (li.returnedQty ?? 0)
@@ -635,7 +635,7 @@ export default function OrderDetailPage() {
                       type="number"
                       min={0}
                       max={remaining}
-                      className="cosmos-input w-20"
+                      className="pleros-input w-20"
                       value={returnQtys[li.id] ?? 0}
                       onChange={(e) =>
                         setReturnQtys((prev) => ({
@@ -644,7 +644,7 @@ export default function OrderDetailPage() {
                         }))
                       }
                     />
-                    <span className="text-cosmos-text-3 text-xs">/ {remaining}</span>
+                    <span className="text-pleros-text-3 text-xs">/ {remaining}</span>
                   </li>
                 )
               })}
@@ -670,7 +670,7 @@ export default function OrderDetailPage() {
       )}
 
       {fulfillMut.isError && (
-        <div className="cosmos-card border text-sm" style={{ borderColor: 'var(--c-warning)', color: 'var(--c-warning)' }}>
+        <div className="pleros-card border text-sm" style={{ borderColor: 'var(--c-warning)', color: 'var(--c-warning)' }}>
           {(fulfillMut.error as Error)?.message ??
             'Could not create fulfillment — task may already exist or WMS unavailable.'}
         </div>
@@ -682,16 +682,16 @@ export default function OrderDetailPage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setShipEditorOpen(false)}
         >
-          <div className="cosmos-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-2">Split shipments</h3>
-            <p className="text-xs text-cosmos-text-3 mb-4">
+          <div className="pleros-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-2">Split shipments</h3>
+            <p className="text-xs text-pleros-text-3 mb-4">
               Allocate line quantities across shipments. Totals must match the order exactly.
             </p>
             <div className="space-y-4">
               {shipDrafts.map((draft, idx) => (
                 <div key={idx} className="rounded-lg p-4 border" style={{ borderColor: 'var(--c-border)' }}>
                   <div className="flex justify-between items-center mb-3">
-                    <span className="font-semibold text-cosmos-white">Shipment {idx + 1}</span>
+                    <span className="font-semibold text-pleros-white">Shipment {idx + 1}</span>
                     {shipDrafts.length > 1 ? (
                       <button
                         type="button"
@@ -704,9 +704,9 @@ export default function OrderDetailPage() {
                   </div>
                   <div className="grid sm:grid-cols-2 gap-3 mb-3">
                     <div>
-                      <label className="text-xs text-cosmos-text-3">Carrier</label>
+                      <label className="text-xs text-pleros-text-3">Carrier</label>
                       <input
-                        className="cosmos-input mt-1"
+                        className="pleros-input mt-1"
                         placeholder="UPS, FedEx…"
                         value={draft.carrier}
                         onChange={(e) =>
@@ -717,9 +717,9 @@ export default function OrderDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-cosmos-text-3">Tracking #</label>
+                      <label className="text-xs text-pleros-text-3">Tracking #</label>
                       <input
-                        className="cosmos-input mt-1 font-mono"
+                        className="pleros-input mt-1 font-mono"
                         value={draft.trackingNumber}
                         onChange={(e) =>
                           setShipDrafts((prev) =>
@@ -737,7 +737,7 @@ export default function OrderDetailPage() {
                           type="number"
                           min={0}
                           max={li.quantity}
-                          className="cosmos-input w-20"
+                          className="pleros-input w-20"
                           value={draft.qtyByLineId[li.id] ?? 0}
                           onChange={(e) => {
                             const v = Math.min(li.quantity, Math.max(0, Number(e.target.value) || 0))
@@ -748,7 +748,7 @@ export default function OrderDetailPage() {
                             )
                           }}
                         />
-                        <span className="text-cosmos-text-3 text-xs">/ {li.quantity}</span>
+                        <span className="text-pleros-text-3 text-xs">/ {li.quantity}</span>
                       </li>
                     ))}
                   </ul>

@@ -1,4 +1,4 @@
-import { createGatewayApi, DEFAULT_GATEWAY_PATH } from '@cosmos/web-gateway-client'
+import { createGatewayApi, DEFAULT_GATEWAY_PATH } from '@pleros/web-gateway-client'
 
 const { api, gatewayApiBaseUrl, formatApiReachabilityError } = createGatewayApi({
   baseUrl: import.meta.env.VITE_GATEWAY_URL ?? DEFAULT_GATEWAY_PATH,

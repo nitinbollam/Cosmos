@@ -8,7 +8,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-  EKS_CLUSTER: cosmos-staging
+  EKS_CLUSTER: pleros-staging
 
 jobs:
   deploy:
@@ -26,11 +26,11 @@ jobs:
 
       - uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push @cosmos/web
+      - name: Build & push @pleros/web
         run: |
           IMAGE_TAG=${{ github.sha }}
-          docker build -f apps/web/Dockerfile -t "$ECR_REGISTRY/cosmos-web:$IMAGE_TAG" .
-          docker push "$ECR_REGISTRY/cosmos-web:$IMAGE_TAG"
+          docker build -f apps/web/Dockerfile -t "$ECR_REGISTRY/pleros-web:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/pleros-web:$IMAGE_TAG"
 
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
@@ -40,5 +40,5 @@ jobs:
           IMAGE_TAG=${{ github.sha }}
           cd infra/k8s/overlays/staging
           kubectl apply -k . --record
-          kubectl set image deployment/cosmos-web web="$ECR_REGISTRY/cosmos-web:$IMAGE_TAG" -n cosmos
-          kubectl rollout status deployment/cosmos-web -n cosmos --timeout=10m
+          kubectl set image deployment/pleros-web web="$ECR_REGISTRY/pleros-web:$IMAGE_TAG" -n pleros
+          kubectl rollout status deployment/pleros-web -n pleros --timeout=10m

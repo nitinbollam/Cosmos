@@ -1,4 +1,4 @@
-import { DEFAULT_GATEWAY_PATH } from '@cosmos/web-gateway-client'
+import { DEFAULT_GATEWAY_PATH } from '@pleros/web-gateway-client'
 
 export type CelestialStreamDone = {
   conversationId: string
@@ -16,13 +16,13 @@ type StreamHandlers = {
 
 function accessToken(): string | null {
   if (typeof window === 'undefined') return null
-  return window.localStorage.getItem('cosmos.accessToken')
+  return window.localStorage.getItem('pleros.accessToken')
 }
 
 function redirectToLogin(loginPath: string) {
   if (typeof window === 'undefined') return
-  window.localStorage.removeItem('cosmos.accessToken')
-  window.localStorage.removeItem('cosmos.refreshToken')
+  window.localStorage.removeItem('pleros.accessToken')
+  window.localStorage.removeItem('pleros.refreshToken')
   const next = encodeURIComponent(window.location.pathname + window.location.search)
   window.location.assign(`${loginPath}?next=${next}`)
 }

@@ -58,7 +58,7 @@ export default function DeliveryMobilePage() {
         <Link
           key={r.id}
           to={`/m/delivery/route/${r.id}`}
-          className="cosmos-mobile-card"
+          className="pleros-mobile-card"
           style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
         >
           <strong>Route {r.id.slice(-8)}</strong>

@@ -3,8 +3,8 @@ import { useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { CosmosDialogModal } from '@/components/cosmos/radix-overlays'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { PlerosDialogModal } from '@/components/pleros/radix-overlays'
 
 type Sku = {
   id: string
@@ -121,7 +121,7 @@ export default function SkuDetailPage() {
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
 
   async function printLabel() {
-    const token = localStorage.getItem('cosmos.accessToken')
+    const token = localStorage.getItem('pleros.accessToken')
     const qty = Math.max(1, labelQty)
     const res = await fetch(`/api/v1/skus/${encodeURIComponent(skuId)}/label?qty=${qty}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -239,7 +239,7 @@ export default function SkuDetailPage() {
     <div className="p-6 space-y-6 max-w-6xl">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link to="/admin/inventory" className="text-sm text-cosmos-accent hover:underline">
+          <Link to="/admin/inventory" className="text-sm text-pleros-accent hover:underline">
             ← Inventory
           </Link>
           {skuQ.isLoading ? (
@@ -248,8 +248,8 @@ export default function SkuDetailPage() {
             <p className="text-red-400 mt-2">SKU not found</p>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-cosmos-white mt-2 font-display">{sku.name}</h1>
-              <p className="font-mono text-sm text-cosmos-accent mt-1">{sku.code}</p>
+              <h1 className="text-2xl font-bold text-pleros-white mt-2 font-display">{sku.name}</h1>
+              <p className="font-mono text-sm text-pleros-accent mt-1">{sku.code}</p>
               <div className="flex flex-wrap gap-3 mt-3 items-center">
                 <span
                   className="text-xs px-2 py-1 rounded-lg"
@@ -287,7 +287,7 @@ export default function SkuDetailPage() {
                 type="number"
                 min={1}
                 max={99}
-                className="cosmos-input !w-16 !py-1.5 !text-sm"
+                className="pleros-input !w-16 !py-1.5 !text-sm"
                 value={labelQty}
                 onChange={(e) => setLabelQty(Math.max(1, Number(e.target.value) || 1))}
                 aria-label="Label quantity"
@@ -302,8 +302,8 @@ export default function SkuDetailPage() {
 
       {sku && (
         <>
-          <div className="cosmos-card">
-            <h3 className="text-cosmos-white font-semibold font-display mb-3">Tracking</h3>
+          <div className="pleros-card">
+            <h3 className="text-pleros-white font-semibold font-display mb-3">Tracking</h3>
             <div className="flex flex-wrap gap-6">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
@@ -326,13 +326,13 @@ export default function SkuDetailPage() {
             </div>
           </div>
 
-          <div className="cosmos-card">
-            <h3 className="text-cosmos-white font-semibold font-display mb-3">Stock by warehouse</h3>
+          <div className="pleros-card">
+            <h3 className="text-pleros-white font-semibold font-display mb-3">Stock by warehouse</h3>
             {levelsQ.isLoading ? (
               <div className="skeleton h-24 w-full" />
             ) : (
               <div className="overflow-x-auto">
-                <table className="cosmos-table">
+                <table className="pleros-table">
                   <thead>
                     <tr>
                       <th>Location / batch</th>
@@ -363,18 +363,18 @@ export default function SkuDetailPage() {
               </div>
             )}
             {(levelsQ.data ?? []).length === 0 && !levelsQ.isLoading && (
-              <p className="text-sm text-cosmos-text-3 py-4">No stock levels yet — receive or transfer stock in.</p>
+              <p className="text-sm text-pleros-text-3 py-4">No stock levels yet — receive or transfer stock in.</p>
             )}
           </div>
 
           {sku.isTobacco && (
-            <div className="cosmos-card">
-              <h3 className="text-cosmos-white font-semibold font-display mb-3">Batch tracking</h3>
+            <div className="pleros-card">
+              <h3 className="text-pleros-white font-semibold font-display mb-3">Batch tracking</h3>
               {batchRows.length === 0 ? (
-                <p className="text-sm text-cosmos-text-3 py-2">No batch-tracked stock yet — receive with a batch id to track excise lots.</p>
+                <p className="text-sm text-pleros-text-3 py-2">No batch-tracked stock yet — receive with a batch id to track excise lots.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="cosmos-table">
+                  <table className="pleros-table">
                     <thead>
                       <tr>
                         <th>Batch</th>
@@ -399,13 +399,13 @@ export default function SkuDetailPage() {
             </div>
           )}
 
-          <div className="cosmos-card">
-            <h3 className="text-cosmos-white font-semibold font-display mb-3">Stock history</h3>
+          <div className="pleros-card">
+            <h3 className="text-pleros-white font-semibold font-display mb-3">Stock history</h3>
             {ledgerQ.isLoading ? (
               <div className="skeleton h-32 w-full" />
             ) : (
               <div className="overflow-x-auto">
-                <table className="cosmos-table text-sm">
+                <table className="pleros-table text-sm">
                   <thead>
                     <tr>
                       <th>When</th>
@@ -423,7 +423,7 @@ export default function SkuDetailPage() {
                   <tbody>
                     {(ledgerQ.data ?? []).map((e) => (
                       <tr key={e.id}>
-                        <td className="text-cosmos-text-3 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString()}</td>
+                        <td className="text-pleros-text-3 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString()}</td>
                         <td className="font-mono text-xs">{whMap.get(e.warehouseId) ?? e.warehouseId.slice(-6)}</td>
                         <td className="font-mono text-xs">{e.locationId ?? '—'}</td>
                         <td className="font-mono text-xs">{e.batchId || '—'}</td>
@@ -448,7 +448,7 @@ export default function SkuDetailPage() {
         </>
       )}
 
-      <CosmosDialogModal
+      <PlerosDialogModal
         open={recvOpen}
         onOpenChange={setRecvOpen}
         title="Receive stock"
@@ -469,7 +469,7 @@ export default function SkuDetailPage() {
           </div>
         }
       >
-        <select className="cosmos-input mb-3" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
+        <select className="pleros-input mb-3" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
           <option value="">Warehouse…</option>
           {(warehousesQ.data ?? []).map((w) => (
             <option key={w.id} value={w.id}>
@@ -477,17 +477,17 @@ export default function SkuDetailPage() {
             </option>
           ))}
         </select>
-        <label className="text-xs text-cosmos-text-3">Quantity</label>
-        <input type="number" className="cosmos-input mb-3" value={recvQty} onChange={(e) => setRecvQty(Math.max(1, +e.target.value))} />
-        <label className="text-xs text-cosmos-text-3">Unit cost</label>
-        <input type="number" step="0.01" className="cosmos-input mb-3" value={recvCost} onChange={(e) => setRecvCost(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">Batch id (optional)</label>
-        <input className="cosmos-input mb-3 font-mono text-sm" value={recvBatch} onChange={(e) => setRecvBatch(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">PO id (optional)</label>
-        <input className="cosmos-input font-mono text-sm" value={recvPo} onChange={(e) => setRecvPo(e.target.value)} />
-      </CosmosDialogModal>
+        <label className="text-xs text-pleros-text-3">Quantity</label>
+        <input type="number" className="pleros-input mb-3" value={recvQty} onChange={(e) => setRecvQty(Math.max(1, +e.target.value))} />
+        <label className="text-xs text-pleros-text-3">Unit cost</label>
+        <input type="number" step="0.01" className="pleros-input mb-3" value={recvCost} onChange={(e) => setRecvCost(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">Batch id (optional)</label>
+        <input className="pleros-input mb-3 font-mono text-sm" value={recvBatch} onChange={(e) => setRecvBatch(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">PO id (optional)</label>
+        <input className="pleros-input font-mono text-sm" value={recvPo} onChange={(e) => setRecvPo(e.target.value)} />
+      </PlerosDialogModal>
 
-      <CosmosDialogModal
+      <PlerosDialogModal
         open={xferOpen}
         onOpenChange={setXferOpen}
         title="Transfer stock"
@@ -514,8 +514,8 @@ export default function SkuDetailPage() {
           </div>
         }
       >
-        <label className="text-xs text-cosmos-text-3">From</label>
-        <select className="cosmos-input mb-3" value={xferFrom} onChange={(e) => setXferFrom(e.target.value)}>
+        <label className="text-xs text-pleros-text-3">From</label>
+        <select className="pleros-input mb-3" value={xferFrom} onChange={(e) => setXferFrom(e.target.value)}>
           <option value="">…</option>
           {(warehousesQ.data ?? []).map((w) => (
             <option key={w.id} value={w.id}>
@@ -523,8 +523,8 @@ export default function SkuDetailPage() {
             </option>
           ))}
         </select>
-        <label className="text-xs text-cosmos-text-3">To</label>
-        <select className="cosmos-input mb-3" value={xferTo} onChange={(e) => setXferTo(e.target.value)}>
+        <label className="text-xs text-pleros-text-3">To</label>
+        <select className="pleros-input mb-3" value={xferTo} onChange={(e) => setXferTo(e.target.value)}>
           <option value="">…</option>
           {(warehousesQ.data ?? []).map((w) => (
             <option key={w.id} value={w.id}>
@@ -534,8 +534,8 @@ export default function SkuDetailPage() {
         </select>
         {(xferBatchMeta.hasNonBatch || xferBatchMeta.batchList.length > 0) && (
           <>
-            <label className="text-xs text-cosmos-text-3">Batch / lot</label>
-            <select className="cosmos-input mb-3 font-mono text-sm" value={xferBatchId} onChange={(e) => setXferBatchId(e.target.value)}>
+            <label className="text-xs text-pleros-text-3">Batch / lot</label>
+            <select className="pleros-input mb-3 font-mono text-sm" value={xferBatchId} onChange={(e) => setXferBatchId(e.target.value)}>
               {xferBatchMeta.hasNonBatch && <option value="">Non-batch (aggregated)</option>}
               {xferBatchMeta.batchList.map((b) => (
                 <option key={b} value={b}>
@@ -545,9 +545,9 @@ export default function SkuDetailPage() {
             </select>
           </>
         )}
-        <label className="text-xs text-cosmos-text-3">Quantity</label>
-        <input type="number" className="cosmos-input" value={xferQty} onChange={(e) => setXferQty(Math.max(1, +e.target.value))} />
-      </CosmosDialogModal>
+        <label className="text-xs text-pleros-text-3">Quantity</label>
+        <input type="number" className="pleros-input" value={xferQty} onChange={(e) => setXferQty(Math.max(1, +e.target.value))} />
+      </PlerosDialogModal>
     </div>
   )
 }

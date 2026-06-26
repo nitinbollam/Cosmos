@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
@@ -31,8 +31,8 @@ export default function AcceptInvitePage() {
     setLoading(true)
     try {
       const r = await api.post<AcceptRes>('/auth/accept-invite', { token, firstName, lastName, password })
-      window.localStorage.setItem('cosmos.accessToken', r.accessToken)
-      window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
+      window.localStorage.setItem('pleros.accessToken', r.accessToken)
+      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
       emitStorefrontAuthChanged()
       // Users whose email matches a CRM customer land in the buyer portal; staff go to admin.
       const me = await api.get<AuthMe>('/auth/me')
@@ -49,18 +49,18 @@ export default function AcceptInvitePage() {
   }
 
   return (
-    <main className="cosmos-auth-page">
+    <main className="pleros-auth-page">
       <AuthThemeToolbar />
-      <div className="cosmos-card cosmos-auth-card">
+      <div className="pleros-card pleros-auth-card">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
-            <CosmosLogo size="lg" />
+            <PlerosLogo size="lg" />
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 24, color: 'var(--c-heading)', margin: '16px 0 0' }}>
             Join your team
           </h1>
           <p style={{ color: 'var(--c-text-2)', fontSize: 14, marginTop: 8 }}>
-            Finish setting up your Cosmos account
+            Finish setting up your Pleros account
           </p>
         </div>
         {!token ? (
@@ -71,14 +71,14 @@ export default function AcceptInvitePage() {
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 12 }}>
               <input
-                className="cosmos-input"
+                className="pleros-input"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 required
                 placeholder="First name"
               />
               <input
-                className="cosmos-input"
+                className="pleros-input"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 required
@@ -86,7 +86,7 @@ export default function AcceptInvitePage() {
               />
             </div>
             <input
-              className="cosmos-input"
+              className="pleros-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
@@ -95,7 +95,7 @@ export default function AcceptInvitePage() {
               placeholder="Password (10+ chars, letter + number)"
             />
             <input
-              className="cosmos-input"
+              className="pleros-input"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               type="password"

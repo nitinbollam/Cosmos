@@ -2,8 +2,8 @@ import { gatewayApiBaseUrl } from '@/lib/api'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 import { clearB2bSession } from '@/lib/session'
 
-const ACCESS_KEY = 'cosmos.accessToken'
-const REFRESH_KEY = 'cosmos.refreshToken'
+const ACCESS_KEY = 'pleros.accessToken'
+const REFRESH_KEY = 'pleros.refreshToken'
 
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null

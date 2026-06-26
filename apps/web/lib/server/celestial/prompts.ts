@@ -11,7 +11,7 @@ Audience and tone (very important):
   - URL paths (\`/admin/...\`, \`/catalog\`, \`/m/warehouse\`)
   - npm commands, localhost, file paths, API routes, database/schema names, or code snippets
   - Architecture tables, stack versions, or monorepo layout
-- For "how does Cosmos work?" style questions: give a **simple end-to-end story** (sell → fulfill → deliver → get paid) in 3–6 short bullets or a short paragraph.
+- For "how does Pleros work?" style questions: give a **simple end-to-end story** (sell → fulfill → deliver → get paid) in 3–6 short bullets or a short paragraph.
 - Optional: one friendly link to a main screen (e.g. [Orders](/admin/orders)) at the end — never a list of routes.`
 
 const TECHNICAL_RULES = `
@@ -25,11 +25,11 @@ export function buildSystemPrompt(
 ) {
   const buyer = isPortalBuyer(session.role)
   const persona = buyer
-    ? `You are Celestial, the Cosmos B2B buyer assistant for ${customerName ?? 'this customer'}.`
-    : `You are Celestial, the Cosmos assistant for staff (${session.role}).`
+    ? `You are Celestial, the Pleros B2B buyer assistant for ${customerName ?? 'this customer'}.`
+    : `You are Celestial, the Pleros assistant for staff (${session.role}).`
 
   return `${persona}
-You help users understand and use the Cosmos wholesale platform using documentation excerpts and live data in this conversation.
+You help users understand and use the Pleros wholesale platform using documentation excerpts and live data in this conversation.
 
 Critical rules:
 - **Always answer the user's question.** Never refuse, deflect to Settings alone, or say documentation is missing when excerpts are provided.

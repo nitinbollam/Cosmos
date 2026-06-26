@@ -1,8 +1,8 @@
 {
-  "name": "cosmos",
+  "name": "pleros",
   "version": "1.0.0",
   "private": true,
-  "description": "Cosmos — production-grade ERP/distribution platform",
+  "description": "Pleros — production-grade ERP/distribution platform",
   "license": "UNLICENSED",
   "packageManager": "npm@10.5.0",
   "workspaces": [
@@ -18,8 +18,8 @@
     "build": "node scripts/workspace-run.mjs build",
     "test": "node scripts/workspace-run.mjs test",
     "lint": "node scripts/workspace-run.mjs lint",
-    "dev": "node scripts/prepare-dev-env.mjs && node scripts/generate-all-prisma.mjs && npm run dev -w @cosmos/client",
-    "dev:client": "npm run dev -w @cosmos/client",
+    "dev": "node scripts/prepare-dev-env.mjs && node scripts/generate-all-prisma.mjs && npm run dev -w @pleros/client",
+    "dev:client": "npm run dev -w @pleros/client",
     "dev:web": "npm run dev",
     "sync:client": "node scripts/sync-client-from-web.mjs",
     "predev": "node scripts/prepare-dev-env.mjs && node scripts/generate-all-prisma.mjs",

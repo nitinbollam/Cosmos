@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '@/lib/api-admin'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type QuoteRow = {
   id: string
@@ -110,7 +110,7 @@ export default function AdminQuotesPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
           Quote approvals
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
@@ -126,13 +126,13 @@ export default function AdminQuotesPage() {
         ))}
       </div>
 
-      <div className="cosmos-card overflow-x-auto">
+      <div className="pleros-card overflow-x-auto">
         {quotesQ.isLoading ? (
           <div className="skeleton h-40 w-full" />
         ) : rows.length === 0 ? (
           <EmptyState icon="📝" title="No quotes" description="Buyer-submitted quotes awaiting approval appear here." />
         ) : (
-          <table className="cosmos-table">
+          <table className="pleros-table">
             <thead>
               <tr>
                 <th>Quote</th>
@@ -184,10 +184,10 @@ export default function AdminQuotesPage() {
 
       {rejectId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
-          <div className="cosmos-card max-w-md w-full space-y-3">
+          <div className="pleros-card max-w-md w-full space-y-3">
             <h3 style={{ color: 'var(--c-heading)' }}>Reject quote</h3>
             <textarea
-              className="cosmos-input min-h-[80px]"
+              className="pleros-input min-h-[80px]"
               placeholder="Reason"
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
@@ -215,16 +215,16 @@ export default function AdminQuotesPage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setDetailId(null)}
         >
-          <div className="cosmos-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-wrap justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-cosmos-white font-display">Quote {detail.id.slice(-12)}</h3>
-                <p className="text-sm text-cosmos-text-3 mt-1">${quoteTotal(detail).toFixed(2)} total</p>
+                <h3 className="text-lg font-semibold text-pleros-white font-display">Quote {detail.id.slice(-12)}</h3>
+                <p className="text-sm text-pleros-text-3 mt-1">${quoteTotal(detail).toFixed(2)} total</p>
               </div>
               <StatusBadge status={detail.status} />
             </div>
 
-            <table className="cosmos-table text-sm mb-6">
+            <table className="pleros-table text-sm mb-6">
               <thead>
                 <tr>
                   <th>#</th>
@@ -247,7 +247,7 @@ export default function AdminQuotesPage() {
 
             {(offersQ.data ?? []).length > 0 ? (
               <div className="mb-6">
-                <h4 className="text-sm font-semibold text-cosmos-white mb-2">Counter-offers</h4>
+                <h4 className="text-sm font-semibold text-pleros-white mb-2">Counter-offers</h4>
                 <ul className="space-y-2">
                   {(offersQ.data ?? []).map((o) => (
                     <li key={o.id} className="rounded-lg p-3 border text-sm" style={{ borderColor: 'var(--c-border)' }}>
@@ -255,7 +255,7 @@ export default function AdminQuotesPage() {
                         <span>
                           {o.offeredBy} · <StatusBadge status={o.status} />
                         </span>
-                        <span className="text-xs text-cosmos-text-3">{new Date(o.createdAt).toLocaleString()}</span>
+                        <span className="text-xs text-pleros-text-3">{new Date(o.createdAt).toLocaleString()}</span>
                       </div>
                       {o.status === 'OPEN' && o.offeredBy === 'BUYER' ? (
                         <button
@@ -274,9 +274,9 @@ export default function AdminQuotesPage() {
             ) : null}
 
             <div className="border-t pt-4" style={{ borderColor: 'var(--c-border)' }}>
-              <h4 className="text-sm font-semibold text-cosmos-white mb-2">Send admin counter-offer</h4>
+              <h4 className="text-sm font-semibold text-pleros-white mb-2">Send admin counter-offer</h4>
               <textarea
-                className="cosmos-input min-h-[60px] mb-3"
+                className="pleros-input min-h-[60px] mb-3"
                 placeholder="Notes"
                 value={counterNotes}
                 onChange={(e) => setCounterNotes(e.target.value)}
@@ -287,7 +287,7 @@ export default function AdminQuotesPage() {
                     <span className="flex-1 truncate">{ln.description}</span>
                     <input
                       type="number"
-                      className="cosmos-input w-16"
+                      className="pleros-input w-16"
                       value={counterLines[ln.lineNo]?.qty ?? ''}
                       onChange={(e) =>
                         setCounterLines((prev) => ({
@@ -302,7 +302,7 @@ export default function AdminQuotesPage() {
                     <input
                       type="number"
                       step="0.01"
-                      className="cosmos-input w-24"
+                      className="pleros-input w-24"
                       value={counterLines[ln.lineNo]?.unitPrice ?? ''}
                       onChange={(e) =>
                         setCounterLines((prev) => ({
