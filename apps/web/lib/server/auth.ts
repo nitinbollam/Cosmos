@@ -64,23 +64,16 @@ export async function loginUser(email: string, password: string): Promise<TokenP
   return signPair(user)
 }
 
-/** When true, new signups are verified immediately (local/dev without SendGrid). */
-export function isDevAutoVerifyEnabled(): boolean {
-  const flag = process.env.PLEROS_DEV_AUTO_VERIFY?.trim().toLowerCase()
-  if (flag === '1' || flag === 'true' || flag === 'yes') return true
-  if (flag === '0' || flag === 'false' || flag === 'no') return false
-  // Default on in non-production when no real email provider is configured.
-  if (process.env.NODE_ENV === 'production') return false
-  return !process.env.SENDGRID_API_KEY?.trim()
-}
-
 export type VerificationDelivery = {
   userId: string
   email: string
   requiresVerification: true
-  /** Present when email was not delivered via SendGrid — use this link in the UI. */
+  /**
+   * Present only when email was not delivered via SendGrid (console/webhook fallback).
+   * Lets QA complete the production verify gate without an inbox; never returned for SendGrid.
+   */
   verifyUrl?: string
-  delivery: 'sendgrid' | 'webhook' | 'console' | 'auto'
+  delivery: 'sendgrid' | 'webhook' | 'console'
 }
 
 export async function registerUser(input: {
@@ -102,10 +95,6 @@ export async function registerUser(input: {
   })
   if (existing) throw new Error('Email already registered for this tenant')
   assertPasswordPolicy(input.password)
-
-  const autoVerify = !input.emailVerified && isDevAutoVerifyEnabled()
-  const emailVerified = Boolean(input.emailVerified || autoVerify)
-
   const passwordHash = await bcrypt.hash(input.password, 12)
   const user = await prisma.user.create({
     data: {
@@ -116,12 +105,12 @@ export async function registerUser(input: {
       lastName: input.lastName,
       role: (input.role ?? 'STAFF') as 'STAFF',
       permissions: [],
-      ...(emailVerified ? { emailVerifiedAt: new Date() } : {}),
+      ...(input.emailVerified ? { emailVerifiedAt: new Date() } : {}),
     },
   })
 
-  if (input.issueTokens === false || !emailVerified) {
-    if (!emailVerified) {
+  if (input.issueTokens === false || !input.emailVerified) {
+    if (!input.emailVerified) {
       const delivery = await sendEmailVerification(user.id)
       return {
         userId: user.id,
@@ -129,16 +118,6 @@ export async function registerUser(input: {
         requiresVerification: true as const,
         verifyUrl: delivery.verifyUrl,
         delivery: delivery.provider,
-      }
-    }
-    // Auto-verified but caller asked not to issue tokens (e.g. public signup still
-    // wants the user to sign in explicitly after account creation).
-    if (autoVerify && input.issueTokens === false) {
-      return {
-        userId: user.id,
-        email: user.email,
-        requiresVerification: true as const,
-        delivery: 'auto',
       }
     }
     return signPair(user)

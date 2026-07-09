@@ -138,7 +138,7 @@ export default function LoginPage() {
             {resendSent ? (
               <p style={{ marginTop: 10, color: 'var(--c-text-3)', fontSize: 13, textAlign: 'center' }}>
                 {devVerifyUrl
-                  ? 'No email provider configured — use the link below.'
+                  ? 'Email provider not configured — use the verification link below.'
                   : 'If an unverified account exists for that address, a new link was sent.'}
               </p>
             ) : null}

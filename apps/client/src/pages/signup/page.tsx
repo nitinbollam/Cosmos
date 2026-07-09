@@ -18,7 +18,6 @@ export default function SignupPage() {
   const [verifyState, setVerifyState] = useState<{
     email: string
     verifyUrl?: string
-    autoVerified?: boolean
   } | null>(null)
 
   async function onSubmit(e: React.FormEvent) {
@@ -39,17 +38,15 @@ export default function SignupPage() {
         accessToken?: string
         refreshToken?: string
         requiresVerification?: boolean
-        autoVerified?: boolean
         email?: string
         verifyUrl?: string
         message?: string
       }
       if (!res.ok) throw new Error(data.message ?? 'Signup failed')
-      if (data.autoVerified || data.requiresVerification) {
+      if (data.requiresVerification) {
         setVerifyState({
           email: data.email ?? form.email,
           verifyUrl: data.verifyUrl,
-          autoVerified: Boolean(data.autoVerified),
         })
         return
       }
@@ -70,56 +67,36 @@ export default function SignupPage() {
         <h1 className="text-2xl font-semibold mb-2">Start your Pleros workspace</h1>
         {verifyState ? (
           <div className="space-y-4">
-            {verifyState.autoVerified ? (
-              <>
-                <p className="text-sm" style={{ color: 'var(--c-text-2)' }}>
-                  Account created for <strong>{verifyState.email}</strong>. Email verification was skipped in local
-                  development (no SendGrid configured). Sign in to finish onboarding.
+            <p className="text-sm" style={{ color: 'var(--c-text-2)' }}>
+              We sent a verification link to <strong>{verifyState.email}</strong>. Confirm your email, then sign in to
+              finish setup.
+            </p>
+            {verifyState.verifyUrl ? (
+              <div
+                className="rounded-lg p-3 space-y-2"
+                style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}
+              >
+                <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>
+                  Email provider not configured — open this verification link to continue testing:
                 </p>
-                <Link to="/admin/login" className="pleros-btn pleros-btn-primary w-full inline-block text-center">
-                  Sign in to continue
+                <a href={verifyState.verifyUrl} className="text-sm break-all" style={{ color: 'var(--c-accent)' }}>
+                  {verifyState.verifyUrl}
+                </a>
+                <Link
+                  to={verifyState.verifyUrl.replace(/^https?:\/\/[^/]+/, '')}
+                  className="pleros-btn pleros-btn-primary w-full inline-block text-center"
+                >
+                  Verify email now
                 </Link>
-              </>
+              </div>
             ) : (
-              <>
-                <p className="text-sm" style={{ color: 'var(--c-text-2)' }}>
-                  {verifyState.verifyUrl ? (
-                    'No email provider is configured, so use the verification link below (also printed in the server console).'
-                  ) : (
-                    <>
-                      We sent a verification link to <strong>{verifyState.email}</strong>. Confirm your email, then sign
-                      in to finish setup.
-                    </>
-                  )}
-                </p>
-                {verifyState.verifyUrl ? (
-                  <div
-                    className="rounded-lg p-3 space-y-2"
-                    style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}
-                  >
-                    <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>
-                      Dev verification link
-                    </p>
-                    <a href={verifyState.verifyUrl} className="text-sm break-all" style={{ color: 'var(--c-accent)' }}>
-                      {verifyState.verifyUrl}
-                    </a>
-                    <Link
-                      to={verifyState.verifyUrl.replace(/^https?:\/\/[^/]+/, '')}
-                      className="pleros-btn pleros-btn-primary w-full inline-block text-center"
-                    >
-                      Verify email now
-                    </Link>
-                  </div>
-                ) : (
-                  <Link to="/verify-email" className="pleros-btn pleros-btn-primary w-full inline-block text-center">
-                    Open verification page
-                  </Link>
-                )}
-                <Link to="/admin/login" className="text-sm" style={{ color: 'var(--c-accent)' }}>
-                  Go to sign in
-                </Link>
-              </>
+              <Link to="/verify-email" className="pleros-btn pleros-btn-primary w-full inline-block text-center">
+                Open verification page
+              </Link>
             )}
+            <Link to="/admin/login" className="text-sm" style={{ color: 'var(--c-accent)' }}>
+              Go to sign in
+            </Link>
           </div>
         ) : (
           <>

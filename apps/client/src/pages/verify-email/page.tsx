@@ -112,7 +112,7 @@ export default function VerifyEmailPage() {
             {resendSent ? (
               <p style={{ color: 'var(--c-text-3)', fontSize: 13, textAlign: 'center' }}>
                 {devVerifyUrl
-                  ? 'No email provider configured — use the link below (also in the server console).'
+                  ? 'Email provider not configured — use the verification link below to continue.'
                   : 'If an unverified account exists for that address, a new link was sent.'}
               </p>
             ) : null}
@@ -125,7 +125,7 @@ export default function VerifyEmailPage() {
                   border: '1px solid var(--c-border)',
                 }}
               >
-                <p style={{ color: 'var(--c-text-3)', fontSize: 12, marginBottom: 8 }}>Dev verification link</p>
+                <p style={{ color: 'var(--c-text-3)', fontSize: 12, marginBottom: 8 }}>Verification link</p>
                 <a href={devVerifyUrl} style={{ color: 'var(--c-accent)', fontSize: 13, wordBreak: 'break-all' }}>
                   {devVerifyUrl}
                 </a>

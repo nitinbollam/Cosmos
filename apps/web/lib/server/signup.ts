@@ -58,8 +58,7 @@ export async function publicSignup(dto: {
     return {
       tenantId,
       slug,
-      requiresVerification: result.delivery !== 'auto',
-      autoVerified: result.delivery === 'auto',
+      requiresVerification: true,
       email: result.email,
       verifyUrl: result.verifyUrl,
       delivery: result.delivery,
