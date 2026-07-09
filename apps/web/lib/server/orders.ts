@@ -50,12 +50,17 @@ export async function createOrder(
 
   await assertOrderLinePrices(tenantId, customerId, dto.lineItems)
 
+  const channel = (dto.channel || 'ADMIN').toUpperCase()
+  // Age attestation is only valid for POS counter sales — ignore it elsewhere so
+  // clients cannot skip the licensed-customer gate by attaching a fake attestation.
+  const ageAttestation = channel === 'POS' ? dto.ageAttestation : undefined
+
   await assertAgeComplianceForOrder(tenantId, {
     customerId,
-    channel: dto.channel,
+    channel,
     lineItems: dto.lineItems,
     userId: opts?.userId,
-    posAttestation: dto.ageAttestation,
+    posAttestation: ageAttestation,
   })
 
   await assertCreditAvailable(tenantId, customerId, totalAmount, dto.paymentMethod)
@@ -64,7 +69,7 @@ export async function createOrder(
     data: {
       tenantId,
       customerId,
-      channel: dto.channel as never,
+      channel: channel as never,
       paymentMethod: dto.paymentMethod as never,
       salesRepId: dto.salesRepId,
       priority: (dto.priority ?? 'NORMAL') as never,

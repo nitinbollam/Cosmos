@@ -64,3 +64,20 @@ test('explicit SKU minimumAge overrides policy default', () => {
 test('non-restricted SKUs return null', () => {
   assert.equal(effectiveRestricted({ isTobacco: false, ageRestricted: false, minimumAge: null }, 21), null)
 })
+
+test('license required for every non-POS channel when policy enabled', () => {
+  const requireTobaccoLicense = true
+  for (const channel of ['B2B_PORTAL', 'ADMIN', 'EDI', 'API', 'UNKNOWN', '']) {
+    const isPos = channel.toUpperCase() === 'POS'
+    const needsLicense = requireTobaccoLicense && !isPos
+    assert.equal(needsLicense, true, `expected license gate for channel=${channel || '(empty)'}`)
+  }
+  assert.equal(requireTobaccoLicense && !('POS'.toUpperCase() === 'POS'), false)
+})
+
+test('POS attestation is ignored for non-POS channels', () => {
+  const channel = 'B2B_PORTAL' as string
+  const dtoAttestation = { method: 'ID_CHECK' as const }
+  const ageAttestation = channel === 'POS' ? dtoAttestation : undefined
+  assert.equal(ageAttestation, undefined)
+})

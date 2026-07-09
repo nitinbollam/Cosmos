@@ -181,6 +181,20 @@ export async function acceptInvite(input: {
   return { ...result, tenantId: invite.tenantId }
 }
 
+/** Never expose raw verify tokens in production API responses. */
+function mayExposeVerifyUrl(): boolean {
+  return process.env.NODE_ENV !== 'production'
+}
+
+function appPublicUrl(): string {
+  const configured = process.env.APP_URL?.trim()
+  if (configured) return configured.replace(/\/$/, '')
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[auth] APP_URL is not set — verification links will be wrong in production')
+  }
+  return 'http://localhost:4000'
+}
+
 export async function sendEmailVerification(
   userId: string,
 ): Promise<{ provider: 'sendgrid' | 'webhook' | 'console'; verifyUrl?: string }> {
@@ -196,7 +210,7 @@ export async function sendEmailVerification(
     },
   })
 
-  const verifyUrl = `${process.env.APP_URL?.trim() || 'http://localhost:4000'}/verify-email?token=${token}`
+  const verifyUrl = `${appPublicUrl()}/verify-email?token=${token}`
   try {
     const { deliverNotification } = await import('./notification-provider')
     const result = await deliverNotification({
@@ -206,15 +220,22 @@ export async function sendEmailVerification(
       templateKey: 'auth.email_verify',
       payload: { verifyUrl, firstName: user.firstName },
     })
-    // Always log the link in non-SendGrid paths so local/dev can complete signup.
     if (result.provider === 'sendgrid') return { provider: 'sendgrid' }
-    console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
-    const provider = result.provider === 'webhook' ? 'webhook' : 'console'
-    return { provider, verifyUrl }
+    // Dev/QA only: surface the link when no real email provider is configured.
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      const provider = result.provider === 'webhook' ? 'webhook' : 'console'
+      return { provider, verifyUrl }
+    }
+    console.info(`[auth] verification email for ${user.email} delivered via ${result.provider} (link not exposed)`)
+    return { provider: result.provider === 'webhook' ? 'webhook' : 'console' }
   } catch (err) {
     console.error('[auth] failed to deliver verification email:', err)
-    console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
-    return { provider: 'console', verifyUrl }
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      return { provider: 'console', verifyUrl }
+    }
+    return { provider: 'console' }
   }
 }
 
@@ -242,7 +263,12 @@ export async function resendEmailVerification(
   })
   if (!user) return { ok: true }
   const delivery = await sendEmailVerification(user.id)
-  return { ok: true, verifyUrl: delivery.verifyUrl, delivery: delivery.provider }
+  // verifyUrl is only present in non-production (see mayExposeVerifyUrl).
+  return {
+    ok: true,
+    ...(delivery.verifyUrl ? { verifyUrl: delivery.verifyUrl } : {}),
+    delivery: delivery.provider,
+  }
 }
 
 /** Reveals nothing about whether the email exists; delivery happens out of band. */
@@ -259,8 +285,12 @@ export async function requestPasswordReset(email: string): Promise<void> {
     },
   })
 
-  const appUrl = process.env.APP_URL?.trim() || 'http://localhost:5173'
-  const resetUrl = `${appUrl}/reset-password?token=${token}`
+  const appUrl = process.env.APP_URL?.trim() || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:4000')
+  if (!appUrl) {
+    console.error('[auth] APP_URL is not set — password reset link cannot be built')
+    return
+  }
+  const resetUrl = `${appUrl.replace(/\/$/, '')}/reset-password?token=${token}`
   try {
     const { deliverNotification } = await import('./notification-provider')
     await deliverNotification({

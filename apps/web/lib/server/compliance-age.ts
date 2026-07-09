@@ -172,9 +172,11 @@ export async function assertAgeComplianceForOrder(
   if (restrictedSkus.length === 0) return null
 
   const requiredMinAge = Math.max(policy.minimumAge, ...restrictedSkus.map((s) => s.minimumAge))
-  const channel = input.channel.toUpperCase()
+  const channel = (input.channel || 'ADMIN').toUpperCase()
+  // Only the POS register path may use staff attestation. Every other channel
+  // (B2B portal, admin, EDI, quotes, unknown) requires a licensed customer when
+  // the policy says so — unknown channels must not bypass checks.
   const isPos = channel === 'POS'
-  const isB2b = channel === 'B2B_PORTAL' || channel === 'ADMIN' || channel === 'EDI' || channel === 'API'
 
   const customer = await crmDb.customer.findFirst({
     where: { id: input.customerId, tenantId },
@@ -188,12 +190,7 @@ export async function assertAgeComplianceForOrder(
   })
   if (!customer) throw new ApiError(404, 'Customer not found')
 
-  const hasTobaccoLines = restrictedSkus.some((s) => s.isTobacco)
-  const needsLicense =
-    policy.requireTobaccoLicense &&
-    (hasTobaccoLines || restrictedSkus.length > 0) &&
-    !isPos &&
-    isB2b
+  const needsLicense = policy.requireTobaccoLicense && !isPos
 
   if (needsLicense) {
     const licensed =

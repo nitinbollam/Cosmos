@@ -414,10 +414,29 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
 
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as orders.CreateOrderInput
-    const order = await orders.createOrder(session.tenantId, body, {
-      ...buyerOpts,
-      userId: session.userId,
-    })
+    // Portal buyers cannot spoof POS channel or supply staff age attestation to
+    // skip the licensed-customer gate for tobacco / age-restricted SKUs.
+    if (buyerCustomerId) {
+      const safeBody: orders.CreateOrderInput = {
+        ...body,
+        channel: 'B2B_PORTAL',
+        ageAttestation: undefined,
+      }
+      const order = await orders.createOrder(session.tenantId, safeBody, {
+        ...buyerOpts,
+        userId: session.userId,
+      })
+      return Response.json(order, { status: 201 })
+    }
+    // Counter sales must go through /pos/orders so register + attestation rules apply.
+    if (String(body.channel ?? '').toUpperCase() === 'POS') {
+      throw new ApiError(400, 'POS sales must use POST /pos/orders')
+    }
+    const order = await orders.createOrder(
+      session.tenantId,
+      { ...body, ageAttestation: undefined },
+      { ...buyerOpts, userId: session.userId },
+    )
     return Response.json(order, { status: 201 })
   }
   if (seg.length === 2 && seg[1] === 'backorders' && method === 'GET') {
