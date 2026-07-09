@@ -64,6 +64,25 @@ export async function loginUser(email: string, password: string): Promise<TokenP
   return signPair(user)
 }
 
+/** When true, new signups are verified immediately (local/dev without SendGrid). */
+export function isDevAutoVerifyEnabled(): boolean {
+  const flag = process.env.PLEROS_DEV_AUTO_VERIFY?.trim().toLowerCase()
+  if (flag === '1' || flag === 'true' || flag === 'yes') return true
+  if (flag === '0' || flag === 'false' || flag === 'no') return false
+  // Default on in non-production when no real email provider is configured.
+  if (process.env.NODE_ENV === 'production') return false
+  return !process.env.SENDGRID_API_KEY?.trim()
+}
+
+export type VerificationDelivery = {
+  userId: string
+  email: string
+  requiresVerification: true
+  /** Present when email was not delivered via SendGrid — use this link in the UI. */
+  verifyUrl?: string
+  delivery: 'sendgrid' | 'webhook' | 'console' | 'auto'
+}
+
 export async function registerUser(input: {
   tenantId: string
   email: string
@@ -74,7 +93,7 @@ export async function registerUser(input: {
   /** Invite accept and admin-created users skip the verification gate. */
   emailVerified?: boolean
   issueTokens?: boolean
-}): Promise<TokenPair | { userId: string; email: string; requiresVerification: true }> {
+}): Promise<TokenPair | VerificationDelivery> {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } })
   if (!tenant) throw new Error('Tenant does not exist')
   const email = input.email.trim().toLowerCase()
@@ -83,6 +102,10 @@ export async function registerUser(input: {
   })
   if (existing) throw new Error('Email already registered for this tenant')
   assertPasswordPolicy(input.password)
+
+  const autoVerify = !input.emailVerified && isDevAutoVerifyEnabled()
+  const emailVerified = Boolean(input.emailVerified || autoVerify)
+
   const passwordHash = await bcrypt.hash(input.password, 12)
   const user = await prisma.user.create({
     data: {
@@ -93,13 +116,32 @@ export async function registerUser(input: {
       lastName: input.lastName,
       role: (input.role ?? 'STAFF') as 'STAFF',
       permissions: [],
-      ...(input.emailVerified ? { emailVerifiedAt: new Date() } : {}),
+      ...(emailVerified ? { emailVerifiedAt: new Date() } : {}),
     },
   })
 
-  if (input.issueTokens === false || !input.emailVerified) {
-    if (!input.emailVerified) await sendEmailVerification(user.id)
-    return { userId: user.id, email: user.email, requiresVerification: true as const }
+  if (input.issueTokens === false || !emailVerified) {
+    if (!emailVerified) {
+      const delivery = await sendEmailVerification(user.id)
+      return {
+        userId: user.id,
+        email: user.email,
+        requiresVerification: true as const,
+        verifyUrl: delivery.verifyUrl,
+        delivery: delivery.provider,
+      }
+    }
+    // Auto-verified but caller asked not to issue tokens (e.g. public signup still
+    // wants the user to sign in explicitly after account creation).
+    if (autoVerify && input.issueTokens === false) {
+      return {
+        userId: user.id,
+        email: user.email,
+        requiresVerification: true as const,
+        delivery: 'auto',
+      }
+    }
+    return signPair(user)
   }
   return signPair(user)
 }
@@ -160,9 +202,11 @@ export async function acceptInvite(input: {
   return { ...result, tenantId: invite.tenantId }
 }
 
-export async function sendEmailVerification(userId: string): Promise<void> {
+export async function sendEmailVerification(
+  userId: string,
+): Promise<{ provider: 'sendgrid' | 'webhook' | 'console'; verifyUrl?: string }> {
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user || user.emailVerifiedAt) return
+  if (!user || user.emailVerifiedAt) return { provider: 'console' }
 
   const token = randomBytes(32).toString('hex')
   await prisma.user.update({
@@ -176,15 +220,22 @@ export async function sendEmailVerification(userId: string): Promise<void> {
   const verifyUrl = `${process.env.APP_URL?.trim() || 'http://localhost:4000'}/verify-email?token=${token}`
   try {
     const { deliverNotification } = await import('./notification-provider')
-    await deliverNotification({
+    const result = await deliverNotification({
       tenantId: user.tenantId,
       channel: 'EMAIL',
       recipient: user.email,
       templateKey: 'auth.email_verify',
       payload: { verifyUrl, firstName: user.firstName },
     })
+    // Always log the link in non-SendGrid paths so local/dev can complete signup.
+    if (result.provider === 'sendgrid') return { provider: 'sendgrid' }
+    console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+    const provider = result.provider === 'webhook' ? 'webhook' : 'console'
+    return { provider, verifyUrl }
   } catch (err) {
     console.error('[auth] failed to deliver verification email:', err)
+    console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+    return { provider: 'console', verifyUrl }
   }
 }
 
@@ -204,12 +255,15 @@ export async function verifyEmail(token: string): Promise<void> {
   })
 }
 
-export async function resendEmailVerification(email: string): Promise<void> {
+export async function resendEmailVerification(
+  email: string,
+): Promise<{ ok: true; verifyUrl?: string; delivery?: 'sendgrid' | 'webhook' | 'console' }> {
   const user = await prisma.user.findFirst({
     where: { email: email.trim().toLowerCase(), isActive: true, emailVerifiedAt: null },
   })
-  if (!user) return
-  await sendEmailVerification(user.id)
+  if (!user) return { ok: true }
+  const delivery = await sendEmailVerification(user.id)
+  return { ok: true, verifyUrl: delivery.verifyUrl, delivery: delivery.provider }
 }
 
 /** Reveals nothing about whether the email exists; delivery happens out of band. */

@@ -232,8 +232,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     if (!body.email?.trim()) return json({ message: 'email required' }, 400)
     try {
       rateLimit(`resend-verify:${clientIp(req)}`, 5, 15 * 60 * 1000)
-      await resendEmailVerification(body.email)
-      return json({ ok: true })
+      return json(await resendEmailVerification(body.email))
     } catch (e) {
       return toJsonError(e)
     }

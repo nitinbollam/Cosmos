@@ -15,12 +15,14 @@ export default function LoginPage() {
   const [needsVerification, setNeedsVerification] = useState(false)
   const [resendSent, setResendSent] = useState(false)
   const [resendBusy, setResendBusy] = useState(false)
+  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setErr(null)
     setNeedsVerification(false)
     setResendSent(false)
+    setDevVerifyUrl(null)
     setLoading(true)
     try {
       const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
@@ -44,9 +46,13 @@ export default function LoginPage() {
   async function resendVerification() {
     setResendBusy(true)
     setErr(null)
+    setDevVerifyUrl(null)
     try {
-      await api.post('/auth/resend-verification', { email: email.trim() })
+      const res = await api.post<{ ok?: boolean; verifyUrl?: string }>('/auth/resend-verification', {
+        email: email.trim(),
+      })
       setResendSent(true)
+      if (res.verifyUrl) setDevVerifyUrl(res.verifyUrl)
     } catch (e) {
       setErr(formatApiReachabilityError(e) || axiosErr(e))
     } finally {
@@ -93,8 +99,23 @@ export default function LoginPage() {
             </button>
             {resendSent ? (
               <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>
-                If an unverified account exists for that address, a new link was sent.
+                {devVerifyUrl
+                  ? 'No email provider configured — use the link below.'
+                  : 'If an unverified account exists for that address, a new link was sent.'}
               </p>
+            ) : null}
+            {devVerifyUrl ? (
+              <div className="space-y-2">
+                <a href={devVerifyUrl} className="text-xs break-all" style={{ color: 'var(--c-accent)' }}>
+                  {devVerifyUrl}
+                </a>
+                <Link
+                  to={devVerifyUrl.replace(/^https?:\/\/[^/]+/, '')}
+                  className="btn-primary w-full inline-block text-center text-sm"
+                >
+                  Verify email now
+                </Link>
+              </div>
             ) : null}
           </div>
         ) : null}

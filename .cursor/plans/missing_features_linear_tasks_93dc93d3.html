@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Missing Features — Linear Task Backlog</title>
+<style>
+  @page { margin: 18mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.45; color: #111; }
+  h1 { font-size: 22pt; border-bottom: 2px solid #222; padding-bottom: 8px; margin-top: 0; page-break-after: avoid; }
+  h2 { font-size: 15pt; margin-top: 24px; border-bottom: 1px solid #ccc; padding-bottom: 4px; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin-top: 16px; color: #222; page-break-after: avoid; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10pt; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; font-weight: 600; }
+  code { font-family: Menlo, monospace; font-size: 9pt; background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
+  blockquote { border-left: 3px solid #888; margin: 12px 0; padding: 4px 12px; color: #444; font-style: italic; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+  ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+<h1>Missing Features — Linear Task Backlog</h1>
+<h2>Current state summary</h2>
+<p>Pleros is a <strong>feature-rich SMB wholesale ERP</strong> (admin + B2B shop + 3 mobile PWAs) in <a href="apps/client"><code>apps/client</code></a> with Express/Prisma API in <a href="apps/web/lib/server"><code>apps/web/lib/server</code></a>. Core workflows (order-to-cash, WMS, finance, EDI, MSA) are largely shipped per <a href="ERP_FEATURE_GAP.md"><code>ERP_FEATURE_GAP.md</code></a>.</p>
+<p><strong>What you asked about:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Reality today</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Age verification</strong></td>
+<td>Not implemented — only metadata (tobacco SKU flag, customer license field, onboarding checkbox)</td>
+<td><a href="apps/web/prisma/inventory/schema.prisma"><code>inventory/schema.prisma</code></a> <code>isTobacco</code>; <a href="apps/web/prisma/crm/schema.prisma"><code>crm/schema.prisma</code></a> <code>tobaccoLicenseNumber</code>; no gates in POS/checkout</td>
+</tr>
+<tr>
+<td><strong>Label scanner</strong></td>
+<td>Text input only — no camera/OCR</td>
+<td><a href="apps/client/src/pages/m/warehouse/receiving/page.tsx"><code>m/warehouse/receiving/page.tsx</code></a> L66–74</td>
+</tr>
+<tr>
+<td><strong>PWA</strong></td>
+<td>Basic — manifest + SW registered, but incomplete offline/install story</td>
+<td><a href="apps/client/public/manifest.webmanifest"><code>manifest.webmanifest</code></a>, <a href="apps/client/public/sw.js"><code>sw.js</code></a>, <a href="apps/client/src/main.tsx"><code>main.tsx</code></a> L16–19</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><em>Diagram omitted in PDF — see the plan markdown for the mermaid flowchart.</em></p>
+</blockquote>
+<hr>
+<h2>Epic 1: Age Verification &amp; Regulated Product Compliance</h2>
+<p><strong>Context:</strong> Vertical enums (<code>TOBACCO_VAPE</code>, <code>ALCOHOL</code>) and tobacco metadata exist but <strong>nothing enforces age or license at sale</strong>. Onboarding <a href="apps/client/src/pages/admin/onboarding/page.tsx"><code>COMPLIANCE_ACK</code></a> is an admin acknowledgment, not a buyer/POS age gate.</p>
+<h3>COS-101 — Define age verification policy model</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> compliance, backend, schema</li>
+<li><strong>Description:</strong> Add tenant-level config for regulated-product rules: minimum age (default 21), required customer license types, which surfaces require verification (POS, B2B checkout, delivery POD).</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>New fields on tenant settings (e.g. <code>ageVerificationEnabled</code>, <code>minimumAge</code>, <code>requireTobaccoLicense</code>)</li>
+<li>Prisma migration in <a href="apps/web/prisma/tenant/schema.prisma"><code>tenant/schema.prisma</code></a></li>
+<li>Settings UI in <a href="apps/client/src/pages/admin/settings/page.tsx"><code>admin/settings/page.tsx</code></a></li>
+<li>API: <code>GET/PATCH /tenants/me/compliance-settings</code></li>
+</ul>
+</li>
+</ul>
+<h3>COS-102 — Enforce licensed-customer rules for tobacco SKUs (B2B)</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> compliance, shop, backend</li>
+<li><strong>Description:</strong> Block or warn when unlicensed buyers add <code>isTobacco</code> SKUs to cart/checkout.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Server-side validation in order confirm / checkout (<a href="apps/web/lib/server/orders.ts"><code>orders.ts</code></a>)</li>
+<li>Catalog/cart UI shows regulated-product badge and license requirement</li>
+<li>Error message when <code>customer.isLicensedTobacco</code> is false or <code>tobaccoLicenseNumber</code> missing/expired</li>
+</ul>
+</li>
+</ul>
+<h3>COS-103 — POS age verification gate</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> compliance, pos, frontend</li>
+<li><strong>Description:</strong> When cart contains regulated SKUs, require staff to confirm customer age/license before completing sale at <a href="apps/client/src/pages/admin/pos/page.tsx"><code>admin/pos/page.tsx</code></a>.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Modal/step: DOB entry or &quot;ID verified&quot; attestation with staff user logged</li>
+<li>Audit log entry for each verification (<code>audit-log.ts</code>)</li>
+<li>Sale blocked until verified when tenant policy enabled</li>
+</ul>
+</li>
+</ul>
+<h3>COS-104 — Age-restricted SKU flag generalization</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> compliance, inventory</li>
+<li><strong>Description:</strong> Extend beyond <code>isTobacco</code> to <code>ageRestricted</code> + <code>minimumAge</code> per SKU (covers alcohol, vape, pharma).</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Schema + inventory create/edit UI updates (<a href="apps/client/src/pages/admin/inventory/page.tsx"><code>admin/inventory/page.tsx</code></a>)</li>
+<li>Backward compatible: <code>isTobacco</code> maps to <code>ageRestricted</code> + age 21</li>
+</ul>
+</li>
+</ul>
+<h3>COS-105 — Delivery POD age check for regulated shipments</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> compliance, mobile, dispatch</li>
+<li><strong>Description:</strong> Driver must confirm recipient age/license before marking regulated stops delivered.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Check order lines for age-restricted SKUs</li>
+<li>POD form requires age confirmation checkbox or license photo capture</li>
+<li>Stored on POD record in dispatch schema</li>
+</ul>
+</li>
+</ul>
+<h3>COS-106 — (Future) ID document scan integration</h3>
+<ul>
+<li><strong>Priority:</strong> Low | <strong>Labels:</strong> compliance, mobile, integration</li>
+<li><strong>Description:</strong> Optional integration with ID scanning provider (e.g. Stripe Identity, Onfido, or manual camera capture of license).</li>
+<li><strong>Acceptance criteria:</strong> Spike doc + provider selection; not required for MVP of COS-101–103</li>
+</ul>
+<hr>
+<h2>Epic 2: Camera Barcode / Label Scanner</h2>
+<p><strong>Context:</strong> Landing page claims &quot;Barcode scans&quot; (<a href="apps/client/src/pages/home/page.tsx"><code>home/page.tsx</code></a> L71) but mobile receiving uses a plain text field. Server already resolves scans via <a href="apps/web/lib/server/inventory.ts"><code>findSkuByScanValue</code></a>. <code>Permissions-Policy: camera=(self)</code> is set in <a href="apps/client/server/index.ts"><code>client/server/index.ts</code></a> but unused.</p>
+<h3>COS-201 — Reusable camera barcode scanner component</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> mobile, frontend, wms</li>
+<li><strong>Description:</strong> Build <code>BarcodeScanner</code> component using <code>BarcodeDetector</code> API with <code>@zxing/library</code> fallback for Safari.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Start/stop camera, torch toggle (where supported), manual entry fallback</li>
+<li>Debounced scan callback with duplicate suppression</li>
+<li>Works on HTTPS and localhost; graceful degradation message when camera denied</li>
+</ul>
+</li>
+</ul>
+<h3>COS-202 — Wire scanner into warehouse receiving</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> mobile, wms</li>
+<li><strong>Description:</strong> Replace text-only input in <a href="apps/client/src/pages/m/warehouse/receiving/page.tsx"><code>m/warehouse/receiving/page.tsx</code></a> with scanner component.</li>
+<li><strong>Acceptance criteria:</strong> Scan triggers same <code>POST .../scan</code> flow; offline queue still works (COS-301)</li>
+</ul>
+<h3>COS-203 — Wire scanner into pick tasks and wave picking</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> mobile, wms</li>
+<li><strong>Description:</strong> Add scan-to-confirm on pick lines in <a href="apps/client/src/pages/m/warehouse/"><code>m/warehouse/tasks</code></a> pages.</li>
+<li><strong>Acceptance criteria:</strong> Wrong barcode shows error; correct scan advances/confirms pick line</li>
+</ul>
+<h3>COS-204 — Wire scanner into cycle count (admin + mobile)</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> wms, admin</li>
+<li><strong>Description:</strong> Scan SKU/bin during cycle count entry.</li>
+<li><strong>Acceptance criteria:</strong> Scan populates SKU field on admin cycle count and mobile count flows</li>
+</ul>
+<h3>COS-205 — POS barcode scan input</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> pos, admin</li>
+<li><strong>Description:</strong> Support USB wedge + optional camera scan on POS register page.</li>
+<li><strong>Acceptance criteria:</strong> Scan adds SKU to POS cart via existing SKU lookup API</li>
+</ul>
+<h3>COS-206 — Printable label format improvements</h3>
+<ul>
+<li><strong>Priority:</strong> Low | <strong>Labels:</strong> wms, backend</li>
+<li><strong>Description:</strong> Enhance <a href="apps/web/lib/server/barcode-labels.ts"><code>barcode-labels.ts</code></a> — Code128/QR render, batch print, standard label sizes.</li>
+<li><strong>Acceptance criteria:</strong> Labels scannable by COS-201 component at 4–6 inch distance</li>
+</ul>
+<hr>
+<h2>Epic 3: PWA &amp; Offline Mobile Hardening</h2>
+<p><strong>Context:</strong> PWA shell exists but is <strong>not production-grade</strong>. Critical gaps:</p>
+<ul>
+<li>No <code>registration.sync.register(&#39;pleros-offline-queue&#39;)</code> — Background Sync documented in <a href="docs/celestial/06-faq.md"><code>docs/celestial/06-faq.md</code></a> L167 but unwired</li>
+<li>Offline queue only replays receiving actions (<a href="apps/client/src/lib/offline-sync.ts"><code>offline-sync.ts</code></a> L5–21)</li>
+<li>SW cache is minimal network-first fallback (<a href="apps/client/public/sw.js"><code>sw.js</code></a> L11–18)</li>
+<li>Manifest <code>start_url</code> is warehouse-only; no install prompt UX</li>
+</ul>
+<h3>COS-301 — Register Background Sync for offline queue</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> pwa, mobile</li>
+<li><strong>Description:</strong> After enqueueing offline actions, call <code>SyncManager.register(&#39;pleros-offline-queue&#39;)</code> and handle permission/feature detection.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li><a href="apps/client/src/lib/offline-queue.ts"><code>offline-queue.ts</code></a> triggers sync registration</li>
+<li>SW <code>sync</code> event replays queue via existing <code>PLEROS_SYNC_QUEUE</code> message path</li>
+<li>Update FAQ/docs to match actual behavior</li>
+</ul>
+</li>
+</ul>
+<h3>COS-302 — Expand offline action types</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> pwa, mobile</li>
+<li><strong>Description:</strong> Queue pick confirmations, POD submissions, sales activity logs offline.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>New action types in <code>offline-sync.ts</code> replay handlers</li>
+<li>Mobile pages enqueue when <code>!navigator.onLine</code></li>
+<li>Conflict handling: show failed count in <a href="apps/client/src/components/mobile/offline-banner.tsx"><code>OfflineBanner</code></a></li>
+</ul>
+</li>
+</ul>
+<h3>COS-303 — App-shell caching strategy for mobile routes</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> pwa</li>
+<li><strong>Description:</strong> Precache <code>/m/*</code> static assets and shell; stale-while-revalidate for API GETs used on mobile home.</li>
+<li><strong>Acceptance criteria:</strong> Mobile warehouse/delivery/sales load with no network after first visit</li>
+<li><strong>Note:</strong> Consider adopting <code>vite-plugin-pwa</code> vs extending hand-rolled <a href="apps/client/public/sw.js"><code>sw.js</code></a></li>
+</ul>
+<h3>COS-304 — PWA install prompt and per-app manifests</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> pwa, mobile</li>
+<li><strong>Description:</strong> Separate manifest shortcuts or dynamic manifest for Warehouse / Delivery / Sales; &quot;Add to Home Screen&quot; prompt on mobile login.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li><code>beforeinstallprompt</code> handler on mobile layout</li>
+<li>Icons/maskable assets verified (512px exists)</li>
+<li>Each app deep-links to correct <code>start_url</code></li>
+</ul>
+</li>
+</ul>
+<h3>COS-305 — Offline conflict resolution UX</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> pwa, mobile</li>
+<li><strong>Description:</strong> When replay fails (409/stale session), surface actionable errors instead of silent fail.</li>
+<li><strong>Acceptance criteria:</strong> Banner shows failed action count + link to retry/discard</li>
+</ul>
+<h3>COS-306 — PWA audit (Lighthouse + iOS/Android)</h3>
+<ul>
+<li><strong>Priority:</strong> Low | <strong>Labels:</strong> pwa, qa</li>
+<li><strong>Description:</strong> Run Lighthouse PWA audit; fix installability, maskable icon, theme-color meta gaps.</li>
+<li><strong>Acceptance criteria:</strong> PWA score ≥ 90 on mobile routes</li>
+</ul>
+<hr>
+<h2>Epic 4: Mobile Field Gaps (marketing vs code)</h2>
+<p><strong>Context:</strong> Landing page lists <strong>&quot;POD photos&quot;</strong> (<a href="apps/client/src/pages/home/page.tsx"><code>home/page.tsx</code></a> L80) but delivery sends <code>photoUrl: null</code> (<a href="apps/client/src/pages/m/delivery/route/%5Bid%5D/page.tsx"><code>m/delivery/route/[id]/page.tsx</code></a> L42).</p>
+<h3>COS-401 — POD photo capture and upload</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> mobile, dispatch</li>
+<li><strong>Description:</strong> Camera capture on delivery stop completion; upload to S3/local storage; attach URL to POD API.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li><code>&lt;input type=&quot;file&quot; capture=&quot;environment&quot;&gt;</code> or camera component</li>
+<li>Backend stores <code>photoUrl</code> on POD record</li>
+<li>Admin dispatch view shows POD photo thumbnail</li>
+</ul>
+</li>
+</ul>
+<h3>COS-402 — POD signature capture</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> mobile, dispatch</li>
+<li><strong>Description:</strong> Canvas signature pad; send <code>signatureDataUrl</code> (currently always null).</li>
+<li><strong>Acceptance criteria:</strong> Signature rendered on admin stop detail</li>
+</ul>
+<h3>COS-403 — Route stop reorder / basic optimization</h3>
+<ul>
+<li><strong>Priority:</strong> Low | <strong>Labels:</strong> dispatch</li>
+<li><strong>Description:</strong> Manual drag reorder exists partially; add map view or simple nearest-neighbor sort.</li>
+<li><strong>Acceptance criteria:</strong> Documented in <a href="ERP_FEATURE_GAP.md"><code>ERP_FEATURE_GAP.md</code></a> L142 as partial</li>
+</ul>
+<hr>
+<h2>Epic 5: Platform Integration Stubs</h2>
+<p><strong>Context:</strong> Infrastructure exists but is not wired to real events.</p>
+<h3>COS-501 — Wire webhook auto-dispatch on domain events</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> integrations, backend</li>
+<li><strong>Description:</strong> <a href="apps/web/lib/server/webhooks.ts"><code>webhooks.ts</code></a> only supports manual <code>testWebhook</code>. Emit subscribed events (order.shipped, compliance.batch_recalled, etc.) from order/compliance flows.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Dispatcher called from order saga, invoice issue, MSA submit, batch recall</li>
+<li>Events match list in <a href="apps/client/src/components/settings/webhook-manager.tsx"><code>webhook-manager.tsx</code></a></li>
+<li>HMAC signature + SSRF checks preserved</li>
+</ul>
+</li>
+</ul>
+<h3>COS-502 — Implement Redis event bus</h3>
+<ul>
+<li><strong>Priority:</strong> High | <strong>Labels:</strong> infra, backend</li>
+<li><strong>Description:</strong> Replace console stub in <a href="apps/web/lib/server/event-bus.ts"><code>event-bus.ts</code></a> with ioredis pub/sub; call <code>publishOrderEvent</code> from order lifecycle.</li>
+<li><strong>Acceptance criteria:</strong> Events published when <code>REDIS_URL</code> set; falls back to console in dev</li>
+</ul>
+<h3>COS-503 — Redis-backed rate limiting for multi-replica</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> infra, security</li>
+<li><strong>Description:</strong> Move in-memory limiter in <a href="apps/web/lib/server/auth-security.ts"><code>auth-security.ts</code></a> to Redis when configured.</li>
+<li><strong>Acceptance criteria:</strong> Documented in <a href="PRODUCTION_READINESS.md"><code>PRODUCTION_READINESS.md</code></a> L43</li>
+</ul>
+<h3>COS-504 — Push notification channel (Expo / Web Push)</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> notifications</li>
+<li><strong>Description:</strong> <code>NotificationChannel.PUSH</code> exists in schema but unused; <code>EXPO_PUSH_ACCESS_TOKEN</code> in <code>.env.example</code> has no code path.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Provider in <a href="apps/web/lib/server/notification-provider.ts"><code>notification-provider.ts</code></a></li>
+<li>Mobile opt-in + device token registration endpoint</li>
+<li>At least order-shipped push trigger</li>
+</ul>
+</li>
+</ul>
+<h3>COS-505 — OpenTelemetry instrumentation</h3>
+<ul>
+<li><strong>Priority:</strong> Low | <strong>Labels:</strong> infra, observability</li>
+<li><strong>Description:</strong> Env vars exist (<code>PLEROS_OTEL_ENABLED</code>); wire traces for API routes and order saga.</li>
+<li><strong>Acceptance criteria:</strong> Spans visible in local OTEL collector (<a href="infra/docker/otel-config.yaml"><code>infra/docker/otel-config.yaml</code></a>)</li>
+</ul>
+<hr>
+<h2>Epic 6: ERP Roadmap (from gap analysis)</h2>
+<p>Per <a href="ERP_FEATURE_GAP.md"><code>ERP_FEATURE_GAP.md</code></a> L231 suggested order:</p>
+<h3>COS-601 — Purchase requisition + approval workflow</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> purchasing, erp</li>
+<li><strong>Description:</strong> Requisition entity, approval chain, convert-to-PO. Today: direct PO only (L109).</li>
+<li><strong>Acceptance criteria:</strong> Admin UI + API; approver notification</li>
+</ul>
+<h3>COS-602 — Batch/lot recall workflow and compliance UI</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> compliance, wms</li>
+<li><strong>Description:</strong> <code>Batch.recalled</code> exists in <a href="apps/web/prisma/compliance/schema.prisma"><code>compliance/schema.prisma</code></a> L87 but no admin recall flow or webhook emit.</li>
+<li><strong>Acceptance criteria:</strong><ul>
+<li>Admin action: mark batch recalled → block allocation/ship</li>
+<li>Emit <code>compliance.batch_recalled</code> webhook (ties to COS-501)</li>
+<li>Customer/order impact report</li>
+</ul>
+</li>
+</ul>
+<h3>COS-603 — Deeper sales tax engine (nexus, exemptions)</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> finance, compliance</li>
+<li><strong>Description:</strong> Extend <a href="apps/web/lib/server/compliance-tax.ts"><code>compliance-tax.ts</code></a> beyond static state rates.</li>
+<li><strong>Acceptance criteria:</strong> Customer tax exemption certs; nexus jurisdiction config</li>
+</ul>
+<h3>COS-604 — Fine-grained RBAC per module</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> security, admin</li>
+<li><strong>Description:</strong> <a href="apps/web/lib/server/permissions.ts"><code>permissions.ts</code></a> permission map exists but routes use coarse role guards only.</li>
+<li><strong>Acceptance criteria:</strong> <code>assertPermission</code> used on sensitive routes; admin role editor UI</li>
+</ul>
+<h3>COS-605 — Report builder / export suite</h3>
+<ul>
+<li><strong>Priority:</strong> Medium | <strong>Labels:</strong> analytics, admin</li>
+<li><strong>Description:</strong> KPI dashboard exists; no ad-hoc reports or CSV/Excel export suite.</li>
+<li><strong>Acceptance criteria:</strong> Saved reports for orders, inventory, AR aging; CSV download</li>
+</ul>
+<h3>COS-606 — Postgres unified local dev path</h3>
+<ul>
+<li><strong>Priority:</strong> Low | <strong>Labels:</strong> infra, dx</li>
+<li><strong>Description:</strong> <a href="MISSING.md"><code>MISSING.md</code></a> L12 — local defaults to SQLite; document or default docker-compose Postgres dev flow.</li>
+<li><strong>Acceptance criteria:</strong> <code>npm run dev</code> works with Postgres via <code>docker compose up db</code></li>
+</ul>
+<hr>
+<h2>Epic 7: Enterprise (Phase 2+ — defer unless customer-driven)</h2>
+<p>From <a href="ERP_FEATURE_GAP.md"><code>ERP_FEATURE_GAP.md</code></a> L219–228 — create Linear issues but mark <strong>Backlog / Enterprise</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Title</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>COS-701</td>
+<td>Multi-currency and FX revaluation</td>
+</tr>
+<tr>
+<td>COS-702</td>
+<td>Multi-subsidiary consolidation</td>
+</tr>
+<tr>
+<td>COS-703</td>
+<td>Rebate and vendor allowance programs</td>
+</tr>
+<tr>
+<td>COS-704</td>
+<td>Fixed assets and depreciation</td>
+</tr>
+<tr>
+<td>COS-705</td>
+<td>Manufacturing / BOM / kitting</td>
+</tr>
+<tr>
+<td>COS-706</td>
+<td>HR and payroll module</td>
+</tr>
+<tr>
+<td>COS-707</td>
+<td>Advanced BI / demand forecasting beyond EWMA</td>
+</tr>
+<tr>
+<td>COS-708</td>
+<td>Omnichannel connectors (Shopify, Amazon)</td>
+</tr>
+<tr>
+<td>COS-709</td>
+<td>Managed X12/AS2 EDI hub (beyond JSON interchange)</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Recommended sprint order</h2>
+<p><strong>Sprint 1 — Close marketing gaps (highest user-visible risk):</strong>
+COS-201, COS-202, COS-401, COS-301, COS-302</p>
+<p><strong>Sprint 2 — Regulated vertical readiness:</strong>
+COS-101, COS-102, COS-103, COS-104</p>
+<p><strong>Sprint 3 — Platform reliability:</strong>
+COS-501, COS-502, COS-602, COS-503</p>
+<p><strong>Sprint 4 — PWA polish + field mobile:</strong>
+COS-303, COS-304, COS-402, COS-203, COS-204</p>
+<p><strong>Sprint 5 — ERP mid-market parity:</strong>
+COS-601, COS-603, COS-604, COS-605</p>
+<hr>
+<h2>Linear setup notes</h2>
+<ul>
+<li><strong>Team suggestion:</strong> <code>Cosmos</code> or <code>Pleros</code> product team</li>
+<li><strong>Labels:</strong> <code>compliance</code>, <code>pwa</code>, <code>mobile</code>, <code>wms</code>, <code>pos</code>, <code>integrations</code>, <code>erp</code>, <code>enterprise</code></li>
+<li><strong>Priority mapping:</strong> High → P1, Medium → P2, Low/Enterprise → P3/Backlog</li>
+<li><strong>No Linear integration exists in repo</strong> — tasks above are ready to bulk-create manually or via Linear CSV import / API</li>
+<li><strong>Prefix:</strong> Replace <code>COS-</code> with your Linear team prefix (e.g. <code>PLR-</code>)</li>
+</ul>
+<h2>Key files to touch (cross-cutting)</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Primary paths</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Age verification</td>
+<td><code>apps/web/prisma/tenant/schema.prisma</code>, <code>apps/web/lib/server/orders.ts</code>, <code>apps/client/src/pages/admin/pos/</code>, <code>apps/client/src/pages/checkout/</code></td>
+</tr>
+<tr>
+<td>Label scanner</td>
+<td>New <code>apps/client/src/components/mobile/barcode-scanner.tsx</code>, <code>apps/client/src/pages/m/warehouse/</code></td>
+</tr>
+<tr>
+<td>PWA</td>
+<td><code>apps/client/public/sw.js</code>, <code>apps/client/src/lib/offline-sync.ts</code>, <code>apps/client/src/lib/offline-queue.ts</code></td>
+</tr>
+<tr>
+<td>Webhooks</td>
+<td><code>apps/web/lib/server/webhooks.ts</code>, order/compliance server modules</td>
+</tr>
+<tr>
+<td>Recall</td>
+<td><code>apps/web/prisma/compliance/schema.prisma</code>, new admin compliance recall UI</td>
+</tr>
+</tbody></table>
+
+</body>
+</html>

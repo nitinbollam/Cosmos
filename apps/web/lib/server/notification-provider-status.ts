@@ -40,6 +40,6 @@ export function getNotificationProviderStatus(): NotificationProviderStatus {
     webhook: { configured: webhook },
     activeFallback: webhook ? 'webhook' : 'console',
     setupNote:
-      'Configure SENDGRID_API_KEY (+ SENDGRID_FROM_EMAIL) for email, TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER for SMS, or NOTIFICATION_WEBHOOK_URL for a custom hook. Without these, messages log to the server console in dev.',
+      'Configure SENDGRID_API_KEY (+ SENDGRID_FROM_EMAIL) for email, TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER for SMS, or NOTIFICATION_WEBHOOK_URL for a custom hook. Without these, messages log to the server console in dev. Local signup auto-verifies when SENDGRID is unset (override with PLEROS_DEV_AUTO_VERIFY=0 to force the verify gate and use the clickable verifyUrl in the UI).',
   }
 }
