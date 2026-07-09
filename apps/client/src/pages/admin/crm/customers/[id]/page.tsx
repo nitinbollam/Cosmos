@@ -307,8 +307,15 @@ export default function CrmCustomerDetailPage() {
                 <div className="flex justify-between gap-4"><dt style={{ color: 'var(--c-text-3)' }}>Tax ID</dt><dd className="font-mono text-xs">{c.taxId ?? '—'}</dd></div>
                 {c.isLicensedTobacco ? (
                   <div className="flex justify-between gap-4"><dt style={{ color: 'var(--c-text-3)' }}>Tobacco license</dt><dd className="font-mono text-xs">{c.tobaccoLicenseNumber ?? '—'}</dd></div>
-                ) : null}
+                ) : (
+                  <div className="flex justify-between gap-4"><dt style={{ color: 'var(--c-text-3)' }}>Tobacco license</dt><dd style={{ color: 'var(--c-text-3)' }}>Not licensed</dd></div>
+                )}
               </dl>
+              <LicenseEditor
+                customerId={c.id}
+                isLicensedTobacco={Boolean(c.isLicensedTobacco)}
+                tobaccoLicenseNumber={c.tobaccoLicenseNumber ?? ''}
+              />
             </div>
             <div className="pleros-card space-y-3">
               <h3 className="font-display font-semibold" style={{ color: 'var(--c-heading)' }}>Credit</h3>
@@ -524,6 +531,62 @@ export default function CrmCustomerDetailPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function LicenseEditor(props: {
+  customerId: string
+  isLicensedTobacco: boolean
+  tobaccoLicenseNumber: string
+}) {
+  const qc = useQueryClient()
+  const [licensed, setLicensed] = useState(props.isLicensedTobacco)
+  const [license, setLicense] = useState(props.tobaccoLicenseNumber)
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/customers/${encodeURIComponent(props.customerId)}`, {
+        isLicensedTobacco: licensed,
+        tobaccoLicenseNumber: licensed ? license.trim() || null : null,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['customer', props.customerId] }),
+  })
+
+  return (
+    <div className="mt-3 pt-3 space-y-2" style={{ borderTop: '1px solid var(--c-border)' }}>
+      <p className="text-xs font-medium" style={{ color: 'var(--c-text-2)' }}>
+        Regulated product license
+      </p>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" checked={licensed} onChange={(e) => setLicensed(e.target.checked)} />
+        Licensed for tobacco / age-restricted products
+      </label>
+      {licensed ? (
+        <input
+          className="pleros-input font-mono text-xs"
+          placeholder="License number"
+          value={license}
+          onChange={(e) => setLicense(e.target.value)}
+        />
+      ) : null}
+      <button
+        type="button"
+        className="btn-ghost !text-xs"
+        disabled={save.isPending || (licensed && !license.trim())}
+        onClick={() => save.mutate()}
+      >
+        {save.isPending ? 'Saving…' : 'Save license'}
+      </button>
+      {save.error ? (
+        <p className="text-xs" style={{ color: 'var(--c-danger)' }}>
+          {errMsg(save.error)}
+        </p>
+      ) : null}
+      {save.isSuccess ? (
+        <p className="text-xs" style={{ color: 'var(--c-accent)' }}>
+          License updated.
+        </p>
+      ) : null}
     </div>
   )
 }

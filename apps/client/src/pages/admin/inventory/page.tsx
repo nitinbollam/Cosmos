@@ -654,6 +654,8 @@ function SkuDrawer({
   const [weight, setWeight] = useState('')
   const [isTobacco, setIsTobacco] = useState(false)
   const [isRegulated, setIsRegulated] = useState(false)
+  const [ageRestricted, setAgeRestricted] = useState(false)
+  const [minimumAge, setMinimumAge] = useState('21')
   const [manufacturerId, setManufacturerId] = useState('')
   const [manufacturerDid, setManufacturerDid] = useState('')
   const [excise, setExcise] = useState('')
@@ -700,6 +702,8 @@ function SkuDrawer({
     setWeight(initial.weightGrams != null ? String(initial.weightGrams) : '')
     setIsTobacco(Boolean(initial.isTobacco))
     setIsRegulated(Boolean(initial.isRegulated))
+    setAgeRestricted(Boolean(initial.ageRestricted ?? initial.isTobacco))
+    setMinimumAge(initial.minimumAge != null ? String(initial.minimumAge) : initial.isTobacco ? '21' : '21')
     setManufacturerId(String(initial.manufacturerId ?? ''))
     setManufacturerDid(String(initial.manufacturerDid ?? ''))
     setExcise(String(initial.exciseTaxCategory ?? ''))
@@ -736,6 +740,8 @@ function SkuDrawer({
     setWeight('')
     setIsTobacco(false)
     setIsRegulated(false)
+    setAgeRestricted(false)
+    setMinimumAge('21')
     setManufacturerId('')
     setManufacturerDid('')
     setExcise('')
@@ -764,6 +770,8 @@ function SkuDrawer({
       unitOfMeasure: uom,
       isTobacco,
       isRegulated,
+      ageRestricted: ageRestricted || isTobacco,
+      minimumAge: ageRestricted || isTobacco ? Number(minimumAge) || 21 : null,
     }
     if (description.trim()) body.description = description.trim()
     if (sub.trim()) body.subcategory = sub.trim()
@@ -867,13 +875,46 @@ function SkuDrawer({
           <input className="pleros-input mb-3" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
 
           <label className="flex items-center gap-2 mb-2 cursor-pointer">
-            <input type="checkbox" checked={isTobacco} onChange={(e) => setIsTobacco(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isTobacco}
+              onChange={(e) => {
+                const on = e.target.checked
+                setIsTobacco(on)
+                if (on) {
+                  setAgeRestricted(true)
+                  setIsRegulated(true)
+                  if (!minimumAge.trim()) setMinimumAge('21')
+                }
+              }}
+            />
             <span className="text-sm text-pleros-text">Is tobacco</span>
           </label>
-          <label className="flex items-center gap-2 mb-3 cursor-pointer">
+          <label className="flex items-center gap-2 mb-2 cursor-pointer">
             <input type="checkbox" checked={isRegulated} onChange={(e) => setIsRegulated(e.target.checked)} />
             <span className="text-sm text-pleros-text">Regulated product</span>
           </label>
+          <label className="flex items-center gap-2 mb-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={ageRestricted || isTobacco}
+              onChange={(e) => setAgeRestricted(e.target.checked)}
+            />
+            <span className="text-sm text-pleros-text">Age restricted</span>
+          </label>
+          {(ageRestricted || isTobacco) && (
+            <>
+              <label className="text-xs text-pleros-text-3">Minimum age</label>
+              <input
+                className="pleros-input mb-3 w-32"
+                type="number"
+                min={18}
+                max={99}
+                value={minimumAge}
+                onChange={(e) => setMinimumAge(e.target.value)}
+              />
+            </>
+          )}
 
           {isTobacco && (
             <>

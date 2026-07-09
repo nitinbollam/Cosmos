@@ -26,6 +26,11 @@ export async function createPosOrder(
     customerId: string
     lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; unitPrice: number }>
     paymentMethod: 'CASH' | 'CARD' | 'CHECK'
+    ageAttestation?: {
+      method: 'ID_CHECK' | 'DOB_ENTRY' | 'LICENSE_ON_FILE'
+      dateOfBirth?: string
+      notes?: string
+    } | null
   },
   userId: string,
 ) {
@@ -42,8 +47,9 @@ export async function createPosOrder(
       paymentMethod: dto.paymentMethod,
       lineItems: dto.lineItems,
       notes: `POS register ${register.name}`,
+      ageAttestation: dto.ageAttestation,
     },
-    { awaitPipeline: true },
+    { awaitPipeline: true, userId },
   )
 
   const created = await orderDb.order.findFirst({

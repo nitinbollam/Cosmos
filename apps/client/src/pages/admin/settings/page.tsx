@@ -283,6 +283,7 @@ function CompanyTab() {
       </div>
 
       <TaxSettingsCard />
+      <AgeVerificationCard />
 
       {tenant.data?.onboardingSteps && tenant.data.onboardingSteps.length > 0 && (
         <div className="pleros-card">
@@ -635,6 +636,109 @@ function TaxSettingsCard() {
       )}
       {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
       {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Tax rate updated.</p>}
+    </div>
+  )
+}
+
+type AgeVerificationPolicy = {
+  enabled: boolean
+  minimumAge: number
+  requireTobaccoLicense: boolean
+  requirePosAttestation: boolean
+  requireDeliveryConfirmation: boolean
+}
+
+function AgeVerificationCard() {
+  const qc = useQueryClient()
+  const policyQ = useQuery<AgeVerificationPolicy>({
+    queryKey: ['age-verification-policy'],
+    queryFn: () => api.get('/compliance/age-verification'),
+  })
+  const [form, setForm] = useState<AgeVerificationPolicy>({
+    enabled: false,
+    minimumAge: 21,
+    requireTobaccoLicense: true,
+    requirePosAttestation: true,
+    requireDeliveryConfirmation: true,
+  })
+
+  useEffect(() => {
+    if (policyQ.data) setForm(policyQ.data)
+  }, [policyQ.data])
+
+  const saveMut = useMutation({
+    mutationFn: (body: AgeVerificationPolicy) => api.patch('/compliance/age-verification', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['age-verification-policy'] }),
+  })
+
+  const ageValid = Number.isFinite(form.minimumAge) && form.minimumAge >= 18 && form.minimumAge <= 99
+
+  return (
+    <div className="pleros-card">
+      <h2 className="text-pleros-white font-semibold font-display mb-1">Age verification</h2>
+      <p className="text-pleros-text-3 text-sm mb-4">
+        Enforce minimum age and license checks for tobacco / age-restricted SKUs on B2B, POS, and delivery.
+      </p>
+      {policyQ.isLoading ? (
+        <div className="skeleton h-24 w-full" />
+      ) : (
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (ageValid) saveMut.mutate(form)
+          }}
+        >
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.enabled}
+              onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
+            />
+            Enable age verification for this tenant
+          </label>
+          <div>
+            <label className="text-xs text-pleros-text-3">Default minimum age</label>
+            <input
+              className="pleros-input mt-1 w-32"
+              type="number"
+              min={18}
+              max={99}
+              value={form.minimumAge}
+              onChange={(e) => setForm((f) => ({ ...f, minimumAge: Number(e.target.value) || 21 }))}
+            />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.requireTobaccoLicense}
+              onChange={(e) => setForm((f) => ({ ...f, requireTobaccoLicense: e.target.checked }))}
+            />
+            Require licensed customer for B2B / admin restricted orders
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.requirePosAttestation}
+              onChange={(e) => setForm((f) => ({ ...f, requirePosAttestation: e.target.checked }))}
+            />
+            Require POS ID / DOB attestation for restricted sales
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.requireDeliveryConfirmation}
+              onChange={(e) => setForm((f) => ({ ...f, requireDeliveryConfirmation: e.target.checked }))}
+            />
+            Require delivery POD age confirmation for restricted orders
+          </label>
+          <button type="submit" className="btn-primary" disabled={!ageValid || saveMut.isPending}>
+            {saveMut.isPending ? 'Saving…' : 'Save age verification'}
+          </button>
+        </form>
+      )}
+      {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
+      {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Age verification policy updated.</p>}
     </div>
   )
 }

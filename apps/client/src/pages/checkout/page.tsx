@@ -9,7 +9,14 @@ import { getB2bCustomerId } from '@/lib/session'
 import { useCartStore } from '@/stores/cart.store'
 import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
-type CustomerRow = { id: string; name: string; email?: string | null; phone?: string | null }
+type CustomerRow = {
+  id: string
+  name: string
+  email?: string | null
+  phone?: string | null
+  isLicensedTobacco?: boolean | null
+  tobaccoLicenseNumber?: string | null
+}
 
 type SavedCard = {
   id: string
@@ -301,6 +308,22 @@ export default function CheckoutPage() {
           <p style={{ marginTop: 12 }}>
             Ship to: {company}, {line1}, {city} {state} {zip}
           </p>
+          {customer && !customer.isLicensedTobacco ? (
+            <p
+              style={{
+                marginTop: 12,
+                padding: 12,
+                borderRadius: 8,
+                background: 'var(--c-surface-2)',
+                border: '1px solid var(--c-border)',
+                color: 'var(--c-text-2)',
+                fontSize: 13,
+              }}
+            >
+              Your account is not marked as licensed for regulated / age-restricted products. Orders that include those
+              SKUs will be blocked until your distributor adds a license on your customer record.
+            </p>
+          ) : null}
           <p>
             Pay with: <strong>{payment.replace(/_/g, ' ')}</strong>
             {payment === 'CARD' && cardPaymentMethodId ? (

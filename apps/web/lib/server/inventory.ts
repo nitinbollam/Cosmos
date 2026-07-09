@@ -14,6 +14,8 @@ export type CreateSkuInput = {
   weightGrams?: number
   isTobacco?: boolean
   isRegulated?: boolean
+  ageRestricted?: boolean
+  minimumAge?: number | null
   manufacturerId?: string
   manufacturerDid?: string
   exciseTaxCategory?: string
@@ -24,6 +26,8 @@ export type CreateSkuInput = {
   defaultLocationId?: string
   reorderPoint?: number
   reorderQty?: number
+  trackLot?: boolean
+  trackSerial?: boolean
 }
 
 export async function distinctCategories(tenantId: string) {
@@ -363,6 +367,13 @@ export async function createSku(tenantId: string, input: CreateSkuInput) {
         weightGrams: input.weightGrams !== undefined ? new Prisma.Decimal(input.weightGrams) : undefined,
         isTobacco: input.isTobacco ?? false,
         isRegulated: input.isRegulated ?? false,
+        ageRestricted: input.ageRestricted ?? Boolean(input.isTobacco),
+        minimumAge:
+          input.minimumAge !== undefined && input.minimumAge !== null
+            ? Math.round(Number(input.minimumAge))
+            : input.isTobacco
+              ? 21
+              : null,
         manufacturerId: input.manufacturerId,
         manufacturerDid: input.manufacturerDid,
         exciseTaxCategory: input.exciseTaxCategory,
@@ -414,6 +425,12 @@ export async function createSku(tenantId: string, input: CreateSkuInput) {
 export async function updateSku(tenantId: string, id: string, patch: Partial<CreateSkuInput> & { isActive?: boolean }) {
   await findSkuById(tenantId, id)
   try {
+    const ageRestricted =
+      patch.ageRestricted !== undefined
+        ? Boolean(patch.ageRestricted)
+        : patch.isTobacco !== undefined
+          ? Boolean(patch.isTobacco)
+          : undefined
     return await inventoryDb.sKU.update({
       where: { id },
       data: {
@@ -421,9 +438,32 @@ export async function updateSku(tenantId: string, id: string, patch: Partial<Cre
         ...(patch.name !== undefined ? { name: patch.name } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.category !== undefined ? { category: patch.category } : {}),
+        ...(patch.subcategory !== undefined ? { subcategory: patch.subcategory } : {}),
+        ...(patch.barcode !== undefined ? { barcode: patch.barcode } : {}),
+        ...(patch.unitOfMeasure !== undefined ? { unitOfMeasure: patch.unitOfMeasure } : {}),
+        ...(patch.isTobacco !== undefined ? { isTobacco: Boolean(patch.isTobacco) } : {}),
+        ...(patch.isRegulated !== undefined ? { isRegulated: Boolean(patch.isRegulated) } : {}),
+        ...(ageRestricted !== undefined ? { ageRestricted } : {}),
+        ...(patch.minimumAge !== undefined
+          ? {
+              minimumAge:
+                patch.minimumAge === null || patch.minimumAge === ('' as unknown)
+                  ? null
+                  : Math.round(Number(patch.minimumAge)),
+            }
+          : patch.isTobacco === true
+            ? { minimumAge: 21 }
+            : {}),
+        ...(patch.manufacturerDid !== undefined ? { manufacturerDid: patch.manufacturerDid } : {}),
+        ...(patch.exciseTaxCategory !== undefined ? { exciseTaxCategory: patch.exciseTaxCategory } : {}),
         ...(patch.cost !== undefined ? { cost: new Prisma.Decimal(+patch.cost) } : {}),
         ...(patch.price !== undefined ? { price: new Prisma.Decimal(+patch.price) } : {}),
+        ...(patch.minPrice !== undefined
+          ? { minPrice: patch.minPrice == null ? null : new Prisma.Decimal(+patch.minPrice) }
+          : {}),
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+        ...(patch.trackLot !== undefined ? { trackLot: Boolean(patch.trackLot) } : {}),
+        ...(patch.trackSerial !== undefined ? { trackSerial: Boolean(patch.trackSerial) } : {}),
       },
     })
   } catch (e) {

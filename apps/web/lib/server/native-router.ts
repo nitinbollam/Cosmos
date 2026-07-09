@@ -89,6 +89,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'payments') return await routePayments(m, seg, req)
     if (seg[0] === 'msa') return await routeMsa(m, seg, req)
     if (seg[0] === 'tax') return await routeTax(m, seg, req)
+    if (seg[0] === 'compliance') return await routeCompliance(m, seg, req)
     if (seg[0] === 'notifications') return await routeNotifications(m, seg, req)
     if (seg[0] === 'journal-entries') return await routeJournalEntries(m, seg, req)
     if (seg[0] === 'chart-accounts') return await routeChartAccounts(m, seg, req)
@@ -413,7 +414,10 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
 
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as orders.CreateOrderInput
-    const order = await orders.createOrder(session.tenantId, body, buyerOpts)
+    const order = await orders.createOrder(session.tenantId, body, {
+      ...buyerOpts,
+      userId: session.userId,
+    })
     return Response.json(order, { status: 201 })
   }
   if (seg.length === 2 && seg[1] === 'backorders' && method === 'GET') {
@@ -1233,7 +1237,9 @@ async function routeRoutes(method: string, seg: string[], req: Request): Promise
   }
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'delivered' && method === 'POST') {
     const body = (await req.json()) as Record<string, unknown>
-    return Response.json(await dispatch.markStopDelivered(session.tenantId, seg[1], seg[3], body))
+    return Response.json(
+      await dispatch.markStopDelivered(session.tenantId, seg[1], seg[3], body, { userId: session.userId }),
+    )
   }
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'failed' && method === 'POST') {
     const body = (await req.json()) as { reason?: string }
@@ -1254,7 +1260,9 @@ async function routeDispatchMobile(method: string, seg: string[], req: Request):
     const routeId = String(body.routeId ?? '')
     if (!routeId.trim()) throw new ApiError(400, 'routeId is required in body')
     const { routeId: _r, stopId: _s, ...pod } = body
-    return Response.json(await dispatch.markStopDelivered(session.tenantId, routeId, seg[2], pod))
+    return Response.json(
+      await dispatch.markStopDelivered(session.tenantId, routeId, seg[2], pod, { userId: session.userId }),
+    )
   }
   throw new ApiError(404, 'Dispatch route not found')
 }
@@ -1337,6 +1345,52 @@ async function routeTax(method: string, seg: string[], req: Request): Promise<Re
     return Response.json(await complianceTax.recordTax(session.tenantId, body))
   }
   throw new ApiError(404, 'Tax route not found')
+}
+
+async function routeCompliance(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requireSession(req)
+  const age = await import('./compliance-age')
+
+  if (seg.length === 2 && seg[1] === 'age-verification' && method === 'GET') {
+    return Response.json(await age.getAgeVerificationPolicy(session.tenantId))
+  }
+  if (seg.length === 2 && seg[1] === 'age-verification' && method === 'PATCH') {
+    assertNotBuyer(session)
+    assertRole(session, ADMIN_ROLES)
+    const body = (await req.json()) as Partial<{
+      enabled: boolean
+      minimumAge: number
+      requireTobaccoLicense: boolean
+      requirePosAttestation: boolean
+      requireDeliveryConfirmation: boolean
+    }>
+    return Response.json(await age.updateAgeVerificationPolicy(session.tenantId, body))
+  }
+  if (seg.length === 2 && seg[1] === 'age-check' && method === 'POST') {
+    const body = (await req.json()) as {
+      customerId?: string
+      channel?: string
+      lineItems?: Array<{ skuId: string }>
+    }
+    if (!body.customerId || !Array.isArray(body.lineItems)) {
+      throw new ApiError(400, 'customerId and lineItems are required')
+    }
+    if (isPortalBuyer(session.role)) {
+      const buyerCustomerId = await requirePortalCustomerId(session)
+      if (body.customerId !== buyerCustomerId) throw new ApiError(403, 'Cannot check another customer')
+    } else {
+      assertNotBuyer(session)
+    }
+    return Response.json(
+      await age.previewOrderAgeRequirements(
+        session.tenantId,
+        body.customerId,
+        body.lineItems,
+        body.channel ?? 'B2B_PORTAL',
+      ),
+    )
+  }
+  throw new ApiError(404, 'Compliance route not found')
 }
 
 async function routeNotifications(method: string, seg: string[], req: Request): Promise<Response> {
