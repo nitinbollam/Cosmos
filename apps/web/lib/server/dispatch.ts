@@ -191,18 +191,27 @@ export async function markStopDelivered(
   tenantId: string,
   routeId: string,
   stopId: string,
-  _pod?: Record<string, unknown>,
+  pod?: Record<string, unknown>,
+  opts?: { userId?: string },
 ) {
   await getRoute(tenantId, routeId)
   const stop = await dispatchDb.routeStop.findFirst({ where: { id: stopId, routeId } })
   if (!stop) throw new ApiError(404, 'Stop not found')
 
+  const orderId = orderIdFromStopAddress(stop.address)
+  if (orderId) {
+    const { assertDeliveryAgeCompliance } = await import('./compliance-age')
+    await assertDeliveryAgeCompliance(tenantId, orderId, pod, opts?.userId)
+  }
+
   await dispatchDb.routeStop.update({
     where: { id: stopId },
-    data: { status: StopStatus.DELIVERED },
+    data: {
+      status: StopStatus.DELIVERED,
+      ...(pod ? { pod: pod as never } : {}),
+    },
   })
 
-  const orderId = orderIdFromStopAddress(stop.address)
   if (orderId) {
     await orderOrchestration.onDeliveryStopDelivered(tenantId, orderId).catch(() => undefined)
   }

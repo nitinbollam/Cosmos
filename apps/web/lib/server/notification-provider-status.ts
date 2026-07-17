@@ -40,6 +40,6 @@ export function getNotificationProviderStatus(): NotificationProviderStatus {
     webhook: { configured: webhook },
     activeFallback: webhook ? 'webhook' : 'console',
     setupNote:
-      'Configure SENDGRID_API_KEY (+ SENDGRID_FROM_EMAIL) for email, TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER for SMS, or NOTIFICATION_WEBHOOK_URL for a custom hook. Without these, messages log to the server console in dev.',
+      'Configure SENDGRID_API_KEY (+ SENDGRID_FROM_EMAIL) and APP_URL for production email. Without SendGrid, messages log to the server console. verifyUrl is only returned in non-production for QA.',
   }
 }

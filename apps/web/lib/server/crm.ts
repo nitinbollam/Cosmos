@@ -120,6 +120,13 @@ export async function patchCustomer(tenantId: string, id: string, dto: Record<st
     data.creditLimit = dto.creditLimit == null ? null : dec(Number(dto.creditLimit))
   }
   if (dto.creditUsed !== undefined) data.creditUsed = new Prisma.Decimal(Number(dto.creditUsed))
+  if (dto.isLicensedTobacco !== undefined) data.isLicensedTobacco = Boolean(dto.isLicensedTobacco)
+  if (dto.tobaccoLicenseNumber !== undefined) {
+    data.tobaccoLicenseNumber =
+      dto.tobaccoLicenseNumber == null || String(dto.tobaccoLicenseNumber).trim() === ''
+        ? null
+        : String(dto.tobaccoLicenseNumber).trim()
+  }
   return crmDb.customer.update({ where: { id }, data })
 }
 

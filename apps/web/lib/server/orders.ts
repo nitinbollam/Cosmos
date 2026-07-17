@@ -9,6 +9,7 @@ import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './orde
 import { syncInvoiceFromOrder } from './invoices'
 import { assertOrderLinePrices } from './pricing'
 import * as notifyTriggers from './notification-triggers'
+import { assertAgeComplianceForOrder, type PosAgeAttestation } from './compliance-age'
 
 export type CreateOrderInput = {
   customerId: string
@@ -18,6 +19,8 @@ export type CreateOrderInput = {
   priority?: string
   notes?: string
   shippingAddress?: Record<string, unknown>
+  /** Required for POS when tenant age verification is enabled and cart has restricted SKUs. */
+  ageAttestation?: PosAgeAttestation | null
   lineItems: Array<{
     skuId: string
     warehouseId: string
@@ -32,7 +35,7 @@ export type CreateOrderInput = {
 export async function createOrder(
   tenantId: string,
   dto: CreateOrderInput,
-  opts?: { buyerCustomerId?: string; awaitPipeline?: boolean },
+  opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string },
 ) {
   const subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
   const taxRate = await getTenantSalesTaxRate(tenantId)
@@ -47,13 +50,26 @@ export async function createOrder(
 
   await assertOrderLinePrices(tenantId, customerId, dto.lineItems)
 
+  const channel = (dto.channel || 'ADMIN').toUpperCase()
+  // Age attestation is only valid for POS counter sales — ignore it elsewhere so
+  // clients cannot skip the licensed-customer gate by attaching a fake attestation.
+  const ageAttestation = channel === 'POS' ? dto.ageAttestation : undefined
+
+  await assertAgeComplianceForOrder(tenantId, {
+    customerId,
+    channel,
+    lineItems: dto.lineItems,
+    userId: opts?.userId,
+    posAttestation: ageAttestation,
+  })
+
   await assertCreditAvailable(tenantId, customerId, totalAmount, dto.paymentMethod)
 
   const order = await orderDb.order.create({
     data: {
       tenantId,
       customerId,
-      channel: dto.channel as never,
+      channel: channel as never,
       paymentMethod: dto.paymentMethod as never,
       salesRepId: dto.salesRepId,
       priority: (dto.priority ?? 'NORMAL') as never,

@@ -23,12 +23,14 @@ export default function LoginPage() {
   const [needsVerification, setNeedsVerification] = useState(false)
   const [resendSent, setResendSent] = useState(false)
   const [resendBusy, setResendBusy] = useState(false)
+  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setErr(null)
     setNeedsVerification(false)
     setResendSent(false)
+    setDevVerifyUrl(null)
     setLoading(true)
     try {
       const r = await api.post<LoginRes>('/auth/login', { email, password })
@@ -63,9 +65,13 @@ export default function LoginPage() {
   async function resendVerification() {
     setResendBusy(true)
     setErr(null)
+    setDevVerifyUrl(null)
     try {
-      await api.post('/auth/resend-verification', { email: email.trim() })
+      const res = await api.post<{ ok?: boolean; verifyUrl?: string }>('/auth/resend-verification', {
+        email: email.trim(),
+      })
       setResendSent(true)
+      if (res.verifyUrl) setDevVerifyUrl(res.verifyUrl)
     } catch (e: unknown) {
       setErr(axiosErr(e))
     } finally {
@@ -131,8 +137,26 @@ export default function LoginPage() {
             </button>
             {resendSent ? (
               <p style={{ marginTop: 10, color: 'var(--c-text-3)', fontSize: 13, textAlign: 'center' }}>
-                If an unverified account exists for that address, a new link was sent.
+                {devVerifyUrl
+                  ? 'Email provider not configured — use the verification link below.'
+                  : 'If an unverified account exists for that address, a new link was sent.'}
               </p>
+            ) : null}
+            {devVerifyUrl ? (
+              <div style={{ marginTop: 12 }}>
+                <a href={devVerifyUrl} style={{ color: 'var(--c-accent)', fontSize: 12, wordBreak: 'break-all' }}>
+                  {devVerifyUrl}
+                </a>
+                <div style={{ marginTop: 10 }}>
+                  <Link
+                    to={devVerifyUrl.replace(/^https?:\/\/[^/]+/, '')}
+                    className="btn-primary"
+                    style={{ display: 'inline-block', width: '100%', textAlign: 'center' }}
+                  >
+                    Verify email now
+                  </Link>
+                </div>
+              </div>
             ) : null}
           </div>
         ) : null}

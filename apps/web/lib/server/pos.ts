@@ -26,6 +26,11 @@ export async function createPosOrder(
     customerId: string
     lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; unitPrice: number }>
     paymentMethod: 'CASH' | 'CARD' | 'CHECK'
+    ageAttestation?: {
+      method: 'ID_CHECK' | 'DOB_ENTRY' | 'LICENSE_ON_FILE'
+      dateOfBirth?: string
+      notes?: string
+    } | null
   },
   userId: string,
 ) {
@@ -33,7 +38,11 @@ export async function createPosOrder(
   const register = await tenantDb.posRegister.findFirst({ where: { id: dto.registerId, tenantId, isActive: true } })
   if (!register) throw new ApiError(404, 'POS register not found')
 
+  if (!dto.lineItems?.length) throw new ApiError(400, 'lineItems required')
+  if (!dto.customerId?.trim()) throw new ApiError(400, 'customerId required')
+
   // Counter sale: reserve synchronously so we can fail fast on missing stock.
+  // Channel is always POS — never trust a client-supplied channel for attestation rules.
   const order = await orders.createOrder(
     tenantId,
     {
@@ -42,8 +51,9 @@ export async function createPosOrder(
       paymentMethod: dto.paymentMethod,
       lineItems: dto.lineItems,
       notes: `POS register ${register.name}`,
+      ageAttestation: dto.ageAttestation ?? null,
     },
-    { awaitPipeline: true },
+    { awaitPipeline: true, userId },
   )
 
   const created = await orderDb.order.findFirst({

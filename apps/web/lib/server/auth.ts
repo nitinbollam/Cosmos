@@ -64,6 +64,18 @@ export async function loginUser(email: string, password: string): Promise<TokenP
   return signPair(user)
 }
 
+export type VerificationDelivery = {
+  userId: string
+  email: string
+  requiresVerification: true
+  /**
+   * Present only when email was not delivered via SendGrid (console/webhook fallback).
+   * Lets QA complete the production verify gate without an inbox; never returned for SendGrid.
+   */
+  verifyUrl?: string
+  delivery: 'sendgrid' | 'webhook' | 'console'
+}
+
 export async function registerUser(input: {
   tenantId: string
   email: string
@@ -74,7 +86,7 @@ export async function registerUser(input: {
   /** Invite accept and admin-created users skip the verification gate. */
   emailVerified?: boolean
   issueTokens?: boolean
-}): Promise<TokenPair | { userId: string; email: string; requiresVerification: true }> {
+}): Promise<TokenPair | VerificationDelivery> {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } })
   if (!tenant) throw new Error('Tenant does not exist')
   const email = input.email.trim().toLowerCase()
@@ -98,8 +110,17 @@ export async function registerUser(input: {
   })
 
   if (input.issueTokens === false || !input.emailVerified) {
-    if (!input.emailVerified) await sendEmailVerification(user.id)
-    return { userId: user.id, email: user.email, requiresVerification: true as const }
+    if (!input.emailVerified) {
+      const delivery = await sendEmailVerification(user.id)
+      return {
+        userId: user.id,
+        email: user.email,
+        requiresVerification: true as const,
+        verifyUrl: delivery.verifyUrl,
+        delivery: delivery.provider,
+      }
+    }
+    return signPair(user)
   }
   return signPair(user)
 }
@@ -160,9 +181,25 @@ export async function acceptInvite(input: {
   return { ...result, tenantId: invite.tenantId }
 }
 
-export async function sendEmailVerification(userId: string): Promise<void> {
+/** Never expose raw verify tokens in production API responses. */
+function mayExposeVerifyUrl(): boolean {
+  return process.env.NODE_ENV !== 'production'
+}
+
+function appPublicUrl(): string {
+  const configured = process.env.APP_URL?.trim()
+  if (configured) return configured.replace(/\/$/, '')
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[auth] APP_URL is not set — verification links will be wrong in production')
+  }
+  return 'http://localhost:4000'
+}
+
+export async function sendEmailVerification(
+  userId: string,
+): Promise<{ provider: 'sendgrid' | 'webhook' | 'console'; verifyUrl?: string }> {
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user || user.emailVerifiedAt) return
+  if (!user || user.emailVerifiedAt) return { provider: 'console' }
 
   const token = randomBytes(32).toString('hex')
   await prisma.user.update({
@@ -173,18 +210,32 @@ export async function sendEmailVerification(userId: string): Promise<void> {
     },
   })
 
-  const verifyUrl = `${process.env.APP_URL?.trim() || 'http://localhost:4000'}/verify-email?token=${token}`
+  const verifyUrl = `${appPublicUrl()}/verify-email?token=${token}`
   try {
     const { deliverNotification } = await import('./notification-provider')
-    await deliverNotification({
+    const result = await deliverNotification({
       tenantId: user.tenantId,
       channel: 'EMAIL',
       recipient: user.email,
       templateKey: 'auth.email_verify',
       payload: { verifyUrl, firstName: user.firstName },
     })
+    if (result.provider === 'sendgrid') return { provider: 'sendgrid' }
+    // Dev/QA only: surface the link when no real email provider is configured.
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      const provider = result.provider === 'webhook' ? 'webhook' : 'console'
+      return { provider, verifyUrl }
+    }
+    console.info(`[auth] verification email for ${user.email} delivered via ${result.provider} (link not exposed)`)
+    return { provider: result.provider === 'webhook' ? 'webhook' : 'console' }
   } catch (err) {
     console.error('[auth] failed to deliver verification email:', err)
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      return { provider: 'console', verifyUrl }
+    }
+    return { provider: 'console' }
   }
 }
 
@@ -204,12 +255,20 @@ export async function verifyEmail(token: string): Promise<void> {
   })
 }
 
-export async function resendEmailVerification(email: string): Promise<void> {
+export async function resendEmailVerification(
+  email: string,
+): Promise<{ ok: true; verifyUrl?: string; delivery?: 'sendgrid' | 'webhook' | 'console' }> {
   const user = await prisma.user.findFirst({
     where: { email: email.trim().toLowerCase(), isActive: true, emailVerifiedAt: null },
   })
-  if (!user) return
-  await sendEmailVerification(user.id)
+  if (!user) return { ok: true }
+  const delivery = await sendEmailVerification(user.id)
+  // verifyUrl is only present in non-production (see mayExposeVerifyUrl).
+  return {
+    ok: true,
+    ...(delivery.verifyUrl ? { verifyUrl: delivery.verifyUrl } : {}),
+    delivery: delivery.provider,
+  }
 }
 
 /** Reveals nothing about whether the email exists; delivery happens out of band. */
@@ -226,8 +285,12 @@ export async function requestPasswordReset(email: string): Promise<void> {
     },
   })
 
-  const appUrl = process.env.APP_URL?.trim() || 'http://localhost:5173'
-  const resetUrl = `${appUrl}/reset-password?token=${token}`
+  const appUrl = process.env.APP_URL?.trim() || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:4000')
+  if (!appUrl) {
+    console.error('[auth] APP_URL is not set — password reset link cannot be built')
+    return
+  }
+  const resetUrl = `${appUrl.replace(/\/$/, '')}/reset-password?token=${token}`
   try {
     const { deliverNotification } = await import('./notification-provider')
     await deliverNotification({

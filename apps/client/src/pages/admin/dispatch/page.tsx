@@ -625,6 +625,7 @@ function PodModal(props: {
   const [recipient, setRecipient] = useState('')
   const [notes, setNotes] = useState('')
   const [signature, setSignature] = useState('')
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -638,6 +639,7 @@ function PodModal(props: {
           recipientName: recipient.trim() || undefined,
           notes: notes.trim() || undefined,
           signature: signature.trim() || undefined,
+          ageConfirmed,
         },
       )
       props.onDone()
@@ -677,6 +679,10 @@ function PodModal(props: {
           onChange={(e) => setSignature(e.target.value)}
           placeholder="Signature label or image URL"
         />
+        <label className="mt-3 flex items-start gap-2 text-sm text-pleros-text cursor-pointer">
+          <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
+          <span>Recipient age confirmed (required for age-restricted orders)</span>
+        </label>
         {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
         <div className="mt-6 flex gap-2">
           <button

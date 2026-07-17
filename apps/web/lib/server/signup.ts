@@ -55,7 +55,14 @@ export async function publicSignup(dto: {
   await ensureTier5Accounts(tenantId).catch(() => undefined)
 
   if ('requiresVerification' in result) {
-    return { tenantId, slug, requiresVerification: true, email: result.email }
+    return {
+      tenantId,
+      slug,
+      requiresVerification: true,
+      email: result.email,
+      verifyUrl: result.verifyUrl,
+      delivery: result.delivery,
+    }
   }
   return { tenantId, slug, ...result }
 }

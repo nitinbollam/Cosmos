@@ -65,6 +65,10 @@ model SKU {
   weightGrams       Decimal?
   isTobacco         Boolean  @default(false)
   isRegulated       Boolean  @default(false)
+  /** Age-gated product (alcohol, tobacco, etc.). Tobacco SKUs should also set this. */
+  ageRestricted     Boolean  @default(false)
+  /** Minimum buyer/recipient age when ageRestricted. Defaults to tenant policy when null. */
+  minimumAge        Int?
   manufacturerId    String?
   manufacturerDid   String?
   exciseTaxCategory String?

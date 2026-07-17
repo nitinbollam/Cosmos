@@ -13,6 +13,7 @@ export default function VerifyEmailPage() {
   const [loading, setLoading] = useState(false)
   const [resendEmail, setResendEmail] = useState('')
   const [resendSent, setResendSent] = useState(false)
+  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (token && !done && !loading) void verify()
@@ -39,9 +40,13 @@ export default function VerifyEmailPage() {
     e.preventDefault()
     setErr(null)
     setLoading(true)
+    setDevVerifyUrl(null)
     try {
-      await api.post('/auth/resend-verification', { email: resendEmail.trim() })
+      const res = await api.post<{ ok?: boolean; verifyUrl?: string }>('/auth/resend-verification', {
+        email: resendEmail.trim(),
+      })
       setResendSent(true)
+      if (res.verifyUrl) setDevVerifyUrl(res.verifyUrl)
     } catch (ex: unknown) {
       setErr(axiosErr(ex))
     } finally {
@@ -57,7 +62,15 @@ export default function VerifyEmailPage() {
           <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
             <PlerosLogo size="lg" />
           </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 24, color: 'var(--c-heading)', margin: '16px 0 0' }}>
+          <h1
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              fontSize: 24,
+              color: 'var(--c-heading)',
+              margin: '16px 0 0',
+            }}
+          >
             Verify your email
           </h1>
         </div>
@@ -98,8 +111,34 @@ export default function VerifyEmailPage() {
             </button>
             {resendSent ? (
               <p style={{ color: 'var(--c-text-3)', fontSize: 13, textAlign: 'center' }}>
-                If an unverified account exists for that address, a new link was sent.
+                {devVerifyUrl
+                  ? 'Email provider not configured — use the verification link below to continue.'
+                  : 'If an unverified account exists for that address, a new link was sent.'}
               </p>
+            ) : null}
+            {devVerifyUrl ? (
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 8,
+                  background: 'var(--c-surface-2)',
+                  border: '1px solid var(--c-border)',
+                }}
+              >
+                <p style={{ color: 'var(--c-text-3)', fontSize: 12, marginBottom: 8 }}>Verification link</p>
+                <a href={devVerifyUrl} style={{ color: 'var(--c-accent)', fontSize: 13, wordBreak: 'break-all' }}>
+                  {devVerifyUrl}
+                </a>
+                <div style={{ marginTop: 12 }}>
+                  <Link
+                    to={devVerifyUrl.replace(/^https?:\/\/[^/]+/, '')}
+                    className="btn-primary"
+                    style={{ display: 'inline-block' }}
+                  >
+                    Verify email now
+                  </Link>
+                </div>
+              </div>
             ) : null}
           </form>
         ) : null}

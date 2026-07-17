@@ -5,12 +5,31 @@ import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
 
 type Register = { id: string; name: string; warehouseId: string | null }
-type Customer = { id: string; name: string; email?: string | null }
-type Sku = { id: string; code: string; name: string; price: string | number; quantityAvailable?: number }
+type Customer = { id: string; name: string; email?: string | null; isLicensedTobacco?: boolean }
+type Sku = {
+  id: string
+  code: string
+  name: string
+  price: string | number
+  quantityAvailable?: number
+  isTobacco?: boolean
+  ageRestricted?: boolean
+  minimumAge?: number | null
+}
 type SkuList = { items: Sku[]; total: number }
 type Warehouse = { id: string; name: string; code: string; isDefault?: boolean }
 
-type CartLine = { skuId: string; code: string; name: string; quantity: number; unitPrice: number }
+type CartLine = {
+  skuId: string
+  code: string
+  name: string
+  quantity: number
+  unitPrice: number
+  ageRestricted?: boolean
+  minimumAge?: number | null
+}
+
+type AgeAttestationMethod = 'ID_CHECK' | 'DOB_ENTRY' | 'LICENSE_ON_FILE'
 
 function toPrice(n: string | number): number {
   if (typeof n === 'number') return n
@@ -42,6 +61,19 @@ export default function PosPage() {
   const [lastOrderId, setLastOrderId] = useState<string | null>(null)
   const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null)
   const [submitErr, setSubmitErr] = useState<string | null>(null)
+  const [ageMethod, setAgeMethod] = useState<AgeAttestationMethod>('ID_CHECK')
+  const [dob, setDob] = useState('')
+  const [ageNotes, setAgeNotes] = useState('')
+
+  const policyQ = useQuery({
+    queryKey: ['age-verification-policy'],
+    queryFn: () =>
+      api.get<{
+        enabled: boolean
+        minimumAge: number
+        requirePosAttestation: boolean
+      }>('/compliance/age-verification'),
+  })
 
   async function printReceipt(orderId: string) {
     const token = window.localStorage.getItem('pleros.accessToken')
@@ -99,6 +131,17 @@ export default function PosPage() {
   )
 
   const effectiveCustomerId = customerId || walkInCustomerId
+  const selectedCustomer = (customersQ.data ?? []).find((c) => c.id === effectiveCustomerId)
+
+  const cartNeedsAge =
+    Boolean(policyQ.data?.enabled) &&
+    Boolean(policyQ.data?.requirePosAttestation) &&
+    cart.some((l) => l.ageRestricted)
+
+  const requiredMinAge = Math.max(
+    policyQ.data?.minimumAge ?? 21,
+    ...cart.filter((l) => l.ageRestricted).map((l) => l.minimumAge ?? policyQ.data?.minimumAge ?? 21),
+  )
 
   const subtotal = cart.reduce((s, l) => s + l.quantity * l.unitPrice, 0)
   const tax = +(subtotal * 0.0825).toFixed(2)
@@ -116,24 +159,47 @@ export default function PosPage() {
           quantity: l.quantity,
           unitPrice: l.unitPrice,
         })),
+        ...(cartNeedsAge
+          ? {
+              ageAttestation: {
+                method: ageMethod,
+                dateOfBirth: ageMethod === 'DOB_ENTRY' ? dob : undefined,
+                notes: ageNotes.trim() || undefined,
+              },
+            }
+          : {}),
       }),
     onSuccess: (order) => {
       setLastOrderId(order.id)
       setLastOrderTotal(order.totalAmount)
       setCart([])
       setSubmitErr(null)
+      setDob('')
+      setAgeNotes('')
     },
     onError: (e) => setSubmitErr(errMsg(e)),
   })
 
   function addToCart(sku: Sku) {
     const unitPrice = toPrice(sku.price)
+    const ageRestricted = Boolean(sku.ageRestricted || sku.isTobacco)
     setCart((prev) => {
       const existing = prev.find((l) => l.skuId === sku.id)
       if (existing) {
         return prev.map((l) => (l.skuId === sku.id ? { ...l, quantity: l.quantity + 1 } : l))
       }
-      return [...prev, { skuId: sku.id, code: sku.code, name: sku.name, quantity: 1, unitPrice }]
+      return [
+        ...prev,
+        {
+          skuId: sku.id,
+          code: sku.code,
+          name: sku.name,
+          quantity: 1,
+          unitPrice,
+          ageRestricted,
+          minimumAge: sku.minimumAge ?? (ageRestricted ? 21 : null),
+        },
+      ]
     })
   }
 
@@ -244,6 +310,7 @@ export default function PosPage() {
                     <p className="text-sm text-pleros-white font-medium mt-1">{sku.name}</p>
                     <p className="text-xs text-pleros-text-3 mt-1">
                       {money(toPrice(sku.price))} · {sku.quantityAvailable ?? 0} avail
+                      {sku.ageRestricted || sku.isTobacco ? ' · 21+' : ''}
                     </p>
                   </button>
                 ))}
@@ -307,6 +374,44 @@ export default function PosPage() {
               </select>
             </div>
 
+            {cartNeedsAge ? (
+              <div
+                className="rounded-lg p-3 space-y-2"
+                style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}
+              >
+                <p className="text-sm font-medium text-pleros-white">Age verification (min {requiredMinAge})</p>
+                <p className="text-xs text-pleros-text-3">
+                  Cart includes age-restricted items. Confirm customer ID before completing the sale.
+                </p>
+                <select
+                  className="pleros-input"
+                  value={ageMethod}
+                  onChange={(e) => setAgeMethod(e.target.value as AgeAttestationMethod)}
+                >
+                  <option value="ID_CHECK">Government ID checked</option>
+                  <option value="DOB_ENTRY">Enter date of birth</option>
+                  <option value="LICENSE_ON_FILE" disabled={!selectedCustomer?.isLicensedTobacco}>
+                    License on file{selectedCustomer?.isLicensedTobacco ? '' : ' (unavailable)'}
+                  </option>
+                </select>
+                {ageMethod === 'DOB_ENTRY' ? (
+                  <input
+                    className="pleros-input"
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    required
+                  />
+                ) : null}
+                <input
+                  className="pleros-input"
+                  placeholder="Optional notes (ID type, last 4…)"
+                  value={ageNotes}
+                  onChange={(e) => setAgeNotes(e.target.value)}
+                />
+              </div>
+            ) : null}
+
             {submitErr ? <p className="text-sm text-red-400">{submitErr}</p> : null}
 
             <button
@@ -317,7 +422,8 @@ export default function PosPage() {
                 !warehouseId ||
                 !effectiveCustomerId ||
                 cart.length === 0 ||
-                checkout.isPending
+                checkout.isPending ||
+                (cartNeedsAge && ageMethod === 'DOB_ENTRY' && !dob)
               }
               onClick={() => checkout.mutate()}
             >
