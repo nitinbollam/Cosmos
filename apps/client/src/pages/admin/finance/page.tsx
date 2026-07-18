@@ -102,6 +102,7 @@ type CashflowBucket = {
 
 type CashflowResp = {
   tenant_id: string
+  method?: string
   weekly_net_baseline: number
   forecast: CashflowBucket[]
   warnings: string[]
@@ -210,33 +211,33 @@ export default function FinancePage() {
     enabled: tab === 'trial',
   })
 
-  type KpiSnap = { tenantId: string; date: string; revenue: string | number }
-  const snapsQ = useQuery({
-    queryKey: ['finance', 'kpi-snapshots'],
-    queryFn: () => api.get<KpiSnap[]>('/kpi/snapshots'),
+  type CashflowHistoryResp = {
+    tenantId: string
+    source: 'ar_ap' | 'revenue_proxy'
+    history: Array<{ period: string; inflow: number; outflow: number }>
+    warnings: string[]
+  }
+
+  const cashHistQ = useQuery({
+    queryKey: ['finance', 'cashflow-history'],
+    queryFn: () => api.get<CashflowHistoryResp>('/analytics/cashflow-history?weeks=16'),
     enabled: tab === 'cashflow',
   })
 
   const cashInput = useMemo(() => {
-    const rows = [...(snapsQ.data ?? [])].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    )
-    if (rows.length < 2) return null
-    const tail = rows.slice(-20)
-    const tenantId = tail[tail.length - 1]?.tenantId ?? 'tenant'
-    const history = tail.map((s) => {
-      const inflow = Number(s.revenue)
-      return { period: new Date(s.date).toISOString().slice(0, 10), inflow, outflow: Math.max(0, inflow * 0.55) }
-    })
+    const hist = cashHistQ.data?.history ?? []
+    const active = hist.filter((p) => p.inflow > 0 || p.outflow > 0)
+    if (active.length < 3) return null
     return {
-      tenant_id: tenantId,
-      history,
+      tenant_id: cashHistQ.data?.tenantId ?? 'tenant',
+      history: hist,
       horizon_weeks: Math.max(1, Math.ceil(cfHorizon / 7)),
+      seasonal_period: hist.length >= 8 ? 4 : null,
     }
-  }, [snapsQ.data, cfHorizon])
+  }, [cashHistQ.data, cfHorizon])
 
   const cashQ = useQuery({
-    queryKey: ['finance', 'cashflow', cfHorizon, (snapsQ.data ?? []).length],
+    queryKey: ['finance', 'cashflow', cfHorizon, cashHistQ.dataUpdatedAt],
     enabled: tab === 'cashflow' && !!cashInput,
     queryFn: async () => {
       const res = await fetch('/api/cashflow', {
@@ -774,13 +775,31 @@ export default function FinancePage() {
             ))}
           </div>
           <div className="pleros-card">
-            {!cashInput ? (
-              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Need KPI snapshots from analytics to run cashflow. Open dashboard once data exists.</p>
-            ) : cashQ.isLoading ? <div className="skeleton h-64 w-full" /> : cashQ.isError ? (
+            {cashHistQ.isLoading || (!cashInput && cashHistQ.isFetching) ? (
+              <div className="skeleton h-64 w-full" />
+            ) : !cashInput ? (
+              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+                Need at least three weeks of AR/AP activity (or KPI revenue) to forecast cashflow.
+              </p>
+            ) : cashQ.isLoading ? (
+              <div className="skeleton h-64 w-full" />
+            ) : cashQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>{cashQ.error instanceof Error ? cashQ.error.message : 'Error'}</p>
             ) : (
               <>
-                <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>Weekly buckets from native EWMA forecast (no Python sidecar)</p>
+                <p className="text-sm mb-1" style={{ color: 'var(--c-text-3)' }}>
+                  Weekly EWMA forecast
+                  {cashQ.data?.method ? (
+                    <span className="font-mono text-xs ml-2" style={{ color: 'var(--c-accent)' }}>
+                      {cashQ.data.method}
+                    </span>
+                  ) : null}
+                  {cashHistQ.data?.source ? (
+                    <span className="text-xs ml-2">
+                      · source {cashHistQ.data.source === 'ar_ap' ? 'AR/AP collections' : 'revenue proxy'}
+                    </span>
+                  ) : null}
+                </p>
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={cfChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -808,8 +827,12 @@ export default function FinancePage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                {(cashQ.data?.warnings?.length ?? 0) > 0 && (
-                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">{cashQ.data!.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                {[...(cashHistQ.data?.warnings ?? []), ...(cashQ.data?.warnings ?? [])].length > 0 && (
+                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">
+                    {[...(cashHistQ.data?.warnings ?? []), ...(cashQ.data?.warnings ?? [])].map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
                 )}
               </>
             )}

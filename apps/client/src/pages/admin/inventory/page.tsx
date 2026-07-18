@@ -79,9 +79,11 @@ type DemandPlanRow = {
   sku: { code: string; name: string }
   warehouseId: string
   avgDailyUsage: number
+  ewmaDailyUsage?: number
   suggestedOrderQty: number
   quantityAvailable: number
   method: string
+  warnings?: string[]
 }
 
 export default function InventoryPage() {
@@ -257,7 +259,7 @@ export default function InventoryPage() {
         <div className="pleros-card">
           <h3 className="text-pleros-white font-semibold font-display mb-2">Demand-based replenishment</h3>
           <p className="text-sm text-pleros-text-3 mb-3">
-            Suggested buy quantities from recent usage (last 30 days) and lead time.
+            Suggested buy quantities from EWMA usage forecast and lead time (≈70-day lookback).
           </p>
           <div className="overflow-x-auto">
             <table className="pleros-table text-sm">
@@ -265,6 +267,7 @@ export default function InventoryPage() {
                 <tr>
                   <th>SKU</th>
                   <th>Available</th>
+                  <th>EWMA/day</th>
                   <th>Avg/day</th>
                   <th>Suggest buy</th>
                   <th>Method</th>
@@ -276,11 +279,24 @@ export default function InventoryPage() {
                     <td>
                       <span className="font-mono text-pleros-accent">{row.sku.code}</span>
                       <span className="text-pleros-text-3 ml-2">{row.sku.name}</span>
+                      {row.warnings?.[0] ? (
+                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--c-warning)' }}>
+                          {row.warnings[0]}
+                        </p>
+                      ) : null}
                     </td>
                     <td>{row.quantityAvailable}</td>
-                    <td>{row.avgDailyUsage}</td>
+                    <td className="tabular-nums">{row.ewmaDailyUsage ?? row.avgDailyUsage}</td>
+                    <td className="tabular-nums text-pleros-text-3">{row.avgDailyUsage}</td>
                     <td className="font-semibold text-pleros-white">{row.suggestedOrderQty}</td>
-                    <td className="text-xs text-pleros-text-3">{row.method}</td>
+                    <td>
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                        style={{ background: 'var(--c-surface-2)', color: 'var(--c-accent)' }}
+                      >
+                        {row.method.replace(/_/g, ' ')}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>

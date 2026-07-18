@@ -48,8 +48,16 @@ interface CashflowBucket {
 
 interface CashflowResponse {
   tenant_id: string
+  method?: string
   weekly_net_baseline: number
   forecast: CashflowBucket[]
+  warnings: string[]
+}
+
+interface CashflowHistoryResponse {
+  tenantId: string
+  source: 'ar_ap' | 'revenue_proxy'
+  history: Array<{ period: string; inflow: number; outflow: number }>
   warnings: string[]
 }
 
@@ -120,20 +128,26 @@ export default function DashboardPage() {
   const revenueSpark = chartData.slice(-8).map((d) => d.revenue)
   const ordersSpark = chartData.slice(-8).map((d) => d.orders)
 
+  const cashHistQ = useQuery<CashflowHistoryResponse>({
+    queryKey: ['dashboard', 'cashflow-history'],
+    queryFn: () => api.get<CashflowHistoryResponse>('/analytics/cashflow-history?weeks=16'),
+    refetchInterval: 30_000,
+  })
+
   const cashflowInput = useMemo(() => {
-    if (sortedSnapshots.length < 3) return null
-    const tail = sortedSnapshots.slice(-20)
-    const tenantId = tail[tail.length - 1]?.tenantId ?? 'tenant'
-    const history = tail.map((s) => ({
-      period: new Date(s.date).toISOString().slice(0, 10),
-      inflow: Number(s.revenue),
-      outflow: Math.max(0, Number(s.revenue) * 0.55),
-    }))
-    return { tenant_id: tenantId, history, horizon_weeks: 13 }
-  }, [sortedSnapshots])
+    const hist = cashHistQ.data?.history ?? []
+    const active = hist.filter((p) => p.inflow > 0 || p.outflow > 0)
+    if (active.length < 3) return null
+    return {
+      tenant_id: cashHistQ.data?.tenantId ?? 'tenant',
+      history: hist,
+      horizon_weeks: 13,
+      seasonal_period: hist.length >= 8 ? 4 : null,
+    }
+  }, [cashHistQ.data])
 
   const cashflowQ = useQuery<CashflowResponse>({
-    queryKey: ['dashboard', 'cashflow', cashflowInput?.tenant_id, sortedSnapshots.length],
+    queryKey: ['dashboard', 'cashflow', cashflowInput?.tenant_id, cashHistQ.dataUpdatedAt],
     enabled: !!cashflowInput,
     queryFn: async () => {
       const res = await fetch('/api/cashflow', {
@@ -147,6 +161,10 @@ export default function DashboardPage() {
     },
     refetchInterval: 30_000,
   })
+
+  const cashflowWarnings = useMemo(() => {
+    return [...(cashHistQ.data?.warnings ?? []), ...(cashflowQ.data?.warnings ?? [])]
+  }, [cashHistQ.data?.warnings, cashflowQ.data?.warnings])
 
   const forecastBalances = useMemo(() => {
     const fc = cashflowQ.data?.forecast ?? []
@@ -246,10 +264,18 @@ export default function DashboardPage() {
 
         <div className="bento-cell bento-tone-white bento-span-4 flex flex-col">
           <h3 className="bento-section-title">Cash outlook</h3>
-          <p className="bento-section-sub">Projected net balance</p>
-          {cashflowQ.isLoading && <div className="skeleton h-28 w-full mt-4" />}
-          {!cashflowQ.isLoading && !cashflowQ.isError && !forecastBalances && (
-            <div className="empty-note mt-4">Need at least three KPI snapshots to forecast cash.</div>
+          <p className="bento-section-sub">
+            Projected net balance
+            {cashflowQ.data?.method ? (
+              <span className="ml-2 font-mono text-[10px] uppercase" style={{ color: 'var(--c-text-3)' }}>
+                {cashflowQ.data.method}
+                {cashHistQ.data?.source === 'ar_ap' ? ' · AR/AP' : cashHistQ.data?.source === 'revenue_proxy' ? ' · proxy' : ''}
+              </span>
+            ) : null}
+          </p>
+          {(cashflowQ.isLoading || cashHistQ.isLoading) && <div className="skeleton h-28 w-full mt-4" />}
+          {!cashflowQ.isLoading && !cashHistQ.isLoading && !cashflowQ.isError && !forecastBalances && (
+            <div className="empty-note mt-4">Need at least three weeks of AR/AP or revenue history to forecast cash.</div>
           )}
           {forecastBalances && (
             <dl className="grid grid-cols-1 gap-2 mt-4 flex-1">
@@ -273,6 +299,11 @@ export default function DashboardPage() {
               ))}
             </dl>
           )}
+          {cashflowWarnings.length > 0 ? (
+            <p className="text-[11px] mt-3 leading-snug" style={{ color: 'var(--c-warning)' }}>
+              {cashflowWarnings[0]}
+            </p>
+          ) : null}
         </div>
 
         <div className="bento-cell bento-tone-white bento-span-8 bento-row-2 min-h-[400px]">
