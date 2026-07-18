@@ -74,8 +74,12 @@ self.addEventListener('fetch', (event) => {
   }
 })
 
+/** Must match OFFLINE_SYNC_TAG in apps/client/src/lib/offline-queue.ts */
+const OFFLINE_SYNC_TAG = 'pleros-offline-queue'
+
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'pleros-offline-queue') {
+  if (event.tag === OFFLINE_SYNC_TAG) {
+    // Wake open clients so they can drain localStorage → API (SW cannot read localStorage)
     event.waitUntil(notifyClientsSync())
   }
 })
@@ -86,7 +90,7 @@ self.addEventListener('message', (event) => {
       (async () => {
         try {
           if (self.registration.sync) {
-            await self.registration.sync.register('pleros-offline-queue')
+            await self.registration.sync.register(OFFLINE_SYNC_TAG)
           }
         } catch {
           // SyncManager unsupported or denied — clients still replay on online

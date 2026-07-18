@@ -1,5 +1,8 @@
 const STORAGE_KEY = 'pleros.offlineQueue'
 
+/** Background Sync tag — must match `sw.js` sync listener. */
+export const OFFLINE_SYNC_TAG = 'pleros-offline-queue'
+
 export type OfflineAction = {
   id: string
   type: string
@@ -21,8 +24,12 @@ function writeQueue(q: OfflineAction[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(q))
 }
 
-async function requestBackgroundSync(): Promise<void> {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+/**
+ * Ask the browser to wake the service worker when connectivity returns
+ * so queued actions can replay without a user tap.
+ */
+export async function requestBackgroundSync(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return false
   try {
     const reg = await navigator.serviceWorker.ready
     const syncManager = (
@@ -31,12 +38,15 @@ async function requestBackgroundSync(): Promise<void> {
       }
     ).sync
     if (syncManager) {
-      await syncManager.register('pleros-offline-queue')
-      return
+      await syncManager.register(OFFLINE_SYNC_TAG)
+      return true
     }
+    // Fallback: ask SW to register (or notify open clients immediately)
     reg.active?.postMessage({ type: 'PLEROS_REGISTER_SYNC' })
+    return false
   } catch {
-    /* SyncManager unsupported — online listener still replays the queue */
+    /* SyncManager unsupported / denied — online + visibility listeners still replay */
+    return false
   }
 }
 
