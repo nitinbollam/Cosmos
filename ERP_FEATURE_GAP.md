@@ -39,7 +39,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 3-way match (PO / receipt / bill) | ✅ | Tier 8 / 12 |
 | Sales tax | ⚠️ Partial | State jurisdiction rates; not full nexus / multi-state engine |
 | Credit memos / returns GL | ✅ | RMA flow |
-| Cashflow forecasting | ✅ | `@pleros/analytics-engine` (EWMA) |
+| Cashflow forecasting | ✅ | EWMA on AR/AP weekly history (`GET /analytics/cashflow-history`); revenue×0.55 proxy only as fallback |
 | Multi-currency / FX | ❌ | Not implemented |
 | Multi-subsidiary consolidation | ❌ | Single tenant org model |
 | Fixed assets / depreciation | ❌ | Not implemented |
@@ -68,7 +68,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | RF scanner / hardware WMS | ⚠️ Partial | Mobile PWA; not industrial RF workflow |
 | Directed putaway | ✅ | Bin suggestion, putaway tasks from receiving, admin confirm |
 | Labor / productivity tracking | ✅ | `WmsLaborEvent` on pick/receive/putaway; 7-day metrics tab |
-| Automated replenishment (MRP) | ✅ | Usage-based demand plan from stock ledger + lead time; reorder suggestions |
+| Automated replenishment (MRP) | ✅ | EWMA demand plan from stock ledger + lead time; reorder suggestions |
 
 **Verdict:** **Mid-tier WMS** — beyond basic pick lists, but below Prophet 21 / NetSuite WMS for high-volume distribution centers.
 
@@ -109,7 +109,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Purchase requisitions / approvals | ❌ | Direct PO only |
 | Landed cost (freight / duty allocation) | ✅ | Freight/duty/other on PO, allocated into unit cost on receive |
 | Vendor scorecards / portal | ❌ | Not implemented |
-| Demand planning / MRP | ✅ | Usage-based demand plan from stock ledger + lead times |
+| Demand planning / MRP | ✅ | EWMA (`USAGE_EWMA` / seasonal) on daily outbound ledger series |
 
 **Verdict:** **Procure-to-pay with landed cost and replenishment planning** is in place; requisition approvals and vendor portals are the remaining gaps.
 
@@ -175,7 +175,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | RBAC | ⚠️ | Coarse role map (`permissions.ts`); not module-level everywhere |
 | Global search | ✅ | Admin |
 | AI assistant (Celestial) | ✅ | RAG + live data tools — rare in ERPs |
-| Deep BI / custom reports | ⚠️ | KPIs + cashflow; no report builder |
+| Deep BI / custom reports | ⚠️ | KPIs + EWMA demand/cashflow; no report builder or anomaly UI |
 | HR / payroll | ❌ | Not implemented |
 | Manufacturing / BOM | ❌ | Not implemented |
 
@@ -200,7 +200,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 |---|-----|----------------|
 | 1 | ~~**General EDI**~~ | ✅ JSON interchange — partners, 850 ingest, 810/856 export |
 | 2 | ~~**Backorder management**~~ | ✅ Shipped — partial allocate, queue, auto-fill on receipt |
-| 3 | ~~**Demand planning**~~ | ✅ Usage forecast from ledger + lead time on stock levels |
+| 3 | ~~**Demand planning**~~ | ✅ EWMA usage forecast from ledger + lead time on stock levels |
 | 4 | ~~**Drop shipping**~~ | ✅ Shipped — DROP_SHIP lines, vendor PO, admin ship |
 | 5 | ~~**Production database path**~~ | ✅ `PLEROS_DB_PROVIDER=postgres`, migrate-all, `db:setup:postgres`, health check |
 
@@ -225,7 +225,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 15 | Fixed assets |
 | 16 | Manufacturing / kitting / BOM |
 | 17 | HR & payroll |
-| 18 | Advanced BI / AI forecasting (beyond cashflow EWMA) |
+| 18 | Advanced BI / AI forecasting | ⚠️ Partial — demand EWMA (`USAGE_EWMA` / seasonal) + AR/AP cashflow history. Deferred: Croston, forecast-accuracy store, auto-PO from plan, report builder, anomaly UI |
 | 19 | ~~Labor management in WMS~~ | ✅ Basic productivity metrics |
 
 **Suggested implementation order:** ~~EDI → demand planning → Postgres hardening → landed cost~~ (shipped). Next: purchase requisitions, deeper tax, report builder.

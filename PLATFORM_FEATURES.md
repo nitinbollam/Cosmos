@@ -204,8 +204,10 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 |------------|-------|
 | Dashboard KPIs | `GET /api/v1/analytics/kpis`, admin dashboard |
 | KPI snapshots | `GET /api/v1/kpi/snapshots` — feeds revenue chart |
-| Cashflow forecast | `POST /api/cashflow` — `@pleros/analytics-engine` |
-| Anomaly detection | `POST /api/anomaly` |
+| Cashflow history | `GET /api/v1/analytics/cashflow-history` — weekly AR/AP collections (revenue proxy fallback) |
+| Cashflow forecast | `POST /api/cashflow` — `@pleros/analytics-engine` EWMA (+ seasonal when history ≥ 8 weeks) |
+| Demand forecast | `forecastDemandUsage` in analytics-engine; `GET /inventory/demand-plan` uses ledger daily series + EWMA |
+| Anomaly detection | `POST /api/anomaly` (engine only; no admin UI yet) |
 | Trial balance | Finance page + ledger API |
 | **AR invoicing** | Auto-issue on ship, invoice list/detail, balance & overdue |
 | **Credit memos** | Returns flow posts credit + optional GL |
@@ -477,7 +479,7 @@ Summary of major work completed in the current development cycle.
 | Item | What was added |
 |------|----------------|
 | **17.1 EDI** | Trading partners (Settings → Integrations), inbound 850 → orders, outbound 810/856 documents, `OrderChannel.EDI` |
-| **17.2 Demand planning** | Usage from stock ledger + lead times; `GET /inventory/demand-plan`, `GET /skus/:id/demand-plan`; replenishment table on inventory page |
+| **17.2 Demand planning** | EWMA on daily outbound ledger series (~70d); methods `USAGE_EWMA` / `USAGE_EWMA_SEASONAL` / `STATIC_REORDER`; `GET /inventory/demand-plan`, replenishment table shows method + EWMA/day |
 | **17.3 Landed cost** | Freight/duty/other on PO allocated into inventory unit cost on receive; PO detail UI |
 | **17.4 Postgres hardening** | `PLEROS_DB_PROVIDER=postgres`, `npm run db:setup:postgres`, dual-mode `migrate-all.ts`, `GET /health/db` |
 
@@ -518,6 +520,8 @@ Summary of major work completed in the current development cycle.
 | `apps/web/lib/server/celestial/compose.test.ts` | Direct compose tables, doc fallback replies |
 | `apps/web/lib/server/celestial/retrieval.test.ts` | RAG chunk loading, POS/FAQ/warehouse retrieval |
 | `packages/analytics-engine/src/cashflow.test.ts` | Cashflow forecast |
+| `packages/analytics-engine/src/demand.test.ts` | Demand EWMA forecast |
+| `apps/web/lib/server/cashflow-history.test.ts` | AR/AP weekly bucket helpers |
 | `packages/web-gateway-client/src/resolve-gateway.test.ts` | API base URL |
 | `apps/client/src/lib/admin-path.test.ts` | Admin path helpers |
 

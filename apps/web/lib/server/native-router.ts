@@ -1515,9 +1515,15 @@ async function routeKpi(method: string, seg: string[], req: Request): Promise<Re
 async function routeAnalytics(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   assertNotBuyer(session)
+  const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'kpis' && method === 'GET') {
     return Response.json(await analytics.dashboardKpis(session.tenantId))
+  }
+  if (seg.length === 2 && seg[1] === 'cashflow-history' && method === 'GET') {
+    const cashflowHistory = await import('./cashflow-history')
+    const weeks = +(url.searchParams.get('weeks') ?? 16)
+    return Response.json(await cashflowHistory.buildArApCashflowHistory(session.tenantId, weeks))
   }
   throw new ApiError(404, 'Analytics route not found')
 }
