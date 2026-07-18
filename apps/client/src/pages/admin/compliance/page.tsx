@@ -333,10 +333,8 @@ export default function CompliancePage() {
           <Card>
             <CardTitle>Recording liabilities</CardTitle>
             <p className="text-sm text-pleros-muted mt-3 leading-relaxed">
-              Ops integrations call <span className="font-mono text-xs">POST /tax/record</span> with order line
-              items to publish <span className="font-mono text-xs">TAX_LIABILITY_RECORDED</span>. There is no list
-              API for raw transactions in the admin UI yet; use this card as a quick exposure read from stored MSA
-              data.
+              Tax liabilities are recorded when orders with taxable lines are processed. This card shows exposure from
+              stored compliance data. A full transaction list will land in a later release.
             </p>
           </Card>
         </div>

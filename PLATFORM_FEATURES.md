@@ -138,7 +138,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 
 **Layout:** `layouts/MobileLayout.tsx` — tab bar, logo header, safe-area padding.
 
-**Offline:** `lib/offline-queue.ts` + `OfflineBanner` — localStorage action queue (no full service-worker sync yet).
+**Offline / PWA:** `sw.js` precaches shell + Vite assets; `offline-queue.ts` registers Background Sync; install hint on `/m/login`; icons include 192×192.
 
 ---
 

@@ -154,6 +154,7 @@ Optional: Docker Compose / K8s / Terraform under `infra/` and `docker-compose*.y
 | [`PLATFORM_FEATURES.md`](PLATFORM_FEATURES.md) | Feature reference and tier changelog |
 | [`ERP_FEATURE_GAP.md`](ERP_FEATURE_GAP.md) | Roadmap vs industry ERPs |
 | [`MISSING.md`](MISSING.md) | Short infra backlog |
+| [`docs/QA_STAGING_CHECKLIST.md`](docs/QA_STAGING_CHECKLIST.md) | Staging QA pass (auth, admin, buyer, mobile, billing, copy) |
 | [`docs/celestial/`](docs/celestial/) | Celestial AI knowledge base |
 
 ## License

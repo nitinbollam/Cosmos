@@ -164,7 +164,7 @@ Both are in Finance module with separate tabs. GL auto-posts journal entries for
 
 ## How do mobile apps work offline?
 
-Mobile PWA uses a service worker (`sw.js`) and localStorage action queue. Actions taken offline replay when connectivity returns (Background Sync). `OfflineBanner` shows sync status on mobile pages.
+Mobile PWA uses a service worker (`sw.js`) that precaches the app shell and hashed assets, plus a localStorage action queue. Enqueued offline actions call `SyncManager.register('pleros-offline-queue')` and replay when connectivity returns. Install from `/m/login` (Add to Home Screen / Install app). `OfflineBanner` shows sync status on mobile pages.
 
 ---
 

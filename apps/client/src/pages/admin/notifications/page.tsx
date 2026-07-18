@@ -86,8 +86,8 @@ export default function NotificationsPage() {
       </Card>
 
       <p className="text-xs text-pleros-muted">
-        System sends use <span className="font-mono">POST /notifications/send</span> with an optional{' '}
-        <span className="font-mono">Idempotency-Key</span> header.
+        Outbound notifications are sent by the platform when events fire (orders, invoices, invites). Duplicate sends
+        are prevented automatically.
       </p>
     </div>
   )
