@@ -24,12 +24,42 @@ export function OfflineBanner() {
     }
   }, [])
 
+  // Auto-drain when back online — no tap required (Background Sync / online listener also do this)
+  useEffect(() => {
+    if (offline || pending === 0) return
+    let cancelled = false
+    setSyncing(true)
+    setMsg(null)
+    void replayOfflineQueue()
+      .then((result) => {
+        if (cancelled) return
+        setPending(queueLength())
+        if (result.synced > 0) {
+          setMsg(`Synced ${result.synced} action(s)`)
+        } else if (readQueue().length > 0) {
+          setMsg('Some actions failed — will retry')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSyncing(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [offline, pending])
+
   async function syncNow() {
     setSyncing(true)
     setMsg(null)
     try {
       const result = await replayOfflineQueue()
-      setMsg(result.synced > 0 ? `Synced ${result.synced} action(s)` : readQueue().length ? 'Some actions failed' : 'Queue empty')
+      setMsg(
+        result.synced > 0
+          ? `Synced ${result.synced} action(s)`
+          : readQueue().length
+            ? 'Some actions failed — will retry'
+            : 'Queue empty',
+      )
       setPending(queueLength())
     } finally {
       setSyncing(false)
@@ -51,17 +81,17 @@ export function OfflineBanner() {
         marginBottom: 12,
       }}
     >
-      {offline ? 'Offline — actions queue locally' : null}
-      {!offline && pending > 0 ? `${pending} queued action(s)` : null}
-      {pending > 0 && !offline ? (
+      {offline ? 'Offline — actions queue locally and sync when online' : null}
+      {!offline && syncing && pending > 0 ? 'Syncing queued actions…' : null}
+      {!offline && !syncing && pending > 0 ? `${pending} queued action(s)` : null}
+      {pending > 0 && !offline && !syncing ? (
         <button
           type="button"
           className="btn-ghost"
           style={{ marginLeft: 8, fontSize: 12, padding: '2px 8px' }}
-          disabled={syncing}
           onClick={() => void syncNow()}
         >
-          {syncing ? 'Syncing…' : 'Sync now'}
+          Retry now
         </button>
       ) : null}
       {msg ? <span style={{ display: 'block', fontWeight: 400, marginTop: 4 }}>{msg}</span> : null}
