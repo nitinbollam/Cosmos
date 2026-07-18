@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
+import { PwaInstallHint } from '@/components/mobile/pwa-install-hint'
 import { api, formatApiReachabilityError } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
 import { parseJwtPayload } from '@/lib/jwt'
@@ -51,7 +52,9 @@ export default function MobileLoginPage() {
         <span style={{ fontWeight: 700, flex: 1, fontFamily: 'var(--font-display)' }}>Pleros Mobile</span>
       </header>
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <form onSubmit={submit} className="pleros-mobile-card w-full max-w-sm space-y-4">
+        <div className="w-full max-w-sm">
+          <PwaInstallHint />
+        <form onSubmit={submit} className="pleros-mobile-card w-full space-y-4">
           <div>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', margin: 0 }}>Sign in</h1>
             <p style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>Warehouse, delivery, and field sales</p>
@@ -69,6 +72,7 @@ export default function MobileLoginPage() {
             </Link>
           </p>
         </form>
+        </div>
       </main>
     </div>
   )

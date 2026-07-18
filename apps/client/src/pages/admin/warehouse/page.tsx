@@ -1567,8 +1567,7 @@ export default function WarehousePage() {
         </label>
         <input type="date" className="pleros-input mb-4" value={countScheduled} onChange={(e) => setCountScheduled(e.target.value)} />
         <p className="text-xs mb-4" style={{ color: 'var(--c-text-3)' }}>
-          Creates a count via POST /wms/cycle-counts. Lines are seeded from inventory levels for this warehouse when the
-          integration is configured.
+          Creates a cycle count for this warehouse. Lines are seeded from current inventory levels when available.
         </p>
         <button
           type="button"

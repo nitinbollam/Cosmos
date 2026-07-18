@@ -21,6 +21,25 @@ function writeQueue(q: OfflineAction[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(q))
 }
 
+async function requestBackgroundSync(): Promise<void> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+  try {
+    const reg = await navigator.serviceWorker.ready
+    const syncManager = (
+      reg as ServiceWorkerRegistration & {
+        sync?: { register: (tag: string) => Promise<void> }
+      }
+    ).sync
+    if (syncManager) {
+      await syncManager.register('pleros-offline-queue')
+      return
+    }
+    reg.active?.postMessage({ type: 'PLEROS_REGISTER_SYNC' })
+  } catch {
+    /* SyncManager unsupported — online listener still replays the queue */
+  }
+}
+
 export function enqueueAction(type: string, payload: unknown): void {
   const q = readQueue()
   q.push({
@@ -31,6 +50,7 @@ export function enqueueAction(type: string, payload: unknown): void {
   })
   writeQueue(q)
   window.dispatchEvent(new CustomEvent('pleros-offline-queue-changed'))
+  void requestBackgroundSync()
 }
 
 export function removeAction(id: string): void {
