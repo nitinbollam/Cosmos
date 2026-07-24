@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
+import { downloadCsv } from '@/lib/csv-download'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 
@@ -32,29 +33,24 @@ type InvoiceRow = {
 
 type InvoiceList = { items: InvoiceRow[]; total: number; page: number; pageSize: number; hasMore?: boolean }
 
+type ArSummary = {
+  invoiced: number
+  collected: number
+  outstanding: number
+  count: number
+  aging: { current: number; d30: number; d60: number; d90: number; d90p: number }
+}
+
 const INVOICES_PAGE_SIZE = 25
+const EXPORT_PAGE_SIZE = 100
 
-function csvEscape(value: unknown): string {
-  const s = value == null ? '' : String(value)
-  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
-}
-
-function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>): void {
-  const lines = [headers.join(','), ...rows.map((r) => r.map(csvEscape).join(','))]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function invoiceStatusQuery(filter: string): string {
-  if (filter === 'ISSUED' || filter === 'PARTIALLY_PAID' || filter === 'PAID' || filter === 'OVERDUE') {
-    return `&status=${encodeURIComponent(filter)}`
-  }
-  return ''
+function invoiceListQuery(filter: string, page: number, pageSize: number): string {
+  const q = new URLSearchParams()
+  q.set('page', String(page))
+  q.set('pageSize', String(pageSize))
+  if (filter === 'ALL') q.set('excludeCancelled', '1')
+  else q.set('status', filter)
+  return q.toString()
 }
 
 type PoRow = {
@@ -171,18 +167,15 @@ export default function FinancePage() {
   const [invoicePage, setInvoicePage] = useState(1)
   const [exportingInvoices, setExportingInvoices] = useState(false)
 
-  const invoicesSummaryQ = useQuery({
+  const arSummaryQ = useQuery({
     queryKey: ['finance', 'invoices-ar-summary'],
-    queryFn: () => api.get<InvoiceList>('/invoices?page=1&pageSize=500'),
+    queryFn: () => api.get<ArSummary>('/invoices/ar-summary'),
     enabled: tab === 'invoices',
   })
 
   const invoicesQ = useQuery({
     queryKey: ['finance', 'invoices-ar', invoicePage, invFilter],
-    queryFn: () =>
-      api.get<InvoiceList>(
-        `/invoices?page=${invoicePage}&pageSize=${INVOICES_PAGE_SIZE}${invoiceStatusQuery(invFilter)}`,
-      ),
+    queryFn: () => api.get<InvoiceList>(`/invoices?${invoiceListQuery(invFilter, invoicePage, INVOICES_PAGE_SIZE)}`),
     enabled: tab === 'invoices',
     placeholderData: (prev) => prev,
   })
@@ -251,49 +244,10 @@ export default function FinancePage() {
     },
   })
 
-  const aging = useMemo(() => {
-    const rows = invoicesSummaryQ.data?.items ?? []
-    const open = rows.filter((inv) => inv.balance > 0.01 && inv.order?.status !== 'CANCELLED')
-    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
-    const now = Date.now()
-    for (const inv of open) {
-      const days = (now - new Date(inv.issuedAt).getTime()) / (86400 * 1000)
-      const b = inv.balance
-      if (days <= 30) buckets.current += b
-      else if (days <= 60) buckets.d30 += b
-      else if (days <= 90) buckets.d60 += b
-      else if (days <= 120) buckets.d90 += b
-      else buckets.d90p += b
-    }
-    return buckets
-  }, [invoicesSummaryQ.data])
+  const aging = arSummaryQ.data?.aging ?? { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
+  const arSummary = arSummaryQ.data ?? { invoiced: 0, collected: 0, outstanding: 0, count: 0, aging }
 
-  const arSummary = useMemo(() => {
-    const rows = (invoicesSummaryQ.data?.items ?? []).filter((inv) => inv.order?.status !== 'CANCELLED')
-    let invoiced = 0
-    let collected = 0
-    for (const inv of rows) {
-      invoiced += Number(inv.totalAmount) + Number(inv.amountCredited ?? 0)
-      collected += Number(inv.amountPaid ?? 0)
-    }
-    return {
-      invoiced,
-      collected,
-      outstanding: rows.reduce((s, inv) => s + inv.balance, 0),
-      count: rows.length,
-    }
-  }, [invoicesSummaryQ.data])
-
-  const filteredInvoices = useMemo(() => {
-    const rows = invoicesQ.data?.items ?? []
-    return rows.filter((inv) => {
-      const st = inv.displayStatus
-      if (invFilter === 'ALL') return inv.order?.status !== 'CANCELLED'
-      if (invFilter === 'FAILED') return inv.order?.status === 'FAILED'
-      return st === invFilter
-    })
-  }, [invoicesQ.data, invFilter])
-
+  const invoiceRows = invoicesQ.data?.items ?? []
   const invoiceTotal = invoicesQ.data?.total ?? 0
   const invoiceTotalPages = Math.max(1, Math.ceil(invoiceTotal / INVOICES_PAGE_SIZE))
 
@@ -302,22 +256,16 @@ export default function FinancePage() {
     try {
       const all: InvoiceRow[] = []
       let page = 1
-      const statusParam = invoiceStatusQuery(invFilter)
       while (true) {
-        const res = await api.get<InvoiceList>(`/invoices?page=${page}&pageSize=100${statusParam}`)
+        const res = await api.get<InvoiceList>(`/invoices?${invoiceListQuery(invFilter, page, EXPORT_PAGE_SIZE)}`)
         all.push(...res.items)
-        if (res.items.length < 100 || page * 100 >= res.total) break
+        if (!res.hasMore || res.items.length === 0 || all.length >= res.total) break
         page += 1
       }
-      const rows = all.filter((inv) => {
-        if (invFilter === 'ALL') return inv.order?.status !== 'CANCELLED'
-        if (invFilter === 'FAILED') return inv.order?.status === 'FAILED'
-        return inv.displayStatus === invFilter
-      })
       downloadCsv(
         `invoices-${new Date().toISOString().slice(0, 10)}.csv`,
         ['Invoice', 'Order', 'Customer', 'Issued', 'Total', 'Paid', 'Balance', 'Status'],
-        rows.map((inv) => [
+        all.map((inv) => [
           inv.invoiceNumber,
           inv.orderId,
           inv.customerId,
@@ -354,6 +302,7 @@ export default function FinancePage() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar-summary'] })
       setPayOrder(null)
       setPayAmount('')
     },
@@ -392,15 +341,11 @@ export default function FinancePage() {
 
   function exportTrialCsv() {
     const rows = trialQ.data ?? []
-    const head = ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net']
-    const lines = [head.join(','), ...rows.map((r) =>
-      [r.accountCode, `"${r.accountName.replace(/"/g, '""')}"`, r.type, r.debits, r.credits, r.netBalance].join(','))]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `pleros-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    downloadCsv(
+      `pleros-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`,
+      ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net'],
+      rows.map((r) => [r.accountCode, r.accountName, r.type, r.debits, r.credits, r.netBalance]),
+    )
   }
 
   const cfChart = useMemo(() => {
@@ -510,7 +455,7 @@ export default function FinancePage() {
           <div className="pleros-card overflow-x-auto">
             {invoicesQ.isLoading ? <div className="skeleton h-40 w-full" /> : invoicesQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>Could not load invoices</p>
-            ) : filteredInvoices.length === 0 ? (
+            ) : invoiceRows.length === 0 ? (
               <EmptyState icon="📄" title="No invoices" description="Invoices are issued when orders ship." />
             ) : (
               <table className="pleros-table">
@@ -528,7 +473,7 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInvoices.map((inv) => (
+                  {invoiceRows.map((inv) => (
                     <tr key={inv.id}>
                       <td className="font-mono text-xs">{inv.invoiceNumber}</td>
                       <td className="font-mono text-xs">{inv.orderId.slice(0, 12)}…</td>
@@ -539,7 +484,7 @@ export default function FinancePage() {
                       <td className="font-mono">{money(inv.balance)}</td>
                       <td><StatusBadge status={inv.displayStatus} /></td>
                       <td className="space-x-2">
-                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && (
+                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && inv.order?.status !== 'FAILED' && (
                           <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
                             setPayOrder(inv)
                             setPayAmount(String(inv.balance.toFixed(2)))

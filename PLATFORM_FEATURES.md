@@ -100,7 +100,8 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion, contract/volume pricing |
 | **Quotes** | `/admin/quotes` | Admin quote approval, counter-offers |
 | **Dispatch** | `/admin/dispatch` | Delivery routes, stop reorder, driver assignment, map, proof of delivery |
-| **Finance** | `/admin/finance` | **AR invoices**, AP (PO bills), 3-way match, bank recon, trial balance, cashflow chart, record payment |
+| **Finance** | `/admin/finance` | **AR invoices** (paginated + CSV + `GET /invoices/ar-summary`), AP (PO bills), 3-way match, bank recon, trial balance, cashflow chart, record payment |
+| **Reports** | `/admin/reports` | Saved report builder — orders, inventory, AR aging with CSV export |
 | **POS** | `/admin/pos` | In-store checkout: register, customer, SKU cart, cash/card/check, receipt print |
 | **Notifications** | `/admin/notifications` | Notification request inbox (SendGrid/Twilio when configured) |
 | **Celestial** | `/admin/celestial` | Full-page AI copilot (also floating ✦ panel on all admin pages) |
@@ -192,7 +193,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | `ledger` | ChartAccount, JournalEntry, JournalLine |
 | `compliance` | MSATenant, MSAReport, Batch, … |
 | `notification` | NotificationRequest |
-| `analytics` | DailyKpiSnapshot, **CelestialConversation**, **CelestialMessage** |
+| `analytics` | DailyKpiSnapshot, **CelestialConversation**, **CelestialMessage**, **SavedReport** |
 
 **Commands:** `npm run db:setup`, `db:generate`, `db:migrate`, `seed`.
 
@@ -205,6 +206,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | Dashboard KPIs | `GET /api/v1/analytics/kpis`, admin dashboard |
 | KPI snapshots | `GET /api/v1/kpi/snapshots` — feeds revenue chart |
 | Cashflow history | `GET /api/v1/analytics/cashflow-history` — weekly AR/AP collections (revenue proxy fallback) |
+| Report builder | `GET/POST /api/v1/report-builder/*` — saved reports + run/export for orders, inventory, AR aging |
 | Cashflow forecast | `POST /api/cashflow` — `@pleros/analytics-engine` EWMA (+ seasonal when history ≥ 8 weeks) |
 | Demand forecast | `forecastDemandUsage` in analytics-engine; `GET /inventory/demand-plan` uses ledger daily series + EWMA |
 | Anomaly detection | `POST /api/anomaly` (engine only; no admin UI yet) |
@@ -268,7 +270,7 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **4.1 Invoicing & AR** | `Invoice` model; auto-issue on ship (`issueInvoiceForOrder`); `GET /invoices`, `GET /invoices/:id`, `GET /orders/:id/invoice`; Finance AR tab; GL posting via `invoice-gl.ts` |
+| **4.1 Invoicing & AR** | `Invoice` model; auto-issue on ship (`issueInvoiceForOrder`); `GET /invoices` (page/pageSize), `GET /invoices/ar-summary`, `GET /invoices/:id`, `GET /orders/:id/invoice`; Finance AR tab with CSV export; GL posting via `invoice-gl.ts` |
 | **4.2 Returns / RMA** | `POST /orders/:id/returns` — restock, credit memo, `returnedQty` on line items, `RETURNED` status; admin order detail “Process return” modal |
 | **4.3 Buyer-scoped quotes** | Quote list/create/get filtered by buyer `customerRef`; wired in `native-router.ts` |
 | **4.4 UI, seed & tests** | Finance/orders/quotes UI updates; `seedInvoices` in seed script; `tier4.test.ts` |
@@ -353,7 +355,7 @@ Summary of major work completed in the current development cycle.
 | **8.8 Split shipments & ETA** | `OrderShipment` model; `GET /orders/:id/tracking` |
 | **8.9 Saved payment methods** | `SavedPaymentMethod` + buyer API |
 | **8.10 Wave picking & bins** | `PickWave`, `BinLocation` models + APIs |
-| **8.11 Barcode labels** | `GET /skus/:id/label` printable HTML |
+| **8.11 Barcode labels** | `GET /skus/:id/label` printable HTML with Code128 + QR (`size`, `symbols`, `qty`) |
 | **8.12 Platform** | Audit log, RBAC permissions map, feature flags, global search, public signup, POS registers |
 
 **Key files:** `operations-gl.ts`, `bank-recon.ts`, `order-templates.ts`, `order-shipments.ts`, `wave-picking.ts`, `audit-log.ts`, `pos.ts`, `search.ts`, `signup.ts`.
@@ -401,7 +403,7 @@ Summary of major work completed in the current development cycle.
 | Item | What was added |
 |------|----------------|
 | **12.1 3-way AP match UI** | Finance → Bills: match status column, filters, detail modal, re-run match |
-| **12.2 Barcode label print** | SKU detail: print qty + opens printable HTML label (`GET /skus/:id/label`) |
+| **12.2 Barcode label print** | SKU detail: size / Code128·QR / qty → printable HTML (`GET /skus/:id/label`) |
 | **12.3 Mobile wave picking** | `/m/warehouse` Waves tab + wave detail with start/complete and task links |
 | **12.4 Seed polish** | Demo vendor bill MATCHED; seed pick wave for mobile warehouse demo |
 

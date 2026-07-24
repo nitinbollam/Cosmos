@@ -19,6 +19,7 @@ const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin/quotes', label: 'Quotes', icon: 'orders' },
   { href: '/admin/dispatch', label: 'Dispatch', icon: 'dispatch' },
   { href: '/admin/finance', label: 'Finance', icon: 'finance' },
+  { href: '/admin/reports', label: 'Reports', icon: 'reports' },
   { href: '/admin/pos', label: 'POS', icon: 'orders' },
   { href: '/admin/notifications', label: 'Notifications', icon: 'notifications' },
   { href: '/admin/celestial', label: 'Celestial', icon: 'celestial', feature: 'celestial' },

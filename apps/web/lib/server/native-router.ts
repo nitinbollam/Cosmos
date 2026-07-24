@@ -24,6 +24,7 @@ import * as complianceTax from './compliance-tax'
 import * as notifications from './notifications'
 import * as ledger from './ledger'
 import * as analytics from './analytics'
+import * as reportBuilder from './report-builder'
 import * as webhooks from './webhooks'
 import * as apBills from './ap-bills'
 import * as pricing from './pricing'
@@ -94,6 +95,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'journal-entries') return await routeJournalEntries(m, seg, req)
     if (seg[0] === 'chart-accounts') return await routeChartAccounts(m, seg, req)
     if (seg[0] === 'reports') return await routeReports(m, seg, req)
+    if (seg[0] === 'report-builder') return await routeReportBuilder(m, seg, req)
     if (seg[0] === 'kpi') return await routeKpi(m, seg, req)
     if (seg[0] === 'analytics') return await routeAnalytics(m, seg, req)
     if (seg[0] === 'internal') return await routeInternal(m, seg, req)
@@ -264,7 +266,9 @@ async function routeSkus(method: string, seg: string[], req: Request): Promise<R
   }
   if (seg.length === 3 && seg[2] === 'label' && method === 'GET') {
     const qty = +(url.searchParams.get('qty') ?? 1)
-    const html = await barcodeLabels.buildSkuLabelHtml(session.tenantId, seg[1], qty)
+    const size = url.searchParams.get('size') ?? undefined
+    const symbols = url.searchParams.get('symbols') ?? undefined
+    const html = await barcodeLabels.buildSkuLabelHtml(session.tenantId, seg[1], { quantity: qty, size, symbols })
     return new Response(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="label-${seg[1]}.html"` },
     })
@@ -679,10 +683,15 @@ async function routeInvoices(method: string, seg: string[], req: Request): Promi
         {
           status: url.searchParams.get('status') ?? undefined,
           customerId: buyerCustomerId ? undefined : url.searchParams.get('customerId') ?? undefined,
+          excludeCancelled: url.searchParams.get('excludeCancelled') === '1',
         },
         buyerOpts,
       ),
     )
+  }
+  if (seg.length === 2 && seg[1] === 'ar-summary' && method === 'GET') {
+    assertNotBuyer(session)
+    return Response.json(await invoices.getArSummary(session.tenantId))
   }
   if (seg.length === 2 && method === 'GET') {
     return Response.json(await invoices.getInvoice(session.tenantId, seg[1], buyerOpts))
@@ -1500,6 +1509,72 @@ async function routeReports(method: string, seg: string[], req: Request): Promis
     return Response.json(await ledger.trialBalance(session.tenantId, year, month))
   }
   throw new ApiError(404, 'Report route not found')
+}
+
+async function routeReportBuilder(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requireRole(req, ADMIN_ROLES)
+  const url = new URL(req.url)
+
+  if (seg.length === 2 && seg[1] === 'types' && method === 'GET') {
+    return Response.json(reportBuilder.reportCatalog())
+  }
+
+  if (seg.length === 2 && seg[1] === 'run' && method === 'POST') {
+    const body = (await req.json()) as { type?: string; filters?: unknown; format?: string }
+    if (!reportBuilder.isReportType(body.type)) throw new ApiError(400, 'Invalid report type')
+    const result = await reportBuilder.runReport(session.tenantId, body.type, body.filters)
+    if (body.format === 'csv') {
+      const stamp = new Date().toISOString().slice(0, 10)
+      return reportBuilder.toCsvResponse(result, `${body.type.toLowerCase()}-${stamp}.csv`)
+    }
+    return Response.json(result)
+  }
+
+  if (seg.length === 2 && seg[1] === 'saved' && method === 'GET') {
+    const mine = url.searchParams.get('mine') === '1'
+    return Response.json(await reportBuilder.listSavedReports(session.tenantId, mine ? session.userId : undefined))
+  }
+
+  if (seg.length === 2 && seg[1] === 'saved' && method === 'POST') {
+    const body = (await req.json()) as { name?: string; type?: string; filters?: unknown }
+    if (!body.name?.trim()) throw new ApiError(400, 'name is required')
+    if (!reportBuilder.isReportType(body.type)) throw new ApiError(400, 'Invalid report type')
+    return Response.json(
+      await reportBuilder.createSavedReport(session.tenantId, session.userId, {
+        name: body.name,
+        type: body.type,
+        filters: body.filters,
+      }),
+      { status: 201 },
+    )
+  }
+
+  if (seg.length === 3 && seg[1] === 'saved' && method === 'GET') {
+    return Response.json(await reportBuilder.getSavedReport(session.tenantId, seg[2]))
+  }
+
+  if (seg.length === 3 && seg[1] === 'saved' && method === 'PATCH') {
+    const body = (await req.json()) as { name?: string; filters?: unknown }
+    return Response.json(await reportBuilder.updateSavedReport(session.tenantId, seg[2], body))
+  }
+
+  if (seg.length === 3 && seg[1] === 'saved' && method === 'DELETE') {
+    return Response.json(await reportBuilder.deleteSavedReport(session.tenantId, seg[2]))
+  }
+
+  if (seg.length === 4 && seg[1] === 'saved' && seg[3] === 'run' && method === 'POST') {
+    const body = (await req.json().catch(() => ({}))) as { format?: string }
+    const result = await reportBuilder.runSavedReport(session.tenantId, seg[2])
+    if (body.format === 'csv') {
+      const saved = await reportBuilder.getSavedReport(session.tenantId, seg[2])
+      const stamp = new Date().toISOString().slice(0, 10)
+      const safe = saved.name.replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 48)
+      return reportBuilder.toCsvResponse(result, `${safe || saved.type.toLowerCase()}-${stamp}.csv`)
+    }
+    return Response.json(result)
+  }
+
+  throw new ApiError(404, 'Report builder route not found')
 }
 
 async function routeKpi(method: string, seg: string[], req: Request): Promise<Response> {

@@ -68,6 +68,8 @@ export default function SkuDetailPage() {
   const [recvOpen, setRecvOpen] = useState(false)
   const [xferOpen, setXferOpen] = useState(false)
   const [labelQty, setLabelQty] = useState(1)
+  const [labelSize, setLabelSize] = useState('4x2')
+  const [labelSymbols, setLabelSymbols] = useState('both')
 
   const [recvWh, setRecvWh] = useState('')
   const [recvQty, setRecvQty] = useState(1)
@@ -123,7 +125,12 @@ export default function SkuDetailPage() {
   async function printLabel() {
     const token = localStorage.getItem('pleros.accessToken')
     const qty = Math.max(1, labelQty)
-    const res = await fetch(`/api/v1/skus/${encodeURIComponent(skuId)}/label?qty=${qty}`, {
+    const params = new URLSearchParams({
+      qty: String(qty),
+      size: labelSize,
+      symbols: labelSymbols,
+    })
+    const res = await fetch(`/api/v1/skus/${encodeURIComponent(skuId)}/label?${params}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (!res.ok) return
@@ -282,7 +289,28 @@ export default function SkuDetailPage() {
             <button type="button" className="btn-ghost !text-sm" onClick={() => setXferOpen(true)}>
               Transfer
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="pleros-input !w-auto !py-1.5 !text-sm"
+                value={labelSize}
+                onChange={(e) => setLabelSize(e.target.value)}
+                aria-label="Label size"
+              >
+                <option value="4x2">4×2 in</option>
+                <option value="4x1">4×1 in</option>
+                <option value="3x2">3×2 in</option>
+                <option value="2x1">2×1 in</option>
+              </select>
+              <select
+                className="pleros-input !w-auto !py-1.5 !text-sm"
+                value={labelSymbols}
+                onChange={(e) => setLabelSymbols(e.target.value)}
+                aria-label="Barcode type"
+              >
+                <option value="both">Code128 + QR</option>
+                <option value="code128">Code128 only</option>
+                <option value="qr">QR only</option>
+              </select>
               <input
                 type="number"
                 min={1}

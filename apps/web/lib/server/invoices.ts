@@ -200,26 +200,111 @@ export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
   })
 }
 
+export type ArAgingBuckets = {
+  current: number
+  d30: number
+  d60: number
+  d90: number
+  d90p: number
+}
+
+export type ArSummary = {
+  invoiced: number
+  collected: number
+  outstanding: number
+  count: number
+  aging: ArAgingBuckets
+}
+
+/** Pure aging bucket helper (days since issue → outstanding balance bucket). */
+export function bucketArAging(days: number, balance: number, buckets: ArAgingBuckets): void {
+  if (balance <= 0.01) return
+  if (days <= 30) buckets.current += balance
+  else if (days <= 60) buckets.d30 += balance
+  else if (days <= 90) buckets.d60 += balance
+  else if (days <= 120) buckets.d90 += balance
+  else buckets.d90p += balance
+}
+
+/**
+ * Lean AR totals + aging for Finance KPIs — aggregates on the server so the
+ * browser never loads hundreds of invoice rows just for summary cards.
+ */
+export async function getArSummary(tenantId: string): Promise<ArSummary> {
+  const rows = await orderDb.invoice.findMany({
+    where: { tenantId },
+    select: {
+      totalAmount: true,
+      amountPaid: true,
+      amountCredited: true,
+      issuedAt: true,
+      order: { select: { status: true } },
+    },
+  })
+
+  const aging: ArAgingBuckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
+  let invoiced = 0
+  let collected = 0
+  let outstanding = 0
+  let count = 0
+  const now = Date.now()
+
+  for (const inv of rows) {
+    if (inv.order.status === 'CANCELLED') continue
+    count += 1
+    const total = Number(inv.totalAmount)
+    const paid = Number(inv.amountPaid)
+    const credited = Number(inv.amountCredited)
+    const balance = invoiceBalance(total, paid, credited)
+    invoiced += total + credited
+    collected += paid
+    outstanding += balance
+    if (inv.order.status === 'FAILED') continue
+    const days = (now - inv.issuedAt.getTime()) / 86_400_000
+    bucketArAging(days, balance, aging)
+  }
+
+  return {
+    invoiced: +invoiced.toFixed(2),
+    collected: +collected.toFixed(2),
+    outstanding: +outstanding.toFixed(2),
+    count,
+    aging: {
+      current: +aging.current.toFixed(2),
+      d30: +aging.d30.toFixed(2),
+      d60: +aging.d60.toFixed(2),
+      d90: +aging.d90.toFixed(2),
+      d90p: +aging.d90p.toFixed(2),
+    },
+  }
+}
+
 export async function listInvoices(
   tenantId: string,
   page = 1,
   pageSize = 50,
-  filters?: { status?: string; customerId?: string },
+  filters?: { status?: string; customerId?: string; excludeCancelled?: boolean },
   opts?: { buyerCustomerId?: string },
 ) {
+  const safePage = Math.max(1, page)
+  const safePageSize = Math.min(100, Math.max(1, pageSize))
   const where: Prisma.InvoiceWhereInput = { tenantId }
   if (opts?.buyerCustomerId) {
     where.customerId = opts.buyerCustomerId
   } else if (filters?.customerId?.trim()) {
     where.customerId = filters.customerId.trim()
   }
-  if (filters?.status && filters.status !== 'ALL') {
-    if (filters.status === 'OVERDUE') {
+
+  const status = filters?.status?.trim()
+  if (status && status !== 'ALL') {
+    if (status === 'FAILED') {
+      where.order = { status: 'FAILED' }
+    } else if (status === 'OVERDUE') {
       const raw = await orderDb.invoice.findMany({
-        where: { ...where, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } },
+        where: { ...where, status: { in: ['ISSUED', 'PARTIALLY_PAID'] }, order: { status: { notIn: ['CANCELLED', 'FAILED'] } } },
         include: { order: { select: { status: true, paymentMethod: true, channel: true } }, creditMemos: true },
         orderBy: { issuedAt: 'desc' },
-        take: 500,
+        take: 2000,
       })
       const overdue = raw.filter(
         (inv) =>
@@ -232,7 +317,7 @@ export async function listInvoices(
             issuedAt: inv.issuedAt,
           }) === 'OVERDUE',
       )
-      const slice = overdue.slice((page - 1) * pageSize, page * pageSize)
+      const slice = overdue.slice((safePage - 1) * safePageSize, safePage * safePageSize)
       return {
         items: slice.map((inv) => ({
           ...inv,
@@ -240,12 +325,16 @@ export async function listInvoices(
           displayStatus: 'OVERDUE' as const,
         })),
         total: overdue.length,
-        page,
-        pageSize,
-        hasMore: page * pageSize < overdue.length,
+        page: safePage,
+        pageSize: safePageSize,
+        hasMore: safePage * safePageSize < overdue.length,
       }
+    } else {
+      where.status = status as never
+      where.order = { status: { notIn: ['CANCELLED', 'FAILED'] } }
     }
-    where.status = filters.status as never
+  } else if (filters?.excludeCancelled) {
+    where.order = { status: { not: 'CANCELLED' } }
   }
 
   const [items, total] = await Promise.all([
@@ -253,8 +342,8 @@ export async function listInvoices(
       where,
       include: { order: { select: { status: true, paymentMethod: true, channel: true } }, creditMemos: true },
       orderBy: { issuedAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (safePage - 1) * safePageSize,
+      take: safePageSize,
     }),
     orderDb.invoice.count({ where }),
   ])
@@ -273,9 +362,9 @@ export async function listInvoices(
       }),
     })),
     total,
-    page,
-    pageSize,
-    hasMore: page * pageSize < total,
+    page: safePage,
+    pageSize: safePageSize,
+    hasMore: safePage * safePageSize < total,
   }
 }
 

@@ -8,6 +8,7 @@ COPY packages/types/package.json ./packages/types/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web-gateway-client/package.json ./packages/web-gateway-client/
 RUN npm ci
+
 FROM node:20-alpine AS builder
 WORKDIR /repo
 COPY --from=deps /repo/node_modules ./node_modules
@@ -19,7 +20,19 @@ COPY scripts ./scripts
 COPY docs ./docs
 COPY PLATFORM_FEATURES.md ./PLATFORM_FEATURES.md
 RUN npm run db:generate -w @pleros/web
+
+# Vite inlines import.meta.env.VITE_* at build time — these must be present
+# before `npm run build -w @pleros/client`. On Render, service env vars with the
+# same names are passed as Docker build-args automatically.
+ARG VITE_GATEWAY_URL=/api/v1
+ARG VITE_STRIPE_PUBLISHABLE_KEY=
+ARG VITE_WEB_ADMIN_ORIGIN=
+ENV VITE_GATEWAY_URL=$VITE_GATEWAY_URL \
+    VITE_STRIPE_PUBLISHABLE_KEY=$VITE_STRIPE_PUBLISHABLE_KEY \
+    VITE_WEB_ADMIN_ORIGIN=$VITE_WEB_ADMIN_ORIGIN
+
 RUN npm run build -w @pleros/client
+
 FROM node:20-alpine AS runner
 WORKDIR /app
 RUN addgroup --system --gid 1001 pleros && adduser --system --uid 1001 pleros
