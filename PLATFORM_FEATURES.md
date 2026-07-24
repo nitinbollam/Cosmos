@@ -138,7 +138,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 
 **Layout:** `layouts/MobileLayout.tsx` — tab bar, logo header, safe-area padding.
 
-**Offline / PWA:** `sw.js` precaches shell + Vite assets; `offline-queue.ts` registers Background Sync; install hint on `/m/login`; icons include 192×192.
+**Offline / PWA:** `sw.js` precaches mobile app shells (`/m/warehouse|delivery|sales|…`) + Vite assets; shell-first navigations and stale-while-revalidate API GETs for instant offline load after first visit; `offline-queue.ts` Background Sync; conflict banner (retry/discard); install hint on `/m/login`; icons include 192×192.
 
 ---
 
@@ -332,7 +332,7 @@ Summary of major work completed in the current development cycle.
 | **7.1 Stripe invoice pay** | `POST /invoices/:id/pay/stripe` + card UI on buyer invoice detail |
 | **7.2 Invoice PDF** | `GET /invoices/:id/pdf` — native PDF (pdfkit); `GET /invoices/:id/html` — print preview |
 | **7.3 Reorder + contract prices** | `GET /orders/:id/reorder-lines` resolves current contract/list prices |
-| **7.4 Offline sync** | Service worker (`public/sw.js`), queue replay (`offline-sync.ts`), mobile sync banner |
+| **7.4 Offline sync** | Service worker app-shell caching (`pwa-shell-routes.json` → precache `/m/*`), SWR API GETs, queue replay, conflict banner (retry + discard) |
 | **7.5 Low-stock PO prefill** | `/admin/purchasing?skuId=` pre-fills PO drawer with `reorderQty` |
 | **7.6 Buyer account portal** | `/account` — credit, terms, address; `PATCH /customers/me` |
 | **7.7 Quote approval** | Statuses OPEN → PENDING_APPROVAL → APPROVED → SUBMITTED; `/admin/quotes` |
