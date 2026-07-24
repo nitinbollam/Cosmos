@@ -1,0 +1,18 @@
+{
+  "shellRoutes": [
+    "/m/login",
+    "/m/warehouse",
+    "/m/warehouse/receiving",
+    "/m/delivery",
+    "/m/sales"
+  ],
+  "staticAssets": [
+    "/",
+    "/index.html",
+    "/manifest.webmanifest",
+    "/favicon-32.png",
+    "/apple-touch-icon.png",
+    "/pleros-icon-192.png",
+    "/pleros-icon-512.png"
+  ]
+}

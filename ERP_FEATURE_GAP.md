@@ -142,7 +142,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Route optimization | ⚠️ Partial | Manual stop reorder; no AI routing |
 | Warehouse mobile | ✅ | Pick, receive, waves |
 | Sales mobile | ✅ | Leads, activities |
-| Offline sync | ⚠️ Partial | `sw.js` + queue + conflict banner (retry/discard); not full offline ERP |
+| Offline sync | ⚠️ Partial | App-shell offline `/m/*` + queue + conflict banner; not full offline ERP |
 
 **Verdict:** Better than many SMB ERPs for **lightweight field apps**; not a full transportation management system.
 

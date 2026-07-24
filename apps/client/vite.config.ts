@@ -6,7 +6,31 @@ import react from '@vitejs/plugin-react'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-/** After build, inject hashed /assets/* URLs into dist/sw.js PRECACHE_URLS. */
+type ShellConfig = {
+  shellRoutes: string[]
+  staticAssets: string[]
+}
+
+function loadShellConfig(): ShellConfig {
+  const cfgPath = path.resolve(__dirname, 'pwa-shell-routes.json')
+  const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf8')) as ShellConfig
+  return {
+    shellRoutes: raw.shellRoutes ?? [],
+    staticAssets: raw.staticAssets ?? [],
+  }
+}
+
+function replaceConstArray(source: string, constName: string, values: string[]): string {
+  const next = `const ${constName} = ${JSON.stringify(values, null, 2)}`
+  const re = new RegExp(`const ${constName} = \\[[\\s\\S]*?\\]`)
+  const replaced = source.replace(re, next)
+  if (replaced === source) {
+    console.warn(`[pwa] Could not inject ${constName} into sw.js`)
+  }
+  return replaced
+}
+
+/** After build, inject shell routes + hashed /assets/* URLs into dist/sw.js. */
 function injectSwPrecache(): Plugin {
   return {
     name: 'pleros-inject-sw-precache',
@@ -16,17 +40,8 @@ function injectSwPrecache(): Plugin {
       const swPath = path.join(dist, 'sw.js')
       if (!fs.existsSync(swPath)) return
 
-      const shell = [
-        '/',
-        '/index.html',
-        '/manifest.webmanifest',
-        '/favicon-32.png',
-        '/apple-touch-icon.png',
-        '/pleros-icon-192.png',
-        '/pleros-icon-512.png',
-        '/m/login',
-        '/m/warehouse',
-      ]
+      const { shellRoutes, staticAssets } = loadShellConfig()
+      const shell = [...staticAssets, ...shellRoutes]
 
       const assetsDir = path.join(dist, 'assets')
       const assetUrls: string[] = []
@@ -40,14 +55,12 @@ function injectSwPrecache(): Plugin {
 
       const precache = [...shell, ...assetUrls]
       let sw = fs.readFileSync(swPath, 'utf8')
-      const next = `const PRECACHE_URLS = ${JSON.stringify(precache, null, 2)}`
-      const replaced = sw.replace(/const PRECACHE_URLS = \[[\s\S]*?\]/, next)
-      if (replaced === sw) {
-        console.warn('[pwa] Could not inject PRECACHE_URLS into sw.js')
-        return
-      }
-      fs.writeFileSync(swPath, replaced)
-      console.log(`[pwa] Injected ${precache.length} URLs into sw.js (${assetUrls.length} assets)`)
+      sw = replaceConstArray(sw, 'MOBILE_SHELL_ROUTES', shellRoutes)
+      sw = replaceConstArray(sw, 'PRECACHE_URLS', precache)
+      fs.writeFileSync(swPath, sw)
+      console.log(
+        `[pwa] Injected ${precache.length} PRECACHE_URLS + ${shellRoutes.length} shell routes into sw.js (${assetUrls.length} assets)`,
+      )
     },
   }
 }
