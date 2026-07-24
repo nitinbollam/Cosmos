@@ -37,6 +37,11 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the Vite SPA at image build time (set in .env.production)
+        VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-/api/v1}
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
+        VITE_WEB_ADMIN_ORIGIN: ${VITE_WEB_ADMIN_ORIGIN:-}
     env_file: [.env.production]
     environment:
       PORT: "4000"

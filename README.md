@@ -137,6 +137,21 @@ Without SendGrid in production, signup still creates accounts and blocks login u
 
 Optional: Docker Compose / K8s / Terraform under `infra/` and `docker-compose*.yml`. See [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md) for security hardening status.
 
+### Vite build-time env (Stripe / gateway)
+
+Checkout and invoice card pay use `import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY`, which Vite **inlines at build time**. For Docker / Render:
+
+| Variable | Staging | Production | Notes |
+|----------|---------|------------|--------|
+| `VITE_STRIPE_PUBLISHABLE_KEY` | `pk_test_…` | `pk_live_…` | Required — avoids “Missing VITE_STRIPE_PUBLISHABLE_KEY” |
+| `VITE_GATEWAY_URL` | `/api/v1` | `/api/v1` | Default OK for same-origin |
+| `VITE_WEB_ADMIN_ORIGIN` | optional | optional | Absolute admin origin if needed |
+
+- Dockerfile: `ARG`/`ENV` before `npm run build -w @pleros/client` ([`apps/web/Dockerfile`](apps/web/Dockerfile)).
+- Render: set the same keys on each service in [`render.yaml`](render.yaml); clear-cache redeploy after changes.
+- Compose: pass via `build.args` in [`docker-compose.production.yml`](docker-compose.production.yml).
+- GHA: `--build-arg` from `secrets.VITE_STRIPE_PUBLISHABLE_KEY` (and optional `VITE_WEB_ADMIN_ORIGIN`).
+
 ### Production identity model
 
 - **New company:** `/signup` → email verification → onboarding.

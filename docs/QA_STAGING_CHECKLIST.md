@@ -42,7 +42,7 @@ Themes to verify where noted: **Obsidian** (default) and **Aurora** (toggle in h
 |---|------|----------|--------|-------|-------|
 | C1 | Buyer login `/login` → `/catalog` | | | | |
 | C2 | Add SKU to cart → `/cart` | | | | |
-| C3 | `/checkout` — NET terms and/or Stripe card path | | | | |
+| C3 | `/checkout` — NET terms and/or Stripe card path (Stripe Elements load; no “Missing VITE_STRIPE_PUBLISHABLE_KEY”) | | | | |
 | C4 | Order confirmation; order appears under `/orders` | | | | |
 | C5 | `/invoices` → open invoice → **Download PDF** is a real `.pdf` | | | | |
 
@@ -64,7 +64,7 @@ Use Chrome DevTools device mode or a real phone. Prefer **installed PWA** from `
 
 ## E. Billing (Settings → Billing)
 
-Requires Stripe **test** keys on staging.
+Requires Stripe **test** keys on staging. `VITE_STRIPE_PUBLISHABLE_KEY=pk_test_…` must be set at **image build** time (Dockerfile ARG / Render env + clear-cache redeploy); runtime-only env is not enough for Elements.
 
 | # | Step | Pass? | Notes |
 |---|------|-------|-------|

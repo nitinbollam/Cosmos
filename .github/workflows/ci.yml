@@ -58,3 +58,7 @@ jobs:
           file: apps/web/Dockerfile
           push: false
           tags: pleros/web:ci
+          build-args: |
+            VITE_GATEWAY_URL=/api/v1
+            VITE_STRIPE_PUBLISHABLE_KEY=pk_test_ci_placeholder
+            VITE_WEB_ADMIN_ORIGIN=

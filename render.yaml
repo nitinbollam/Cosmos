@@ -1,0 +1,166 @@
+# Render Blueprint — bake Vite client env into the Docker image at build time.
+#
+# Vite reads import.meta.env.VITE_* during `npm run build -w @pleros/client`.
+# Render passes service env vars with matching names as Docker build-args
+# (see ARG/ENV in apps/web/Dockerfile).
+#
+# After changing any VITE_* value, trigger a **clear cache & deploy** so the
+# SPA is rebuilt (runtime-only env changes do not update the client bundle).
+#
+# Set secrets marked `sync: false` in the Render dashboard:
+#   Staging:    VITE_STRIPE_PUBLISHABLE_KEY=pk_test_…
+#   Production: VITE_STRIPE_PUBLISHABLE_KEY=pk_live_…
+
+services:
+  - type: web
+    name: pleros-staging
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: develop
+    rootDir: .
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: HOSTNAME
+        value: "0.0.0.0"
+      # ── Vite (build-time — baked into SPA) ──────────────────────────────────
+      - key: VITE_GATEWAY_URL
+        value: /api/v1
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false # pk_test_… — required for checkout / invoice Stripe Elements
+      - key: VITE_WEB_ADMIN_ORIGIN
+        sync: false # optional; blank = same-origin /admin links
+      # ── Runtime ─────────────────────────────────────────────────────────────
+      - key: APP_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: STRIPE_SECRET_KEY
+        sync: false # sk_test_…
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_RETURN_URL
+        sync: false
+      - key: PLEROS_DB_PROVIDER
+        value: postgres
+      - key: PLEROS_CLIENT_ORIGIN
+        sync: false
+      # Per-schema Postgres URLs (or point each at the same DB if consolidated)
+      - key: AUTH_DATABASE_URL
+        sync: false
+      - key: TENANT_DATABASE_URL
+        sync: false
+      - key: INVENTORY_DATABASE_URL
+        sync: false
+      - key: ORDER_DATABASE_URL
+        sync: false
+      - key: CRM_DATABASE_URL
+        sync: false
+      - key: STOREFRONT_DATABASE_URL
+        sync: false
+      - key: PURCHASING_DATABASE_URL
+        sync: false
+      - key: PAYMENT_DATABASE_URL
+        sync: false
+      - key: WMS_DATABASE_URL
+        sync: false
+      - key: DISPATCH_DATABASE_URL
+        sync: false
+      - key: COMPLIANCE_DATABASE_URL
+        sync: false
+      - key: LEDGER_DATABASE_URL
+        sync: false
+      - key: NOTIFICATION_DATABASE_URL
+        sync: false
+      - key: ANALYTICS_DATABASE_URL
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        sync: false
+
+  - type: web
+    name: pleros-production
+    runtime: docker
+    plan: standard
+    region: oregon
+    branch: main
+    rootDir: .
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: HOSTNAME
+        value: "0.0.0.0"
+      # ── Vite (build-time — baked into SPA) ──────────────────────────────────
+      - key: VITE_GATEWAY_URL
+        value: /api/v1
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false # pk_live_…
+      - key: VITE_WEB_ADMIN_ORIGIN
+        sync: false
+      # ── Runtime ─────────────────────────────────────────────────────────────
+      - key: APP_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false # sk_live_…
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_RETURN_URL
+        sync: false
+      - key: PLEROS_DB_PROVIDER
+        value: postgres
+      - key: PLEROS_CLIENT_ORIGIN
+        sync: false
+      - key: AUTH_DATABASE_URL
+        sync: false
+      - key: TENANT_DATABASE_URL
+        sync: false
+      - key: INVENTORY_DATABASE_URL
+        sync: false
+      - key: ORDER_DATABASE_URL
+        sync: false
+      - key: CRM_DATABASE_URL
+        sync: false
+      - key: STOREFRONT_DATABASE_URL
+        sync: false
+      - key: PURCHASING_DATABASE_URL
+        sync: false
+      - key: PAYMENT_DATABASE_URL
+        sync: false
+      - key: WMS_DATABASE_URL
+        sync: false
+      - key: DISPATCH_DATABASE_URL
+        sync: false
+      - key: COMPLIANCE_DATABASE_URL
+        sync: false
+      - key: LEDGER_DATABASE_URL
+        sync: false
+      - key: NOTIFICATION_DATABASE_URL
+        sync: false
+      - key: ANALYTICS_DATABASE_URL
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        sync: false
