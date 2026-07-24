@@ -1,0 +1,71 @@
+{
+  "nodes": [
+    {
+      "id": "pipeline:.github/workflows/ci.yml",
+      "type": "pipeline",
+      "name": "ci.yml",
+      "filePath": ".github/workflows/ci.yml",
+      "summary": "GitHub Actions CI workflow that runs the full preflight suite (lint, tests, and build) against a live Postgres 16 service container on every push and pull request to main or develop, then validates the Docker image builds successfully after the node job passes.",
+      "tags": ["ci-cd", "build-system", "testing", "containerization"],
+      "complexity": "moderate",
+      "languageNotes": "Uses concurrency groups with cancel-in-progress to avoid redundant runs on rapid pushes. The docker job is gated on the node job and only runs on push events (not PRs) to skip expensive Docker builds during code review."
+    },
+    {
+      "id": "pipeline:.github/workflows/deploy-production.yml",
+      "type": "pipeline",
+      "name": "deploy-production.yml",
+      "filePath": ".github/workflows/deploy-production.yml",
+      "summary": "GitHub Actions workflow that builds and pushes the cosmos/web Docker image to AWS ECR, then performs a rolling deployment to the EKS cosmos-production cluster on semantic version tags or manual dispatch, with PagerDuty failure alerting.",
+      "tags": ["ci-cd", "deployment", "infrastructure", "monitoring"],
+      "complexity": "moderate",
+      "languageNotes": "Uses OIDC-based AWS credential federation (id-token: write) instead of static access keys for improved security. The deploy step applies Kustomize overlays from infra/k8s/overlays/production and waits up to 15 minutes for rollout to complete."
+    },
+    {
+      "id": "pipeline:.github/workflows/deploy-staging.yml",
+      "type": "pipeline",
+      "name": "deploy-staging.yml",
+      "filePath": ".github/workflows/deploy-staging.yml",
+      "summary": "GitHub Actions workflow that builds and pushes the cosmos/web Docker image to AWS ECR tagged with the commit SHA, then deploys it to the EKS cosmos-staging cluster on every push to the develop branch.",
+      "tags": ["ci-cd", "deployment", "infrastructure"],
+      "complexity": "simple",
+      "languageNotes": "Mirrors the production workflow but targets the staging EKS cluster and Kustomize overlay. Uses commit SHA as the image tag (rather than a semantic version) and has a shorter rollout timeout of 10 minutes. No failure alerting configured."
+    }
+  ],
+  "edges": [
+    {
+      "source": "pipeline:.github/workflows/ci.yml",
+      "target": "service:apps/web/Dockerfile",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/deploy-production.yml",
+      "target": "service:apps/web/Dockerfile",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/deploy-staging.yml",
+      "target": "service:apps/web/Dockerfile",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/deploy-production.yml",
+      "target": "file:apps/client/server/index.ts",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "pipeline:.github/workflows/deploy-staging.yml",
+      "target": "file:apps/client/server/index.ts",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

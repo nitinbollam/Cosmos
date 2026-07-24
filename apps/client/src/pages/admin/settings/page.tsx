@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useQueryParams } from '@/lib/use-query-params'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-admin'
-import { EmptyState } from '@/components/cosmos/empty-state'
-import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { WebhookManager } from '@/components/settings/webhook-manager'
 
 type TenantMe = {
@@ -125,10 +125,10 @@ export default function SettingsPage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
           Settings
         </h1>
-        <p className="text-cosmos-text-3 text-sm mt-1">Company profile, people, warehouses, integrations, and plan</p>
+        <p className="text-pleros-text-3 text-sm mt-1">Company profile, people, warehouses, integrations, and plan</p>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--c-border)' }}>
@@ -205,9 +205,9 @@ function CompanyTab() {
 
   return (
     <div className="space-y-6">
-      <div className="cosmos-card">
-        <h2 className="text-cosmos-white font-semibold font-display mb-1">Company profile</h2>
-        <p className="text-cosmos-text-3 text-sm mb-4">Updates your tenant via PATCH /tenants/me</p>
+      <div className="pleros-card">
+        <h2 className="text-pleros-white font-semibold font-display mb-1">Company profile</h2>
+        <p className="text-pleros-text-3 text-sm mb-4">Organization name, billing contact, and timezone for your tenant.</p>
         {tenant.isLoading ? (
           <div className="skeleton h-24 w-full" />
         ) : tenant.error || !tenant.data ? (
@@ -228,17 +228,17 @@ function CompanyTab() {
             }}
           >
             <div>
-              <label className="text-xs text-cosmos-text-3">Slug (read-only)</label>
-              <input className="cosmos-input mt-1 opacity-70" readOnly value={tenant.data.slug} />
+              <label className="text-xs text-pleros-text-3">Slug (read-only)</label>
+              <input className="pleros-input mt-1 opacity-70" readOnly value={tenant.data.slug} />
             </div>
             <div>
-              <label className="text-xs text-cosmos-text-3">Display name</label>
-              <input className="cosmos-input mt-1" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Display name</label>
+              <input className="pleros-input mt-1" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs text-cosmos-text-3">Billing email</label>
+              <label className="text-xs text-pleros-text-3">Billing email</label>
               <input
-                className="cosmos-input mt-1"
+                className="pleros-input mt-1"
                 type="email"
                 value={billingEmail}
                 onChange={(e) => setBillingEmail(e.target.value)}
@@ -246,20 +246,20 @@ function CompanyTab() {
               />
             </div>
             <div>
-              <label className="text-xs text-cosmos-text-3">Time zone</label>
+              <label className="text-xs text-pleros-text-3">Time zone</label>
               <input
-                className="cosmos-input mt-1"
+                className="pleros-input mt-1"
                 value={timeZone}
                 onChange={(e) => setTimeZone(e.target.value)}
                 placeholder="e.g. America/New_York"
               />
             </div>
             <div>
-              <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">
+              <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">
                 Industry Vertical
               </label>
               <select
-                className="cosmos-input w-full max-w-xs"
+                className="pleros-input w-full max-w-xs"
                 value={industry}
                 onChange={(e) => setIndustry(e.target.value)}
               >
@@ -282,10 +282,13 @@ function CompanyTab() {
         )}
       </div>
 
+      <TaxSettingsCard />
+      <AgeVerificationCard />
+
       {tenant.data?.onboardingSteps && tenant.data.onboardingSteps.length > 0 && (
-        <div className="cosmos-card">
-          <h2 className="text-cosmos-white font-semibold font-display mb-1">Onboarding</h2>
-          <p className="text-cosmos-text-3 text-sm mb-4">Mark steps your organization has finished</p>
+        <div className="pleros-card">
+          <h2 className="text-pleros-white font-semibold font-display mb-1">Onboarding</h2>
+          <p className="text-pleros-text-3 text-sm mb-4">Mark steps your organization has finished</p>
           <ul className="space-y-2 text-sm">
             {tenant.data.onboardingSteps.map((s) => (
               <li
@@ -293,10 +296,10 @@ function CompanyTab() {
                 className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-0"
                 style={{ borderColor: 'var(--c-border)' }}
               >
-                <span className="text-cosmos-text">
+                <span className="text-pleros-text">
                   {STEP_LABELS[s.stepKey] ?? s.stepKey.replace(/_/g, ' ')}
                 </span>
-                <label className="flex items-center gap-2 cursor-pointer text-cosmos-text-3 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer text-pleros-text-3 text-xs">
                   <input
                     type="checkbox"
                     checked={s.completed}
@@ -321,6 +324,8 @@ function UsersTab() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<string>(INVITE_ROLES[0])
   const [deactivateUser, setDeactivateUser] = useState<UserRow | null>(null)
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const usersQ = useQuery<UsersPage>({
     queryKey: ['users', 'settings'],
@@ -333,13 +338,25 @@ function UsersTab() {
   })
 
   const inviteMut = useMutation({
-    mutationFn: () => api.post('/tenants/me/invites', { email: inviteEmail.trim(), role: inviteRole }),
-    onSuccess: () => {
+    mutationFn: () =>
+      api.post<InviteRow & { inviteUrl?: string }>('/tenants/me/invites', {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      }),
+    onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: ['tenant-invites'] })
       setInviteOpen(false)
       setInviteEmail('')
       setInviteRole(INVITE_ROLES[0])
+      setLinkCopied(false)
+      setInviteLink(created?.inviteUrl ?? null)
     },
+  })
+
+  const roleMut = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      api.patch(`/users/${encodeURIComponent(id)}`, { role }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['users'] }),
   })
 
   const revokeMut = useMutation({
@@ -359,21 +376,21 @@ function UsersTab() {
     <div className="space-y-6">
       <div className="flex flex-wrap justify-between gap-3 items-start">
         <div>
-          <h2 className="text-cosmos-white font-semibold font-display">Team members</h2>
-          <p className="text-cosmos-text-3 text-sm mt-1">Deactivate users on this tenant · invite by email</p>
+          <h2 className="text-pleros-white font-semibold font-display">Team members</h2>
+          <p className="text-pleros-text-3 text-sm mt-1">Deactivate users on this tenant · invite by email</p>
         </div>
         <button type="button" className="btn-primary" onClick={() => setInviteOpen(true)}>
           Invite user
         </button>
       </div>
 
-      <div className="cosmos-card overflow-x-auto">
+      <div className="pleros-card overflow-x-auto">
         {usersQ.isLoading ? (
           <div className="skeleton h-32 w-full" />
         ) : usersQ.isError ? (
           <p className="text-sm text-red-400">{errMsg(usersQ.error)}</p>
         ) : (
-          <table className="cosmos-table">
+          <table className="pleros-table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -390,7 +407,27 @@ function UsersTab() {
                     {u.firstName} {u.lastName}
                   </td>
                   <td className="font-mono text-xs">{u.email}</td>
-                  <td className="text-sm text-cosmos-text-2">{u.role}</td>
+                  <td className="text-sm text-pleros-text-2">
+                    {u.isActive ? (
+                      <select
+                        className="pleros-input !py-1 !px-2 !text-xs w-auto"
+                        value={u.role}
+                        disabled={roleMut.isPending}
+                        onChange={(e) => roleMut.mutate({ id: u.id, role: e.target.value })}
+                      >
+                        {(INVITE_ROLES.includes(u.role as (typeof INVITE_ROLES)[number])
+                          ? INVITE_ROLES
+                          : [u.role, ...INVITE_ROLES]
+                        ).map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      u.role
+                    )}
+                  </td>
                   <td className="text-sm">{u.isActive ? 'Active' : 'Inactive'}</td>
                   <td className="text-right">
                     {u.isActive && (
@@ -404,18 +441,48 @@ function UsersTab() {
             </tbody>
           </table>
         )}
+        {roleMut.error ? <p className="text-red-400 text-xs mt-2">{errMsg(roleMut.error)}</p> : null}
       </div>
 
-      <div className="cosmos-card">
-        <h3 className="text-cosmos-white font-semibold font-display mb-3">Pending invites</h3>
+      {inviteLink ? (
+        <div className="pleros-card" style={{ borderColor: 'var(--c-accent)' }}>
+          <h3 className="text-pleros-white font-semibold font-display mb-2">Invite link created</h3>
+          <p className="text-pleros-text-3 text-sm mb-3">
+            An email was sent if delivery is configured. You can also share this link directly — it is shown only
+            once and expires in 7 days.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <code className="text-xs font-mono break-all px-3 py-2 rounded-lg" style={{ background: 'var(--c-surface-2)', color: 'var(--c-accent)' }}>
+              {inviteLink}
+            </code>
+            <button
+              type="button"
+              className="btn-ghost !py-1 !px-3 !text-xs"
+              onClick={() => {
+                void navigator.clipboard.writeText(inviteLink).then(() => setLinkCopied(true))
+              }}
+            >
+              {linkCopied ? 'Copied' : 'Copy'}
+            </button>
+            <button type="button" className="btn-ghost !py-1 !px-3 !text-xs" onClick={() => setInviteLink(null)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <ChangePasswordCard />
+
+      <div className="pleros-card">
+        <h3 className="text-pleros-white font-semibold font-display mb-3">Pending invites</h3>
         {invitesQ.isLoading ? (
           <div className="skeleton h-16 w-full" />
         ) : invitesQ.isError ? (
           <p className="text-sm text-red-400">{errMsg(invitesQ.error)}</p>
         ) : (invitesQ.data ?? []).length === 0 ? (
-          <p className="text-sm text-cosmos-text-3">No pending invites</p>
+          <p className="text-sm text-pleros-text-3">No pending invites</p>
         ) : (
-          <table className="cosmos-table">
+          <table className="pleros-table">
             <thead>
               <tr>
                 <th>Email</th>
@@ -429,7 +496,7 @@ function UsersTab() {
                 <tr key={inv.id}>
                   <td className="font-mono text-xs">{inv.email}</td>
                   <td className="text-sm">{inv.role}</td>
-                  <td className="text-sm text-cosmos-text-3">{new Date(inv.expiresAt).toLocaleString()}</td>
+                  <td className="text-sm text-pleros-text-3">{new Date(inv.expiresAt).toLocaleString()}</td>
                   <td className="text-right">
                     <button
                       type="button"
@@ -447,7 +514,7 @@ function UsersTab() {
         )}
       </div>
 
-      <CosmosDialogModal
+      <PlerosDialogModal
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         title="Invite user"
@@ -468,10 +535,10 @@ function UsersTab() {
           </div>
         }
       >
-        <label className="text-xs text-cosmos-text-3">Email</label>
-        <input className="cosmos-input mb-3 mt-1" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">Role</label>
-        <select className="cosmos-input mt-1" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+        <label className="text-xs text-pleros-text-3">Email</label>
+        <input className="pleros-input mb-3 mt-1" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">Role</label>
+        <select className="pleros-input mt-1" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
           {INVITE_ROLES.map((r) => (
             <option key={r} value={r}>
               {r}
@@ -479,9 +546,9 @@ function UsersTab() {
           ))}
         </select>
         {inviteMut.error && <p className="text-red-400 text-sm mt-3">{errMsg(inviteMut.error)}</p>}
-      </CosmosDialogModal>
+      </PlerosDialogModal>
 
-      <CosmosDialogModal
+      <PlerosDialogModal
         open={!!deactivateUser}
         onOpenChange={(o) => !o && setDeactivateUser(null)}
         title="Deactivate user"
@@ -504,12 +571,253 @@ function UsersTab() {
         }
       >
         {deactivateUser && (
-          <p className="text-sm text-cosmos-text">
+          <p className="text-sm text-pleros-text">
             Deactivate <span className="font-mono">{deactivateUser.email}</span>? They will not be able to sign in.
           </p>
         )}
         {deactivateMut.error && <p className="text-red-400 text-sm mt-3">{errMsg(deactivateMut.error)}</p>}
-      </CosmosDialogModal>
+      </PlerosDialogModal>
+    </div>
+  )
+}
+
+function TaxSettingsCard() {
+  const qc = useQueryClient()
+  const taxQ = useQuery<{ salesTaxRate: number; salesTaxPercent: number }>({
+    queryKey: ['tax-settings'],
+    queryFn: () => api.get('/tax/settings'),
+  })
+  const [percent, setPercent] = useState('')
+
+  useEffect(() => {
+    if (taxQ.data) setPercent(String(taxQ.data.salesTaxPercent))
+  }, [taxQ.data])
+
+  const saveMut = useMutation({
+    mutationFn: (rate: number) => api.patch('/tax/settings', { salesTaxRate: rate }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['tax-settings'] }),
+  })
+
+  const parsed = Number.parseFloat(percent)
+  const valid = Number.isFinite(parsed) && parsed >= 0 && parsed <= 50
+
+  return (
+    <div className="pleros-card">
+      <h2 className="text-pleros-white font-semibold font-display mb-1">Sales tax</h2>
+      <p className="text-pleros-text-3 text-sm mb-4">
+        Applied to orders, quotes, and POS transactions for this tenant.
+      </p>
+      {taxQ.isLoading ? (
+        <div className="skeleton h-10 w-48" />
+      ) : (
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (valid) saveMut.mutate(+(parsed / 100).toFixed(6))
+          }}
+        >
+          <div>
+            <label className="text-xs text-pleros-text-3">Sales tax rate (%)</label>
+            <input
+              className="pleros-input mt-1 w-32"
+              type="number"
+              step="0.01"
+              min="0"
+              max="50"
+              value={percent}
+              onChange={(e) => setPercent(e.target.value)}
+            />
+          </div>
+          <button type="submit" className="btn-primary" disabled={!valid || saveMut.isPending}>
+            {saveMut.isPending ? 'Saving…' : 'Save tax rate'}
+          </button>
+        </form>
+      )}
+      {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
+      {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Tax rate updated.</p>}
+    </div>
+  )
+}
+
+type AgeVerificationPolicy = {
+  enabled: boolean
+  minimumAge: number
+  requireTobaccoLicense: boolean
+  requirePosAttestation: boolean
+  requireDeliveryConfirmation: boolean
+}
+
+function AgeVerificationCard() {
+  const qc = useQueryClient()
+  const policyQ = useQuery<AgeVerificationPolicy>({
+    queryKey: ['age-verification-policy'],
+    queryFn: () => api.get('/compliance/age-verification'),
+  })
+  const [form, setForm] = useState<AgeVerificationPolicy>({
+    enabled: false,
+    minimumAge: 21,
+    requireTobaccoLicense: true,
+    requirePosAttestation: true,
+    requireDeliveryConfirmation: true,
+  })
+
+  useEffect(() => {
+    if (policyQ.data) setForm(policyQ.data)
+  }, [policyQ.data])
+
+  const saveMut = useMutation({
+    mutationFn: (body: AgeVerificationPolicy) => api.patch('/compliance/age-verification', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['age-verification-policy'] }),
+  })
+
+  const ageValid = Number.isFinite(form.minimumAge) && form.minimumAge >= 18 && form.minimumAge <= 99
+
+  return (
+    <div className="pleros-card">
+      <h2 className="text-pleros-white font-semibold font-display mb-1">Age verification</h2>
+      <p className="text-pleros-text-3 text-sm mb-4">
+        Enforce minimum age and license checks for tobacco / age-restricted SKUs on B2B, POS, and delivery.
+      </p>
+      {policyQ.isLoading ? (
+        <div className="skeleton h-24 w-full" />
+      ) : (
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (ageValid) saveMut.mutate(form)
+          }}
+        >
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.enabled}
+              onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
+            />
+            Enable age verification for this tenant
+          </label>
+          <div>
+            <label className="text-xs text-pleros-text-3">Default minimum age</label>
+            <input
+              className="pleros-input mt-1 w-32"
+              type="number"
+              min={18}
+              max={99}
+              value={form.minimumAge}
+              onChange={(e) => setForm((f) => ({ ...f, minimumAge: Number(e.target.value) || 21 }))}
+            />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.requireTobaccoLicense}
+              onChange={(e) => setForm((f) => ({ ...f, requireTobaccoLicense: e.target.checked }))}
+            />
+            Require licensed customer for B2B / admin restricted orders
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.requirePosAttestation}
+              onChange={(e) => setForm((f) => ({ ...f, requirePosAttestation: e.target.checked }))}
+            />
+            Require POS ID / DOB attestation for restricted sales
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
+            <input
+              type="checkbox"
+              checked={form.requireDeliveryConfirmation}
+              onChange={(e) => setForm((f) => ({ ...f, requireDeliveryConfirmation: e.target.checked }))}
+            />
+            Require delivery POD age confirmation for restricted orders
+          </label>
+          <button type="submit" className="btn-primary" disabled={!ageValid || saveMut.isPending}>
+            {saveMut.isPending ? 'Saving…' : 'Save age verification'}
+          </button>
+        </form>
+      )}
+      {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
+      {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Age verification policy updated.</p>}
+    </div>
+  )
+}
+
+function ChangePasswordCard() {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [localErr, setLocalErr] = useState<string | null>(null)
+
+  const changeMut = useMutation({
+    mutationFn: () => api.post('/auth/change-password', { currentPassword, newPassword }),
+    onSuccess: () => {
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirm('')
+      setLocalErr(null)
+    },
+  })
+
+  return (
+    <div className="pleros-card">
+      <h3 className="text-pleros-white font-semibold font-display mb-1">Change your password</h3>
+      <p className="text-pleros-text-3 text-sm mb-4">
+        At least 10 characters with a letter and a number. Changing your password signs out other sessions.
+      </p>
+      <form
+        className="space-y-3 max-w-md"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (newPassword !== confirm) {
+            setLocalErr('New passwords do not match')
+            return
+          }
+          setLocalErr(null)
+          changeMut.mutate()
+        }}
+      >
+        <input
+          className="pleros-input"
+          type="password"
+          placeholder="Current password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+        />
+        <input
+          className="pleros-input"
+          type="password"
+          placeholder="New password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          required
+          minLength={10}
+          autoComplete="new-password"
+        />
+        <input
+          className="pleros-input"
+          type="password"
+          placeholder="Confirm new password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          required
+          minLength={10}
+          autoComplete="new-password"
+        />
+        {(localErr || changeMut.error) && (
+          <p className="text-red-400 text-sm">{localErr ?? errMsg(changeMut.error)}</p>
+        )}
+        {changeMut.isSuccess && !localErr ? <p className="text-emerald-400 text-sm">Password updated.</p> : null}
+        <button
+          type="submit"
+          className="btn-primary"
+          disabled={!currentPassword || !newPassword || !confirm || changeMut.isPending}
+        >
+          {changeMut.isPending ? 'Updating…' : 'Update password'}
+        </button>
+      </form>
     </div>
   )
 }
@@ -568,15 +876,15 @@ function WarehousesTab() {
     <div className="space-y-6">
       <div className="flex justify-between items-start gap-3 flex-wrap">
         <div>
-          <h2 className="text-cosmos-white font-semibold font-display">Warehouses</h2>
-          <p className="text-cosmos-text-3 text-sm mt-1">POST /warehouses · set default receiving location</p>
+          <h2 className="text-pleros-white font-semibold font-display">Warehouses</h2>
+          <p className="text-pleros-text-3 text-sm mt-1">Distribution centers for receiving, picking, and fulfillment.</p>
         </div>
         <button type="button" className="btn-primary" onClick={() => setDrawerOpen(true)}>
           New warehouse
         </button>
       </div>
 
-      <div className="cosmos-card overflow-x-auto">
+      <div className="pleros-card overflow-x-auto">
         {warehousesQ.isLoading ? (
           <div className="skeleton h-24 w-full" />
         ) : warehousesQ.isError ? (
@@ -593,7 +901,7 @@ function WarehousesTab() {
             }
           />
         ) : (
-          <table className="cosmos-table">
+          <table className="pleros-table">
             <thead>
               <tr>
                 <th>Code</th>
@@ -611,10 +919,10 @@ function WarehousesTab() {
                   <tr key={w.id}>
                     <td className="font-mono text-xs">{w.code}</td>
                     <td>{w.name}</td>
-                    <td className="text-sm text-cosmos-text-2 max-w-[240px] truncate" title={addr}>
+                    <td className="text-sm text-pleros-text-2 max-w-[240px] truncate" title={addr}>
                       {addr || '—'}
                     </td>
-                    <td>{w.isDefault ? <span className="text-cosmos-accent text-sm">Yes</span> : '—'}</td>
+                    <td>{w.isDefault ? <span className="text-pleros-accent text-sm">Yes</span> : '—'}</td>
                     <td className="text-right">
                       {!w.isDefault && (
                         <button
@@ -635,30 +943,30 @@ function WarehousesTab() {
         )}
       </div>
 
-      <CosmosSheet open={drawerOpen} onOpenChange={setDrawerOpen} title="New warehouse">
-        <label className="text-xs text-cosmos-text-3">Name</label>
-        <input className="cosmos-input mb-3 mt-1" value={name} onChange={(e) => setName(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">Code</label>
-        <input className="cosmos-input mb-3 mt-1 font-mono" value={code} onChange={(e) => setCode(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">Address line 1</label>
-        <input className="cosmos-input mb-3 mt-1" value={line1} onChange={(e) => setLine1(e.target.value)} />
+      <PlerosSheet open={drawerOpen} onOpenChange={setDrawerOpen} title="New warehouse">
+        <label className="text-xs text-pleros-text-3">Name</label>
+        <input className="pleros-input mb-3 mt-1" value={name} onChange={(e) => setName(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">Code</label>
+        <input className="pleros-input mb-3 mt-1 font-mono" value={code} onChange={(e) => setCode(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">Address line 1</label>
+        <input className="pleros-input mb-3 mt-1" value={line1} onChange={(e) => setLine1(e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-cosmos-text-3">City</label>
-            <input className="cosmos-input mt-1" value={city} onChange={(e) => setCity(e.target.value)} />
+            <label className="text-xs text-pleros-text-3">City</label>
+            <input className="pleros-input mt-1" value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs text-cosmos-text-3">State</label>
-            <input className="cosmos-input mt-1" value={state} onChange={(e) => setState(e.target.value)} />
+            <label className="text-xs text-pleros-text-3">State</label>
+            <input className="pleros-input mt-1" value={state} onChange={(e) => setState(e.target.value)} />
           </div>
         </div>
-        <label className="text-xs text-cosmos-text-3 mt-3 block">Postal code</label>
-        <input className="cosmos-input mb-3 mt-1" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">Country</label>
-        <input className="cosmos-input mb-3 mt-1" value={country} onChange={(e) => setCountry(e.target.value)} />
+        <label className="text-xs text-pleros-text-3 mt-3 block">Postal code</label>
+        <input className="pleros-input mb-3 mt-1" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">Country</label>
+        <input className="pleros-input mb-3 mt-1" value={country} onChange={(e) => setCountry(e.target.value)} />
         <label className="flex items-center gap-2 cursor-pointer mb-4">
           <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-          <span className="text-sm text-cosmos-text">Set as default warehouse</span>
+          <span className="text-sm text-pleros-text">Set as default warehouse</span>
         </label>
         {createMut.error && <p className="text-red-400 text-sm mb-3">{errMsg(createMut.error)}</p>}
         <div className="flex gap-2 justify-end">
@@ -674,7 +982,7 @@ function WarehousesTab() {
             Create
           </button>
         </div>
-      </CosmosSheet>
+      </PlerosSheet>
     </div>
   )
 }
@@ -729,18 +1037,117 @@ function IntegrationsTab() {
 
   const cfg = msaQ.data
 
+  const ediPartnersQ = useQuery<
+    Array<{ id: string; code: string; name: string; inboundEnabled: boolean; outboundEnabled: boolean; autoCreateOrders: boolean }>
+  >({
+    queryKey: ['edi-partners'],
+    queryFn: () => api.get('/edi/partners'),
+  })
+
+  const [ediCode, setEdiCode] = useState('')
+  const [ediName, setEdiName] = useState('')
+  const [ediDrawer, setEdiDrawer] = useState(false)
+
+  const createEdiPartner = useMutation({
+    mutationFn: () =>
+      api.post('/edi/partners', {
+        code: ediCode.trim(),
+        name: ediName.trim(),
+        autoCreateOrders: true,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['edi-partners'] })
+      setEdiDrawer(false)
+      setEdiCode('')
+      setEdiName('')
+    },
+  })
+
+  const ediDocsQ = useQuery<
+    Array<{ id: string; docType: string; direction: string; status: string; controlNumber: string | null; createdAt: string }>
+  >({
+    queryKey: ['edi-documents'],
+    queryFn: () => api.get('/edi/documents?limit=20'),
+  })
+
   return (
     <div className="space-y-6">
       <WebhookManager />
 
-      <div>
-        <h2 className="text-cosmos-white font-semibold font-display">Other integrations</h2>
-        <p className="text-cosmos-text-3 text-sm mt-1">MSA reporting config and Stripe webhook health</p>
+      <div className="pleros-card">
+        <div className="flex flex-wrap justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-pleros-white font-semibold font-display">Trading partner EDI</h3>
+            <p className="text-pleros-text-3 text-sm mt-1">
+              Inbound 850 purchase orders, outbound 810 invoices and 856 ship notices (JSON interchange).
+            </p>
+          </div>
+          <button type="button" className="btn-primary !text-sm" onClick={() => setEdiDrawer(true)}>
+            Add partner
+          </button>
+        </div>
+        {ediPartnersQ.isLoading ? (
+          <div className="skeleton h-16 w-full" />
+        ) : (ediPartnersQ.data ?? []).length === 0 ? (
+          <p className="text-sm text-pleros-text-3">No trading partners — add one to receive EDI orders.</p>
+        ) : (
+          <ul className="space-y-2">
+            {(ediPartnersQ.data ?? []).map((p) => (
+              <li key={p.id} className="text-sm flex flex-wrap gap-3 items-center" style={{ color: 'var(--c-text-2)' }}>
+                <span className="font-mono text-pleros-accent">{p.code}</span>
+                <span className="text-pleros-white">{p.name}</span>
+                <span className="text-xs text-pleros-text-3">
+                  In: {p.inboundEnabled ? 'on' : 'off'} · Out: {p.outboundEnabled ? 'on' : 'off'} · Auto orders:{' '}
+                  {p.autoCreateOrders ? 'on' : 'off'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {(ediDocsQ.data ?? []).length > 0 ? (
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--c-border)' }}>
+            <p className="text-xs uppercase tracking-wider text-pleros-text-3 mb-2">Recent EDI documents</p>
+            <ul className="space-y-1 text-xs font-mono" style={{ color: 'var(--c-text-3)' }}>
+              {(ediDocsQ.data ?? []).slice(0, 5).map((d) => (
+                <li key={d.id}>
+                  {d.docType} {d.direction} · {d.status} · {d.controlNumber ?? d.id.slice(-8)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
-      <div className="cosmos-card">
+      {ediDrawer ? (
+        <PlerosDialogModal open={ediDrawer} onOpenChange={setEdiDrawer} title="New EDI trading partner">
+          <label className="block text-xs text-pleros-text-3 mt-2">Partner code</label>
+          <input className="pleros-input mt-1 w-full" value={ediCode} onChange={(e) => setEdiCode(e.target.value)} placeholder="ACME" />
+          <label className="block text-xs text-pleros-text-3 mt-3">Name</label>
+          <input className="pleros-input mt-1 w-full" value={ediName} onChange={(e) => setEdiName(e.target.value)} placeholder="Acme Retail EDI" />
+          <div className="flex gap-2 mt-4 justify-end">
+            <button type="button" className="btn-ghost" onClick={() => setEdiDrawer(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!ediCode.trim() || !ediName.trim() || createEdiPartner.isPending}
+              onClick={() => createEdiPartner.mutate()}
+            >
+              Save
+            </button>
+          </div>
+        </PlerosDialogModal>
+      ) : null}
+
+      <div>
+        <h2 className="text-pleros-white font-semibold font-display">Other integrations</h2>
+        <p className="text-pleros-text-3 text-sm mt-1">MSA reporting config and Stripe webhook health</p>
+      </div>
+
+      <div className="pleros-card">
         <div className="flex flex-wrap justify-between gap-3 mb-4">
-          <h3 className="text-cosmos-white font-semibold font-display">MSA (compliance)</h3>
+          <h3 className="text-pleros-white font-semibold font-display">MSA (compliance)</h3>
           <button
             type="button"
             className="btn-primary !text-sm"
@@ -767,19 +1174,19 @@ function IntegrationsTab() {
         ) : msaQ.isError ? (
           <p className="text-sm text-red-400">{errMsg(msaQ.error)}</p>
         ) : !cfg ? (
-          <p className="text-sm text-cosmos-text-3">No MSA tenant config yet — add reporter and manufacturer DIDs.</p>
+          <p className="text-sm text-pleros-text-3">No MSA tenant config yet — add reporter and manufacturer DIDs.</p>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-cosmos-text-2">
-              Reporter DID: <span className="font-mono text-cosmos-accent">{cfg.reporterDid}</span> · MSA{' '}
+            <p className="text-sm text-pleros-text-2">
+              Reporter DID: <span className="font-mono text-pleros-accent">{cfg.reporterDid}</span> · MSA{' '}
               {cfg.msaEnabled ? 'enabled' : 'disabled'}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {cfg.manufacturerDids.map((m) => (
                 <div key={m.id} className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
-                  <p className="font-mono text-xs text-cosmos-accent break-all">{m.manufacturerDid}</p>
-                  <p className="text-cosmos-white font-medium mt-1">{m.manufacturerName}</p>
-                  <p className="text-xs text-cosmos-text-3 mt-2">
+                  <p className="font-mono text-xs text-pleros-accent break-all">{m.manufacturerDid}</p>
+                  <p className="text-pleros-white font-medium mt-1">{m.manufacturerName}</p>
+                  <p className="text-xs text-pleros-text-3 mt-2">
                     EDI: {m.ediEndpoint || '—'} · Auto-submit: {m.autoSubmit ? 'on' : 'off'}
                   </p>
                 </div>
@@ -789,9 +1196,9 @@ function IntegrationsTab() {
         )}
       </div>
 
-      <div className="cosmos-card">
-        <h3 className="text-cosmos-white font-semibold font-display mb-3">Notification delivery</h3>
-        <p className="text-cosmos-text-3 text-sm mb-4">GET /notifications/providers/status — env-driven SendGrid, Twilio, or webhook</p>
+      <div className="pleros-card">
+        <h3 className="text-pleros-white font-semibold font-display mb-3">Notification delivery</h3>
+        <p className="text-pleros-text-3 text-sm mb-4">Email, SMS, and webhook delivery status for your tenant.</p>
         {notifProvidersQ.isLoading ? (
           <div className="skeleton h-20 w-full" />
         ) : notifProvidersQ.isError ? (
@@ -799,45 +1206,45 @@ function IntegrationsTab() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
-              <p className="text-sm text-cosmos-white font-medium">Email</p>
-              <p className="text-xs text-cosmos-text-3 mt-2">
-                Provider: <span className="font-mono text-cosmos-accent">{notifProvidersQ.data?.email.provider}</span>
+              <p className="text-sm text-pleros-white font-medium">Email</p>
+              <p className="text-xs text-pleros-text-3 mt-2">
+                Provider: <span className="font-mono text-pleros-accent">{notifProvidersQ.data?.email.provider}</span>
               </p>
-              <p className="text-xs text-cosmos-text-3 mt-1">
+              <p className="text-xs text-pleros-text-3 mt-1">
                 Configured:{' '}
                 <strong className={notifProvidersQ.data?.email.configured ? 'text-emerald-400' : 'text-amber-400'}>
                   {notifProvidersQ.data?.email.configured ? 'yes' : 'console fallback'}
                 </strong>
               </p>
-              <p className="text-xs text-cosmos-text-3 mt-1">From: {notifProvidersQ.data?.email.fromEmail}</p>
+              <p className="text-xs text-pleros-text-3 mt-1">From: {notifProvidersQ.data?.email.fromEmail}</p>
             </div>
             <div className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
-              <p className="text-sm text-cosmos-white font-medium">SMS</p>
-              <p className="text-xs text-cosmos-text-3 mt-2">
-                Provider: <span className="font-mono text-cosmos-accent">{notifProvidersQ.data?.sms.provider}</span>
+              <p className="text-sm text-pleros-white font-medium">SMS</p>
+              <p className="text-xs text-pleros-text-3 mt-2">
+                Provider: <span className="font-mono text-pleros-accent">{notifProvidersQ.data?.sms.provider}</span>
               </p>
-              <p className="text-xs text-cosmos-text-3 mt-1">
+              <p className="text-xs text-pleros-text-3 mt-1">
                 Configured:{' '}
                 <strong className={notifProvidersQ.data?.sms.configured ? 'text-emerald-400' : 'text-amber-400'}>
                   {notifProvidersQ.data?.sms.configured ? 'yes' : 'console fallback'}
                 </strong>
               </p>
-              <p className="text-xs text-cosmos-text-3 mt-1">
+              <p className="text-xs text-pleros-text-3 mt-1">
                 From: {notifProvidersQ.data?.sms.fromNumberMasked ?? '—'}
               </p>
             </div>
           </div>
         )}
         {notifProvidersQ.data ? (
-          <p className="text-xs text-cosmos-text-3 mt-4 whitespace-pre-wrap">{notifProvidersQ.data.setupNote}</p>
+          <p className="text-xs text-pleros-text-3 mt-4 whitespace-pre-wrap">{notifProvidersQ.data.setupNote}</p>
         ) : null}
       </div>
 
-      <div className="cosmos-card">
+      <div className="pleros-card">
         <div className="flex flex-wrap justify-between gap-3 items-start mb-3">
           <div>
-            <h3 className="text-cosmos-white font-semibold font-display">Stripe</h3>
-            <p className="text-cosmos-text-3 text-sm mt-1">GET /payments/stripe/status</p>
+            <h3 className="text-pleros-white font-semibold font-display">Stripe</h3>
+            <p className="text-pleros-text-3 text-sm mt-1">Card payments and webhook configuration</p>
           </div>
           <button type="button" className="btn-ghost !text-sm" onClick={() => setRotateOpen(true)}>
             Rotate signing secret
@@ -849,7 +1256,7 @@ function IntegrationsTab() {
           <p className="text-sm text-red-400">{errMsg(stripeQ.error)}</p>
         ) : (
           <div className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
-            <p className="text-sm text-cosmos-text">
+            <p className="text-sm text-pleros-text">
               Webhook signing secret:{' '}
               <strong className={stripeQ.data?.webhookSigningSecretConfigured ? 'text-emerald-400' : 'text-amber-400'}>
                 {stripeQ.data?.webhookSigningSecretConfigured ? 'configured' : 'not configured'}
@@ -859,23 +1266,23 @@ function IntegrationsTab() {
         )}
       </div>
 
-      <CosmosSheet open={addOpen} onOpenChange={setAddOpen} title="Add MSA configuration">
-        <p className="text-xs text-cosmos-text-3 mb-3">POST /msa/config — creates or updates tenant MSA row and manufacturer DID.</p>
-        <label className="text-xs text-cosmos-text-3">Reporter DID</label>
-        <input className="cosmos-input mb-3 mt-1 font-mono text-sm" value={reporterDid} onChange={(e) => setReporterDid(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">Manufacturer DID</label>
-        <input className="cosmos-input mb-3 mt-1 font-mono text-sm" value={manufacturerDid} onChange={(e) => setManufacturerDid(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">Manufacturer name</label>
-        <input className="cosmos-input mb-3 mt-1" value={manufacturerName} onChange={(e) => setManufacturerName(e.target.value)} />
-        <label className="text-xs text-cosmos-text-3">EDI endpoint (optional)</label>
-        <input className="cosmos-input mb-3 mt-1 font-mono text-sm" value={ediEndpoint} onChange={(e) => setEdiEndpoint(e.target.value)} />
+      <PlerosSheet open={addOpen} onOpenChange={setAddOpen} title="Add MSA configuration">
+        <p className="text-xs text-pleros-text-3 mb-3">Connect manufacturer reporting for regulated product categories.</p>
+        <label className="text-xs text-pleros-text-3">Reporter DID</label>
+        <input className="pleros-input mb-3 mt-1 font-mono text-sm" value={reporterDid} onChange={(e) => setReporterDid(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">Manufacturer DID</label>
+        <input className="pleros-input mb-3 mt-1 font-mono text-sm" value={manufacturerDid} onChange={(e) => setManufacturerDid(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">Manufacturer name</label>
+        <input className="pleros-input mb-3 mt-1" value={manufacturerName} onChange={(e) => setManufacturerName(e.target.value)} />
+        <label className="text-xs text-pleros-text-3">EDI endpoint (optional)</label>
+        <input className="pleros-input mb-3 mt-1 font-mono text-sm" value={ediEndpoint} onChange={(e) => setEdiEndpoint(e.target.value)} />
         <label className="flex items-center gap-2 cursor-pointer mb-2">
           <input type="checkbox" checked={msaEnabled} onChange={(e) => setMsaEnabled(e.target.checked)} />
-          <span className="text-sm text-cosmos-text">MSA enabled</span>
+          <span className="text-sm text-pleros-text">MSA enabled</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer mb-4">
           <input type="checkbox" checked={autoSubmit} onChange={(e) => setAutoSubmit(e.target.checked)} />
-          <span className="text-sm text-cosmos-text">Auto-submit reports</span>
+          <span className="text-sm text-pleros-text">Auto-submit reports</span>
         </label>
         {saveMsaMut.error && <p className="text-red-400 text-sm mb-3">{errMsg(saveMsaMut.error)}</p>}
         <div className="flex gap-2 justify-end">
@@ -893,14 +1300,14 @@ function IntegrationsTab() {
             Save
           </button>
         </div>
-      </CosmosSheet>
+      </PlerosSheet>
 
-      <CosmosDialogModal open={rotateOpen} onOpenChange={setRotateOpen} title="Rotate Stripe webhook secret" maxWidthClass="max-w-lg">
-        <p className="text-sm text-cosmos-text whitespace-pre-wrap">
+      <PlerosDialogModal open={rotateOpen} onOpenChange={setRotateOpen} title="Rotate Stripe webhook secret" maxWidthClass="max-w-lg">
+        <p className="text-sm text-pleros-text whitespace-pre-wrap">
           {stripeQ.data?.rotation ??
             'Create a new signing secret in the Stripe Dashboard for your webhook endpoint, update STRIPE_WEBHOOK_SECRET in your environment, redeploy, then remove the old secret in Stripe.'}
         </p>
-      </CosmosDialogModal>
+      </PlerosDialogModal>
     </div>
   )
 }
@@ -923,56 +1330,131 @@ const PLANS = [
   },
 ]
 
+type BillingStatus = {
+  plan: string
+  billingStatus: string | null
+  billingConfigured: boolean
+  pricesConfigured: { growth: boolean; enterprise: boolean }
+}
+
 function BillingTab() {
   const qc = useQueryClient()
+  const searchParams = useQueryParams()
+  const checkoutResult = searchParams.get('checkout')
+
   const tenant = useQuery<TenantMe>({
     queryKey: ['tenant-me'],
     queryFn: () => api.get('/tenants/me'),
   })
 
+  const billingQ = useQuery<BillingStatus>({
+    queryKey: ['billing-status'],
+    queryFn: () => api.get('/tenants/me/billing'),
+  })
+
   const upgradeMut = useMutation({
-    mutationFn: (plan: 'STARTER' | 'GROWTH' | 'ENTERPRISE') => api.post('/tenants/me/upgrade', { plan }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['tenant-me'] }),
+    mutationFn: async (plan: 'STARTER' | 'GROWTH' | 'ENTERPRISE') => {
+      if (billingQ.data?.billingConfigured && plan !== 'STARTER') {
+        const { url } = await api.post<{ url: string }>('/tenants/me/billing/checkout', { plan })
+        window.location.href = url
+        return
+      }
+      return api.post('/tenants/me/upgrade', { plan })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tenant-me'] })
+      void qc.invalidateQueries({ queryKey: ['billing-status'] })
+    },
+  })
+
+  const portalMut = useMutation({
+    mutationFn: () => api.post<{ url: string }>('/tenants/me/billing/portal'),
+    onSuccess: (res) => {
+      if (res?.url) window.location.href = res.url
+    },
   })
 
   const current = tenant.data?.plan ?? 'STARTER'
+  const stripeOn = billingQ.data?.billingConfigured ?? false
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-cosmos-white font-semibold font-display">Billing</h2>
-        <p className="text-cosmos-text-3 text-sm mt-1">POST /tenants/me/upgrade to change plan (admin)</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-pleros-white font-semibold font-display">Billing</h2>
+          <p className="text-pleros-text-3 text-sm mt-1">
+            {stripeOn
+              ? 'Paid plans are billed through Stripe Checkout. Manage your subscription in the billing portal.'
+              : 'Stripe is not configured — plan changes apply immediately (local dev only).'}
+          </p>
+        </div>
+        {stripeOn && billingQ.data?.billingStatus ? (
+          <button
+            type="button"
+            className="btn-ghost !text-sm"
+            disabled={portalMut.isPending}
+            onClick={() => portalMut.mutate()}
+          >
+            {portalMut.isPending ? 'Opening…' : 'Manage subscription'}
+          </button>
+        ) : null}
       </div>
 
-      <div className="cosmos-card">
-        <h3 className="text-cosmos-white font-semibold font-display mb-2">Current plan</h3>
+      {checkoutResult === 'success' ? (
+        <p className="text-sm text-emerald-400">Checkout complete — your plan will update shortly.</p>
+      ) : checkoutResult === 'cancel' ? (
+        <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Checkout canceled.</p>
+      ) : null}
+
+      <div className="pleros-card">
+        <h3 className="text-pleros-white font-semibold font-display mb-2">Current plan</h3>
         {tenant.isLoading ? (
           <div className="skeleton h-10 w-48" />
         ) : (
-          <p className="text-2xl font-bold text-cosmos-accent font-display">{current}</p>
+          <>
+            <p className="text-2xl font-bold text-pleros-accent font-display">{current}</p>
+            {billingQ.data?.billingStatus ? (
+              <p className="text-xs text-pleros-text-3 mt-2 capitalize">Subscription: {billingQ.data.billingStatus}</p>
+            ) : null}
+          </>
         )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         {PLANS.map((p) => {
           const isCurrent = current === p.id
+          const paidUnavailable =
+            stripeOn &&
+            p.id !== 'STARTER' &&
+            !billingQ.data?.pricesConfigured[p.id === 'GROWTH' ? 'growth' : 'enterprise']
           return (
-            <div key={p.id} className="cosmos-card flex flex-col">
-              <h4 className="text-cosmos-white font-semibold font-display">{p.name}</h4>
-              <p className="text-sm text-cosmos-text-3 mt-2 flex-1">{p.blurb}</p>
+            <div key={p.id} className="pleros-card flex flex-col">
+              <h4 className="text-pleros-white font-semibold font-display">{p.name}</h4>
+              <p className="text-sm text-pleros-text-3 mt-2 flex-1">{p.blurb}</p>
               <button
                 type="button"
                 className="btn-primary mt-4 w-full"
-                disabled={isCurrent || upgradeMut.isPending}
+                disabled={isCurrent || upgradeMut.isPending || paidUnavailable || (stripeOn && p.id === 'STARTER')}
                 onClick={() => upgradeMut.mutate(p.id)}
               >
-                {isCurrent ? 'Current plan' : `Upgrade to ${p.name}`}
+                {isCurrent
+                  ? 'Current plan'
+                  : stripeOn && p.id !== 'STARTER'
+                    ? `Subscribe to ${p.name}`
+                    : p.id === 'STARTER'
+                      ? 'Free tier'
+                      : `Upgrade to ${p.name}`}
               </button>
+              {paidUnavailable ? (
+                <p className="text-xs text-amber-400 mt-2">Set STRIPE_PRICE_{p.id} in environment</p>
+              ) : null}
             </div>
           )
         })}
       </div>
-      {upgradeMut.error && <p className="text-red-400 text-sm">{errMsg(upgradeMut.error)}</p>}
+      {(upgradeMut.error || portalMut.error) && (
+        <p className="text-red-400 text-sm">{errMsg(upgradeMut.error ?? portalMut.error)}</p>
+      )}
     </div>
   )
 }
@@ -1042,13 +1524,13 @@ function FeaturesTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-cosmos-white font-semibold font-display">Feature flags</h2>
-        <p className="text-cosmos-text-3 text-sm mt-1">
-          Plan defaults for <span className="font-mono text-cosmos-accent">{plan}</span> · overrides saved via PATCH /tenants/me
+        <h2 className="text-pleros-white font-semibold font-display">Feature flags</h2>
+        <p className="text-pleros-text-3 text-sm mt-1">
+          Plan defaults for <span className="font-mono text-pleros-accent">{plan}</span> · toggle overrides for your workspace
         </p>
       </div>
 
-      <div className="cosmos-card space-y-4">
+      <div className="pleros-card space-y-4">
         {detailQ.isLoading ? (
           <div className="skeleton h-32 w-full" />
         ) : detailQ.isError ? (
@@ -1064,11 +1546,11 @@ function FeaturesTab() {
                 style={{ borderColor: 'var(--c-border)' }}
               >
                 <div>
-                  <p className="text-cosmos-white font-medium">{label}</p>
-                  <p className="text-xs text-cosmos-text-3 mt-1">{blurb}</p>
-                  <p className="text-xs text-cosmos-text-3 mt-1">
+                  <p className="text-pleros-white font-medium">{label}</p>
+                  <p className="text-xs text-pleros-text-3 mt-1">{blurb}</p>
+                  <p className="text-xs text-pleros-text-3 mt-1">
                     Plan default: {planDefault ? 'On' : 'Off'}
-                    {overridden ? <span className="text-cosmos-accent ml-2">· overridden</span> : null}
+                    {overridden ? <span className="text-pleros-accent ml-2">· overridden</span> : null}
                   </p>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1077,7 +1559,7 @@ function FeaturesTab() {
                     checked={Boolean(toggles[key])}
                     onChange={(e) => setToggles((prev) => ({ ...prev, [key]: e.target.checked }))}
                   />
-                  <span className="text-sm text-cosmos-text">{toggles[key] ? 'Enabled' : 'Disabled'}</span>
+                  <span className="text-sm text-pleros-text">{toggles[key] ? 'Enabled' : 'Disabled'}</span>
                 </label>
               </div>
             )
@@ -1121,13 +1603,13 @@ function AuditTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-cosmos-white font-semibold font-display">Audit log</h2>
-        <p className="text-cosmos-text-3 text-sm mt-1">Recent platform events for compliance and troubleshooting.</p>
+        <h2 className="text-pleros-white font-semibold font-display">Audit log</h2>
+        <p className="text-pleros-text-3 text-sm mt-1">Recent platform events for compliance and troubleshooting.</p>
       </div>
       <div className="flex flex-wrap gap-3 items-end">
         <div>
-          <label className="text-xs text-cosmos-text-3">Filter by entity type</label>
-          <select className="cosmos-input mt-1 w-48" value={entityType} onChange={(e) => setEntityType(e.target.value)}>
+          <label className="text-xs text-pleros-text-3">Filter by entity type</label>
+          <select className="pleros-input mt-1 w-48" value={entityType} onChange={(e) => setEntityType(e.target.value)}>
             <option value="">All types</option>
             <option value="Order">Order</option>
             <option value="Invoice">Invoice</option>
@@ -1136,7 +1618,7 @@ function AuditTab() {
           </select>
         </div>
       </div>
-      <div className="cosmos-card overflow-x-auto">
+      <div className="pleros-card overflow-x-auto">
         {auditQ.isLoading ? (
           <div className="skeleton h-32 w-full" />
         ) : auditQ.isError ? (
@@ -1144,7 +1626,7 @@ function AuditTab() {
         ) : (auditQ.data ?? []).length === 0 ? (
           <EmptyState icon="📋" title="No audit events" description="Actions like order shipped and payments appear here." />
         ) : (
-          <table className="cosmos-table text-sm">
+          <table className="pleros-table text-sm">
             <thead>
               <tr>
                 <th>When</th>
@@ -1156,15 +1638,15 @@ function AuditTab() {
             <tbody>
               {(auditQ.data ?? []).map((row) => (
                 <tr key={row.id}>
-                  <td className="text-cosmos-text-3 whitespace-nowrap">{new Date(row.createdAt).toLocaleString()}</td>
+                  <td className="text-pleros-text-3 whitespace-nowrap">{new Date(row.createdAt).toLocaleString()}</td>
                   <td className="font-mono text-xs">{row.action}</td>
                   <td>
-                    <span className="text-cosmos-text-2">{row.entityType}</span>
+                    <span className="text-pleros-text-2">{row.entityType}</span>
                     {row.entityId ? (
-                      <span className="font-mono text-xs text-cosmos-text-3 ml-1">…{row.entityId.slice(-10)}</span>
+                      <span className="font-mono text-xs text-pleros-text-3 ml-1">…{row.entityId.slice(-10)}</span>
                     ) : null}
                   </td>
-                  <td className="font-mono text-xs text-cosmos-text-3">{row.userId?.slice(-8) ?? '—'}</td>
+                  <td className="font-mono text-xs text-pleros-text-3">{row.userId?.slice(-8) ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

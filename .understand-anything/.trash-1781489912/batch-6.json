@@ -1,0 +1,1039 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/client/src/components/compliance/msa-status-card.tsx",
+      "type": "file",
+      "name": "msa-status-card.tsx",
+      "filePath": "apps/client/src/components/compliance/msa-status-card.tsx",
+      "summary": "Renders a compliance MSA (Master Supply Agreement) status summary card that fetches the latest weekly MSA report and displays submission status with date and net purchase totals.",
+      "tags": ["component", "compliance", "api-handler", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/components/compliance/msa-status-card.tsx:MSAStatusCard",
+      "type": "function",
+      "name": "MSAStatusCard",
+      "filePath": "apps/client/src/components/compliance/msa-status-card.tsx",
+      "lineRange": [16, 89],
+      "summary": "React component that queries the latest MSA report via React Query and renders a status card showing submission dates, net purchases, and a StatusBadge for the current week.",
+      "tags": ["component", "compliance", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "type": "file",
+      "name": "bento-cards.tsx",
+      "filePath": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "summary": "Design-system bento card primitives including metric cards with sparklines, donut charts, trend pills, hero cards, and avatar stacks used across dashboard and data visualization surfaces.",
+      "tags": ["component", "utility", "data-model"],
+      "complexity": "moderate",
+      "languageNotes": "Pure presentational components with no external project imports — self-contained SVG-based chart rendering."
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoMetricCard",
+      "type": "function",
+      "name": "BentoMetricCard",
+      "filePath": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "lineRange": [96, 125],
+      "summary": "Bento metric card displaying a label, value, optional trend pill, and sparkline chart with configurable tone styling.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoSparkline",
+      "type": "function",
+      "name": "BentoSparkline",
+      "filePath": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "lineRange": [15, 42],
+      "summary": "SVG polyline sparkline chart component that normalizes data points to a fixed pixel height.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoDonut",
+      "type": "function",
+      "name": "BentoDonut",
+      "filePath": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "lineRange": [44, 88],
+      "summary": "SVG donut chart showing a percentage fill with label and sublabel, computing stroke dasharray from the percent value.",
+      "tags": ["component", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoHeroCard",
+      "type": "function",
+      "name": "BentoHeroCard",
+      "filePath": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "lineRange": [127, 148],
+      "summary": "Hero card layout component with title, subtitle, and slot for child content.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoAvatarStack",
+      "type": "function",
+      "name": "BentoAvatarStack",
+      "filePath": "apps/client/src/components/cosmos/bento-cards.tsx",
+      "lineRange": [150, 171],
+      "summary": "Renders a stacked row of initials-based avatar chips from a list of label strings.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "file",
+      "name": "empty-state.tsx",
+      "filePath": "apps/client/src/components/cosmos/empty-state.tsx",
+      "summary": "Reusable empty-state UI component that renders an icon, title, description, and optional action button, widely used when list views have no data.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/empty-state.tsx:EmptyState",
+      "type": "function",
+      "name": "EmptyState",
+      "filePath": "apps/client/src/components/cosmos/empty-state.tsx",
+      "lineRange": [1, 29],
+      "summary": "Exported React component displaying a centered empty state with configurable icon, title, description, and action.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "type": "file",
+      "name": "radix-overlays.tsx",
+      "filePath": "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "summary": "Cosmos design-system overlay wrappers — CosmosSheet (slide-out drawer) and CosmosDialogModal (modal dialog) — built on Radix UI primitives with consistent styling.",
+      "tags": ["component", "utility", "middleware"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/radix-overlays.tsx:CosmosSheet",
+      "type": "function",
+      "name": "CosmosSheet",
+      "filePath": "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "lineRange": [5, 36],
+      "summary": "Radix Sheet wrapper that renders a slide-in panel with a title header and standardized styling.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/radix-overlays.tsx:CosmosDialogModal",
+      "type": "function",
+      "name": "CosmosDialogModal",
+      "filePath": "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "lineRange": [38, 79],
+      "summary": "Radix Dialog wrapper with configurable max-width, title header, optional footer slot, and overlay backdrop.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "type": "file",
+      "name": "spreadsheet-import-panel.tsx",
+      "filePath": "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "summary": "Generic spreadsheet import UI panel supporting CSV and Excel file uploads, column preview, template download, and import execution with error reporting.",
+      "tags": ["component", "utility", "validation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx:SpreadsheetImportPanel",
+      "type": "function",
+      "name": "SpreadsheetImportPanel",
+      "filePath": "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "lineRange": [19, 183],
+      "summary": "Full spreadsheet import workflow component: file picker, CSV/Excel parsing, header preview table, column validation, import mutation execution, and result display.",
+      "tags": ["component", "validation", "utility"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "file",
+      "name": "status-badge.tsx",
+      "filePath": "apps/client/src/components/cosmos/status-badge.tsx",
+      "summary": "Reusable StatusBadge component that maps order/workflow status strings to color-coded badge variants across the admin UI.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/cosmos/status-badge.tsx:StatusBadge",
+      "type": "function",
+      "name": "StatusBadge",
+      "filePath": "apps/client/src/components/cosmos/status-badge.tsx",
+      "lineRange": [30, 50],
+      "summary": "Maps a status string (e.g. PENDING, FULFILLED) to a colored badge element, normalizing underscores to spaces for display.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/inventory/low-stock-alert.tsx",
+      "type": "file",
+      "name": "low-stock-alert.tsx",
+      "filePath": "apps/client/src/components/inventory/low-stock-alert.tsx",
+      "summary": "Dashboard widget listing up to 8 low-stock SKU alerts with links to the inventory admin page filtered by SKU.",
+      "tags": ["component", "inventory"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/inventory/low-stock-alert.tsx:LowStockAlert",
+      "type": "function",
+      "name": "LowStockAlert",
+      "filePath": "apps/client/src/components/inventory/low-stock-alert.tsx",
+      "lineRange": [7, 44],
+      "summary": "Renders a scrollable list of low-stock inventory alerts with quantity-on-hand and reorder threshold, each linking to the inventory page filtered by SKU.",
+      "tags": ["component", "inventory"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "type": "file",
+      "name": "recent-orders.tsx",
+      "filePath": "apps/client/src/components/orders/recent-orders.tsx",
+      "summary": "Dashboard widget that fetches and lists the 10 most recent orders with status badges, customer names, totals, and links to each order detail page.",
+      "tags": ["component", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/components/orders/recent-orders.tsx:RecentOrders",
+      "type": "function",
+      "name": "RecentOrders",
+      "filePath": "apps/client/src/components/orders/recent-orders.tsx",
+      "lineRange": [32, 106],
+      "summary": "Queries the admin API for recent orders and renders a table with skeleton loading states, customer labels, order totals, status badges, and order detail links.",
+      "tags": ["component", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/settings/webhook-manager.tsx",
+      "type": "file",
+      "name": "webhook-manager.tsx",
+      "filePath": "apps/client/src/components/settings/webhook-manager.tsx",
+      "summary": "Webhook configuration UI that lists registered webhook endpoints, allows creating and deleting webhooks, and supports sending test pings to verify delivery.",
+      "tags": ["component", "api-handler", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/components/settings/webhook-manager.tsx:WebhookManager",
+      "type": "function",
+      "name": "WebhookManager",
+      "filePath": "apps/client/src/components/settings/webhook-manager.tsx",
+      "lineRange": [33, 226],
+      "summary": "Full webhook CRUD component using React Query mutations for create, delete, and test operations with inline add form and event type selection.",
+      "tags": ["component", "api-handler", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/lib/admin-path.test.ts",
+      "type": "file",
+      "name": "admin-path.test.ts",
+      "filePath": "apps/client/src/lib/admin-path.test.ts",
+      "summary": "Unit tests for the adminPath utility function verifying path construction under various input conditions.",
+      "tags": ["test", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/admin-path.ts",
+      "type": "file",
+      "name": "admin-path.ts",
+      "filePath": "apps/client/src/lib/admin-path.ts",
+      "summary": "Utility functions for constructing admin-panel SPA route paths and cross-origin storefront-to-admin href links using the VITE_WEB_ADMIN_ORIGIN environment variable.",
+      "tags": ["utility", "type-definition"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/lib/admin-path.ts:adminPath",
+      "type": "function",
+      "name": "adminPath",
+      "filePath": "apps/client/src/lib/admin-path.ts",
+      "lineRange": [2, 9],
+      "summary": "Constructs a client-side admin route path, prepending /admin/ prefix and handling both hash and pathname routing patterns.",
+      "tags": ["utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/lib/admin-path.ts:storefrontAdminHref",
+      "type": "function",
+      "name": "storefrontAdminHref",
+      "filePath": "apps/client/src/lib/admin-path.ts",
+      "lineRange": [12, 16],
+      "summary": "Generates an absolute URL to the admin panel from a storefront context by combining the VITE_WEB_ADMIN_ORIGIN env var with an adminPath.",
+      "tags": ["utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/api-admin.ts",
+      "type": "file",
+      "name": "api-admin.ts",
+      "filePath": "apps/client/src/lib/api-admin.ts",
+      "summary": "Exports the shared admin API client instance (api/adminApi), gateway base URL, and an API reachability error formatter used throughout all admin pages.",
+      "tags": ["utility", "service", "api-handler"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "type": "file",
+      "name": "spreadsheet-import.ts",
+      "filePath": "apps/client/src/lib/spreadsheet-import.ts",
+      "summary": "CSV and Excel parsing utilities supporting header normalization, typed value extraction, and a CSV template downloader used by the SpreadsheetImportPanel.",
+      "tags": ["utility", "serialization", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/spreadsheet-import.ts:parseSpreadsheetFile",
+      "type": "function",
+      "name": "parseSpreadsheetFile",
+      "filePath": "apps/client/src/lib/spreadsheet-import.ts",
+      "lineRange": [30, 48],
+      "summary": "Detects whether an uploaded file is CSV or Excel and dispatches to the appropriate parser, returning a uniform array of header-keyed row objects.",
+      "tags": ["utility", "serialization"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/spreadsheet-import.ts:downloadCsvTemplate",
+      "type": "function",
+      "name": "downloadCsvTemplate",
+      "filePath": "apps/client/src/lib/spreadsheet-import.ts",
+      "lineRange": [99, 107],
+      "summary": "Creates and triggers a browser download of a blank CSV template file with the given column headers.",
+      "tags": ["utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/toast.ts",
+      "type": "file",
+      "name": "toast.ts",
+      "filePath": "apps/client/src/lib/toast.ts",
+      "summary": "Lightweight dependency-free toast notification system that programmatically injects and auto-removes toast DOM elements with support for success, error, and info variants.",
+      "tags": ["utility", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/toast.ts:showToast",
+      "type": "function",
+      "name": "showToast",
+      "filePath": "apps/client/src/lib/toast.ts",
+      "lineRange": [37, 69],
+      "summary": "Shows a styled toast notification by appending a DOM element to the toast container, then fades and removes it after a configurable duration.",
+      "tags": ["utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/lib/use-query-params.ts",
+      "type": "file",
+      "name": "use-query-params.ts",
+      "filePath": "apps/client/src/lib/use-query-params.ts",
+      "summary": "Thin React hook wrapper around React Router's useSearchParams providing a convenient object-oriented interface for reading URL query parameters.",
+      "tags": ["hook", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/lib/use-query-params.ts:useQueryParams",
+      "type": "function",
+      "name": "useQueryParams",
+      "filePath": "apps/client/src/lib/use-query-params.ts",
+      "lineRange": [4, 7],
+      "summary": "Custom hook that returns the first element of useSearchParams for reading URL search parameters.",
+      "tags": ["hook", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "summary": "Admin detail page for a single MSA compliance report showing week range, net purchases, return amounts, qualifying status, and submission metadata.",
+      "tags": ["api-handler", "component"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx:MsaReportDetailPage",
+      "type": "function",
+      "name": "MsaReportDetailPage",
+      "filePath": "apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "lineRange": [26, 150],
+      "summary": "Page component that reads the reportId route param, fetches the full MSA report record, and renders a structured detail view with all compliance fields.",
+      "tags": ["api-handler", "component"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/compliance/page.tsx",
+      "summary": "Admin compliance management page with tabs for MSA reports and tax data, supporting report generation, CSV import of transaction data, and report submission workflows.",
+      "tags": ["api-handler", "component"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/compliance/page.tsx:CompliancePage",
+      "type": "function",
+      "name": "CompliancePage",
+      "filePath": "apps/client/src/pages/admin/compliance/page.tsx",
+      "lineRange": [41, 346],
+      "summary": "Top-level compliance page managing MSA report listing, bulk transaction import via SpreadsheetImportPanel, report generation mutation, status filtering, and submission actions.",
+      "tags": ["api-handler", "component"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "summary": "Detailed CRM customer view showing contact info, order history, contract pricing, volume breaks, activity log, and portal invite management with full CRUD mutations.",
+      "tags": ["api-handler", "component"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/crm/customers/[id]/page.tsx:CrmCustomerDetailPage",
+      "type": "function",
+      "name": "CrmCustomerDetailPage",
+      "filePath": "apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "lineRange": [73, 529],
+      "summary": "CRM customer detail page with tabbed sections for overview, pricing, volume breaks, orders, and activities; supports adding contract prices, volume breaks, log activities, and generating portal invites.",
+      "tags": ["api-handler", "component"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/crm/page.tsx",
+      "summary": "Full CRM page with a customers section (paginated table, CSV export, import) and a leads kanban board with drag-and-drop pipeline stage management.",
+      "tags": ["api-handler", "component"],
+      "complexity": "complex",
+      "languageNotes": "Uses @dnd-kit for drag-and-drop kanban columns with optimistic updates via React Query's setQueryData."
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/crm/page.tsx:CrmPage",
+      "type": "function",
+      "name": "CrmPage",
+      "filePath": "apps/client/src/pages/admin/crm/page.tsx",
+      "lineRange": [91, 156],
+      "summary": "Top-level CRM page component orchestrating customer and leads queries, tab switching, and passing rep data to sub-sections.",
+      "tags": ["api-handler", "component"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/crm/page.tsx:CustomersSection",
+      "type": "function",
+      "name": "CustomersSection",
+      "filePath": "apps/client/src/pages/admin/crm/page.tsx",
+      "lineRange": [178, 417],
+      "summary": "Paginated customer table sub-component with debounced search, CSV export, spreadsheet import, and a new customer drawer.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/crm/page.tsx:LeadsKanbanSection",
+      "type": "function",
+      "name": "LeadsKanbanSection",
+      "filePath": "apps/client/src/pages/admin/crm/page.tsx",
+      "lineRange": [585, 752],
+      "summary": "Kanban board for CRM leads with drag-and-drop column reordering, optimistic status patch mutations, pipeline value aggregation per column, and import/new lead actions.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "summary": "Admin customer detail page showing contact information, account settings, and order history for a specific customer record.",
+      "tags": ["api-handler", "component"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/customers/[id]/page.tsx:CustomerDetailPage",
+      "type": "function",
+      "name": "CustomerDetailPage",
+      "filePath": "apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "lineRange": [37, 250],
+      "summary": "Fetches a customer record and renders editable contact details, account status, payment terms, and associated order list.",
+      "tags": ["api-handler", "component"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/src/components/compliance/msa-status-card.tsx",
+      "target": "function:apps/client/src/components/compliance/msa-status-card.tsx:MSAStatusCard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/compliance/msa-status-card.tsx",
+      "target": "function:apps/client/src/components/compliance/msa-status-card.tsx:MSAStatusCard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/compliance/msa-status-card.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/compliance/msa-status-card.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoMetricCard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoMetricCard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoSparkline",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoSparkline",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoDonut",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoDonut",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoHeroCard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoHeroCard",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoAvatarStack",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "target": "function:apps/client/src/components/cosmos/bento-cards.tsx:BentoAvatarStack",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "target": "function:apps/client/src/components/cosmos/empty-state.tsx:EmptyState",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "target": "function:apps/client/src/components/cosmos/empty-state.tsx:EmptyState",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "target": "function:apps/client/src/components/cosmos/radix-overlays.tsx:CosmosSheet",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "target": "function:apps/client/src/components/cosmos/radix-overlays.tsx:CosmosSheet",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "target": "function:apps/client/src/components/cosmos/radix-overlays.tsx:CosmosDialogModal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "target": "function:apps/client/src/components/cosmos/radix-overlays.tsx:CosmosDialogModal",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "target": "function:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx:SpreadsheetImportPanel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "target": "function:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx:SpreadsheetImportPanel",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "target": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "target": "function:apps/client/src/components/cosmos/status-badge.tsx:StatusBadge",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "target": "function:apps/client/src/components/cosmos/status-badge.tsx:StatusBadge",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/inventory/low-stock-alert.tsx",
+      "target": "function:apps/client/src/components/inventory/low-stock-alert.tsx:LowStockAlert",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/inventory/low-stock-alert.tsx",
+      "target": "function:apps/client/src/components/inventory/low-stock-alert.tsx:LowStockAlert",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/inventory/low-stock-alert.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "target": "function:apps/client/src/components/orders/recent-orders.tsx:RecentOrders",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "target": "function:apps/client/src/components/orders/recent-orders.tsx:RecentOrders",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/settings/webhook-manager.tsx",
+      "target": "function:apps/client/src/components/settings/webhook-manager.tsx:WebhookManager",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/settings/webhook-manager.tsx",
+      "target": "function:apps/client/src/components/settings/webhook-manager.tsx:WebhookManager",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/settings/webhook-manager.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/settings/webhook-manager.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/lib/admin-path.test.ts",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/lib/admin-path.test.ts",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/client/src/lib/admin-path.ts",
+      "target": "function:apps/client/src/lib/admin-path.ts:adminPath",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/admin-path.ts",
+      "target": "function:apps/client/src/lib/admin-path.ts:adminPath",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/admin-path.ts",
+      "target": "function:apps/client/src/lib/admin-path.ts:storefrontAdminHref",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/admin-path.ts",
+      "target": "function:apps/client/src/lib/admin-path.ts:storefrontAdminHref",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "target": "function:apps/client/src/lib/spreadsheet-import.ts:parseSpreadsheetFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "target": "function:apps/client/src/lib/spreadsheet-import.ts:parseSpreadsheetFile",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "target": "function:apps/client/src/lib/spreadsheet-import.ts:downloadCsvTemplate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "target": "function:apps/client/src/lib/spreadsheet-import.ts:downloadCsvTemplate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/toast.ts",
+      "target": "function:apps/client/src/lib/toast.ts:showToast",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/toast.ts",
+      "target": "function:apps/client/src/lib/toast.ts:showToast",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/use-query-params.ts",
+      "target": "function:apps/client/src/lib/use-query-params.ts:useQueryParams",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/use-query-params.ts",
+      "target": "function:apps/client/src/lib/use-query-params.ts:useQueryParams",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx:MsaReportDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx:MsaReportDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/msa/[reportId]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "function:apps/client/src/pages/admin/compliance/page.tsx:CompliancePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "function:apps/client/src/pages/admin/compliance/page.tsx:CompliancePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/compliance/page.tsx",
+      "target": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/crm/customers/[id]/page.tsx:CrmCustomerDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/crm/customers/[id]/page.tsx:CrmCustomerDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/customers/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "function:apps/client/src/pages/admin/crm/page.tsx:CrmPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "function:apps/client/src/pages/admin/crm/page.tsx:CrmPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "function:apps/client/src/pages/admin/crm/page.tsx:CustomersSection",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "function:apps/client/src/pages/admin/crm/page.tsx:LeadsKanbanSection",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/crm/page.tsx",
+      "target": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/customers/[id]/page.tsx:CustomerDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/customers/[id]/page.tsx:CustomerDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/customers/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

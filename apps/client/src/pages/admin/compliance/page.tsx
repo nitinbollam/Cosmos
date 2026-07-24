@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Card, CardTitle } from '@cosmos/ui'
+import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
-import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
 import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
 
 type MsaStatus = 'GENERATED' | 'SUBMITTED' | 'SUBMISSION_FAILED' | 'ACCEPTED'
@@ -84,20 +84,20 @@ export default function CompliancePage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white">Compliance</h1>
-          <p className="text-cosmos-muted text-sm mt-1">MSA reporting and tax exposure from compliance data.</p>
+          <h1 className="text-2xl font-bold text-pleros-white">Compliance</h1>
+          <p className="text-pleros-muted text-sm mt-1">MSA reporting and tax exposure from compliance data.</p>
         </div>
-        <div className="flex rounded-lg border border-cosmos-border overflow-hidden">
+        <div className="flex rounded-lg border border-pleros-border overflow-hidden">
           <button
             type="button"
-            className={`px-4 py-2 text-sm ${tab === 'msa' ? 'bg-cosmos-primary text-white' : 'text-cosmos-text'}`}
+            className={`px-4 py-2 text-sm ${tab === 'msa' ? 'bg-pleros-primary text-white' : 'text-pleros-text'}`}
             onClick={() => setTab('msa')}
           >
             MSA
           </button>
           <button
             type="button"
-            className={`px-4 py-2 text-sm ${tab === 'tax' ? 'bg-cosmos-primary text-white' : 'text-cosmos-text'}`}
+            className={`px-4 py-2 text-sm ${tab === 'tax' ? 'bg-pleros-primary text-white' : 'text-pleros-text'}`}
             onClick={() => setTab('tax')}
           >
             Tax
@@ -122,8 +122,8 @@ export default function CompliancePage() {
                 onClick={() => setStatusFilter(f.value)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
                   statusFilter === f.value
-                    ? 'border-cosmos-primary bg-cosmos-primary/20 text-cosmos-white'
-                    : 'border-cosmos-border text-cosmos-muted'
+                    ? 'border-pleros-primary bg-pleros-primary/20 text-pleros-white'
+                    : 'border-pleros-border text-pleros-muted'
                 }`}
               >
                 {f.label}
@@ -133,7 +133,7 @@ export default function CompliancePage() {
               type="button"
               onClick={() => generate.mutate()}
               disabled={generate.isPending}
-              className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+              className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             >
               {generate.isPending ? 'Generating…' : 'Generate weekly drafts'}
             </button>
@@ -141,7 +141,7 @@ export default function CompliancePage() {
               type="button"
               onClick={() => runCron.mutate()}
               disabled={runCron.isPending}
-              className="h-9 px-4 rounded-md border border-cosmos-border text-sm text-cosmos-text disabled:opacity-40"
+              className="h-9 px-4 rounded-md border border-pleros-border text-sm text-pleros-text disabled:opacity-40"
             >
               {runCron.isPending ? 'Running…' : 'Run full automation'}
             </button>
@@ -152,7 +152,7 @@ export default function CompliancePage() {
             </p>
           )}
           {runCron.data ? (
-            <p className="text-xs text-cosmos-muted">
+            <p className="text-xs text-pleros-muted">
               Automation: {(runCron.data as { generated?: string[] }).generated?.length ?? 0} generated,{' '}
               {(runCron.data as { submitted?: string[] }).submitted?.length ?? 0} submitted via EDI
             </p>
@@ -231,7 +231,7 @@ export default function CompliancePage() {
           <Card>
             <CardTitle>MSA reports</CardTitle>
             {reports.isLoading ? (
-              <p className="text-sm text-cosmos-muted mt-3">Loading…</p>
+              <p className="text-sm text-pleros-muted mt-3">Loading…</p>
             ) : reports.isError ? (
               <p className="text-sm text-red-400 mt-3">Could not load MSA reports.</p>
             ) : (reports.data ?? []).length === 0 ? (
@@ -244,7 +244,7 @@ export default function CompliancePage() {
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
+                    <tr className="text-left text-pleros-muted border-b border-pleros-border">
                       <th className="pb-2 pr-4">Manufacturer DID</th>
                       <th className="pb-2 pr-4">Week ending</th>
                       <th className="pb-2 pr-4">Transactions</th>
@@ -255,15 +255,15 @@ export default function CompliancePage() {
                   </thead>
                   <tbody>
                     {(reports.data ?? []).map((r) => (
-                      <tr key={r.id} className="border-b border-cosmos-border/60">
-                        <td className="py-2 pr-4 font-mono text-xs text-cosmos-text max-w-[200px] truncate">
+                      <tr key={r.id} className="border-b border-pleros-border/60">
+                        <td className="py-2 pr-4 font-mono text-xs text-pleros-text max-w-[200px] truncate">
                           {r.manufacturerDid}
                         </td>
-                        <td className="py-2 pr-4 text-cosmos-muted whitespace-nowrap">
+                        <td className="py-2 pr-4 text-pleros-muted whitespace-nowrap">
                           {new Date(r.weekEnding).toLocaleDateString()}
                         </td>
-                        <td className="py-2 pr-4 text-cosmos-white">{r.totalTransactions}</td>
-                        <td className="py-2 pr-4 font-mono text-cosmos-text">
+                        <td className="py-2 pr-4 text-pleros-white">{r.totalTransactions}</td>
+                        <td className="py-2 pr-4 font-mono text-pleros-text">
                           ${Number(r.netPurchases ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-2 pr-4">
@@ -273,7 +273,7 @@ export default function CompliancePage() {
                           <div className="flex flex-wrap gap-2 items-center">
                             <Link
                               to={adminPath(`/compliance/msa/${r.id}`)}
-                              className="text-cosmos-primary text-xs whitespace-nowrap"
+                              className="text-pleros-primary text-xs whitespace-nowrap"
                             >
                               View
                             </Link>
@@ -281,7 +281,7 @@ export default function CompliancePage() {
                               <>
                                 <button
                                   type="button"
-                                  className="text-xs text-cosmos-muted hover:text-cosmos-white"
+                                  className="text-xs text-pleros-muted hover:text-pleros-white"
                                   disabled={uploadReport.isPending}
                                   onClick={() => uploadReport.mutate(r.id)}
                                 >
@@ -289,7 +289,7 @@ export default function CompliancePage() {
                                 </button>
                                 <button
                                   type="button"
-                                  className="text-xs text-cosmos-muted hover:text-cosmos-white"
+                                  className="text-xs text-pleros-muted hover:text-pleros-white"
                                   disabled={submitReport.isPending}
                                   onClick={() => submitReport.mutate(r.id)}
                                 >
@@ -313,30 +313,28 @@ export default function CompliancePage() {
         <div className="grid md:grid-cols-2 gap-4">
           <Card>
             <CardTitle>MSA transaction rollup</CardTitle>
-            <p className="text-xs text-cosmos-muted mt-2">
-              Totals <span className="font-mono text-cosmos-text/80">netAmount</span> across qualifying MSA
+            <p className="text-xs text-pleros-muted mt-2">
+              Totals <span className="font-mono text-pleros-text/80">netAmount</span> across qualifying MSA
               transactions for this tenant (not sales tax collected at checkout).
             </p>
             {tax.isLoading ? (
-              <p className="text-sm text-cosmos-muted mt-4">Loading…</p>
+              <p className="text-sm text-pleros-muted mt-4">Loading…</p>
             ) : tax.isError ? (
               <p className="text-sm text-red-400 mt-4">Could not load summary.</p>
             ) : (
               <>
-                <p className="text-3xl font-semibold text-cosmos-white mt-4">
+                <p className="text-3xl font-semibold text-pleros-white mt-4">
                   ${Number(tax.data?.totalNet ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-xs text-cosmos-muted mt-2">{tax.data?.count ?? 0} linked rows</p>
+                <p className="text-xs text-pleros-muted mt-2">{tax.data?.count ?? 0} linked rows</p>
               </>
             )}
           </Card>
           <Card>
             <CardTitle>Recording liabilities</CardTitle>
-            <p className="text-sm text-cosmos-muted mt-3 leading-relaxed">
-              Ops integrations call <span className="font-mono text-xs">POST /tax/record</span> with order line
-              items to publish <span className="font-mono text-xs">TAX_LIABILITY_RECORDED</span>. There is no list
-              API for raw transactions in the admin UI yet; use this card as a quick exposure read from stored MSA
-              data.
+            <p className="text-sm text-pleros-muted mt-3 leading-relaxed">
+              Tax liabilities are recorded when orders with taxable lines are processed. This card shows exposure from
+              stored compliance data. A full transaction list will land in a later release.
             </p>
           </Card>
         </div>

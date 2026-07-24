@@ -70,8 +70,8 @@ export async function completeChat(messages: ChatMessage[]): Promise<LlmResponse
           process.env.OPENROUTER_API_URL?.trim() || 'https://openrouter.ai/api/v1/chat/completions',
         apiKey: process.env.OPENROUTER_API_KEY!,
         headers: {
-          'HTTP-Referer': process.env.COSMOS_CLIENT_ORIGIN?.trim() || 'http://localhost:4000',
-          'X-Title': 'Cosmos Celestial',
+          'HTTP-Referer': process.env.PLEROS_CLIENT_ORIGIN?.trim() || 'http://localhost:4000',
+          'X-Title': 'Pleros Celestial',
         },
       })
     case 'groq':
@@ -103,8 +103,8 @@ export async function* streamChat(messages: ChatMessage[]): AsyncGenerator<strin
           process.env.OPENROUTER_API_URL?.trim() || 'https://openrouter.ai/api/v1/chat/completions',
         apiKey: process.env.OPENROUTER_API_KEY!,
         headers: {
-          'HTTP-Referer': process.env.COSMOS_CLIENT_ORIGIN?.trim() || 'http://localhost:4000',
-          'X-Title': 'Cosmos Celestial',
+          'HTTP-Referer': process.env.PLEROS_CLIENT_ORIGIN?.trim() || 'http://localhost:4000',
+          'X-Title': 'Pleros Celestial',
         },
       })
     case 'groq':
@@ -391,19 +391,19 @@ function mockComplete(messages: ChatMessage[], model: string): LlmResponse {
     }
     lines.push('Open **Orders** in the portal for full tracking and shipment details.')
   } else if (toolBlock.includes('list_my_invoices')) {
-    lines.push('I pulled your recent invoices from Cosmos.')
+    lines.push('I pulled your recent invoices from Pleros.')
     lines.push('Check **Invoices** for PDFs, balances, and payment history.')
   } else if (toolBlock.includes('search_catalog')) {
     lines.push('I searched the catalog for matching in-stock SKUs.')
     lines.push('Visit **Catalog** to add items to your cart.')
   } else if (toolBlock.includes('list_my_quotes')) {
-    lines.push('Here are your open quotes in Cosmos.')
+    lines.push('Here are your open quotes in Pleros.')
     lines.push('Open **Quotes** to accept, counter-offer, or convert to an order.')
   } else if (toolBlock.includes('global_search') || toolBlock.includes('list_low_stock')) {
-    lines.push('I ran an admin search across Cosmos records.')
+    lines.push('I ran an admin search across Pleros records.')
     lines.push('Use the linked admin pages for full detail.')
   } else if (toolBlock.includes('list_warehouses')) {
-    lines.push('Here are your active warehouses in Cosmos:')
+    lines.push('Here are your active warehouses in Pleros:')
     const names = toolBlock.match(/"name":\s*"([^"]+)"/g)
     const codes = toolBlock.match(/"code":\s*"([^"]+)"/g)
     if (names?.length) {
@@ -416,7 +416,7 @@ function mockComplete(messages: ChatMessage[], model: string): LlmResponse {
     }
     lines.push('Open **Warehouse** in admin for pick tasks, waves, and bins.')
   } else {
-    lines.push(`I'm Celestial, your Cosmos assistant.`)
+    lines.push(`I'm Celestial, your Pleros assistant.`)
     lines.push(`You asked: "${lastUser.slice(0, 120)}"`)
     lines.push(
       'Configure OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, or Ollama for richer AI answers. I can still help with orders, invoices, catalog, and quotes using live data.',

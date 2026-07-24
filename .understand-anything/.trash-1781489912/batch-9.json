@@ -1,0 +1,572 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/web/lib/server/auth-security.ts",
+      "type": "file",
+      "name": "auth-security.ts",
+      "filePath": "apps/web/lib/server/auth-security.ts",
+      "summary": "Provides password policy enforcement and per-process in-memory rate limiting for auth endpoints, with helpers for extracting client IP from forwarded headers.",
+      "tags": ["security", "middleware", "validation", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth-security.ts:assertPasswordPolicy",
+      "type": "function",
+      "name": "assertPasswordPolicy",
+      "filePath": "apps/web/lib/server/auth-security.ts",
+      "lineRange": [11, 21],
+      "summary": "Validates a password string against the minimum length (10), maximum length (128), and alphanumeric complexity requirements, throwing ApiError 400 on failure.",
+      "tags": ["validation", "security", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth-security.ts:rateLimit",
+      "type": "function",
+      "name": "rateLimit",
+      "filePath": "apps/web/lib/server/auth-security.ts",
+      "lineRange": [35, 48],
+      "summary": "Enforces a fixed-window rate limit for a given key, throwing ApiError 429 with a retry-after hint when the limit is exceeded; cleans up expired windows on overflow.",
+      "tags": ["security", "rate-limiting", "middleware"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/auth.ts",
+      "type": "file",
+      "name": "auth.ts",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "summary": "Implements the complete authentication lifecycle for the ERP platform including login, registration, JWT token signing, refresh, logout, email verification, password reset, and invite acceptance using bcrypt and JOSE.",
+      "tags": ["authentication", "service", "security", "api-handler"],
+      "complexity": "complex",
+      "languageNotes": "Uses JOSE for HS256 JWT signing and bcrypt for password and refresh-token hashing. Dynamic imports of notification-provider avoid circular dependencies at module load time."
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:signPair",
+      "type": "function",
+      "name": "signPair",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [16, 46],
+      "summary": "Signs and returns an access+refresh JWT pair for a user, storing the bcrypt-hashed refresh token in the database for rotation validation.",
+      "tags": ["authentication", "jwt", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:loginUser",
+      "type": "function",
+      "name": "loginUser",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [48, 65],
+      "summary": "Authenticates a user by email and password, enforces email-verification gate for new signups, updates lastLoginAt, and returns a signed token pair.",
+      "tags": ["authentication", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:registerUser",
+      "type": "function",
+      "name": "registerUser",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [67, 105],
+      "summary": "Creates a new user for a given tenant after validating the tenant exists and the email is unique, enforcing password policy and optionally issuing tokens or triggering email verification.",
+      "tags": ["authentication", "service", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:acceptInvite",
+      "type": "function",
+      "name": "acceptInvite",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [127, 161],
+      "summary": "Validates an admin-issued invite token, registers the invited user with the associated role and tenant, and marks the invite as accepted.",
+      "tags": ["authentication", "service", "security"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:sendEmailVerification",
+      "type": "function",
+      "name": "sendEmailVerification",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [163, 189],
+      "summary": "Generates a 32-byte random email verification token, stores its SHA-256 hash with a 24-hour expiry, and delivers the verification email via the notification provider.",
+      "tags": ["authentication", "service", "notification"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:verifyEmail",
+      "type": "function",
+      "name": "verifyEmail",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [191, 205],
+      "summary": "Validates an email verification token against its stored SHA-256 hash and expiry, then marks the user's email as verified.",
+      "tags": ["authentication", "service", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:requestPasswordReset",
+      "type": "function",
+      "name": "requestPasswordReset",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [216, 243],
+      "summary": "Generates a 30-minute password reset token stored as a SHA-256 hash and sends the reset link by email without revealing whether the address exists.",
+      "tags": ["authentication", "service", "security"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:resetPassword",
+      "type": "function",
+      "name": "resetPassword",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [245, 264],
+      "summary": "Validates the password reset token, enforces the password policy on the new password, re-hashes it, and invalidates all existing sessions by clearing the refresh token hash.",
+      "tags": ["authentication", "service", "security"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/auth.ts:changePassword",
+      "type": "function",
+      "name": "changePassword",
+      "filePath": "apps/web/lib/server/auth.ts",
+      "lineRange": [266, 277],
+      "summary": "Allows an authenticated user to change their password by verifying the current password, enforcing the new password policy, and invalidating existing sessions.",
+      "tags": ["authentication", "service", "security"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/db-health.ts",
+      "type": "file",
+      "name": "db-health.ts",
+      "filePath": "apps/web/lib/server/db-health.ts",
+      "summary": "Provides database health check utilities that verify all required database environment URLs are configured and test live connectivity to the auth database.",
+      "tags": ["utility", "monitoring", "database"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/db-health.ts:checkDatabaseConnections",
+      "type": "function",
+      "name": "checkDatabaseConnections",
+      "filePath": "apps/web/lib/server/db-health.ts",
+      "lineRange": [9, 43],
+      "summary": "Iterates all database environment URL keys to verify they are set, then performs a live ping against authDb and returns a structured health report with per-check status.",
+      "tags": ["monitoring", "database", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/env.ts",
+      "type": "file",
+      "name": "env.ts",
+      "filePath": "apps/web/lib/server/env.ts",
+      "summary": "Exports typed accessors for JWT secrets from environment variables and a utility for constructing Postgres database URLs, plus a constant listing all required database URL environment keys.",
+      "tags": ["configuration", "utility", "environment"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/signup.ts",
+      "type": "file",
+      "name": "signup.ts",
+      "filePath": "apps/web/lib/server/signup.ts",
+      "summary": "Orchestrates public tenant self-registration by creating a new tenant and organization record, seeding onboarding steps and GL accounts, and registering the first TENANT_ADMIN user with email verification.",
+      "tags": ["service", "authentication", "entry-point"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/signup.ts:publicSignup",
+      "type": "function",
+      "name": "publicSignup",
+      "filePath": "apps/web/lib/server/signup.ts",
+      "lineRange": [6, 61],
+      "summary": "Validates slug uniqueness and email availability, then atomically provisions a new tenant, organization, onboarding data, GL accounts, and the first admin user, returning tenant info with verification status.",
+      "tags": ["service", "authentication", "factory"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/server/api-router.ts",
+      "type": "file",
+      "name": "api-router.ts",
+      "filePath": "apps/web/server/api-router.ts",
+      "summary": "Central HTTP API router that handles all /api/v1/* routes including authentication flows, analytics endpoints, and delegates unknown routes to the native module router, with rate limiting and consistent error serialization.",
+      "tags": ["api-handler", "middleware", "entry-point", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/server/api-router.ts:handleApiRequest",
+      "type": "function",
+      "name": "handleApiRequest",
+      "filePath": "apps/web/server/api-router.ts",
+      "lineRange": [25, 297],
+      "summary": "Dispatches incoming HTTP requests to the appropriate auth, analytics, or native API handler based on pathname pattern matching, applying rate limits and serializing errors as JSON responses.",
+      "tags": ["api-handler", "middleware", "routing"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/web/lib/server/auth-security.ts",
+      "target": "function:apps/web/lib/server/auth-security.ts:assertPasswordPolicy",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth-security.ts",
+      "target": "function:apps/web/lib/server/auth-security.ts:assertPasswordPolicy",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth-security.ts",
+      "target": "function:apps/web/lib/server/auth-security.ts:rateLimit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth-security.ts",
+      "target": "function:apps/web/lib/server/auth-security.ts:rateLimit",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth-security.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:signPair",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:loginUser",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:loginUser",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:registerUser",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:registerUser",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:acceptInvite",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:acceptInvite",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:sendEmailVerification",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:sendEmailVerification",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:verifyEmail",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:verifyEmail",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:requestPasswordReset",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:requestPasswordReset",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:resetPassword",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:resetPassword",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:changePassword",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth.ts:changePassword",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "file:apps/web/lib/server/auth-security.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "file:apps/web/lib/server/env.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/auth.ts",
+      "target": "function:apps/web/lib/server/auth-security.ts:assertPasswordPolicy",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/db-health.ts",
+      "target": "function:apps/web/lib/server/db-health.ts:checkDatabaseConnections",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/db-health.ts",
+      "target": "function:apps/web/lib/server/db-health.ts:checkDatabaseConnections",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/db-health.ts",
+      "target": "file:apps/web/lib/server/env.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/signup.ts",
+      "target": "function:apps/web/lib/server/signup.ts:publicSignup",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/signup.ts",
+      "target": "function:apps/web/lib/server/signup.ts:publicSignup",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/signup.ts",
+      "target": "file:apps/web/lib/server/auth.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/signup.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/signup.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/signup.ts",
+      "target": "function:apps/web/lib/server/auth.ts:registerUser",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/server/api-router.ts:handleApiRequest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/server/api-router.ts:handleApiRequest",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "file:apps/web/lib/server/auth-security.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "file:apps/web/lib/server/auth.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "file:apps/web/lib/server/buyer-context.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "file:apps/web/lib/server/env.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "file:apps/web/lib/server/native-router.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "file:apps/web/lib/server/signup.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/auth-security.ts:rateLimit",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/auth.ts:loginUser",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/auth.ts:acceptInvite",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/auth.ts:resetPassword",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/signup.ts:publicSignup",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/auth.ts:verifyEmail",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/auth.ts:requestPasswordReset",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/server/api-router.ts",
+      "target": "function:apps/web/lib/server/auth.ts:changePassword",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

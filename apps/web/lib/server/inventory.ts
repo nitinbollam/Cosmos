@@ -14,6 +14,8 @@ export type CreateSkuInput = {
   weightGrams?: number
   isTobacco?: boolean
   isRegulated?: boolean
+  ageRestricted?: boolean
+  minimumAge?: number | null
   manufacturerId?: string
   manufacturerDid?: string
   exciseTaxCategory?: string
@@ -24,6 +26,8 @@ export type CreateSkuInput = {
   defaultLocationId?: string
   reorderPoint?: number
   reorderQty?: number
+  trackLot?: boolean
+  trackSerial?: boolean
 }
 
 export async function distinctCategories(tenantId: string) {
@@ -129,22 +133,21 @@ export async function findSkuById(tenantId: string, id: string) {
 }
 
 export async function getSkuReorderSuggestion(tenantId: string, skuId: string, warehouseId?: string) {
+  const { getSkuDemandPlan } = await import('./demand-planning')
+  const plan = await getSkuDemandPlan(tenantId, skuId, warehouseId)
   const sku = await findSkuById(tenantId, skuId)
-  const level = await inventoryDb.stockLevel.findFirst({
-    where: {
-      tenantId,
-      skuId,
-      ...(warehouseId ? { warehouseId } : {}),
-    },
-    orderBy: { reorderPoint: 'desc' },
-  })
-  const reorderQty = level?.reorderQty && level.reorderQty > 0 ? level.reorderQty : Math.max(1, (level?.reorderPoint ?? 0) * 2 || 10)
+  const suggestedQty =
+    plan.method === 'USAGE_FORECAST' && plan.suggestedOrderQty > 0
+      ? plan.suggestedOrderQty
+      : plan.staticReorderQty
   return {
     sku: { id: sku.id, code: sku.code, name: sku.name, cost: Number(sku.cost ?? 0) },
-    warehouseId: level?.warehouseId ?? warehouseId ?? null,
-    quantityAvailable: level?.quantityAvailable ?? 0,
-    reorderPoint: level?.reorderPoint ?? 0,
-    suggestedQty: reorderQty,
+    warehouseId: plan.warehouseId,
+    quantityAvailable: plan.quantityAvailable,
+    reorderPoint: plan.reorderPoint,
+    suggestedQty,
+    demandMethod: plan.method,
+    avgDailyUsage: plan.avgDailyUsage,
   }
 }
 
@@ -183,13 +186,23 @@ export type ReceiveStockInput = {
 }
 
 export async function receiveStock(tenantId: string, dto: ReceiveStockInput, performedBy: string) {
-  await findSkuById(tenantId, dto.skuId)
+  const sku = await findSkuById(tenantId, dto.skuId)
   await findWarehouseById(tenantId, dto.warehouseId)
   const correlationId = randomUUID()
   const entryId = randomUUID()
   const batchKey = dto.batchId ?? ''
 
-  return inventoryDb.$transaction(async (tx) => {
+  if (batchKey && sku.trackLot) {
+    const { ensureInventoryLot } = await import('./inventory-lots')
+    await ensureInventoryLot(tenantId, {
+      skuId: dto.skuId,
+      warehouseId: dto.warehouseId,
+      batchCode: batchKey,
+      supplierId: dto.supplierId ?? null,
+    })
+  }
+
+  const result = await inventoryDb.$transaction(async (tx) => {
     const currentLevel = await tx.stockLevel.upsert({
       where: {
         tenantId_skuId_warehouseId_batchId: {
@@ -235,6 +248,11 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
       },
     })
   })
+
+  const { fillBackordersOnReceipt } = await import('./backorders')
+  void fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId).catch(() => undefined)
+
+  return result
 }
 
 export type TransferStockInput = {
@@ -349,6 +367,13 @@ export async function createSku(tenantId: string, input: CreateSkuInput) {
         weightGrams: input.weightGrams !== undefined ? new Prisma.Decimal(input.weightGrams) : undefined,
         isTobacco: input.isTobacco ?? false,
         isRegulated: input.isRegulated ?? false,
+        ageRestricted: input.ageRestricted ?? Boolean(input.isTobacco),
+        minimumAge:
+          input.minimumAge !== undefined && input.minimumAge !== null
+            ? Math.round(Number(input.minimumAge))
+            : input.isTobacco
+              ? 21
+              : null,
         manufacturerId: input.manufacturerId,
         manufacturerDid: input.manufacturerDid,
         exciseTaxCategory: input.exciseTaxCategory,
@@ -400,6 +425,12 @@ export async function createSku(tenantId: string, input: CreateSkuInput) {
 export async function updateSku(tenantId: string, id: string, patch: Partial<CreateSkuInput> & { isActive?: boolean }) {
   await findSkuById(tenantId, id)
   try {
+    const ageRestricted =
+      patch.ageRestricted !== undefined
+        ? Boolean(patch.ageRestricted)
+        : patch.isTobacco !== undefined
+          ? Boolean(patch.isTobacco)
+          : undefined
     return await inventoryDb.sKU.update({
       where: { id },
       data: {
@@ -407,9 +438,32 @@ export async function updateSku(tenantId: string, id: string, patch: Partial<Cre
         ...(patch.name !== undefined ? { name: patch.name } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.category !== undefined ? { category: patch.category } : {}),
+        ...(patch.subcategory !== undefined ? { subcategory: patch.subcategory } : {}),
+        ...(patch.barcode !== undefined ? { barcode: patch.barcode } : {}),
+        ...(patch.unitOfMeasure !== undefined ? { unitOfMeasure: patch.unitOfMeasure } : {}),
+        ...(patch.isTobacco !== undefined ? { isTobacco: Boolean(patch.isTobacco) } : {}),
+        ...(patch.isRegulated !== undefined ? { isRegulated: Boolean(patch.isRegulated) } : {}),
+        ...(ageRestricted !== undefined ? { ageRestricted } : {}),
+        ...(patch.minimumAge !== undefined
+          ? {
+              minimumAge:
+                patch.minimumAge === null || patch.minimumAge === ('' as unknown)
+                  ? null
+                  : Math.round(Number(patch.minimumAge)),
+            }
+          : patch.isTobacco === true
+            ? { minimumAge: 21 }
+            : {}),
+        ...(patch.manufacturerDid !== undefined ? { manufacturerDid: patch.manufacturerDid } : {}),
+        ...(patch.exciseTaxCategory !== undefined ? { exciseTaxCategory: patch.exciseTaxCategory } : {}),
         ...(patch.cost !== undefined ? { cost: new Prisma.Decimal(+patch.cost) } : {}),
         ...(patch.price !== undefined ? { price: new Prisma.Decimal(+patch.price) } : {}),
+        ...(patch.minPrice !== undefined
+          ? { minPrice: patch.minPrice == null ? null : new Prisma.Decimal(+patch.minPrice) }
+          : {}),
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+        ...(patch.trackLot !== undefined ? { trackLot: Boolean(patch.trackLot) } : {}),
+        ...(patch.trackSerial !== undefined ? { trackSerial: Boolean(patch.trackSerial) } : {}),
       },
     })
   } catch (e) {
@@ -592,7 +646,7 @@ export function getStockLevels(tenantId: string, opts: { skuId?: string; warehou
 export async function patchStockLevel(
   tenantId: string,
   levelId: string,
-  patch: { reorderPoint?: number; reorderQty?: number; locationId?: string | null },
+  patch: { reorderPoint?: number; reorderQty?: number; leadTimeDays?: number; locationId?: string | null },
 ) {
   const row = await inventoryDb.stockLevel.findFirst({ where: { id: levelId, tenantId } })
   if (!row) throw new ApiError(404, 'Stock level not found')
@@ -601,6 +655,7 @@ export async function patchStockLevel(
     data: {
       ...(patch.reorderPoint !== undefined ? { reorderPoint: patch.reorderPoint } : {}),
       ...(patch.reorderQty !== undefined ? { reorderQty: patch.reorderQty } : {}),
+      ...(patch.leadTimeDays !== undefined ? { leadTimeDays: patch.leadTimeDays } : {}),
       ...(patch.locationId !== undefined ? { locationId: patch.locationId || null } : {}),
     },
   })
@@ -642,30 +697,52 @@ export async function ensureStockLevel(
   })
 }
 
+export async function findStockLevel(
+  tenantId: string,
+  skuId: string,
+  warehouseId: string,
+  batchId = '',
+) {
+  return inventoryDb.stockLevel.findFirst({
+    where: { tenantId, skuId, warehouseId, batchId },
+  })
+}
+
+/** Order reservations are long-lived; the safety expiry exists to reap abandoned holds. */
+const RESERVATION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
 export async function reserveStock(
   tenantId: string,
   dto: { skuId: string; warehouseId: string; quantity: number; orderId: string; correlationId: string; batchId?: string },
 ): Promise<string> {
-  const batchKey = dto.batchId ?? ''
-  const level = await inventoryDb.stockLevel.findFirst({
-    where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
-  })
-  if (!level || level.quantityAvailable < dto.quantity) {
-    throw new ApiError(
-      400,
-      `Insufficient stock: available ${level?.quantityAvailable ?? 0}, requested ${dto.quantity}`,
-    )
+  if (!Number.isInteger(dto.quantity) || dto.quantity <= 0) {
+    throw new ApiError(400, 'quantity must be a positive integer')
   }
+  const batchKey = dto.batchId ?? ''
   const reservationId = randomUUID()
-  await inventoryDb.$transaction([
-    inventoryDb.stockLevel.update({
-      where: { id: level.id },
+
+  await inventoryDb.$transaction(async (tx) => {
+    const level = await tx.stockLevel.findFirst({
+      where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
+    })
+    if (!level || level.quantityAvailable < dto.quantity) {
+      throw new ApiError(
+        400,
+        `Insufficient stock: available ${level?.quantityAvailable ?? 0}, requested ${dto.quantity}`,
+      )
+    }
+    // Conditional update guards against concurrent reservations racing past the check above.
+    const updated = await tx.stockLevel.updateMany({
+      where: { id: level.id, quantityAvailable: { gte: dto.quantity } },
       data: {
         quantityReserved: { increment: dto.quantity },
         quantityAvailable: { decrement: dto.quantity },
       },
-    }),
-    inventoryDb.stockReservation.create({
+    })
+    if (updated.count === 0) {
+      throw new ApiError(400, `Insufficient stock: requested ${dto.quantity} no longer available`)
+    }
+    await tx.stockReservation.create({
       data: {
         id: reservationId,
         tenantId,
@@ -674,12 +751,131 @@ export async function reserveStock(
         batchId: batchKey,
         orderId: dto.orderId,
         quantity: dto.quantity,
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        expiresAt: new Date(Date.now() + RESERVATION_TTL_MS),
         status: 'ACTIVE',
       },
-    }),
-  ])
+    })
+  })
   return reservationId
+}
+
+/** Reap reservations past their safety expiry, returning stock to availability. */
+export async function releaseExpiredReservations(limit = 200): Promise<{ released: number }> {
+  const rows = await inventoryDb.stockReservation.findMany({
+    where: { status: 'ACTIVE', expiresAt: { lt: new Date() } },
+    take: limit,
+  })
+  for (const row of rows) {
+    await inventoryDb.$transaction([
+      inventoryDb.stockReservation.update({
+        where: { id: row.id },
+        data: { status: 'EXPIRED' },
+      }),
+      inventoryDb.stockLevel.updateMany({
+        where: {
+          tenantId: row.tenantId,
+          skuId: row.skuId,
+          warehouseId: row.warehouseId,
+          batchId: row.batchId ?? '',
+        },
+        data: {
+          quantityReserved: { decrement: row.quantity },
+          quantityAvailable: { increment: row.quantity },
+        },
+      }),
+    ])
+  }
+  return { released: rows.length }
+}
+
+/**
+ * Commit a shipment: decrement on-hand, release the reservation hold, mark reservations
+ * FULFILLED, and write STOCK_SHIPPED ledger entries. This is the inventory side of dispatch.
+ *
+ * `shippedByLine` (optional) caps how much of each reservation actually ships — used for SHORT
+ * picks where pickedQty < reserved. The unshipped remainder of a reservation is returned to
+ * available stock. When omitted, the full reserved quantity ships.
+ */
+export async function commitShipmentForOrder(
+  tenantId: string,
+  orderId: string,
+  performedBy: string,
+  shippedByLine?: Array<{ skuId: string; warehouseId: string; batchId?: string; quantity: number }>,
+): Promise<{ shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> }> {
+  const correlationId = randomUUID()
+  const shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> = []
+
+  // Remaining shippable quantity per sku|warehouse|batch from the pick result.
+  const cap = new Map<string, number>()
+  if (shippedByLine) {
+    for (const l of shippedByLine) {
+      const key = `${l.skuId}|${l.warehouseId}|${l.batchId ?? ''}`
+      cap.set(key, (cap.get(key) ?? 0) + l.quantity)
+    }
+  }
+
+  await inventoryDb.$transaction(async (tx) => {
+    const reservations = await tx.stockReservation.findMany({
+      where: { tenantId, orderId, status: 'ACTIVE' },
+    })
+
+    for (const res of reservations) {
+      const batchKey = res.batchId ?? ''
+      const key = `${res.skuId}|${res.warehouseId}|${batchKey}`
+      const shipQty = shippedByLine ? Math.min(res.quantity, Math.max(0, cap.get(key) ?? 0)) : res.quantity
+      if (shippedByLine) cap.set(key, Math.max(0, (cap.get(key) ?? 0) - shipQty))
+
+      const level = await tx.stockLevel.findFirst({
+        where: { tenantId, skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey },
+      })
+
+      if (level) {
+        const newOnHand = Math.max(0, level.quantityOnHand - shipQty)
+        // Release the full reservation hold; only `shipQty` actually leaves stock, so the
+        // unshipped remainder (res.quantity - shipQty) flows back into availability.
+        const availableDelta = res.quantity - shipQty
+        await tx.stockLevel.update({
+          where: { id: level.id },
+          data: {
+            quantityOnHand: newOnHand,
+            quantityReserved: { decrement: res.quantity },
+            quantityAvailable: { increment: availableDelta },
+          },
+        })
+
+        if (shipQty > 0) {
+          await tx.stockLedgerEntry.create({
+            data: {
+              id: randomUUID(),
+              tenantId,
+              skuId: res.skuId,
+              warehouseId: res.warehouseId,
+              batchId: batchKey,
+              eventType: 'STOCK_SHIPPED',
+              quantityDelta: -shipQty,
+              quantityAfter: newOnHand,
+              unitCost: new Prisma.Decimal(0),
+              referenceId: orderId,
+              referenceType: 'ORDER',
+              performedBy,
+              correlationId,
+            },
+          })
+        }
+      }
+
+      await tx.stockReservation.update({
+        where: { id: res.id },
+        data: { status: 'FULFILLED' },
+      })
+
+      if (shipQty > 0) {
+        shipped.push({ skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey, quantity: shipQty })
+      }
+    }
+  })
+
+  return { shipped }
 }
 
 export async function releaseReservation(tenantId: string, reservationId: string): Promise<void> {
@@ -727,11 +923,12 @@ export async function lowStockAlerts(tenantId: string) {
     skuIds.length > 0
       ? await inventoryDb.sKU.findMany({ where: { id: { in: skuIds }, tenantId } })
       : []
-  const skuName = new Map(skus.map((s) => [s.id, s.name]))
+  const skuMeta = new Map(skus.map((s) => [s.id, { name: s.name, code: s.code }]))
   return {
     lowStock: low.slice(0, 50).map((r) => ({
       skuId: r.skuId,
-      name: skuName.get(r.skuId) ?? r.skuId,
+      code: skuMeta.get(r.skuId)?.code ?? r.skuId,
+      name: skuMeta.get(r.skuId)?.name ?? r.skuId,
       available: r.quantityAvailable,
       reorderPoint: r.reorderPoint,
     })),

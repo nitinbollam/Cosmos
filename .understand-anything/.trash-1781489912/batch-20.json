@@ -1,0 +1,35 @@
+{
+  "nodes": [
+    {
+      "id": "config:apps/web/.env.local.example",
+      "type": "config",
+      "name": ".env.local.example",
+      "filePath": "apps/web/.env.local.example",
+      "summary": "Example environment variable template for the Cosmos web API layer, declaring database connection URLs for all 14 domain SQLite databases, JWT secrets, Stripe payment keys, and app origin settings for local development.",
+      "tags": ["configuration", "environment", "security", "database", "development"],
+      "complexity": "moderate",
+      "languageNotes": "Uses a domain-per-database architecture with 14 separate SQLite URLs, one per Prisma schema (auth, tenant, inventory, order, crm, etc.), enabling independent schema migrations."
+    },
+    {
+      "id": "config:apps/web/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "apps/web/package.json",
+      "summary": "Package manifest for the @cosmos/web API workspace, declaring runtime dependencies (Prisma, bcrypt, jose, Stripe, date-fns) and dev scripts including a multi-schema Prisma code generation command that generates clients for all 14 domain databases.",
+      "tags": ["configuration", "build-system", "dependencies", "prisma"],
+      "complexity": "moderate",
+      "languageNotes": "The db:generate script chains 14 separate `prisma generate` commands, one per domain schema file, reflecting the multi-database architecture."
+    },
+    {
+      "id": "config:apps/web/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "apps/web/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the @cosmos/web API layer, enabling strict mode with bundler module resolution and defining path aliases for both the root workspace and all 14 generated Prisma client packages.",
+      "tags": ["configuration", "typescript", "build-system", "path-aliases"],
+      "complexity": "moderate",
+      "languageNotes": "Uses `moduleResolution: bundler` and `noEmit: true` (type-checking only), with path aliases mapping @/generated/prisma-* to each domain's generated Prisma client directory."
+    }
+  ],
+  "edges": []
+}

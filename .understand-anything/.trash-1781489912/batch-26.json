@@ -1,0 +1,377 @@
+{
+  "nodes": [
+    {
+      "id": "schema:apps/web/prisma/storefront/schema.prisma",
+      "type": "schema",
+      "name": "schema.prisma",
+      "filePath": "apps/web/prisma/storefront/schema.prisma",
+      "summary": "Defines the storefront domain schema for B2B quoting workflows, including B2BQuote, QuoteLine, OrderTemplate, and QuoteCounterOffer models with status enums and approval tracking.",
+      "tags": ["schema-definition", "database", "storefront", "b2b"],
+      "complexity": "moderate",
+      "languageNotes": "Uses Prisma multi-schema pattern with a dedicated SQLite datasource (STOREFRONT_DATABASE_URL). Outputs generated client to apps/web/generated/prisma-storefront."
+    },
+    {
+      "id": "schema:apps/web/prisma/tenant/schema.prisma",
+      "type": "schema",
+      "name": "schema.prisma",
+      "filePath": "apps/web/prisma/tenant/schema.prisma",
+      "summary": "Defines the tenant domain schema managing multi-tenant organization lifecycle, including TenantOrganization, billing via Stripe, onboarding steps, invites, audit events, POS registers, and EDI trading partners/documents.",
+      "tags": ["schema-definition", "database", "tenant", "multi-tenant"],
+      "complexity": "complex",
+      "languageNotes": "Covers both tenant management and EDI document exchange (PO_850, INVOICE_810, ASN_856) within the same domain schema, outputting to apps/web/generated/prisma-tenant."
+    },
+    {
+      "id": "schema:apps/web/prisma/wms/schema.prisma",
+      "type": "schema",
+      "name": "schema.prisma",
+      "filePath": "apps/web/prisma/wms/schema.prisma",
+      "summary": "Defines the Warehouse Management System (WMS) domain schema covering fulfillment tasks, pick/pack flows, receiving sessions, carton packing, cycle counts, pick waves, putaway tasks, and labor event tracking.",
+      "tags": ["schema-definition", "database", "wms", "warehouse"],
+      "complexity": "complex",
+      "languageNotes": "The most extensive Prisma schema in the batch at 282 lines, covering the full physical warehouse lifecycle from receiving through dispatch with granular status enums for each workflow stage."
+    },
+    {
+      "id": "file:apps/web/server/register-paths.mjs",
+      "type": "file",
+      "name": "register-paths.mjs",
+      "filePath": "apps/web/server/register-paths.mjs",
+      "summary": "Registers TypeScript path aliases for all 14 Prisma-generated client packages at server startup using tsconfig-paths, enabling @/* and @/generated/prisma-* imports when running the API server via tsx.",
+      "tags": ["configuration", "utility", "path-aliases", "server"],
+      "complexity": "simple",
+      "languageNotes": "ESM module using import.meta.url and node:path to resolve the web root, loaded before application code to ensure generated Prisma clients are resolvable at runtime."
+    },
+    {
+      "id": "config:apps/web/tailwind.config.ts",
+      "type": "config",
+      "name": "tailwind.config.ts",
+      "filePath": "apps/web/tailwind.config.ts",
+      "summary": "Tailwind CSS configuration defining the Cosmos design system with a dark-mode color palette (cosmos.*), custom font families (Jakarta, JetBrains Mono), and a bento border-radius token.",
+      "tags": ["configuration", "styling", "design-system", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:infra/docker/otel-config.yaml",
+      "type": "config",
+      "name": "otel-config.yaml",
+      "filePath": "infra/docker/otel-config.yaml",
+      "summary": "OpenTelemetry Collector configuration accepting OTLP signals over gRPC (4317) and HTTP (4318), batching them, and exporting traces, metrics, and logs to a debug exporter.",
+      "tags": ["configuration", "monitoring", "observability", "infrastructure"],
+      "complexity": "simple",
+      "languageNotes": "Configures all three OTLP signal types (traces, metrics, logs) through a single batch processor pipeline. The debug exporter is typically replaced with production backends (e.g., Jaeger, Prometheus, Loki) in deployment."
+    },
+    {
+      "id": "service:infra/docker/python-service.Dockerfile",
+      "type": "service",
+      "name": "python-service.Dockerfile",
+      "filePath": "infra/docker/python-service.Dockerfile",
+      "summary": "Multi-stage Dockerfile for a Python 3.11 microservice that builds with pip and produces a slim runtime image running uvicorn on port 8000 under a non-root system user with a health check.",
+      "tags": ["containerization", "infrastructure", "deployment", "security"],
+      "complexity": "simple",
+      "languageNotes": "Uses a builder/runner multi-stage pattern to separate pip installation from the runtime layer, reducing image size. Creates a dedicated 'cosmos' system user to avoid running as root."
+    },
+    {
+      "id": "resource:infra/k8s/base/external-secrets/cluster-secret-store.yaml",
+      "type": "resource",
+      "name": "cluster-secret-store.yaml",
+      "filePath": "infra/k8s/base/external-secrets/cluster-secret-store.yaml",
+      "summary": "Defines a Kubernetes ClusterSecretStore resource named 'cosmos-aws-secrets' that authenticates to AWS Secrets Manager via JWT/IRSA, serving as the cluster-wide secret backend for ExternalSecret resources.",
+      "tags": ["infrastructure", "security", "secrets-management", "kubernetes"],
+      "complexity": "simple",
+      "languageNotes": "Uses External Secrets Operator v1beta1 with AWS IRSA (JWT) auth. All ExternalSecret resources in the cluster reference this ClusterSecretStore as their backend."
+    },
+    {
+      "id": "resource:infra/k8s/examples/external-secret-redis.yaml",
+      "type": "resource",
+      "name": "external-secret-redis.yaml",
+      "filePath": "infra/k8s/examples/external-secret-redis.yaml",
+      "summary": "Example ExternalSecret manifest that syncs the shared Redis URL from AWS Secrets Manager into a Kubernetes secret (cosmos-redis-url), providing REDIS_URL to BullMQ and event-bus services.",
+      "tags": ["infrastructure", "security", "secrets-management", "kubernetes"],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:infra/k8s/examples/external-secret-storefront-database.yaml",
+      "type": "resource",
+      "name": "external-secret-storefront-database.yaml",
+      "filePath": "infra/k8s/examples/external-secret-storefront-database.yaml",
+      "summary": "Example ExternalSecret manifest that syncs the storefront tenant database URL from AWS Secrets Manager into storefront-service-secrets, exposing both STORE_FRONT_DATABASE_URL and DATABASE_URL environment variables.",
+      "tags": ["infrastructure", "security", "secrets-management", "kubernetes"],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:infra/k8s/overlays/production/kustomization.yaml",
+      "type": "resource",
+      "name": "kustomization.yaml",
+      "filePath": "infra/k8s/overlays/production/kustomization.yaml",
+      "summary": "Kustomize overlay for the production environment that extends the base K8s manifests and scales the cosmos-web Deployment to 3 replicas with production environment labels.",
+      "tags": ["infrastructure", "deployment", "kubernetes", "orchestration"],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:infra/k8s/overlays/staging/kustomization.yaml",
+      "type": "resource",
+      "name": "kustomization.yaml",
+      "filePath": "infra/k8s/overlays/staging/kustomization.yaml",
+      "summary": "Kustomize overlay for the staging environment that extends the base K8s manifests and runs the cosmos-web Deployment at 1 replica with staging environment labels.",
+      "tags": ["infrastructure", "deployment", "kubernetes", "orchestration"],
+      "complexity": "simple"
+    },
+    {
+      "id": "table:infra/sql/init-databases.sql",
+      "type": "table",
+      "name": "init-databases.sql",
+      "filePath": "infra/sql/init-databases.sql",
+      "summary": "Bootstrap SQL script that creates 15 separate PostgreSQL databases — one per Cosmos domain — providing the multi-database foundation for the platform's domain-separated Prisma schemas.",
+      "tags": ["database", "infrastructure", "migration", "initialization"],
+      "complexity": "simple",
+      "languageNotes": "Creates independent databases (cosmos_auth, cosmos_tenant, cosmos_inventory, cosmos_wms, etc.) rather than using schemas within a single database, enabling per-domain connection isolation."
+    },
+    {
+      "id": "resource:infra/terraform/environments/production/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "infra/terraform/environments/production/main.tf",
+      "summary": "Terraform root configuration for the production AWS environment, composing networking, RDS (db.r6g.xlarge, 200GB), ElastiCache Redis (r6g.large), S3, and EKS modules with an S3 remote state backend.",
+      "tags": ["infrastructure", "deployment", "terraform", "aws"],
+      "complexity": "moderate",
+      "languageNotes": "Production-grade sizing: multi-AZ RDS with 200GB storage, large Redis nodes, and EKS with GPU node groups for AI workloads. State stored in cosmos-tfstate/production/terraform.tfstate."
+    },
+    {
+      "id": "resource:infra/terraform/environments/staging/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "infra/terraform/environments/staging/main.tf",
+      "summary": "Terraform root configuration for the staging AWS environment, composing the same module set as production but with reduced sizing (db.t3.small, cache.t3.micro) and outputting all endpoint values.",
+      "tags": ["infrastructure", "deployment", "terraform", "aws"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "resource:infra/terraform/modules/eks/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "infra/terraform/modules/eks/main.tf",
+      "summary": "Reusable Terraform module that provisions an AWS EKS cluster named cosmos-{environment} with Kubernetes 1.29, general-purpose t3.medium nodes (2-10), and an optional GPU node group (g4dn.xlarge) for AI workloads.",
+      "tags": ["infrastructure", "kubernetes", "terraform", "aws"],
+      "complexity": "moderate",
+      "languageNotes": "GPU node group uses taints/labels for workload isolation; desired_size is conditionally 1 in production and 0 in staging, enabling zero-cost GPU capacity in non-prod environments."
+    },
+    {
+      "id": "resource:infra/terraform/modules/networking/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "infra/terraform/modules/networking/main.tf",
+      "summary": "Reusable Terraform module that creates an AWS VPC with 3-AZ private/public subnets, NAT gateway (single in non-prod, multi in prod), and DNS hostname support for the Cosmos platform.",
+      "tags": ["infrastructure", "networking", "terraform", "aws"],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:infra/terraform/modules/rds/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "infra/terraform/modules/rds/main.tf",
+      "summary": "Reusable Terraform module that provisions an encrypted AWS RDS PostgreSQL 16.3 instance with a randomly generated master password, subnet group, security group, and environment-conditional multi-AZ and backup settings.",
+      "tags": ["infrastructure", "database", "terraform", "aws"],
+      "complexity": "moderate",
+      "languageNotes": "Automatically enables multi-AZ, 30-day backups, and deletion protection when environment is 'production'. Storage auto-scales up to 5x the allocated_storage value."
+    },
+    {
+      "id": "resource:infra/terraform/modules/redis/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "infra/terraform/modules/redis/main.tf",
+      "summary": "Reusable Terraform module that provisions an AWS ElastiCache Redis 7.1 replication group with automatic failover in production, a private subnet group, and a VPC security group allowing port 6379.",
+      "tags": ["infrastructure", "cache", "terraform", "aws"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "resource:infra/terraform/modules/s3/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "infra/terraform/modules/s3/main.tf",
+      "summary": "Reusable Terraform module that creates a private, versioned, AES256-encrypted S3 bucket (cosmos-documents-{environment}) for document storage with all public access blocked.",
+      "tags": ["infrastructure", "storage", "terraform", "aws"],
+      "complexity": "simple",
+      "languageNotes": "force_destroy is enabled only in non-production environments to allow clean teardown; versioning and encryption are always enabled regardless of environment."
+    },
+    {
+      "id": "config:packages/analytics-engine/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/analytics-engine/package.json",
+      "summary": "Package manifest for the @cosmos/analytics-engine private workspace package, defining build, lint, test, and typecheck scripts with TypeScript and tsx as dev dependencies.",
+      "tags": ["configuration", "build-system", "analytics", "package"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/analytics-engine/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/analytics-engine/src/index.ts",
+      "summary": "Barrel entry point for the @cosmos/analytics-engine package, re-exporting all public symbols from the cashflow, anomaly, and stats sub-modules.",
+      "tags": ["entry-point", "barrel", "analytics"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/analytics-engine/tsconfig.json",
+      "type": "config",
+      "name": "tsconfig.json",
+      "filePath": "packages/analytics-engine/tsconfig.json",
+      "summary": "TypeScript compiler configuration for the analytics-engine package, extending the monorepo base config with src/ as rootDir and dist/ as output directory.",
+      "tags": ["configuration", "typescript", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:packages/types/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "packages/types/package.json",
+      "summary": "Package manifest for the @cosmos/types private workspace package, which provides shared TypeScript type definitions compiled to dist/ with TypeScript as the sole dev dependency.",
+      "tags": ["configuration", "build-system", "type-definition", "package"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/types/src/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "packages/types/src/index.ts",
+      "summary": "Shared cross-service TypeScript type definitions for the Cosmos platform, exporting domain primitives including Role, Plan, JwtPayload, AuthenticatedUser, PaginatedResult, MoneyAmount, OrderStatus, OrderChannel, PaymentMethod, ServiceHealth, and ApiError.",
+      "tags": ["type-definition", "entry-point", "shared", "domain-model"],
+      "complexity": "moderate",
+      "languageNotes": "Acts as the canonical source of cross-cutting domain types consumed by all API services and the frontend; no runtime code, purely TypeScript type/interface declarations."
+    }
+  ],
+  "edges": [
+    {
+      "source": "resource:infra/terraform/environments/production/main.tf",
+      "target": "resource:infra/terraform/modules/networking/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/production/main.tf",
+      "target": "resource:infra/terraform/modules/rds/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/production/main.tf",
+      "target": "resource:infra/terraform/modules/redis/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/production/main.tf",
+      "target": "resource:infra/terraform/modules/s3/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/production/main.tf",
+      "target": "resource:infra/terraform/modules/eks/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/staging/main.tf",
+      "target": "resource:infra/terraform/modules/networking/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/staging/main.tf",
+      "target": "resource:infra/terraform/modules/rds/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/staging/main.tf",
+      "target": "resource:infra/terraform/modules/redis/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/staging/main.tf",
+      "target": "resource:infra/terraform/modules/s3/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/terraform/environments/staging/main.tf",
+      "target": "resource:infra/terraform/modules/eks/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/overlays/production/kustomization.yaml",
+      "target": "resource:infra/terraform/modules/eks/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/overlays/staging/kustomization.yaml",
+      "target": "resource:infra/terraform/modules/eks/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/examples/external-secret-redis.yaml",
+      "target": "resource:infra/k8s/base/external-secrets/cluster-secret-store.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/examples/external-secret-storefront-database.yaml",
+      "target": "resource:infra/k8s/base/external-secrets/cluster-secret-store.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:infra/k8s/examples/external-secret-storefront-database.yaml",
+      "target": "schema:apps/web/prisma/storefront/schema.prisma",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "resource:infra/terraform/modules/rds/main.tf",
+      "target": "table:infra/sql/init-databases.sql",
+      "type": "provisions",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/server/register-paths.mjs",
+      "target": "schema:apps/web/prisma/storefront/schema.prisma",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/server/register-paths.mjs",
+      "target": "schema:apps/web/prisma/tenant/schema.prisma",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/server/register-paths.mjs",
+      "target": "schema:apps/web/prisma/wms/schema.prisma",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

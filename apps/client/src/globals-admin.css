@@ -3,21 +3,21 @@
 @tailwind utilities;
 
 @layer utilities {
-  .text-cosmos-white,
-  .text-cosmos-heading {
+  .text-pleros-white,
+  .text-pleros-heading {
     color: var(--c-heading) !important;
   }
 
-  .text-cosmos-text {
+  .text-pleros-text {
     color: var(--c-text) !important;
   }
 
-  .text-cosmos-text-2 {
+  .text-pleros-text-2 {
     color: var(--c-text-2) !important;
   }
 
-  .text-cosmos-muted,
-  .text-cosmos-text-3 {
+  .text-pleros-muted,
+  .text-pleros-text-3 {
     color: var(--c-text-3) !important;
   }
 
@@ -25,7 +25,7 @@
     color: var(--c-on-primary) !important;
   }
 
-  /* Remap legacy Tailwind palette classes for the light theme */
+  /* Remap legacy Tailwind palette classes for Obsidian theme */
   .text-red-400,
   .text-red-300 {
     color: var(--c-danger) !important;
@@ -43,33 +43,33 @@
 }
 
 /* Readable defaults inside admin surfaces */
-.cosmos-admin-content,
+.pleros-admin-content,
 .p-6,
 .page-shell,
 .bento-page {
   color: var(--c-text);
 }
 
-.cosmos-admin-content :is(h1, h2, h3, h4, h5, h6),
+.pleros-admin-content :is(h1, h2, h3, h4, h5, h6),
 .p-6 :is(h1, h2, h3, h4, h5, h6):not([class*='text-white']),
 .page-shell :is(h1, h2, h3, h4, h5, h6),
 .bento-page :is(h1, h2, h3, h4, h5, h6) {
   color: var(--c-heading);
 }
 
-.cosmos-admin-content label,
+.pleros-admin-content label,
 .p-6 label {
   color: var(--c-text-2);
 }
 
-.cosmos-input,
-select.cosmos-input,
-.cosmos-input option {
+.pleros-input,
+select.pleros-input,
+.pleros-input option {
   color: var(--c-text);
   background: var(--c-surface);
 }
 
-select.cosmos-input option {
+select.pleros-input option {
   background: var(--c-surface);
   color: var(--c-text);
 }
@@ -102,7 +102,7 @@ select.cosmos-input option {
 }
 
 .bento-cell,
-.cosmos-card {
+.pleros-card {
   border: var(--border-width) solid var(--c-border-card);
   border-radius: var(--bento-radius);
   padding: 24px;
@@ -112,7 +112,7 @@ select.cosmos-input option {
 }
 
 .bento-tone-white,
-.cosmos-card {
+.pleros-card {
   background: var(--c-surface);
 }
 
@@ -139,7 +139,7 @@ select.cosmos-input option {
   color: var(--c-heading);
 }
 
-.bento-cell .cosmos-card {
+.bento-cell .pleros-card {
   background: transparent;
   border: none;
   border-radius: 0;
@@ -207,7 +207,7 @@ select.cosmos-input option {
 .bento-section-title {
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.02em;
   color: var(--c-heading);
 }
 
@@ -221,7 +221,7 @@ select.cosmos-input option {
 .bento-hero-title {
   font-size: clamp(1.65rem, 2.8vw, 2.1rem);
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.01em;
   line-height: 1.12;
   color: var(--c-heading);
 }
@@ -309,12 +309,12 @@ select.cosmos-input option {
   background: var(--c-surface-2);
 }
 
-.cosmos-table {
+.pleros-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-.cosmos-table th {
+.pleros-table th {
   padding: 10px 12px;
   text-align: left;
   font-size: 11px;
@@ -325,18 +325,18 @@ select.cosmos-input option {
   border-bottom: var(--border-width) solid var(--c-border);
 }
 
-.cosmos-table td {
+.pleros-table td {
   padding: 12px;
   font-size: 14px;
   color: var(--c-text);
   border-bottom: 1px solid var(--c-border);
 }
 
-.cosmos-table tr:hover td {
+.pleros-table tr:hover td {
   background: var(--c-surface-2);
 }
 
-.cosmos-input {
+.pleros-input {
   width: 100%;
   background: var(--c-surface);
   border: var(--border-width) solid var(--c-border-card);
@@ -350,11 +350,11 @@ select.cosmos-input option {
   box-shadow: none;
 }
 
-.cosmos-input:focus {
+.pleros-input:focus {
   background: var(--c-surface-2);
 }
 
-.cosmos-input::placeholder {
+.pleros-input::placeholder {
   color: var(--c-text-3);
 }
 
@@ -410,32 +410,32 @@ select.cosmos-input option {
 }
 
 /* Admin shell */
-.cosmos-admin-shell {
+.pleros-admin-shell {
   min-height: 100vh;
   display: flex;
   background: var(--c-bg);
 }
 
-.cosmos-admin-main {
+.pleros-admin-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.cosmos-admin-content {
+.pleros-admin-content {
   flex: 1;
   overflow: auto;
   background: var(--c-bg);
 }
 
-.cosmos-admin-content:has(.celestial-page) {
+.pleros-admin-content:has(.celestial-page) {
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.cosmos-admin-header {
+.pleros-admin-header {
   height: 80px;
   shrink: 0;
   display: flex;
@@ -446,7 +446,7 @@ select.cosmos-input option {
   background: var(--c-surface);
 }
 
-.cosmos-admin-header-label {
+.pleros-admin-header-label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -454,14 +454,14 @@ select.cosmos-input option {
   color: var(--c-text-2);
 }
 
-.cosmos-admin-header-title {
+.pleros-admin-header-title {
   font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.02em;
   color: var(--c-heading);
 }
 
-.cosmos-icon-btn {
+.pleros-icon-btn {
   display: inline-flex;
   height: 40px;
   width: 40px;
@@ -475,17 +475,17 @@ select.cosmos-input option {
   text-decoration: none;
 }
 
-.cosmos-icon-btn:hover {
+.pleros-icon-btn:hover {
   background: var(--c-surface-2);
 }
 
-.cosmos-avatar-btn {
+.pleros-avatar-btn {
   background: var(--c-primary-dim);
   color: var(--c-primary);
   border-color: var(--c-accent);
 }
 
-.cosmos-sidebar {
+.pleros-sidebar {
   --sidebar-width: 240px;
   width: var(--sidebar-width);
   shrink: 0;
@@ -493,14 +493,14 @@ select.cosmos-input option {
   flex-direction: column;
   background: var(--c-surface);
   border-right: var(--border-width) solid var(--c-border);
-  box-shadow: 2px 0 12px rgba(45, 38, 64, 0.04);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.35);
 }
 
-.cosmos-sidebar--collapsed {
+.pleros-sidebar--collapsed {
   --sidebar-width: 72px;
 }
 
-.cosmos-sidebar-brand {
+.pleros-sidebar-brand {
   min-height: 80px;
   display: flex;
   align-items: center;
@@ -510,7 +510,7 @@ select.cosmos-input option {
   gap: 12px;
 }
 
-.cosmos-sidebar-brand-link {
+.pleros-sidebar-brand-link {
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -519,19 +519,19 @@ select.cosmos-input option {
   overflow: visible;
 }
 
-.cosmos-sidebar--collapsed .cosmos-sidebar-brand {
+.pleros-sidebar--collapsed .pleros-sidebar-brand {
   justify-content: center;
   padding-inline: 10px;
 }
 
-.cosmos-sidebar-nav {
+.pleros-sidebar-nav {
   flex: 1;
   padding: 12px 10px;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.cosmos-sidebar-foot {
+.pleros-sidebar-foot {
   padding: 12px 10px 14px;
   border-top: var(--border-width) solid var(--c-border);
   display: flex;
@@ -539,7 +539,7 @@ select.cosmos-input option {
   gap: 8px;
 }
 
-.cosmos-sidebar-shop {
+.pleros-sidebar-shop {
   display: block;
   padding: 8px 12px;
   border-radius: var(--bento-radius-sm);
@@ -552,12 +552,12 @@ select.cosmos-input option {
   transition: background 0.12s, color 0.12s;
 }
 
-.cosmos-sidebar-shop:hover {
+.pleros-sidebar-shop:hover {
   background: var(--c-surface-3);
   color: var(--c-primary);
 }
 
-.cosmos-sidebar-toggle {
+.pleros-sidebar-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -575,16 +575,16 @@ select.cosmos-input option {
   transition: background 0.12s, color 0.12s;
 }
 
-.cosmos-sidebar-toggle:hover {
+.pleros-sidebar-toggle:hover {
   background: var(--c-surface-3);
   color: var(--c-heading);
 }
 
-.cosmos-sidebar--collapsed .cosmos-sidebar-toggle {
+.pleros-sidebar--collapsed .pleros-sidebar-toggle {
   padding-inline: 0;
 }
 
-.cosmos-nav-link {
+.pleros-nav-link {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -599,32 +599,32 @@ select.cosmos-input option {
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
-.cosmos-nav-link:hover {
+.pleros-nav-link:hover {
   background: var(--c-surface-2);
   border-color: var(--c-border);
   color: var(--c-heading);
 }
 
-.cosmos-nav-link--active {
+.pleros-nav-link--active {
   background: var(--c-primary-dim);
-  border-color: rgba(113, 97, 239, 0.35);
+  border-color: var(--c-border-card);
   color: var(--c-heading);
   font-weight: 600;
   box-shadow: inset 3px 0 0 var(--c-primary);
 }
 
-.cosmos-sidebar--collapsed .cosmos-nav-link {
+.pleros-sidebar--collapsed .pleros-nav-link {
   justify-content: center;
   padding-inline: 0;
   gap: 0;
 }
 
-.cosmos-sidebar--collapsed .cosmos-nav-link--active {
+.pleros-sidebar--collapsed .pleros-nav-link--active {
   box-shadow: none;
   border-color: var(--c-accent);
 }
 
-.cosmos-nav-icon-wrap {
+.pleros-nav-icon-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -638,46 +638,46 @@ select.cosmos-input option {
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.cosmos-nav-link:hover .cosmos-nav-icon-wrap {
+.pleros-nav-link:hover .pleros-nav-icon-wrap {
   color: var(--c-primary);
-  border-color: rgba(113, 97, 239, 0.4);
+  border-color: var(--c-accent);
 }
 
-.cosmos-nav-link--active .cosmos-nav-icon-wrap {
+.pleros-nav-link--active .pleros-nav-icon-wrap {
   background: var(--c-surface);
   color: var(--c-primary);
   border-color: var(--c-accent);
 }
 
-.cosmos-nav-icon {
+.pleros-nav-icon {
   display: block;
 }
 
-.cosmos-nav-label {
+.pleros-nav-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 /* Admin header + mobile nav */
-.cosmos-admin-header-start {
+.pleros-admin-header-start {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
 }
 
-.cosmos-admin-header-titles {
+.pleros-admin-header-titles {
   min-width: 0;
 }
 
-.cosmos-admin-header-logo {
+.pleros-admin-header-logo {
   display: none;
   line-height: 0;
   flex-shrink: 0;
 }
 
-.cosmos-mobile-menu-btn {
+.pleros-mobile-menu-btn {
   display: none;
   align-items: center;
   justify-content: center;
@@ -691,12 +691,12 @@ select.cosmos-input option {
   flex-shrink: 0;
 }
 
-.cosmos-mobile-menu-btn:hover {
+.pleros-mobile-menu-btn:hover {
   background: var(--c-surface-3);
   color: var(--c-heading);
 }
 
-.cosmos-sidebar-backdrop {
+.pleros-sidebar-backdrop {
   display: none;
   position: fixed;
   inset: 0;
@@ -704,11 +704,11 @@ select.cosmos-input option {
   border: none;
   padding: 0;
   margin: 0;
-  background: rgba(45, 38, 64, 0.45);
+  background: rgba(0, 0, 0, 0.6);
   cursor: pointer;
 }
 
-.cosmos-sidebar-close {
+.pleros-sidebar-close {
   display: none;
   align-items: center;
   justify-content: center;
@@ -723,21 +723,21 @@ select.cosmos-input option {
   flex-shrink: 0;
 }
 
-.cosmos-sidebar-close:hover {
+.pleros-sidebar-close:hover {
   background: var(--c-surface-3);
   color: var(--c-heading);
 }
 
-body.cosmos-nav-open {
+body.pleros-nav-open {
   overflow: hidden;
 }
 
 @media (max-width: 767px) {
-  .cosmos-admin-shell {
+  .pleros-admin-shell {
     flex-direction: column;
   }
 
-  .cosmos-sidebar {
+  .pleros-sidebar {
     position: fixed;
     top: 0;
     left: 0;
@@ -747,53 +747,53 @@ body.cosmos-nav-open {
     max-width: 288px;
     transform: translateX(-105%);
     transition: transform 0.22s ease;
-    box-shadow: 8px 0 32px rgba(45, 38, 64, 0.18);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.5);
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .cosmos-sidebar--mobile-open {
+  .pleros-sidebar--mobile-open {
     transform: translateX(0);
   }
 
-  .cosmos-sidebar-backdrop {
+  .pleros-sidebar-backdrop {
     display: block;
   }
 
-  .cosmos-sidebar-close {
+  .pleros-sidebar-close {
     display: inline-flex;
   }
 
-  .cosmos-sidebar-brand {
+  .pleros-sidebar-brand {
     justify-content: space-between;
     gap: 12px;
     min-height: 72px;
     padding: 16px;
   }
 
-  .cosmos-sidebar-toggle--desktop {
+  .pleros-sidebar-toggle--desktop {
     display: none;
   }
 
-  .cosmos-nav-link {
+  .pleros-nav-link {
     min-height: 44px;
     padding: 12px;
   }
 
-  .cosmos-nav-icon-wrap {
+  .pleros-nav-icon-wrap {
     width: 36px;
     height: 36px;
   }
 
-  .cosmos-mobile-menu-btn {
+  .pleros-mobile-menu-btn {
     display: inline-flex;
   }
 
-  .cosmos-admin-header-logo {
+  .pleros-admin-header-logo {
     display: inline-flex;
   }
 
-  .cosmos-admin-header {
+  .pleros-admin-header {
     height: auto;
     min-height: 64px;
     padding: 12px 16px;
@@ -801,29 +801,29 @@ body.cosmos-nav-open {
     gap: 12px;
   }
 
-  .cosmos-admin-header-label {
+  .pleros-admin-header-label {
     font-size: 10px;
   }
 
-  .cosmos-admin-header-title {
+  .pleros-admin-header-title {
     font-size: 1.05rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .cosmos-admin-content {
+  .pleros-admin-content {
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .cosmos-admin-content .bento-page,
-  .cosmos-admin-content .page-shell,
-  .cosmos-admin-content .p-6 {
+  .pleros-admin-content .bento-page,
+  .pleros-admin-content .page-shell,
+  .pleros-admin-content .p-6 {
     padding-left: 16px;
     padding-right: 16px;
   }
 
-  .cosmos-icon-btn {
+  .pleros-icon-btn {
     width: 44px;
     height: 44px;
   }
@@ -832,7 +832,7 @@ body.cosmos-nav-open {
     font-size: 24px;
   }
 
-  .cosmos-table {
+  .pleros-table {
     display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -840,12 +840,12 @@ body.cosmos-nav-open {
 }
 
 @media (min-width: 768px) {
-  .cosmos-sidebar-backdrop {
+  .pleros-sidebar-backdrop {
     display: none !important;
   }
 }
 
-.cosmos-shop-header {
+.pleros-shop-header {
   border-bottom: var(--border-width) solid var(--c-border);
   background: var(--c-bg);
   padding: 12px 24px;
@@ -856,17 +856,116 @@ body.cosmos-nav-open {
   justify-content: space-between;
 }
 
-.cosmos-shop-link {
+.pleros-shop-link {
   color: var(--c-text);
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
 }
 
-.cosmos-shop-link:hover {
+.pleros-shop-link:hover {
   color: var(--c-primary);
 }
 
-.cosmos-shop-link--active {
+.pleros-shop-link--active {
   color: var(--c-primary);
+}
+
+/* Theme switcher */
+.pleros-theme-switcher {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--bento-radius-sm);
+  background: var(--c-surface-2);
+  border: var(--border-width) solid var(--c-border);
+}
+
+.pleros-theme-switcher--compact .pleros-theme-switcher-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.pleros-theme-switcher-btn {
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-2);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.pleros-theme-switcher-btn:hover {
+  color: var(--c-heading);
+  background: var(--c-surface-3);
+}
+
+.pleros-theme-switcher-btn--active {
+  color: var(--c-heading);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* User menu */
+.pleros-user-menu {
+  position: relative;
+}
+
+.pleros-user-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+  min-width: 220px;
+  padding: 12px;
+  border-radius: var(--bento-radius);
+  background: var(--c-surface);
+  border: var(--border-width) solid var(--c-border-card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.pleros-user-menu-email {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-heading);
+  word-break: break-all;
+}
+
+.pleros-user-menu-section {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: var(--border-width) solid var(--c-border);
+}
+
+.pleros-user-menu-label {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-text-3);
+}
+
+.pleros-user-menu-signout {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border);
+  background: var(--c-surface-2);
+  color: var(--c-danger);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.pleros-user-menu-signout:hover {
+  background: var(--c-danger-soft);
 }

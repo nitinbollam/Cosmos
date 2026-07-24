@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
+import { PwaInstallHint } from '@/components/mobile/pwa-install-hint'
 import { api, formatApiReachabilityError } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
 import { parseJwtPayload } from '@/lib/jwt'
@@ -23,8 +25,8 @@ export default function MobileLoginPage() {
     setLoading(true)
     try {
       const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
-      window.localStorage.setItem('cosmos.accessToken', r.accessToken)
-      window.localStorage.setItem('cosmos.refreshToken', r.refreshToken)
+      window.localStorage.setItem('pleros.accessToken', r.accessToken)
+      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
       const next = new URLSearchParams(window.location.search).get('next')
       if (next?.startsWith('/m/')) {
         navigate(next)
@@ -41,21 +43,24 @@ export default function MobileLoginPage() {
   }
 
   return (
-    <div className="cosmos-mobile" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <header className="cosmos-mobile-header">
-        <Link to="/" className="cosmos-shop-link" style={{ fontSize: 13 }}>
+    <div className="pleros-mobile" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AuthThemeToolbar />
+      <header className="pleros-mobile-header">
+        <Link to="/" className="pleros-shop-link" style={{ fontSize: 13 }}>
           ← Hub
         </Link>
-        <span style={{ fontWeight: 700, flex: 1, fontFamily: 'var(--font-display)' }}>Cosmos Mobile</span>
+        <span style={{ fontWeight: 700, flex: 1, fontFamily: 'var(--font-display)' }}>Pleros Mobile</span>
       </header>
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <form onSubmit={submit} className="cosmos-mobile-card w-full max-w-sm space-y-4">
+        <div className="w-full max-w-sm">
+          <PwaInstallHint />
+        <form onSubmit={submit} className="pleros-mobile-card w-full space-y-4">
           <div>
-            <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem', margin: 0 }}>Sign in</h1>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', margin: 0 }}>Sign in</h1>
             <p style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>Warehouse, delivery, and field sales</p>
           </div>
-          <input className="cosmos-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input className="cosmos-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <input className="pleros-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="pleros-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p> : null}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? 'Signing in…' : 'Continue'}
@@ -63,10 +68,11 @@ export default function MobileLoginPage() {
           <p style={{ fontSize: 12, opacity: 0.65, textAlign: 'center' }}>
             Admin users?{' '}
             <Link to="/admin/login" style={{ color: 'var(--c-accent)' }}>
-              Cosmos Admin login
+              Pleros Admin login
             </Link>
           </p>
         </form>
+        </div>
       </main>
     </div>
   )

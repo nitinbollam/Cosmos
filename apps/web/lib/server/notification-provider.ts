@@ -35,6 +35,18 @@ const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subj
     subject: 'Payment received',
     body: `We received your payment of $${String(p.amount ?? '')}${p.invoiceNumber ? ` for invoice ${String(p.invoiceNumber)}` : ''}. Thank you.`,
   }),
+  'auth.email_verify': (p) => ({
+    subject: 'Verify your Pleros email',
+    body: `Hi ${String(p.firstName ?? 'there')},\n\nThanks for signing up. Confirm your email within 24 hours:\n\n${String(p.verifyUrl ?? '')}\n\nIf you didn't create an account, you can ignore this email.`,
+  }),
+  'auth.password_reset': (p) => ({
+    subject: 'Reset your Pleros password',
+    body: `Hi ${String(p.firstName ?? 'there')},\n\nWe received a request to reset your password. Use the link below within 30 minutes:\n\n${String(p.resetUrl ?? '')}\n\nIf you didn't request this, you can safely ignore this email.`,
+  }),
+  'tenant.invite': (p) => ({
+    subject: `You've been invited to join ${String(p.orgName ?? 'a team')} on Pleros`,
+    body: `You've been invited to join ${String(p.orgName ?? 'a team')} as ${String(p.role ?? 'STAFF')}.\n\nAccept the invite within 7 days:\n\n${String(p.inviteUrl ?? '')}`,
+  }),
 }
 
 function renderNotification(input: NotificationDeliveryInput): { subject: string; body: string } {
@@ -49,7 +61,7 @@ function renderNotification(input: NotificationDeliveryInput): { subject: string
 async function sendViaSendGrid(recipient: string, subject: string, body: string): Promise<void> {
   const key = process.env.SENDGRID_API_KEY?.trim()
   if (!key) throw new Error('SENDGRID_API_KEY not configured')
-  const from = process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@cosmos.local'
+  const from = process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@pleros.local'
   const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
@@ -58,7 +70,7 @@ async function sendViaSendGrid(recipient: string, subject: string, body: string)
     },
     body: JSON.stringify({
       personalizations: [{ to: [{ email: recipient }] }],
-      from: { email: from, name: 'Cosmos' },
+      from: { email: from, name: 'Pleros' },
       subject,
       content: [{ type: 'text/plain', value: body }],
     }),

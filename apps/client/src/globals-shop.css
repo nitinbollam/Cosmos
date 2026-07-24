@@ -1,6 +1,6 @@
 /* Shop inherits global theme — layout + B2B portal helpers */
 
-.cosmos-shop-header {
+.pleros-shop-header {
   position: relative;
   z-index: 30;
   border-bottom: var(--border-width) solid var(--c-border);
@@ -14,7 +14,7 @@
   justify-content: space-between;
 }
 
-.cosmos-shop-header-row {
+.pleros-shop-header-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -22,7 +22,7 @@
   flex: 1;
 }
 
-.cosmos-shop-menu-btn {
+.pleros-shop-menu-btn {
   display: none;
   align-items: center;
   justify-content: center;
@@ -36,7 +36,7 @@
   flex-shrink: 0;
 }
 
-.cosmos-shop-brand {
+.pleros-shop-brand {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -44,7 +44,7 @@
   min-width: 0;
 }
 
-.cosmos-shop-brand-label {
+.pleros-shop-brand-label {
   font-family: var(--font-display);
   font-weight: 700;
   color: var(--c-heading);
@@ -54,26 +54,26 @@
   text-overflow: ellipsis;
 }
 
-.cosmos-shop-nav {
+.pleros-shop-nav {
   display: flex;
   gap: 20px;
   align-items: center;
 }
 
-.cosmos-shop-header-actions {
+.pleros-shop-header-actions {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.cosmos-shop-cart-link {
+.pleros-shop-cart-link {
   position: relative;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
 }
 
-.cosmos-shop-cart-badge {
+.pleros-shop-cart-badge {
   margin-left: 6px;
   background: var(--c-primary);
   color: var(--c-primary-fg);
@@ -83,18 +83,18 @@
   border: 1px solid var(--c-border);
 }
 
-.cosmos-shop-user-btn {
+.pleros-shop-user-btn {
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cosmos-shop-user-menu {
+.pleros-shop-user-menu {
   position: relative;
 }
 
-.cosmos-shop-user-dropdown {
+.pleros-shop-user-dropdown {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
@@ -103,7 +103,7 @@
   padding: 0 !important;
 }
 
-.cosmos-shop-signout {
+.pleros-shop-signout {
   width: 100%;
   text-align: left;
   padding: 12px 16px;
@@ -114,7 +114,7 @@
   cursor: pointer;
 }
 
-.cosmos-shop-signin {
+.pleros-shop-signin {
   text-decoration: none;
   font-size: 13px;
   min-height: 44px;
@@ -122,16 +122,16 @@
   align-items: center;
 }
 
-.cosmos-shop-nav-backdrop {
+.pleros-shop-nav-backdrop {
   display: none;
 }
 
 @media (max-width: 767px) {
-  .cosmos-shop-menu-btn {
+  .pleros-shop-menu-btn {
     display: inline-flex;
   }
 
-  .cosmos-shop-nav {
+  .pleros-shop-nav {
     display: none;
     position: absolute;
     left: 0;
@@ -143,14 +143,14 @@
     background: var(--c-surface);
     border-bottom: var(--border-width) solid var(--c-border);
     padding: 8px;
-    box-shadow: 0 12px 24px rgba(45, 38, 64, 0.1);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
   }
 
-  .cosmos-shop-nav--open {
+  .pleros-shop-nav--open {
     display: flex;
   }
 
-  .cosmos-shop-nav .cosmos-shop-link {
+  .pleros-shop-nav .pleros-shop-link {
     min-height: 44px;
     display: flex;
     align-items: center;
@@ -158,44 +158,44 @@
     border-radius: var(--bento-radius-sm);
   }
 
-  .cosmos-shop-nav .cosmos-shop-link:hover {
+  .pleros-shop-nav .pleros-shop-link:hover {
     background: var(--c-surface-2);
   }
 
-  .cosmos-shop-nav .cosmos-shop-link--active {
+  .pleros-shop-nav .pleros-shop-link--active {
     color: var(--c-primary);
     font-weight: 600;
     background: var(--c-primary-dim);
   }
 
-  .cosmos-shop-nav-backdrop {
+  .pleros-shop-nav-backdrop {
     display: block;
     position: fixed;
     inset: 0;
     z-index: -1;
     border: none;
-    background: rgba(45, 38, 64, 0.35);
+    background: rgba(0, 0, 0, 0.55);
   }
 
-  .cosmos-shop-header {
+  .pleros-shop-header {
     flex-wrap: nowrap;
   }
 
-  .cosmos-shop-header-row {
+  .pleros-shop-header-row {
     flex: 1;
     min-width: 0;
   }
 
-  .cosmos-shop-brand-label {
+  .pleros-shop-brand-label {
     max-width: 120px;
   }
 
-  body.cosmos-shop-menu-open {
+  body.pleros-shop-menu-open {
     overflow: hidden;
   }
 }
 
-.cosmos-shop .cosmos-card {
+.pleros-shop .pleros-card {
   background: var(--c-surface);
   border: var(--border-width) solid var(--c-border-card);
   border-radius: var(--bento-radius);
@@ -204,51 +204,51 @@
   color: var(--c-text);
 }
 
-.cosmos-shop .cosmos-card h2,
-.cosmos-shop .cosmos-card h3 {
+.pleros-shop .pleros-card h2,
+.pleros-shop .pleros-card h3 {
   color: var(--c-heading);
 }
 
-.cosmos-shop .btn-primary {
+.pleros-shop .btn-primary {
   box-shadow: var(--shadow-card);
 }
 
-.cosmos-shop-page {
+.pleros-shop-page {
   max-width: 960px;
   margin: 40px auto;
   padding: 0 20px;
 }
 
-.cosmos-shop-page-main {
+.pleros-shop-page-main {
   max-width: 900px;
   margin: 40px auto;
   padding: 0 20px;
   color: var(--c-text);
 }
 
-.cosmos-shop-link-accent {
+.pleros-shop-link-accent {
   color: var(--c-primary);
   text-decoration: none;
   font-weight: 600;
 }
 
-.cosmos-shop-link-accent:hover {
+.pleros-shop-link-accent:hover {
   color: var(--c-accent);
 }
 
-.cosmos-shop-muted {
+.pleros-shop-muted {
   color: var(--c-text-3);
 }
 
-.cosmos-shop-subtle {
+.pleros-shop-subtle {
   color: var(--c-text-2);
 }
 
-.cosmos-shop-error {
+.pleros-shop-error {
   color: var(--c-danger);
 }
 
-.cosmos-shop-list-card {
+.pleros-shop-list-card {
   border: var(--border-width) solid var(--c-border-card);
   border-radius: var(--bento-radius);
   padding: 14px;
@@ -262,7 +262,7 @@
   box-shadow: var(--shadow-card);
 }
 
-.cosmos-shop-inset {
+.pleros-shop-inset {
   margin-top: 16px;
   padding: 12px;
   border-radius: var(--bento-radius-sm);
@@ -270,7 +270,7 @@
   border: var(--border-width) solid var(--c-border);
 }
 
-.cosmos-shop-line-card {
+.pleros-shop-line-card {
   border: var(--border-width) solid var(--c-border);
   border-radius: var(--bento-radius-sm);
   padding: 12px;
@@ -280,7 +280,7 @@
   background: var(--c-surface);
 }
 
-.cosmos-shop-field {
+.pleros-shop-field {
   width: 100%;
   margin-top: 6px;
   padding: 10px;
@@ -292,29 +292,29 @@
   font-size: 14px;
 }
 
-.cosmos-shop-field:focus {
+.pleros-shop-field:focus {
   outline: none;
   background: var(--c-surface-2);
   border-color: var(--c-accent);
 }
 
-.cosmos-shop-field--mono {
+.pleros-shop-field--mono {
   font-family: var(--font-mono);
   font-size: 13px;
 }
 
-.cosmos-shop-field--readonly {
+.pleros-shop-field--readonly {
   background: var(--c-surface-2);
   color: var(--c-text-3);
 }
 
-.cosmos-shop-table {
+.pleros-shop-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 16px;
 }
 
-.cosmos-shop-table th {
+.pleros-shop-table th {
   text-align: left;
   color: var(--c-text-3);
   font-size: 12px;
@@ -323,13 +323,13 @@
   border-bottom: var(--border-width) solid var(--c-border);
 }
 
-.cosmos-shop-table td {
+.pleros-shop-table td {
   padding: 10px 4px;
   border-top: var(--border-width) solid var(--c-border);
   color: var(--c-text);
 }
 
-.cosmos-shop-btn-secondary {
+.pleros-shop-btn-secondary {
   margin-top: 28px;
   padding: 12px 22px;
   border-radius: var(--bento-radius-sm);
@@ -340,11 +340,11 @@
   font-weight: 600;
 }
 
-.cosmos-shop-btn-secondary:hover {
+.pleros-shop-btn-secondary:hover {
   background: var(--c-surface-2);
 }
 
-.cosmos-shop-btn-dashed {
+.pleros-shop-btn-dashed {
   margin-top: 12px;
   font-size: 13px;
   padding: 6px 12px;

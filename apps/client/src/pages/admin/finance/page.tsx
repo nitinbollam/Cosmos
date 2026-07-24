@@ -12,8 +12,9 @@ import {
 } from 'recharts'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { downloadCsv } from '@/lib/csv-download'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type InvoiceRow = {
   id: string
@@ -30,7 +31,27 @@ type InvoiceRow = {
   order?: { status: string; paymentMethod: string }
 }
 
-type InvoiceList = { items: InvoiceRow[]; total: number }
+type InvoiceList = { items: InvoiceRow[]; total: number; page: number; pageSize: number; hasMore?: boolean }
+
+type ArSummary = {
+  invoiced: number
+  collected: number
+  outstanding: number
+  count: number
+  aging: { current: number; d30: number; d60: number; d90: number; d90p: number }
+}
+
+const INVOICES_PAGE_SIZE = 25
+const EXPORT_PAGE_SIZE = 100
+
+function invoiceListQuery(filter: string, page: number, pageSize: number): string {
+  const q = new URLSearchParams()
+  q.set('page', String(page))
+  q.set('pageSize', String(pageSize))
+  if (filter === 'ALL') q.set('excludeCancelled', '1')
+  else q.set('status', filter)
+  return q.toString()
+}
 
 type PoRow = {
   id: string
@@ -77,6 +98,7 @@ type CashflowBucket = {
 
 type CashflowResp = {
   tenant_id: string
+  method?: string
   weekly_net_baseline: number
   forecast: CashflowBucket[]
   warnings: string[]
@@ -142,11 +164,20 @@ export default function FinancePage() {
   const [matchBill, setMatchBill] = useState<BillRow | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
+  const [invoicePage, setInvoicePage] = useState(1)
+  const [exportingInvoices, setExportingInvoices] = useState(false)
+
+  const arSummaryQ = useQuery({
+    queryKey: ['finance', 'invoices-ar-summary'],
+    queryFn: () => api.get<ArSummary>('/invoices/ar-summary'),
+    enabled: tab === 'invoices',
+  })
 
   const invoicesQ = useQuery({
-    queryKey: ['finance', 'invoices-ar'],
-    queryFn: () => api.get<InvoiceList>('/invoices?page=1&pageSize=200'),
+    queryKey: ['finance', 'invoices-ar', invoicePage, invFilter],
+    queryFn: () => api.get<InvoiceList>(`/invoices?${invoiceListQuery(invFilter, invoicePage, INVOICES_PAGE_SIZE)}`),
     enabled: tab === 'invoices',
+    placeholderData: (prev) => prev,
   })
 
   const billsQ = useQuery({
@@ -173,33 +204,33 @@ export default function FinancePage() {
     enabled: tab === 'trial',
   })
 
-  type KpiSnap = { tenantId: string; date: string; revenue: string | number }
-  const snapsQ = useQuery({
-    queryKey: ['finance', 'kpi-snapshots'],
-    queryFn: () => api.get<KpiSnap[]>('/kpi/snapshots'),
+  type CashflowHistoryResp = {
+    tenantId: string
+    source: 'ar_ap' | 'revenue_proxy'
+    history: Array<{ period: string; inflow: number; outflow: number }>
+    warnings: string[]
+  }
+
+  const cashHistQ = useQuery({
+    queryKey: ['finance', 'cashflow-history'],
+    queryFn: () => api.get<CashflowHistoryResp>('/analytics/cashflow-history?weeks=16'),
     enabled: tab === 'cashflow',
   })
 
   const cashInput = useMemo(() => {
-    const rows = [...(snapsQ.data ?? [])].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    )
-    if (rows.length < 2) return null
-    const tail = rows.slice(-20)
-    const tenantId = tail[tail.length - 1]?.tenantId ?? 'tenant'
-    const history = tail.map((s) => {
-      const inflow = Number(s.revenue)
-      return { period: new Date(s.date).toISOString().slice(0, 10), inflow, outflow: Math.max(0, inflow * 0.55) }
-    })
+    const hist = cashHistQ.data?.history ?? []
+    const active = hist.filter((p) => p.inflow > 0 || p.outflow > 0)
+    if (active.length < 3) return null
     return {
-      tenant_id: tenantId,
-      history,
+      tenant_id: cashHistQ.data?.tenantId ?? 'tenant',
+      history: hist,
       horizon_weeks: Math.max(1, Math.ceil(cfHorizon / 7)),
+      seasonal_period: hist.length >= 8 ? 4 : null,
     }
-  }, [snapsQ.data, cfHorizon])
+  }, [cashHistQ.data, cfHorizon])
 
   const cashQ = useQuery({
-    queryKey: ['finance', 'cashflow', cfHorizon, (snapsQ.data ?? []).length],
+    queryKey: ['finance', 'cashflow', cfHorizon, cashHistQ.dataUpdatedAt],
     enabled: tab === 'cashflow' && !!cashInput,
     queryFn: async () => {
       const res = await fetch('/api/cashflow', {
@@ -213,48 +244,42 @@ export default function FinancePage() {
     },
   })
 
-  const aging = useMemo(() => {
-    const rows = invoicesQ.data?.items ?? []
-    const open = rows.filter((inv) => inv.balance > 0.01 && inv.order?.status !== 'CANCELLED')
-    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
-    const now = Date.now()
-    for (const inv of open) {
-      const days = (now - new Date(inv.issuedAt).getTime()) / (86400 * 1000)
-      const b = inv.balance
-      if (days <= 30) buckets.current += b
-      else if (days <= 60) buckets.d30 += b
-      else if (days <= 90) buckets.d60 += b
-      else if (days <= 120) buckets.d90 += b
-      else buckets.d90p += b
-    }
-    return buckets
-  }, [invoicesQ.data])
+  const aging = arSummaryQ.data?.aging ?? { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
+  const arSummary = arSummaryQ.data ?? { invoiced: 0, collected: 0, outstanding: 0, count: 0, aging }
 
-  const arSummary = useMemo(() => {
-    const rows = (invoicesQ.data?.items ?? []).filter((inv) => inv.order?.status !== 'CANCELLED')
-    let invoiced = 0
-    let collected = 0
-    for (const inv of rows) {
-      invoiced += Number(inv.totalAmount) + Number(inv.amountCredited ?? 0)
-      collected += Number(inv.amountPaid ?? 0)
-    }
-    return {
-      invoiced,
-      collected,
-      outstanding: rows.reduce((s, inv) => s + inv.balance, 0),
-      count: rows.length,
-    }
-  }, [invoicesQ.data])
+  const invoiceRows = invoicesQ.data?.items ?? []
+  const invoiceTotal = invoicesQ.data?.total ?? 0
+  const invoiceTotalPages = Math.max(1, Math.ceil(invoiceTotal / INVOICES_PAGE_SIZE))
 
-  const filteredInvoices = useMemo(() => {
-    const rows = invoicesQ.data?.items ?? []
-    return rows.filter((inv) => {
-      const st = inv.displayStatus
-      if (invFilter === 'ALL') return inv.order?.status !== 'CANCELLED'
-      if (invFilter === 'FAILED') return inv.order?.status === 'FAILED'
-      return st === invFilter
-    })
-  }, [invoicesQ.data, invFilter])
+  async function exportInvoicesCsv() {
+    setExportingInvoices(true)
+    try {
+      const all: InvoiceRow[] = []
+      let page = 1
+      while (true) {
+        const res = await api.get<InvoiceList>(`/invoices?${invoiceListQuery(invFilter, page, EXPORT_PAGE_SIZE)}`)
+        all.push(...res.items)
+        if (!res.hasMore || res.items.length === 0 || all.length >= res.total) break
+        page += 1
+      }
+      downloadCsv(
+        `invoices-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Invoice', 'Order', 'Customer', 'Issued', 'Total', 'Paid', 'Balance', 'Status'],
+        all.map((inv) => [
+          inv.invoiceNumber,
+          inv.orderId,
+          inv.customerId,
+          new Date(inv.issuedAt).toLocaleDateString(),
+          inv.totalAmount,
+          inv.amountPaid ?? 0,
+          inv.balance,
+          inv.displayStatus,
+        ]),
+      )
+    } finally {
+      setExportingInvoices(false)
+    }
+  }
 
   const filteredBills = useMemo(() => {
     const rows = billsQ.data ?? []
@@ -277,6 +302,7 @@ export default function FinancePage() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar-summary'] })
       setPayOrder(null)
       setPayAmount('')
     },
@@ -315,15 +341,11 @@ export default function FinancePage() {
 
   function exportTrialCsv() {
     const rows = trialQ.data ?? []
-    const head = ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net']
-    const lines = [head.join(','), ...rows.map((r) =>
-      [r.accountCode, `"${r.accountName.replace(/"/g, '""')}"`, r.type, r.debits, r.credits, r.netBalance].join(','))]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `cosmos-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    downloadCsv(
+      `pleros-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`,
+      ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net'],
+      rows.map((r) => [r.accountCode, r.accountName, r.type, r.debits, r.credits, r.netBalance]),
+    )
   }
 
   const cfChart = useMemo(() => {
@@ -344,7 +366,7 @@ export default function FinancePage() {
   return (
     <div className="p-6 space-y-6" style={{ fontFamily: 'var(--font-body)' }}>
       <div>
-        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
           Finance
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
@@ -381,7 +403,7 @@ export default function FinancePage() {
               { label: 'Collected', v: arSummary.collected, hint: 'Payments received' },
               { label: 'Outstanding AR', v: arSummary.outstanding, hint: 'Unpaid balance' },
             ].map((c) => (
-              <div key={c.label} className="cosmos-card">
+              <div key={c.label} className="pleros-card">
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
                 <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{c.hint}</div>
@@ -399,26 +421,44 @@ export default function FinancePage() {
               { k: 'd90', label: '91–120 Days', v: aging.d90, color: 'var(--c-danger)' },
               { k: 'd90p', label: '120+ Days', v: aging.d90p, color: '#b91c1c' },
             ].map((c) => (
-              <div key={c.k} className="cosmos-card metric-accent" style={{ borderLeftColor: c.color }}>
+              <div key={c.k} className="pleros-card metric-accent" style={{ borderLeftColor: c.color }}>
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
                 <div className="text-lg font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex flex-wrap gap-2">
             {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'FAILED'].map((s) => (
-              <button key={s} type="button" className={invFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setInvFilter(s)}>
+              <button
+                key={s}
+                type="button"
+                className={invFilter === s ? 'btn-primary' : 'btn-ghost'}
+                onClick={() => {
+                  setInvFilter(s)
+                  setInvoicePage(1)
+                }}
+              >
                 {s}
               </button>
             ))}
+            </div>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={exportingInvoices}
+              onClick={() => void exportInvoicesCsv()}
+            >
+              {exportingInvoices ? 'Exporting…' : 'Export CSV'}
+            </button>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {invoicesQ.isLoading ? <div className="skeleton h-40 w-full" /> : invoicesQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>Could not load invoices</p>
-            ) : filteredInvoices.length === 0 ? (
+            ) : invoiceRows.length === 0 ? (
               <EmptyState icon="📄" title="No invoices" description="Invoices are issued when orders ship." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Invoice</th>
@@ -433,7 +473,7 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInvoices.map((inv) => (
+                  {invoiceRows.map((inv) => (
                     <tr key={inv.id}>
                       <td className="font-mono text-xs">{inv.invoiceNumber}</td>
                       <td className="font-mono text-xs">{inv.orderId.slice(0, 12)}…</td>
@@ -444,7 +484,7 @@ export default function FinancePage() {
                       <td className="font-mono">{money(inv.balance)}</td>
                       <td><StatusBadge status={inv.displayStatus} /></td>
                       <td className="space-x-2">
-                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && (
+                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && inv.order?.status !== 'FAILED' && (
                           <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
                             setPayOrder(inv)
                             setPayAmount(String(inv.balance.toFixed(2)))
@@ -458,6 +498,31 @@ export default function FinancePage() {
               </table>
             )}
           </div>
+          {invoiceTotal > INVOICES_PAGE_SIZE ? (
+            <div className="flex items-center justify-between gap-3 text-sm" style={{ color: 'var(--c-text-2)' }}>
+              <span>
+                Page {invoicePage} of {invoiceTotalPages} · {invoiceTotal} invoice{invoiceTotal === 1 ? '' : 's'}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  disabled={invoicePage <= 1 || invoicesQ.isFetching}
+                  onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                >
+                  ← Prev
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  disabled={invoicePage >= invoiceTotalPages || invoicesQ.isFetching}
+                  onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
 
@@ -470,13 +535,13 @@ export default function FinancePage() {
               </button>
             ))}
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {billsQ.isLoading ? <div className="skeleton h-40 w-full" /> : billsQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>Could not load vendor bills</p>
             ) : filteredBills.length === 0 ? (
               <EmptyState icon="📥" title="No bills" description="Vendor bills are created when goods are received against POs." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Bill #</th>
@@ -512,7 +577,7 @@ export default function FinancePage() {
                             <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
                           </button>
                         ) : (
-                          <span className="text-xs text-cosmos-text-3">—</span>
+                          <span className="text-xs text-pleros-text-3">—</span>
                         )}
                       </td>
                       <td className="space-x-2 whitespace-nowrap">
@@ -539,7 +604,7 @@ export default function FinancePage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {(bankSummaryQ.data?.accounts ?? []).map((acct) => (
-              <div key={acct.id} className="cosmos-card">
+              <div key={acct.id} className="pleros-card">
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{acct.name}</div>
                 <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
                   {money(Number(acct.currentBalance))}
@@ -547,18 +612,18 @@ export default function FinancePage() {
                 <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{acct.accountNumber ?? '—'}</div>
               </div>
             ))}
-            <div className="cosmos-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
+            <div className="pleros-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
               <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled lines</div>
               <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
                 {bankSummaryQ.data?.unreconciledCount ?? 0}
               </div>
             </div>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {bankLinesQ.isLoading ? <div className="skeleton h-40 w-full" /> : (bankLinesQ.data ?? []).length === 0 ? (
               <EmptyState icon="🏦" title="All caught up" description="No unreconciled bank statement lines." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -595,16 +660,16 @@ export default function FinancePage() {
       )}
 
       {tab === 'trial' && (
-        <div className="cosmos-card space-y-4">
+        <div className="pleros-card space-y-4">
           <div className="flex flex-wrap gap-3 items-center">
             <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
-            <select className="cosmos-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
+            <select className="pleros-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
               ))}
             </select>
             <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Year</label>
-            <select className="cosmos-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
+            <select className="pleros-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
               {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <button type="button" className="btn-ghost" onClick={() => void trialQ.refetch()}>Load</button>
@@ -615,7 +680,7 @@ export default function FinancePage() {
           ) : (trialQ.data?.length ?? 0) === 0 ? (
             <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this month to see balances." />
           ) : (
-            <table className="cosmos-table">
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>Code</th>
@@ -654,14 +719,32 @@ export default function FinancePage() {
               </button>
             ))}
           </div>
-          <div className="cosmos-card">
-            {!cashInput ? (
-              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Need KPI snapshots from analytics to run cashflow. Open dashboard once data exists.</p>
-            ) : cashQ.isLoading ? <div className="skeleton h-64 w-full" /> : cashQ.isError ? (
+          <div className="pleros-card">
+            {cashHistQ.isLoading || (!cashInput && cashHistQ.isFetching) ? (
+              <div className="skeleton h-64 w-full" />
+            ) : !cashInput ? (
+              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+                Need at least three weeks of AR/AP activity (or KPI revenue) to forecast cashflow.
+              </p>
+            ) : cashQ.isLoading ? (
+              <div className="skeleton h-64 w-full" />
+            ) : cashQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>{cashQ.error instanceof Error ? cashQ.error.message : 'Error'}</p>
             ) : (
               <>
-                <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>Weekly buckets from native EWMA forecast (no Python sidecar)</p>
+                <p className="text-sm mb-1" style={{ color: 'var(--c-text-3)' }}>
+                  Weekly EWMA forecast
+                  {cashQ.data?.method ? (
+                    <span className="font-mono text-xs ml-2" style={{ color: 'var(--c-accent)' }}>
+                      {cashQ.data.method}
+                    </span>
+                  ) : null}
+                  {cashHistQ.data?.source ? (
+                    <span className="text-xs ml-2">
+                      · source {cashHistQ.data.source === 'ar_ap' ? 'AR/AP collections' : 'revenue proxy'}
+                    </span>
+                  ) : null}
+                </p>
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={cfChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -689,8 +772,12 @@ export default function FinancePage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                {(cashQ.data?.warnings?.length ?? 0) > 0 && (
-                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">{cashQ.data!.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                {[...(cashHistQ.data?.warnings ?? []), ...(cashQ.data?.warnings ?? [])].length > 0 && (
+                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">
+                    {[...(cashHistQ.data?.warnings ?? []), ...(cashQ.data?.warnings ?? [])].map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
                 )}
               </>
             )}
@@ -700,12 +787,12 @@ export default function FinancePage() {
 
       {(payOrder || payBill) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
-          <div className="cosmos-card max-w-md w-full space-y-4">
+          <div className="pleros-card max-w-md w-full space-y-4">
             <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Record payment</h3>
             <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
-            <input className="cosmos-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            <input className="pleros-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
             <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
-            <select className="cosmos-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
+            <select className="pleros-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
               {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
             <div className="flex gap-2 justify-end">
@@ -726,7 +813,7 @@ export default function FinancePage() {
 
       {matchBill ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setMatchBill(null)}>
-          <div className="cosmos-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start gap-3">
               <div>
                 <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)', margin: 0 }}>3-way match</h3>

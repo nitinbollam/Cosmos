@@ -15,7 +15,10 @@ model TenantOrganization {
   plan             TenantPlan           @default(STARTER)
   onboardingPhase  OnboardingPhase      @default(PROFILE)
   settings         Json                 
-  billingEmail     String?
+  billingEmail           String?
+  stripeCustomerId       String?              @unique
+  stripeSubscriptionId   String?
+  billingStatus          String?
   timeZone         String               @default("Etc/UTC")
   industry         IndustryVertical     @default(GENERAL_WHOLESALE)
   suspended        Boolean              @default(false)
@@ -29,14 +32,16 @@ model TenantOrganization {
 }
 
 model TenantInvite {
-  id        String   @id @default(cuid())
-  tenantId  String
-  email     String
-  role      String   @default("STAFF")
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
-  tenant    TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  tenantId   String
+  email      String
+  role       String   @default("STAFF")
+  token      String?  @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+  tenant     TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, email])
@@ -112,4 +117,61 @@ model PosRegister {
   updatedAt   DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+model EdiTradingPartner {
+  id               String        @id @default(cuid())
+  tenantId         String
+  code             String
+  name             String
+  isaId            String?
+  inboundEnabled   Boolean       @default(true)
+  outboundEnabled  Boolean       @default(true)
+  autoCreateOrders Boolean       @default(true)
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  documents        EdiDocument[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+enum EdiDocType {
+  PO_850
+  INVOICE_810
+  ASN_856
+}
+
+enum EdiDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum EdiDocStatus {
+  RECEIVED
+  PROCESSED
+  SENT
+  FAILED
+}
+
+model EdiDocument {
+  id            String            @id @default(cuid())
+  tenantId      String
+  partnerId     String?
+  docType       EdiDocType
+  direction     EdiDirection
+  status        EdiDocStatus      @default(RECEIVED)
+  controlNumber String?
+  payload       Json
+  referenceType String?
+  referenceId   String?
+  errorMessage  String?
+  createdAt     DateTime          @default(now())
+  processedAt   DateTime?
+  partner       EdiTradingPartner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, docType, status])
+  @@index([tenantId, createdAt])
+  @@index([referenceType, referenceId])
 }

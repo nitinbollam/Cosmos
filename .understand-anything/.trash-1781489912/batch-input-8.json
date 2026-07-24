@@ -1,0 +1,842 @@
+{
+  "batchIndex": 8,
+  "files": [
+    {
+      "path": "apps/client/src/pages/admin/customers/page.tsx",
+      "language": "typescript",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/dispatch/page.tsx",
+      "language": "typescript",
+      "sizeLines": 895,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/finance/page.tsx",
+      "language": "typescript",
+      "sizeLines": 787,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 323,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/fulfillment/page.tsx",
+      "language": "typescript",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 553,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/inventory/page.tsx",
+      "language": "typescript",
+      "sizeLines": 956,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/notifications/page.tsx",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 789,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/orders/page.tsx",
+      "language": "typescript",
+      "sizeLines": 283,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/page.tsx",
+      "language": "typescript",
+      "sizeLines": 352,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/pos/page.tsx",
+      "language": "typescript",
+      "sizeLines": 331,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 454,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/purchasing/page.tsx",
+      "language": "typescript",
+      "sizeLines": 523,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/quotes/page.tsx",
+      "language": "typescript",
+      "sizeLines": 331,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/settings/page.tsx",
+      "language": "typescript",
+      "sizeLines": 1554,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/warehouse/page.tsx",
+      "language": "typescript",
+      "sizeLines": 1735,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/client/src/pages/admin/customers/page.tsx": [
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/dispatch/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/use-query-params.ts"
+    ],
+    "apps/client/src/pages/admin/finance/journals/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/finance/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/fulfillment/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/inventory/[skuId]/page.tsx": [
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/inventory/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts"
+    ],
+    "apps/client/src/pages/admin/notifications/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/orders/[id]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/orders/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/page.tsx": [
+      "apps/client/src/components/cosmos/bento-cards.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/components/inventory/low-stock-alert.tsx",
+      "apps/client/src/components/orders/recent-orders.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/pos/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/purchasing/[poId]/page.tsx": [
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/toast.ts"
+    ],
+    "apps/client/src/pages/admin/purchasing/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/quotes/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/api-admin.ts"
+    ],
+    "apps/client/src/pages/admin/settings/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/settings/webhook-manager.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/use-query-params.ts"
+    ],
+    "apps/client/src/pages/admin/warehouse/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/components/cosmos/radix-overlays.tsx",
+      "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "apps/client/src/components/cosmos/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/spreadsheet-import.ts",
+      "apps/client/src/lib/toast.ts"
+    ]
+  },
+  "neighborMap": {
+    "apps/client/src/pages/admin/customers/page.tsx": [
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/dispatch/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/use-query-params.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "useQueryParams"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/finance/journals/[id]/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/finance/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/fulfillment/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/inventory/[skuId]/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/radix-overlays.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "CosmosSheet",
+          "CosmosDialogModal"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/inventory/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/radix-overlays.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "CosmosSheet",
+          "CosmosDialogModal"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "SpreadsheetImportPanel"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/spreadsheet-import.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "normalizeHeader",
+          "rowValue",
+          "rowNumber",
+          "parseSpreadsheetFile",
+          "downloadCsvTemplate"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/notifications/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/orders/[id]/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/orders/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/bento-cards.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "BentoTrendPill",
+          "BentoSparkline",
+          "BentoDonut",
+          "BentoMetricCard",
+          "BentoHeroCard",
+          "BentoAvatarStack"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/inventory/low-stock-alert.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "LowStockAlert"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/orders/recent-orders.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "RecentOrders"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/pos/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/purchasing/[poId]/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/toast.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "showToast"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/purchasing/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/quotes/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/settings/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/radix-overlays.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "CosmosSheet",
+          "CosmosDialogModal"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/settings/webhook-manager.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "WebhookManager"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/use-query-params.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "useQueryParams"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/warehouse/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/radix-overlays.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "CosmosSheet",
+          "CosmosDialogModal"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "SpreadsheetImportPanel"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos/status-badge.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "StatusBadge"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/spreadsheet-import.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "normalizeHeader",
+          "rowValue",
+          "rowNumber",
+          "parseSpreadsheetFile",
+          "downloadCsvTemplate"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/toast.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "showToast"
+        ]
+      }
+    ]
+  }
+}

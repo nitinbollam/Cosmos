@@ -6,16 +6,16 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cosmos
-      POSTGRES_PASSWORD: cosmos
-      POSTGRES_DB: cosmos
+      POSTGRES_USER: pleros
+      POSTGRES_PASSWORD: pleros
+      POSTGRES_DB: pleros
     ports:
       - "15432:5432"
     volumes:
-      - cosmos-pg-data:/var/lib/postgresql/data
+      - pleros-pg-data:/var/lib/postgresql/data
       - ./infra/sql/init-databases.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cosmos -d cosmos"]
+      test: ["CMD-SHELL", "pg_isready -U pleros -d pleros"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,7 +27,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - cosmos-redis-data:/data
+      - pleros-redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -39,13 +39,13 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: cosmos
-      MINIO_ROOT_PASSWORD: cosmos-dev-secret
+      MINIO_ROOT_USER: pleros
+      MINIO_ROOT_PASSWORD: pleros-dev-secret
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - cosmos-minio-data:/data
+      - pleros-minio-data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -63,6 +63,6 @@ services:
       - "4318:4318"
 
 volumes:
-  cosmos-pg-data:
-  cosmos-redis-data:
-  cosmos-minio-data:
+  pleros-pg-data:
+  pleros-redis-data:
+  pleros-minio-data:

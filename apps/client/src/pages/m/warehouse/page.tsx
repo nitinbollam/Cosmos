@@ -60,7 +60,7 @@ export default function WarehouseMobilePage() {
     <div>
       <OfflineBanner />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h1 style={{ margin: 0, fontSize: '1.25rem', fontFamily: 'var(--font-syne)' }}>Warehouse</h1>
+        <h1 style={{ margin: 0, fontSize: '1.25rem', fontFamily: 'var(--font-display)' }}>Warehouse</h1>
         <button type="button" className="btn-ghost" onClick={() => void load()} disabled={loading}>
           Refresh
         </button>
@@ -80,7 +80,7 @@ export default function WarehouseMobilePage() {
         ))}
       </div>
 
-      <Link to="/m/warehouse/receiving" className="cosmos-mobile-card" style={{ display: 'block', color: 'inherit', marginBottom: 12 }}>
+      <Link to="/m/warehouse/receiving" className="pleros-mobile-card" style={{ display: 'block', color: 'inherit', marginBottom: 12 }}>
         <strong>Receiving</strong>
         <p style={{ margin: '6px 0 0', opacity: 0.7, fontSize: 13 }}>Start or continue a receiving session</p>
       </Link>
@@ -94,7 +94,7 @@ export default function WarehouseMobilePage() {
             <Link
               key={t.id}
               to={`/m/warehouse/task/${t.id}`}
-              className="cosmos-mobile-card"
+              className="pleros-mobile-card"
               style={{ display: 'block', color: 'inherit', textDecoration: 'none', marginBottom: 10 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -118,7 +118,7 @@ export default function WarehouseMobilePage() {
             <Link
               key={w.id}
               to={`/m/warehouse/waves/${w.id}`}
-              className="cosmos-mobile-card"
+              className="pleros-mobile-card"
               style={{ display: 'block', color: 'inherit', textDecoration: 'none', marginBottom: 10 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -132,7 +132,7 @@ export default function WarehouseMobilePage() {
           ))}
           {activeWaves.length === 0 ? (
             <p style={{ opacity: 0.6, textAlign: 'center', marginTop: 24 }}>
-              No active pick waves — create one in Cosmos Admin → Warehouse.
+              No active pick waves — create one in Pleros Admin → Warehouse.
             </p>
           ) : null}
         </>

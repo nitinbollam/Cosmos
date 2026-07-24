@@ -1,0 +1,651 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/client/src/App.tsx",
+      "type": "file",
+      "name": "App.tsx",
+      "filePath": "apps/client/src/App.tsx",
+      "summary": "Root application component that composes the global Providers wrapper around the AppRouter, serving as the top-level React tree entry point.",
+      "tags": ["entry-point", "component", "routing"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "file",
+      "name": "auth-theme-toolbar.tsx",
+      "filePath": "apps/client/src/components/auth-theme-toolbar.tsx",
+      "summary": "Renders a compact toolbar containing the ThemeSwitcher, used on authentication pages to allow theme selection without a full layout.",
+      "tags": ["component", "utility", "authentication"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/auth/require-auth.tsx",
+      "type": "file",
+      "name": "require-auth.tsx",
+      "filePath": "apps/client/src/components/auth/require-auth.tsx",
+      "summary": "Guard component that checks localStorage for an admin access token and redirects unauthenticated users to the login page before rendering children.",
+      "tags": ["middleware", "authentication", "component"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/auth/require-mobile-auth.tsx",
+      "type": "file",
+      "name": "require-mobile-auth.tsx",
+      "filePath": "apps/client/src/components/auth/require-mobile-auth.tsx",
+      "summary": "Guard component for the mobile app that checks localStorage for an access token and redirects unauthenticated users to the mobile login path.",
+      "tags": ["middleware", "authentication", "component"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "type": "file",
+      "name": "celestial-chat.tsx",
+      "filePath": "apps/client/src/components/celestial/celestial-chat.tsx",
+      "summary": "Full-featured AI chat component with streaming responses, conversation history, surface-aware context, floating and inline variants, and route-derived entity context injection.",
+      "tags": ["component", "ai-chat", "streaming", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/components/celestial/celestial-chat.tsx:CelestialChat",
+      "type": "function",
+      "name": "CelestialChat",
+      "filePath": "apps/client/src/components/celestial/celestial-chat.tsx",
+      "lineRange": [33, 411],
+      "summary": "Main AI chat UI component managing message state, SSE streaming, conversation persistence, and both floating and inline rendering modes.",
+      "tags": ["component", "streaming", "ai-chat"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/components/celestial/celestial-markdown.tsx",
+      "type": "file",
+      "name": "celestial-markdown.tsx",
+      "filePath": "apps/client/src/components/celestial/celestial-markdown.tsx",
+      "summary": "Renders AI assistant markdown responses with custom link handling that opens external links in new tabs.",
+      "tags": ["component", "utility", "markdown"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/celestial/celestial-stream.ts",
+      "type": "file",
+      "name": "celestial-stream.ts",
+      "filePath": "apps/client/src/components/celestial/celestial-stream.ts",
+      "summary": "Client-side SSE streaming utility for the Celestial AI chat, handling fetch, SSE/JSON response parsing, auth token injection, and redirect-to-login on 401.",
+      "tags": ["utility", "streaming", "service"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/components/celestial/celestial-stream.ts:streamCelestialChat",
+      "type": "function",
+      "name": "streamCelestialChat",
+      "filePath": "apps/client/src/components/celestial/celestial-stream.ts",
+      "lineRange": [112, 150],
+      "summary": "Exported entry point for sending a chat message and consuming the streaming AI response, dispatching SSE deltas or JSON fallback to caller-provided handlers.",
+      "tags": ["utility", "streaming", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "file",
+      "name": "cosmos-logo.tsx",
+      "filePath": "apps/client/src/components/cosmos-logo.tsx",
+      "summary": "Exports the CosmosLogo SVG component supporting full, mark, and wordmark variants at multiple sizes for use throughout the application.",
+      "tags": ["component", "utility", "branding"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/global-search.tsx",
+      "type": "file",
+      "name": "global-search.tsx",
+      "filePath": "apps/client/src/components/global-search.tsx",
+      "summary": "Admin dashboard search component that queries orders, SKUs, and customers via a debounced API call and displays grouped results in a dropdown.",
+      "tags": ["component", "search", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/landing-nav.tsx",
+      "type": "file",
+      "name": "landing-nav.tsx",
+      "filePath": "apps/client/src/components/landing-nav.tsx",
+      "summary": "Navigation bar for the public landing page that reacts to auth state changes via storage and custom events, showing sign-in or sign-out links accordingly.",
+      "tags": ["component", "navigation", "authentication"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "type": "file",
+      "name": "dashboard-shell.tsx",
+      "filePath": "apps/client/src/components/layout/dashboard-shell.tsx",
+      "summary": "Admin dashboard layout shell with collapsible sidebar, mobile navigation overlay, page title derivation from the current route, and floating Celestial AI chat.",
+      "tags": ["component", "layout", "dashboard"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/components/layout/dashboard-shell.tsx:DashboardShell",
+      "type": "function",
+      "name": "DashboardShell",
+      "filePath": "apps/client/src/components/layout/dashboard-shell.tsx",
+      "lineRange": [19, 96],
+      "summary": "Exported layout shell component that composes the admin sidebar, top header, user menu, global search, and Celestial chat into a responsive two-pane interface.",
+      "tags": ["component", "layout", "dashboard"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/components/layout/sidebar-icons.tsx",
+      "type": "file",
+      "name": "sidebar-icons.tsx",
+      "filePath": "apps/client/src/components/layout/sidebar-icons.tsx",
+      "summary": "Registry of SVG icon components for the admin sidebar navigation, mapping icon name strings to inline SVG elements.",
+      "tags": ["component", "utility", "branding"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/layout/sidebar.tsx",
+      "type": "file",
+      "name": "sidebar.tsx",
+      "filePath": "apps/client/src/components/layout/sidebar.tsx",
+      "summary": "Admin navigation sidebar with collapsible and mobile-overlay modes, dynamic nav items filtered by tenant feature flags fetched from the API.",
+      "tags": ["component", "navigation", "layout"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/components/layout/sidebar.tsx:Sidebar",
+      "type": "function",
+      "name": "Sidebar",
+      "filePath": "apps/client/src/components/layout/sidebar.tsx",
+      "lineRange": [31, 136],
+      "summary": "Navigation sidebar component that fetches tenant feature flags and conditionally renders nav items with active-path highlighting and collapse/mobile behavior.",
+      "tags": ["component", "navigation", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/components/shop-header.tsx",
+      "type": "file",
+      "name": "shop-header.tsx",
+      "filePath": "apps/client/src/components/shop-header.tsx",
+      "summary": "B2C shop header component with reactive auth state, cart count display, category navigation, mobile menu, and user sign-out support.",
+      "tags": ["component", "navigation", "authentication"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/components/shop-header.tsx:ShopHeader",
+      "type": "function",
+      "name": "ShopHeader",
+      "filePath": "apps/client/src/components/shop-header.tsx",
+      "lineRange": [10, 131],
+      "summary": "Header component for the shop storefront that subscribes to auth and storage events to refresh user info, and displays navigation, cart badge, and user menu.",
+      "tags": ["component", "navigation", "event-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/components/storefront-nav.tsx",
+      "type": "file",
+      "name": "storefront-nav.tsx",
+      "filePath": "apps/client/src/components/storefront-nav.tsx",
+      "summary": "B2B storefront navigation component that tracks cart count from localStorage, reflects auth state, and provides sign-out functionality.",
+      "tags": ["component", "navigation", "authentication"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "file",
+      "name": "theme-switcher.tsx",
+      "filePath": "apps/client/src/components/theme-switcher.tsx",
+      "summary": "UI control for switching between Cosmos application themes (obsidian and aurora), persisting the selection and listening for storage/custom events to stay in sync.",
+      "tags": ["component", "utility", "configuration"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/user-menu.tsx",
+      "type": "file",
+      "name": "user-menu.tsx",
+      "filePath": "apps/client/src/components/user-menu.tsx",
+      "summary": "Dropdown user menu showing initials avatar, email, optional theme switcher, and sign-out action, reactive to auth and storage events.",
+      "tags": ["component", "authentication", "navigation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/layouts/AdminLayout.tsx",
+      "type": "file",
+      "name": "AdminLayout.tsx",
+      "filePath": "apps/client/src/layouts/AdminLayout.tsx",
+      "summary": "Route layout wrapper for the admin area that conditionally renders RequireAuth around DashboardShell unless the current path is an admin login route.",
+      "tags": ["component", "layout", "authentication"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/layouts/MobileLayout.tsx",
+      "type": "file",
+      "name": "MobileLayout.tsx",
+      "filePath": "apps/client/src/layouts/MobileLayout.tsx",
+      "summary": "Route layout wrapper for the mobile app that guards non-login routes with RequireMobileAuth and provides MobileShell with tab-bar navigation.",
+      "tags": ["component", "layout", "authentication"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/layouts/RootLayout.tsx",
+      "type": "file",
+      "name": "RootLayout.tsx",
+      "filePath": "apps/client/src/layouts/RootLayout.tsx",
+      "summary": "Minimal root layout component that renders an Outlet for top-level route nesting with no additional wrapping UI.",
+      "tags": ["component", "layout", "routing"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/layouts/ShopLayout.tsx",
+      "type": "file",
+      "name": "ShopLayout.tsx",
+      "filePath": "apps/client/src/layouts/ShopLayout.tsx",
+      "summary": "Layout wrapper for the B2C shop that composes ShopHeader above the main content area and embeds the floating CelestialChat assistant.",
+      "tags": ["component", "layout", "routing"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/src/App.tsx",
+      "target": "file:apps/client/src/providers.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/App.tsx",
+      "target": "file:apps/client/src/router.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "target": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "file:apps/client/src/components/celestial/celestial-markdown.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "file:apps/client/src/components/celestial/celestial-stream.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "file:apps/client/src/stores/celestial-store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/global-search.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/landing-nav.tsx",
+      "target": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/landing-nav.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/landing-nav.tsx",
+      "target": "file:apps/client/src/lib/auth-session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "file:apps/client/src/components/global-search.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "file:apps/client/src/components/layout/sidebar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "file:apps/client/src/components/user-menu.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/sidebar.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/sidebar.tsx",
+      "target": "file:apps/client/src/components/layout/sidebar-icons.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/layout/sidebar.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "file:apps/client/src/lib/auth-session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "file:apps/client/src/lib/jwt.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "file:apps/client/src/stores/cart.store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/storefront-nav.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/storefront-nav.tsx",
+      "target": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/storefront-nav.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/storefront-nav.tsx",
+      "target": "file:apps/client/src/lib/auth-session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/storefront-nav.tsx",
+      "target": "file:apps/client/src/lib/b2b-cart.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/theme-switcher.tsx",
+      "target": "file:apps/client/src/lib/theme.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/user-menu.tsx",
+      "target": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/user-menu.tsx",
+      "target": "file:apps/client/src/lib/auth-events.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/user-menu.tsx",
+      "target": "file:apps/client/src/lib/auth-session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/user-menu.tsx",
+      "target": "file:apps/client/src/lib/jwt.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/AdminLayout.tsx",
+      "target": "file:apps/client/src/components/auth/require-auth.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/AdminLayout.tsx",
+      "target": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/MobileLayout.tsx",
+      "target": "file:apps/client/src/components/auth/require-mobile-auth.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/MobileLayout.tsx",
+      "target": "file:apps/client/src/components/cosmos-logo.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/MobileLayout.tsx",
+      "target": "file:apps/client/src/components/mobile/offline-sync-runner.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/MobileLayout.tsx",
+      "target": "file:apps/client/src/components/theme-switcher.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/MobileLayout.tsx",
+      "target": "file:apps/client/src/lib/auth-session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/ShopLayout.tsx",
+      "target": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/layouts/ShopLayout.tsx",
+      "target": "file:apps/client/src/components/shop-header.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "function:apps/client/src/components/celestial/celestial-chat.tsx:CelestialChat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-chat.tsx",
+      "target": "function:apps/client/src/components/celestial/celestial-chat.tsx:CelestialChat",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-stream.ts",
+      "target": "function:apps/client/src/components/celestial/celestial-stream.ts:streamCelestialChat",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/celestial/celestial-stream.ts",
+      "target": "function:apps/client/src/components/celestial/celestial-stream.ts:streamCelestialChat",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "function:apps/client/src/components/layout/dashboard-shell.tsx:DashboardShell",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/layout/dashboard-shell.tsx",
+      "target": "function:apps/client/src/components/layout/dashboard-shell.tsx:DashboardShell",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/layout/sidebar.tsx",
+      "target": "function:apps/client/src/components/layout/sidebar.tsx:Sidebar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/layout/sidebar.tsx",
+      "target": "function:apps/client/src/components/layout/sidebar.tsx:Sidebar",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "function:apps/client/src/components/shop-header.tsx:ShopHeader",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/shop-header.tsx",
+      "target": "function:apps/client/src/components/shop-header.tsx:ShopHeader",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/client/src/components/celestial/celestial-chat.tsx:CelestialChat",
+      "target": "function:apps/client/src/components/celestial/celestial-stream.ts:streamCelestialChat",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

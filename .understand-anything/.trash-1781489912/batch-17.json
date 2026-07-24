@@ -1,0 +1,290 @@
+{
+  "nodes": [
+    {
+      "id": "config:.env.example",
+      "type": "config",
+      "name": ".env.example",
+      "filePath": ".env.example",
+      "summary": "Development environment variable template documenting all required and optional runtime settings including JWT secrets, Stripe payment keys, AWS S3 credentials, AI provider configuration (Celestial), notification services (SendGrid/Twilio), and optional Postgres override for local SQLite dev.",
+      "tags": ["configuration", "environment", "security", "development"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:.env.production.example",
+      "type": "config",
+      "name": ".env.production.example",
+      "filePath": ".env.production.example",
+      "summary": "Production environment variable template covering Postgres and Redis credentials, JWT secrets, Stripe live keys, AWS S3 bucket settings, and notification provider tokens; intended to be copied to `.env.production` before deploying with docker-compose.production.yml.",
+      "tags": ["configuration", "environment", "security", "deployment"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:ERP_FEATURE_GAP.md",
+      "type": "document",
+      "name": "ERP_FEATURE_GAP.md",
+      "filePath": "ERP_FEATURE_GAP.md",
+      "summary": "Detailed module-by-module gap analysis comparing Cosmos against established ERP platforms (NetSuite, Dynamics 365, Acumatica, Epicor, SAP Business One), covering financials, inventory/WMS, sales, CRM, purchasing, compliance, analytics, and AI — positioning Cosmos for SMB wholesale distributors at ~85% coverage of core distribution ops.",
+      "tags": ["documentation", "product-strategy", "erp", "competitive-analysis"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:MISSING.md",
+      "type": "document",
+      "name": "MISSING.md",
+      "filePath": "MISSING.md",
+      "summary": "Brief status note for the `@cosmos/web` package listing in-progress or stubbed features: MSA S3 upload, Redis event bus, real notification providers, POS registers, service worker offline sync, Postgres dev path, and native PDF invoices.",
+      "tags": ["documentation", "development", "known-gaps"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:PLATFORM_FEATURES.md",
+      "type": "document",
+      "name": "PLATFORM_FEATURES.md",
+      "filePath": "PLATFORM_FEATURES.md",
+      "summary": "Comprehensive human and machine-readable reference for the entire Cosmos platform covering all ERP modules, architecture layers, UI surfaces, API capabilities, data model, analytics, recent additions, testing, and demo accounts — also serves as the Celestial AI knowledge base reference.",
+      "tags": ["documentation", "entry-point", "architecture", "api-schema"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:PRODUCTION_READINESS.md",
+      "type": "document",
+      "name": "PRODUCTION_READINESS.md",
+      "filePath": "PRODUCTION_READINESS.md",
+      "summary": "Production readiness audit document recording the resolution of five go-live blockers (inventory decrement, open registration endpoint, RBAC enforcement, double-booking fix, SaaS plumbing) plus security hardening status, identity/onboarding flows, Stripe billing integration, and remaining non-blocking work items.",
+      "tags": ["documentation", "security", "deployment", "audit"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Project entry-point documentation for Cosmos describing the Vite+React+Express single-port architecture, quickstart setup commands (install, seed, migrate, dev), demo credentials, UI themes, database options (SQLite/Postgres), and available npm workspace scripts.",
+      "tags": ["documentation", "entry-point", "overview", "quickstart"],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.production.yml",
+      "type": "service",
+      "name": "docker-compose.production.yml",
+      "filePath": "docker-compose.production.yml",
+      "summary": "Production Docker Compose configuration orchestrating Postgres, Redis, and the Cosmos web application container, wiring all 14 domain-separated database URLs, Redis connection, and health checks across a shared `cosmos-net` bridge network with password-protected credentials via environment substitution.",
+      "tags": ["orchestration", "infrastructure", "deployment", "containerization"],
+      "complexity": "moderate",
+      "languageNotes": "Exposes 14 separate DATABASE_URL environment variables reflecting the multi-schema Prisma architecture where each ERP domain (auth, tenant, inventory, order, crm, etc.) has its own Postgres database."
+    },
+    {
+      "id": "service:docker-compose.yml",
+      "type": "service",
+      "name": "docker-compose.yml",
+      "filePath": "docker-compose.yml",
+      "summary": "Development Docker Compose configuration providing optional infrastructure services — Postgres 16, Redis 7, MinIO object storage, and an OpenTelemetry collector — for scaled local development; the application itself runs with `npm run dev`, not in Docker.",
+      "tags": ["orchestration", "infrastructure", "development", "containerization"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "package.json",
+      "summary": "Root npm workspace manifest defining the Cosmos monorepo with workspaces for `apps/web`, `apps/client`, and `packages/*`, and providing all top-level scripts for dev, build, test, database management (SQLite and Postgres), Docker infrastructure, and production preflight checks.",
+      "tags": ["configuration", "build-system", "monorepo", "entry-point"],
+      "complexity": "moderate",
+      "languageNotes": "Uses npm workspaces (npm 10+, Node 20+) with script delegation to `scripts/workspace-run.mjs` and separate `tsx`-based scripts for Prisma migrations and seeding."
+    },
+    {
+      "id": "config:tsconfig.base.json",
+      "type": "config",
+      "name": "tsconfig.base.json",
+      "filePath": "tsconfig.base.json",
+      "summary": "Shared TypeScript base configuration for the Cosmos monorepo enabling full strict mode (noImplicitAny, strictNullChecks, strictFunctionTypes, strictPropertyInitialization), ES2022 target, CommonJS modules, decorator metadata emission, and incremental compilation with source maps and declaration maps.",
+      "tags": ["configuration", "typescript", "build-system", "monorepo"],
+      "complexity": "simple",
+      "languageNotes": "Enables `experimentalDecorators` and `emitDecoratorMetadata`, indicating usage of decorator-based patterns (e.g., DI frameworks or ORM annotations) somewhere in the workspace packages."
+    },
+    {
+      "id": "service:docker-compose.production.yml:postgres",
+      "type": "service",
+      "name": "postgres",
+      "filePath": "docker-compose.production.yml",
+      "summary": "Production Postgres 16 service with health checks, password-substituted credentials, and initialization via `infra/sql/init-databases.sql` to pre-create all 14 domain databases.",
+      "tags": ["infrastructure", "database", "deployment"],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.production.yml:redis",
+      "type": "service",
+      "name": "redis",
+      "filePath": "docker-compose.production.yml",
+      "summary": "Production Redis 7 service with append-only persistence and password authentication used by the Cosmos web service for session caching and job queues.",
+      "tags": ["infrastructure", "caching", "deployment"],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.production.yml:web",
+      "type": "service",
+      "name": "web",
+      "filePath": "docker-compose.production.yml",
+      "summary": "Production Cosmos application container built from `apps/web/Dockerfile`, exposing port 4000, and injecting all 14 domain database URLs plus Redis URL via environment variables; depends on the postgres service being healthy.",
+      "tags": ["infrastructure", "deployment", "application"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:docker-compose.yml:postgres",
+      "type": "service",
+      "name": "postgres",
+      "filePath": "docker-compose.yml",
+      "summary": "Development Postgres 16 service mapped to host port 15432, initialized with `infra/sql/init-databases.sql`, used as an optional alternative to the default SQLite setup.",
+      "tags": ["infrastructure", "database", "development"],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.yml:redis",
+      "type": "service",
+      "name": "redis",
+      "filePath": "docker-compose.yml",
+      "summary": "Development Redis 7 service with append-only persistence, mapped to port 6379 for event bus and session cache wiring in scaled local environments.",
+      "tags": ["infrastructure", "caching", "development"],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.yml:minio",
+      "type": "service",
+      "name": "minio",
+      "filePath": "docker-compose.yml",
+      "summary": "Development MinIO S3-compatible object storage service for MSA document file storage, exposing API on port 9000 and console UI on port 9001.",
+      "tags": ["infrastructure", "storage", "development"],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.yml:otel-collector",
+      "type": "service",
+      "name": "otel-collector",
+      "filePath": "docker-compose.yml",
+      "summary": "OpenTelemetry collector service for optional observability in scaled dev environments, accepting OTLP gRPC (4317) and HTTP (4318) traffic and reading config from `infra/docker/otel-config.yaml`.",
+      "tags": ["infrastructure", "monitoring", "observability"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:.env.production.example",
+      "target": "service:docker-compose.production.yml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:docker-compose.production.yml",
+      "target": "service:docker-compose.production.yml:postgres",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker-compose.production.yml",
+      "target": "service:docker-compose.production.yml:redis",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker-compose.production.yml",
+      "target": "service:docker-compose.production.yml:web",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "service:docker-compose.yml:postgres",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "service:docker-compose.yml:redis",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "service:docker-compose.yml:minio",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "service:docker-compose.yml:otel-collector",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:docker-compose.production.yml:web",
+      "target": "service:docker-compose.production.yml:postgres",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:docker-compose.production.yml:web",
+      "target": "service:docker-compose.production.yml:redis",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:package.json",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "config:.env.example",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:PRODUCTION_READINESS.md",
+      "target": "document:ERP_FEATURE_GAP.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:ERP_FEATURE_GAP.md",
+      "target": "document:PLATFORM_FEATURES.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:ERP_FEATURE_GAP.md",
+      "target": "document:MISSING.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:.env.example",
+      "target": "service:docker-compose.yml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:tsconfig.base.json",
+      "target": "config:package.json",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

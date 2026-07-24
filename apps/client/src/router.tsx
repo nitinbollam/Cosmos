@@ -1,9 +1,18 @@
 import { lazy, Suspense, type ComponentType } from 'react'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router-dom'
 import { RootLayout } from '@/layouts/RootLayout'
 import { ShopLayout } from '@/layouts/ShopLayout'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { MobileLayout } from '@/layouts/MobileLayout'
+
+function AdminCustomersRedirect() {
+  return <Navigate to="/admin/crm" replace />
+}
+
+function AdminCustomerDetailRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/admin/crm/customers/${id ?? ''}`} replace />
+}
 
 function page(importFn: () => Promise<{ default: ComponentType }>) {
   const Lazy = lazy(importFn)
@@ -21,6 +30,12 @@ const router = createBrowserRouter([
       { path: '/', element: page(() => import('@/pages/home/page')) },
       { path: '/login', element: page(() => import('@/pages/login/page')) },
       { path: '/signup', element: page(() => import('@/pages/signup/page')) },
+      { path: '/forgot-password', element: page(() => import('@/pages/forgot-password/page')) },
+      { path: '/reset-password', element: page(() => import('@/pages/reset-password/page')) },
+      { path: '/accept-invite', element: page(() => import('@/pages/accept-invite/page')) },
+      { path: '/verify-email', element: page(() => import('@/pages/verify-email/page')) },
+      { path: '/terms', element: page(() => import('@/pages/legal/terms/page')) },
+      { path: '/privacy', element: page(() => import('@/pages/legal/privacy/page')) },
       {
         element: <ShopLayout />,
         children: [
@@ -47,6 +62,7 @@ const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { index: true, element: page(() => import('@/pages/admin/page')) },
+          { path: 'onboarding', element: page(() => import('@/pages/admin/onboarding/page')) },
           { path: 'login', element: page(() => import('@/pages/admin/login/page')) },
           { path: 'compliance', element: page(() => import('@/pages/admin/compliance/page')) },
           {
@@ -59,11 +75,8 @@ const router = createBrowserRouter([
             element: page(() => import('@/pages/admin/crm/customers/[id]/page')),
           },
           { path: 'quotes', element: page(() => import('@/pages/admin/quotes/page')) },
-          { path: 'customers', element: page(() => import('@/pages/admin/customers/page')) },
-          {
-            path: 'customers/:id',
-            element: page(() => import('@/pages/admin/customers/[id]/page')),
-          },
+          { path: 'customers', element: <AdminCustomersRedirect /> },
+          { path: 'customers/:id', element: <AdminCustomerDetailRedirect /> },
           { path: 'dispatch', element: page(() => import('@/pages/admin/dispatch/page')) },
           {
             path: 'dispatch/:routeId',
@@ -74,6 +87,7 @@ const router = createBrowserRouter([
             path: 'finance/journals/:id',
             element: page(() => import('@/pages/admin/finance/journals/[id]/page')),
           },
+          { path: 'reports', element: page(() => import('@/pages/admin/reports/page')) },
           { path: 'fulfillment', element: page(() => import('@/pages/admin/fulfillment/page')) },
           {
             path: 'fulfillment/:taskId',

@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 type Customer = {
   id: string
@@ -186,6 +186,20 @@ export default function CrmCustomerDetailPage() {
     enabled: !!customer.data?.salesRepUserId,
   })
 
+  const [portalInviteUrl, setPortalInviteUrl] = useState<string | null>(null)
+  const [portalLinkCopied, setPortalLinkCopied] = useState(false)
+  const portalInvite = useMutation({
+    mutationFn: () =>
+      api.post<{ inviteUrl?: string }>('/tenants/me/invites', {
+        email: customer.data?.email,
+        role: 'STAFF',
+      }),
+    onSuccess: (res) => {
+      setPortalLinkCopied(false)
+      setPortalInviteUrl(res?.inviteUrl ?? null)
+    },
+  })
+
   const addActivity = useMutation({
     mutationFn: () =>
       api.post('/activities', {
@@ -231,20 +245,61 @@ export default function CrmCustomerDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold font-display text-cosmos-white">{c.name}</h1>
+                <h1 className="text-2xl font-bold font-display text-pleros-white">{c.name}</h1>
                 <StatusBadge status={c.customerKind === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'BUSINESS'} />
               </div>
               <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
                 Since {new Date(c.createdAt).toLocaleDateString()}
               </p>
             </div>
-            <button type="button" className="btn-primary" onClick={() => setActivityOpen(true)}>
-              Log activity
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {c.email ? (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={portalInvite.isPending}
+                  onClick={() => portalInvite.mutate()}
+                >
+                  {portalInvite.isPending ? 'Inviting…' : 'Invite to buyer portal'}
+                </button>
+              ) : null}
+              <button type="button" className="btn-primary" onClick={() => setActivityOpen(true)}>
+                Log activity
+              </button>
+            </div>
           </div>
 
+          {portalInvite.error ? (
+            <p className="text-sm" style={{ color: 'var(--c-danger)' }}>{errMsg(portalInvite.error)}</p>
+          ) : null}
+          {portalInviteUrl ? (
+            <div className="pleros-card" style={{ borderColor: 'var(--c-accent)' }}>
+              <h3 className="font-display font-semibold" style={{ color: 'var(--c-heading)' }}>Buyer portal invite created</h3>
+              <p className="text-sm mt-1 mb-3" style={{ color: 'var(--c-text-3)' }}>
+                Sent to {c.email}. Share this link if email delivery isn&rsquo;t configured — shown once, expires in 7 days.
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <code className="text-xs font-mono break-all px-3 py-2 rounded-lg" style={{ background: 'var(--c-surface-2)', color: 'var(--c-accent)' }}>
+                  {portalInviteUrl}
+                </code>
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(portalInviteUrl).then(() => setPortalLinkCopied(true))
+                  }}
+                >
+                  {portalLinkCopied ? 'Copied' : 'Copy'}
+                </button>
+                <button type="button" className="btn-ghost !py-1 !px-3 !text-xs" onClick={() => setPortalInviteUrl(null)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="cosmos-card space-y-2">
+            <div className="pleros-card space-y-2">
               <h3 className="font-display font-semibold" style={{ color: 'var(--c-heading)' }}>Contact</h3>
               <dl className="text-sm space-y-1">
                 <div className="flex justify-between gap-4"><dt style={{ color: 'var(--c-text-3)' }}>Email</dt><dd>{c.email ?? '—'}</dd></div>
@@ -252,10 +307,17 @@ export default function CrmCustomerDetailPage() {
                 <div className="flex justify-between gap-4"><dt style={{ color: 'var(--c-text-3)' }}>Tax ID</dt><dd className="font-mono text-xs">{c.taxId ?? '—'}</dd></div>
                 {c.isLicensedTobacco ? (
                   <div className="flex justify-between gap-4"><dt style={{ color: 'var(--c-text-3)' }}>Tobacco license</dt><dd className="font-mono text-xs">{c.tobaccoLicenseNumber ?? '—'}</dd></div>
-                ) : null}
+                ) : (
+                  <div className="flex justify-between gap-4"><dt style={{ color: 'var(--c-text-3)' }}>Tobacco license</dt><dd style={{ color: 'var(--c-text-3)' }}>Not licensed</dd></div>
+                )}
               </dl>
+              <LicenseEditor
+                customerId={c.id}
+                isLicensedTobacco={Boolean(c.isLicensedTobacco)}
+                tobaccoLicenseNumber={c.tobaccoLicenseNumber ?? ''}
+              />
             </div>
-            <div className="cosmos-card space-y-3">
+            <div className="pleros-card space-y-3">
               <h3 className="font-display font-semibold" style={{ color: 'var(--c-heading)' }}>Credit</h3>
               {limit > 0 ? (
                 <>
@@ -284,7 +346,7 @@ export default function CrmCustomerDetailPage() {
           </div>
 
           {(c.primaryAddressLine1 || c.primaryCity) ? (
-            <div className="cosmos-card">
+            <div className="pleros-card">
               <h3 className="font-display font-semibold" style={{ color: 'var(--c-heading)' }}>Primary address</h3>
               <p className="text-sm mt-2" style={{ color: 'var(--c-text)' }}>
                 {[c.primaryAddressLine1, [c.primaryCity, c.primaryState, c.primaryZip].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
@@ -292,15 +354,15 @@ export default function CrmCustomerDetailPage() {
             </div>
           ) : null}
 
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             <h3 className="font-display font-semibold mb-3" style={{ color: 'var(--c-heading)' }}>Contract pricing</h3>
             <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>
               Customer-specific SKU prices override list price in the B2B catalog and at checkout.
             </p>
             <div className="grid md:grid-cols-4 gap-2 mb-4">
-              <input className="cosmos-input" placeholder="SKU id" value={priceSkuId} onChange={(e) => setPriceSkuId(e.target.value)} />
-              <input className="cosmos-input" placeholder="Unit price" type="number" step="0.01" value={priceAmount} onChange={(e) => setPriceAmount(e.target.value)} />
-              <input className="cosmos-input md:col-span-2" placeholder="Notes (optional)" value={priceNotes} onChange={(e) => setPriceNotes(e.target.value)} />
+              <input className="pleros-input" placeholder="SKU id" value={priceSkuId} onChange={(e) => setPriceSkuId(e.target.value)} />
+              <input className="pleros-input" placeholder="Unit price" type="number" step="0.01" value={priceAmount} onChange={(e) => setPriceAmount(e.target.value)} />
+              <input className="pleros-input md:col-span-2" placeholder="Notes (optional)" value={priceNotes} onChange={(e) => setPriceNotes(e.target.value)} />
             </div>
             <button
               type="button"
@@ -315,7 +377,7 @@ export default function CrmCustomerDetailPage() {
             ) : (contractPrices.data?.length ?? 0) === 0 ? (
               <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>No contract prices — catalog uses list price.</p>
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr><th>SKU</th><th>List</th><th>Contract</th><th>Notes</th><th /></tr>
                 </thead>
@@ -341,15 +403,15 @@ export default function CrmCustomerDetailPage() {
             )}
           </div>
 
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             <h3 className="font-display font-semibold mb-3" style={{ color: 'var(--c-heading)' }}>Volume pricing</h3>
             <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>
               Tier breaks apply when order quantity meets minimum — overrides list price at checkout.
             </p>
             <div className="grid md:grid-cols-4 gap-2 mb-4">
-              <input className="cosmos-input" placeholder="SKU id" value={volSkuId} onChange={(e) => setVolSkuId(e.target.value)} />
-              <input className="cosmos-input" placeholder="Min qty" type="number" min={1} value={volMinQty} onChange={(e) => setVolMinQty(e.target.value)} />
-              <input className="cosmos-input" placeholder="Unit price" type="number" step="0.01" value={volPrice} onChange={(e) => setVolPrice(e.target.value)} />
+              <input className="pleros-input" placeholder="SKU id" value={volSkuId} onChange={(e) => setVolSkuId(e.target.value)} />
+              <input className="pleros-input" placeholder="Min qty" type="number" min={1} value={volMinQty} onChange={(e) => setVolMinQty(e.target.value)} />
+              <input className="pleros-input" placeholder="Unit price" type="number" step="0.01" value={volPrice} onChange={(e) => setVolPrice(e.target.value)} />
               <button
                 type="button"
                 className="btn-primary"
@@ -364,7 +426,7 @@ export default function CrmCustomerDetailPage() {
             ) : (volumeBreaks.data ?? []).filter((v) => v.customerId === id).length === 0 ? (
               <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>No volume tiers for this customer.</p>
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr><th>SKU</th><th>Min qty</th><th>Unit price</th></tr>
                 </thead>
@@ -383,14 +445,14 @@ export default function CrmCustomerDetailPage() {
             )}
           </div>
 
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             <h3 className="font-display font-semibold mb-3" style={{ color: 'var(--c-heading)' }}>Recent orders</h3>
             {orders.isLoading ? (
               <div className="skeleton h-20 w-full" />
             ) : (orders.data?.items?.length ?? 0) === 0 ? (
               <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>No orders for this customer yet.</p>
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr><th>Order</th><th>Date</th><th>Total</th><th>Status</th><th /></tr>
                 </thead>
@@ -409,7 +471,7 @@ export default function CrmCustomerDetailPage() {
             )}
           </div>
 
-          <div className="cosmos-card">
+          <div className="pleros-card">
             <h3 className="font-display font-semibold mb-3" style={{ color: 'var(--c-heading)' }}>Activity timeline</h3>
             {activities.isLoading ? (
               <div className="skeleton h-32 w-full" />
@@ -440,20 +502,20 @@ export default function CrmCustomerDetailPage() {
 
       {activityOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }}>
-          <div className="cosmos-card max-w-md w-full space-y-3">
+          <div className="pleros-card max-w-md w-full space-y-3">
             <h3 className="font-display font-bold" style={{ color: 'var(--c-heading)' }}>Log activity</h3>
             <label className="text-xs" style={{ color: 'var(--c-text-3)' }}>Type</label>
-            <select className="cosmos-input" value={actType} onChange={(e) => setActType(e.target.value as typeof actType)}>
+            <select className="pleros-input" value={actType} onChange={(e) => setActType(e.target.value as typeof actType)}>
               <option value="CALL">Call</option>
               <option value="EMAIL">Email</option>
               <option value="NOTE">Note</option>
             </select>
             <label className="text-xs" style={{ color: 'var(--c-text-3)' }}>Subject *</label>
-            <input className="cosmos-input" value={actSubject} onChange={(e) => setActSubject(e.target.value)} />
+            <input className="pleros-input" value={actSubject} onChange={(e) => setActSubject(e.target.value)} />
             <label className="text-xs" style={{ color: 'var(--c-text-3)' }}>Notes</label>
-            <textarea className="cosmos-input min-h-[80px]" value={actBody} onChange={(e) => setActBody(e.target.value)} />
+            <textarea className="pleros-input min-h-[80px]" value={actBody} onChange={(e) => setActBody(e.target.value)} />
             <label className="text-xs" style={{ color: 'var(--c-text-3)' }}>Outcome</label>
-            <input className="cosmos-input" value={actOutcome} onChange={(e) => setActOutcome(e.target.value)} />
+            <input className="pleros-input" value={actOutcome} onChange={(e) => setActOutcome(e.target.value)} />
             {addActivity.error && <p className="text-sm" style={{ color: 'var(--c-danger)' }}>{errMsg(addActivity.error)}</p>}
             <div className="flex gap-2 pt-2">
               <button type="button" className="btn-ghost flex-1" onClick={() => setActivityOpen(false)}>Cancel</button>
@@ -469,6 +531,62 @@ export default function CrmCustomerDetailPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function LicenseEditor(props: {
+  customerId: string
+  isLicensedTobacco: boolean
+  tobaccoLicenseNumber: string
+}) {
+  const qc = useQueryClient()
+  const [licensed, setLicensed] = useState(props.isLicensedTobacco)
+  const [license, setLicense] = useState(props.tobaccoLicenseNumber)
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/customers/${encodeURIComponent(props.customerId)}`, {
+        isLicensedTobacco: licensed,
+        tobaccoLicenseNumber: licensed ? license.trim() || null : null,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['customer', props.customerId] }),
+  })
+
+  return (
+    <div className="mt-3 pt-3 space-y-2" style={{ borderTop: '1px solid var(--c-border)' }}>
+      <p className="text-xs font-medium" style={{ color: 'var(--c-text-2)' }}>
+        Regulated product license
+      </p>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" checked={licensed} onChange={(e) => setLicensed(e.target.checked)} />
+        Licensed for tobacco / age-restricted products
+      </label>
+      {licensed ? (
+        <input
+          className="pleros-input font-mono text-xs"
+          placeholder="License number"
+          value={license}
+          onChange={(e) => setLicense(e.target.value)}
+        />
+      ) : null}
+      <button
+        type="button"
+        className="btn-ghost !text-xs"
+        disabled={save.isPending || (licensed && !license.trim())}
+        onClick={() => save.mutate()}
+      >
+        {save.isPending ? 'Saving…' : 'Save license'}
+      </button>
+      {save.error ? (
+        <p className="text-xs" style={{ color: 'var(--c-danger)' }}>
+          {errMsg(save.error)}
+        </p>
+      ) : null}
+      {save.isSuccess ? (
+        <p className="text-xs" style={{ color: 'var(--c-accent)' }}>
+          License updated.
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -1,0 +1,550 @@
+{
+  "batchIndex": 1,
+  "files": [
+    {
+      "path": "apps/client/src/components/checkout-card-capture.tsx",
+      "language": "typescript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/mobile/offline-banner.tsx",
+      "language": "typescript",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/mobile/offline-sync-runner.tsx",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/components/status-badge.tsx",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/api-mobile.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/api.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/axios-error.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/b2b-cart.ts",
+      "language": "typescript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/offline-queue.ts",
+      "language": "typescript",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/offline-sync.ts",
+      "language": "typescript",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/account/page.tsx",
+      "language": "typescript",
+      "sizeLines": 449,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/cart/page.tsx",
+      "language": "typescript",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/catalog/page.tsx",
+      "language": "typescript",
+      "sizeLines": 329,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/checkout/page.tsx",
+      "language": "typescript",
+      "sizeLines": 506,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/invoices/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 288,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/invoices/page.tsx",
+      "language": "typescript",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/delivery/page.tsx",
+      "language": "typescript",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/login/page.tsx",
+      "language": "typescript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/sales/page.tsx",
+      "language": "typescript",
+      "sizeLines": 192,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/page.tsx",
+      "language": "typescript",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "language": "typescript",
+      "sizeLines": 81,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 175,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/notifications/page.tsx",
+      "language": "typescript",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/orders/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 385,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/orders/page.tsx",
+      "language": "typescript",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/quotes/[id]/page.tsx",
+      "language": "typescript",
+      "sizeLines": 346,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/quotes/new/page.tsx",
+      "language": "typescript",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/quotes/page.tsx",
+      "language": "typescript",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/stores/cart.store.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/client/src/components/checkout-card-capture.tsx": [],
+    "apps/client/src/components/mobile/offline-banner.tsx": [
+      "apps/client/src/lib/offline-queue.ts",
+      "apps/client/src/lib/offline-sync.ts"
+    ],
+    "apps/client/src/components/mobile/offline-sync-runner.tsx": [
+      "apps/client/src/lib/offline-sync.ts"
+    ],
+    "apps/client/src/components/status-badge.tsx": [],
+    "apps/client/src/lib/api-mobile.ts": [],
+    "apps/client/src/lib/api.ts": [],
+    "apps/client/src/lib/axios-error.ts": [],
+    "apps/client/src/lib/b2b-cart.ts": [],
+    "apps/client/src/lib/offline-queue.ts": [],
+    "apps/client/src/lib/offline-sync.ts": [
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/pages/account/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/cart/page.tsx": [
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/catalog/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/checkout/page.tsx": [
+      "apps/client/src/components/checkout-card-capture.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/invoices/[id]/page.tsx": [
+      "apps/client/src/components/checkout-card-capture.tsx",
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/invoices/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/m/delivery/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/pages/m/delivery/route/[id]/page.tsx": [
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/m/login/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/jwt.ts"
+    ],
+    "apps/client/src/pages/m/sales/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/receiving/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/offline-queue.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/task/[id]/page.tsx": [
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/m/warehouse/waves/[id]/page.tsx": [
+      "apps/client/src/components/mobile/offline-banner.tsx",
+      "apps/client/src/lib/api-mobile.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/notifications/page.tsx": [
+      "apps/client/src/components/cosmos/empty-state.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/jwt.ts"
+    ],
+    "apps/client/src/pages/orders/[id]/confirmation/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/orders/[id]/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/admin-path.ts",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/orders/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts",
+      "apps/client/src/stores/cart.store.ts"
+    ],
+    "apps/client/src/pages/quotes/[id]/page.tsx": [
+      "apps/client/src/components/status-badge.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/quotes/new/page.tsx": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/b2b-cart.ts",
+      "apps/client/src/lib/use-query-params.ts"
+    ],
+    "apps/client/src/pages/quotes/page.tsx": [
+      "apps/client/src/lib/api.ts"
+    ],
+    "apps/client/src/stores/cart.store.ts": []
+  },
+  "neighborMap": {
+    "apps/client/src/components/mobile/offline-sync-runner.tsx": [
+      {
+        "path": "apps/client/src/layouts/MobileLayout.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "MobileLayout"
+        ]
+      }
+    ],
+    "apps/client/src/lib/api.ts": [
+      {
+        "path": "apps/client/src/components/celestial/celestial-chat.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CelestialChat"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/auth-session.ts",
+        "batchIndex": 7,
+        "symbols": [
+          "getAccessToken",
+          "isSignedIn",
+          "signOut"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/accept-invite/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "AcceptInvitePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/forgot-password/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "ForgotPasswordPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/login/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "LoginPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/reset-password/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "ResetPasswordPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/verify-email/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "VerifyEmailPage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/axios-error.ts": [
+      {
+        "path": "apps/client/src/components/celestial/celestial-chat.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CelestialChat"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/accept-invite/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "AcceptInvitePage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/admin/login/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "LoginPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/forgot-password/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "ForgotPasswordPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/login/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "LoginPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/reset-password/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "ResetPasswordPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/verify-email/page.tsx",
+        "batchIndex": 7,
+        "symbols": [
+          "VerifyEmailPage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/b2b-cart.ts": [
+      {
+        "path": "apps/client/src/components/storefront-nav.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "StorefrontNav"
+        ]
+      }
+    ],
+    "apps/client/src/pages/account/page.tsx": [
+      {
+        "path": "apps/client/src/lib/session.ts",
+        "batchIndex": 7,
+        "symbols": [
+          "setB2bSession",
+          "clearB2bSession",
+          "getB2bCustomerId",
+          "getB2bTenantId"
+        ]
+      }
+    ],
+    "apps/client/src/pages/checkout/page.tsx": [
+      {
+        "path": "apps/client/src/lib/session.ts",
+        "batchIndex": 7,
+        "symbols": [
+          "setB2bSession",
+          "clearB2bSession",
+          "getB2bCustomerId",
+          "getB2bTenantId"
+        ]
+      }
+    ],
+    "apps/client/src/pages/m/login/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/jwt.ts",
+        "batchIndex": 7,
+        "symbols": [
+          "parseJwtPayload",
+          "jwtEmail"
+        ]
+      }
+    ],
+    "apps/client/src/pages/notifications/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos/empty-state.tsx",
+        "batchIndex": 6,
+        "symbols": [
+          "EmptyState"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/jwt.ts",
+        "batchIndex": 7,
+        "symbols": [
+          "parseJwtPayload",
+          "jwtEmail"
+        ]
+      }
+    ],
+    "apps/client/src/pages/orders/[id]/page.tsx": [
+      {
+        "path": "apps/client/src/lib/admin-path.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "adminPath",
+          "storefrontAdminHref"
+        ]
+      }
+    ],
+    "apps/client/src/pages/orders/page.tsx": [
+      {
+        "path": "apps/client/src/lib/session.ts",
+        "batchIndex": 7,
+        "symbols": [
+          "setB2bSession",
+          "clearB2bSession",
+          "getB2bCustomerId",
+          "getB2bTenantId"
+        ]
+      }
+    ],
+    "apps/client/src/pages/quotes/new/page.tsx": [
+      {
+        "path": "apps/client/src/lib/use-query-params.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "useQueryParams"
+        ]
+      }
+    ],
+    "apps/client/src/stores/cart.store.ts": [
+      {
+        "path": "apps/client/src/components/shop-header.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "ShopHeader"
+        ]
+      }
+    ]
+  }
+}

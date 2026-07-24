@@ -1,4 +1,4 @@
-import { DEFAULT_GATEWAY_PATH } from '@cosmos/web-gateway-client'
+import { DEFAULT_GATEWAY_PATH } from '@pleros/web-gateway-client'
 
 export type CelestialStreamDone = {
   conversationId: string
@@ -16,7 +16,15 @@ type StreamHandlers = {
 
 function accessToken(): string | null {
   if (typeof window === 'undefined') return null
-  return window.localStorage.getItem('cosmos.accessToken')
+  return window.localStorage.getItem('pleros.accessToken')
+}
+
+function redirectToLogin(loginPath: string) {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem('pleros.accessToken')
+  window.localStorage.removeItem('pleros.refreshToken')
+  const next = encodeURIComponent(window.location.pathname + window.location.search)
+  window.location.assign(`${loginPath}?next=${next}`)
 }
 
 function parseSseBlock(block: string, handlers: StreamHandlers) {
@@ -28,10 +36,14 @@ function parseSseBlock(block: string, handlers: StreamHandlers) {
     if (line.startsWith('data:')) data += line.slice(5).trim()
   }
   if (!data) return
-  const payload = JSON.parse(data) as Record<string, unknown>
-  if (event === 'delta' && typeof payload.text === 'string') handlers.onDelta(payload.text)
-  if (event === 'done') handlers.onDone(payload as CelestialStreamDone)
-  if (event === 'error' && typeof payload.message === 'string') handlers.onError(payload.message)
+  try {
+    const payload = JSON.parse(data) as Record<string, unknown>
+    if (event === 'delta' && typeof payload.text === 'string') handlers.onDelta(payload.text)
+    if (event === 'done') handlers.onDone(payload as CelestialStreamDone)
+    if (event === 'error' && typeof payload.message === 'string') handlers.onError(payload.message)
+  } catch {
+    handlers.onError('Invalid stream data from Celestial')
+  }
 }
 
 async function consumeSseResponse(res: Response, handlers: StreamHandlers) {
@@ -51,6 +63,10 @@ async function consumeSseResponse(res: Response, handlers: StreamHandlers) {
       if (!part.trim()) continue
       parseSseBlock(part, handlers)
     }
+  }
+
+  if (buffer.trim()) {
+    parseSseBlock(buffer, handlers)
   }
 }
 
@@ -95,7 +111,7 @@ async function postCelestial(
 
 export async function streamCelestialChat(
   baseUrl: string,
-  _loginPath: string,
+  loginPath: string,
   body: unknown,
   handlers: StreamHandlers,
   signal?: AbortSignal,
@@ -106,6 +122,11 @@ export async function streamCelestialChat(
   let res = await postCelestial(gateway, '/celestial/chat/stream', body, token, signal)
   if (res.status === 404) {
     res = await postCelestial(gateway, '/celestial/chat', body, token, signal)
+  }
+
+  if (res.status === 401) {
+    redirectToLogin(loginPath)
+    throw new Error('Session expired — please sign in again')
   }
 
   if (!res.ok) {

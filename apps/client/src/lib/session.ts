@@ -1,5 +1,5 @@
-const TENANT = 'cosmos.tenantId'
-const CUSTOMER = 'cosmos.customerId'
+const TENANT = 'pleros.tenantId'
+const CUSTOMER = 'pleros.customerId'
 
 export function setB2bSession(tenantId: string, customerId: string) {
   if (typeof window === 'undefined') return

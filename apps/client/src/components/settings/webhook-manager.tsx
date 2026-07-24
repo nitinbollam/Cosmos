@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 const COMMON_EVENTS = [
   { value: '*', label: 'All events' },
@@ -71,9 +71,9 @@ export function WebhookManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-cosmos-white font-display">Webhook Endpoints</h3>
+          <h3 className="text-lg font-semibold text-pleros-white font-display">Webhook Endpoints</h3>
           <p className="text-sm mt-0.5" style={{ color: 'var(--c-text-3)' }}>
-            Connect Cosmos events to Workato, Zapier, or any external system.
+            Connect Pleros events to Workato, Zapier, or any external system.
           </p>
         </div>
         <button type="button" className="btn-primary !text-sm" onClick={() => setShowAdd(true)}>
@@ -81,17 +81,17 @@ export function WebhookManager() {
         </button>
       </div>
 
-      <div className="cosmos-card" style={{ borderColor: 'var(--c-primary)', background: 'var(--c-primary-dim)' }}>
-        <p className="text-sm font-medium text-cosmos-white mb-1">Verify webhook authenticity</p>
+      <div className="pleros-card" style={{ borderColor: 'var(--c-primary)', background: 'var(--c-primary-dim)' }}>
+        <p className="text-sm font-medium text-pleros-white mb-1">Verify webhook authenticity</p>
         <p className="text-xs" style={{ color: 'var(--c-text-2)' }}>
           Every webhook request includes a{' '}
-          <code className="font-mono" style={{ color: 'var(--c-accent)' }}>X-Cosmos-Signature</code> header (HMAC-SHA256).
+          <code className="font-mono" style={{ color: 'var(--c-accent)' }}>X-Pleros-Signature</code> header (HMAC-SHA256).
           In Workato, use your signing secret to verify each incoming request. Contact your administrator for the
           signing secret value.
         </p>
       </div>
 
-      <div className="cosmos-card">
+      <div className="pleros-card">
         {listQ.isLoading ? (
           <div className="space-y-2 py-4">
             {[1, 2, 3].map((i) => (
@@ -163,14 +163,14 @@ export function WebhookManager() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setShowAdd(false)}
         >
-          <div className="cosmos-card max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-4">Add Webhook</h3>
+          <div className="pleros-card max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-4">Add Webhook</h3>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">Event</label>
+                <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Event</label>
                 <select
-                  className="cosmos-input w-full"
+                  className="pleros-input w-full"
                   value={form.event}
                   onChange={(e) => setForm((f) => ({ ...f, event: e.target.value }))}
                 >
@@ -183,9 +183,9 @@ export function WebhookManager() {
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">Endpoint URL</label>
+                <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Endpoint URL</label>
                 <input
-                  className="cosmos-input w-full"
+                  className="pleros-input w-full"
                   placeholder="https://hooks.workato.com/recipe/..."
                   value={form.url}
                   onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
@@ -193,11 +193,11 @@ export function WebhookManager() {
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">
+                <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">
                   Description (optional)
                 </label>
                 <input
-                  className="cosmos-input w-full"
+                  className="pleros-input w-full"
                   placeholder="e.g. QuickBooks invoice sync"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}

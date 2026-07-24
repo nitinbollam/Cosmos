@@ -43,6 +43,8 @@ model StockLevel {
   quantityAvailable Int      @default(0)
   reorderPoint      Int      @default(0)
   reorderQty        Int      @default(0)
+  leadTimeDays      Int      @default(7)
+  expiryDate        DateTime?
   updatedAt         DateTime @updatedAt
 
   @@unique([tenantId, skuId, warehouseId, batchId])
@@ -63,6 +65,10 @@ model SKU {
   weightGrams       Decimal?
   isTobacco         Boolean  @default(false)
   isRegulated       Boolean  @default(false)
+  /** Age-gated product (alcohol, tobacco, etc.). Tobacco SKUs should also set this. */
+  ageRestricted     Boolean  @default(false)
+  /** Minimum buyer/recipient age when ageRestricted. Defaults to tenant policy when null. */
+  minimumAge        Int?
   manufacturerId    String?
   manufacturerDid   String?
   exciseTaxCategory String?
@@ -70,10 +76,14 @@ model SKU {
   price             Decimal 
   minPrice          Decimal?
   isActive          Boolean  @default(true)
+  trackLot          Boolean  @default(false)
+  trackSerial       Boolean  @default(false)
   imageUrls Json 
   attributes        Json     
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  lots              InventoryLot[]
+  serials           SerialUnit[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -136,4 +146,46 @@ enum ReservationStatus {
   FULFILLED
   RELEASED
   EXPIRED
+}
+
+model InventoryLot {
+  id          String    @id @default(cuid())
+  tenantId    String
+  skuId       String
+  warehouseId String
+  batchCode   String
+  expiryDate  DateTime?
+  supplierId  String?
+  receivedAt  DateTime  @default(now())
+  sku         SKU       @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, skuId, warehouseId, batchCode])
+  @@index([tenantId, skuId])
+  @@index([tenantId, expiryDate])
+}
+
+enum SerialUnitStatus {
+  IN_STOCK
+  RESERVED
+  SHIPPED
+  RETURNED
+}
+
+model SerialUnit {
+  id             String           @id @default(cuid())
+  tenantId       String
+  skuId          String
+  serialNumber   String
+  status         SerialUnitStatus @default(IN_STOCK)
+  warehouseId    String?
+  locationId     String?
+  batchId        String?
+  orderId        String?
+  reservationId  String?
+  receivedAt     DateTime         @default(now())
+  sku            SKU              @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, serialNumber])
+  @@index([tenantId, skuId, status])
+  @@index([tenantId, orderId])
 }

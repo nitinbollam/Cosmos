@@ -1,6 +1,6 @@
 # Admin Module Guides (LLM Knowledge Base)
 
-Detailed how-to guides for each Cosmos admin module. Use these to answer "how does X work" and "where do I find Y" questions.
+Detailed how-to guides for each Pleros admin module. Use these to answer "how does X work" and "where do I find Y" questions.
 
 **Keywords:** admin, ERP, module guide, how to, dashboard, inventory, orders, warehouse, finance, settings
 
@@ -32,7 +32,7 @@ Inventory manages the product catalog (SKUs) and stock levels per warehouse.
 - Transfer stock between warehouses
 - Spreadsheet import for bulk SKU updates
 - Low-stock alerts when quantity falls below reorder point
-- Print barcode labels (`GET /skus/:id/label` — printable HTML)
+- Print barcode labels (`GET /skus/:id/label?qty=&size=&symbols=` — printable HTML with Code128 + QR; sizes `4x2`|`4x1`|`3x2`|`2x1`)
 
 **Stock model:** Each SKU has `StockLevel` rows per warehouse, optional `binCode` on location, and a `StockLedgerEntry` audit trail.
 
@@ -200,9 +200,9 @@ Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list
 **Keywords:** finance, AR, AP, invoice, bill, payment, trial balance, GL, bank reconciliation, cashflow
 
 **Tabs:**
-- **AR (Accounts Receivable)** — customer invoices, balance, overdue, record payment
+- **AR (Accounts Receivable)** — paginated invoices (`page`/`pageSize`), AR summary KPIs (`GET /invoices/ar-summary`), Export CSV, overdue filters, record payment
 - **AP (Accounts Payable)** — vendor bills from PO receive, 3-way match status, pay bill
-- **Trial balance** — GL accounts from ledger
+- **Trial balance** — GL accounts from ledger (+ Export CSV)
 - **Cashflow chart** — forecast via analytics engine
 - **Bank reconciliation** — bank accounts, statement lines, reconcile
 
@@ -213,7 +213,26 @@ Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list
 - AP payment: Dr AP / Cr Cash
 - Ship COGS: Dr COGS / Cr Inventory
 
-**Invoices:** Auto-issued on ship; PDF via `GET /invoices/:id/pdf` (print-ready HTML).
+**Invoices:** Auto-issued on ship; PDF via `GET /invoices/:id/pdf` (native PDF).
+
+---
+
+## Reports — how it works
+
+**Route:** `/admin/reports`
+
+**Keywords:** reports, report builder, CSV export, saved reports, AR aging, orders export, inventory export
+
+Build ad-hoc operational reports, save filter presets, and download CSV.
+
+**Report types:**
+- **Orders** — status, channel, date range, search
+- **Inventory** — SKU stock (on hand / reserved / available), warehouse, low-stock filter
+- **AR aging** — open invoice balances in 0–30 / 31–60 / 61–90 / 91–120 / 120+ buckets
+
+**API:** `GET /report-builder/types`, `POST /report-builder/run`, `GET/POST/PATCH/DELETE /report-builder/saved`, `POST /report-builder/saved/:id/run`.
+
+**Related:** Finance shows live AR aging widgets; Reports is the exportable / savable version.
 
 ---
 
@@ -225,7 +244,7 @@ Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list
 
 POS is an **admin in-store checkout** for walk-in or counter sales (not the B2B buyer portal).
 
-**How to use POS in Cosmos:**
+**How to use POS in Pleros:**
 1. Go to **Admin → POS** (`/admin/pos`)
 2. Select a **register** (seed includes a default register)
 3. Select or create a **customer** (seed includes walk-in customer)

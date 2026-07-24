@@ -48,14 +48,14 @@ export default function ReceivingMobilePage() {
   return (
     <div>
       <OfflineBanner />
-      <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+      <Link to="/m/warehouse" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Tasks
       </Link>
-      <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem' }}>Receiving</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>Receiving</h1>
       {!sessionId ? (
         <>
           <label style={{ display: 'block', fontSize: 13, marginTop: 12 }}>PO ID (optional)</label>
-          <input className="cosmos-input" value={poId} onChange={(e) => setPoId(e.target.value)} />
+          <input className="pleros-input" value={poId} onChange={(e) => setPoId(e.target.value)} />
           <button type="button" className="btn-primary" style={{ marginTop: 12 }} onClick={() => void startSession()}>
             Start session
           </button>
@@ -64,7 +64,7 @@ export default function ReceivingMobilePage() {
         <>
           <p style={{ fontSize: 13, opacity: 0.8 }}>Session {sessionId}</p>
           <input
-            className="cosmos-input"
+            className="pleros-input"
             placeholder="Scan barcode"
             value={scan}
             onChange={(e) => setScan(e.target.value)}

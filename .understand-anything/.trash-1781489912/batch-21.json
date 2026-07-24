@@ -1,0 +1,102 @@
+{
+  "nodes": [
+    {
+      "id": "document:docs/celestial/01-platform-overview.md",
+      "type": "document",
+      "name": "01-platform-overview.md",
+      "filePath": "docs/celestial/01-platform-overview.md",
+      "summary": "LLM-optimized knowledge base document providing a comprehensive plain-language overview of the Cosmos ERP platform, covering architecture, user roles, module routing, order lifecycle, data model (14 SQLite databases), demo accounts, development quickstart, and a full glossary of domain acronyms.",
+      "tags": ["documentation", "overview", "erp", "architecture"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/celestial/02-admin-modules.md",
+      "type": "document",
+      "name": "02-admin-modules.md",
+      "filePath": "docs/celestial/02-admin-modules.md",
+      "summary": "Detailed how-to reference for every Cosmos admin ERP module (Dashboard, Inventory, Orders, Fulfillment, Warehouse/WMS, Purchasing, CRM, Quotes, Dispatch, Compliance, Finance, POS, Settings, Notifications, and Celestial AI), including workflows, API module references, and key capabilities per module.",
+      "tags": ["documentation", "admin", "erp", "module-guide"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/celestial/03-buyer-mobile.md",
+      "type": "document",
+      "name": "03-buyer-mobile.md",
+      "filePath": "docs/celestial/03-buyer-mobile.md",
+      "summary": "Guide to the B2B buyer portal (catalog, cart, checkout, orders, invoices, quotes, account) and the three mobile PWA apps (warehouse, delivery, and sales), documenting login credentials, key features, and offline sync behavior for field users.",
+      "tags": ["documentation", "buyer-portal", "mobile", "pwa"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/celestial/04-api-finance-integrations.md",
+      "type": "document",
+      "name": "04-api-finance-integrations.md",
+      "filePath": "docs/celestial/04-api-finance-integrations.md",
+      "summary": "Technical reference covering the full REST API surface (all domain endpoints and server modules), detailed AR/AP/GL finance workflows with double-entry GL auto-posting rules, contract and volume pricing, split shipments, wave picking, feature flags, notification integrations (SendGrid/Twilio/webhooks), Stripe payments, MSA compliance automation, and known platform limitations.",
+      "tags": ["documentation", "api-reference", "finance", "integrations"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/celestial/05-celestial-ai.md",
+      "type": "document",
+      "name": "05-celestial-ai.md",
+      "filePath": "docs/celestial/05-celestial-ai.md",
+      "summary": "Complete reference for the Celestial AI assistant, documenting its hybrid RAG+live-data architecture, all eight live data tools with trigger phrases, API endpoints and request/response schemas, LLM provider configuration (OpenRouter, Groq, Gemini, Ollama, mock mode), conversation persistence, and links to implementation files.",
+      "tags": ["documentation", "ai-assistant", "rag", "celestial"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/celestial/06-faq.md",
+      "type": "document",
+      "name": "06-faq.md",
+      "filePath": "docs/celestial/06-faq.md",
+      "summary": "Frequently asked questions knowledge base covering platform identity, login credentials, key workflow explanations (POS, order fulfillment, returns, invoicing, contract pricing, wave picking, quotes), Celestial AI setup and mock mode, local development quickstart, module differences, offline mobile behavior, and a tier changelog summary.",
+      "tags": ["documentation", "faq", "troubleshooting", "onboarding"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:docs/celestial/02-admin-modules.md",
+      "target": "document:docs/celestial/05-celestial-ai.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/celestial/04-api-finance-integrations.md",
+      "target": "document:docs/celestial/01-platform-overview.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/celestial/06-faq.md",
+      "target": "document:docs/celestial/01-platform-overview.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/celestial/06-faq.md",
+      "target": "document:docs/celestial/05-celestial-ai.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/celestial/05-celestial-ai.md",
+      "target": "document:docs/celestial/01-platform-overview.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/celestial/03-buyer-mobile.md",
+      "target": "document:docs/celestial/01-platform-overview.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

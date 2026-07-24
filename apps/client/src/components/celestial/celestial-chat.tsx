@@ -21,6 +21,15 @@ const ADMIN_SUGGESTIONS = [
   'How does wave picking work?',
 ]
 
+const RESERVED_ROUTE_IDS = new Set(['new', 'confirmation', 'edit', 'create'])
+
+function routeEntityId(pathname: string, pattern: RegExp): string | undefined {
+  const match = pathname.match(pattern)
+  const id = match?.[1]
+  if (!id || RESERVED_ROUTE_IDS.has(id)) return undefined
+  return id
+}
+
 export function CelestialChat({
   surface,
   variant = 'floating',
@@ -44,11 +53,15 @@ export function CelestialChat({
   const setMessages = useCelestialStore((s) => s.setMessages)
   const updateMessage = useCelestialStore((s) => s.updateMessage)
   const clearChat = useCelestialStore((s) => s.clearChat)
+  const skipHistoryRestore = useCelestialStore((s) => s[surface].skipHistoryRestore)
+  const setSkipHistoryRestore = useCelestialStore((s) => s.setSkipHistoryRestore)
 
   const open = isPage || floatingOpen
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [hasToken, setHasToken] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -57,16 +70,90 @@ export function CelestialChat({
   }, [messages, open])
 
   useEffect(() => {
-    if (!open) return
+    const refreshAuth = () =>
+      setHasToken(Boolean(typeof window !== 'undefined' && window.localStorage.getItem('pleros.accessToken')))
+    refreshAuth()
+    window.addEventListener('storage', refreshAuth)
+    return () => window.removeEventListener('storage', refreshAuth)
+  }, [])
+
+  useEffect(() => {
+    if (surface === 'shop' && !hasToken) {
+      setEnabled(null)
+      return
+    }
+    void api
+      .get<{ enabled?: boolean }>('/celestial/status')
+      .then((s) => setEnabled(s.enabled !== false))
+      .catch(() => setEnabled(null))
+  }, [api, surface, hasToken])
+
+  useEffect(() => {
+    if (!open || (surface === 'shop' && !hasToken)) return
     void api
       .get<{ provider: string; model: string; configured: boolean }>('/celestial/status')
       .then((s) =>
         setProviderInfo(surface, `${s.provider} · ${s.model}${s.configured ? '' : ' · demo mode'}`),
       )
       .catch(() => setProviderInfo(surface, null))
-  }, [open, api, surface, setProviderInfo])
+  }, [open, api, surface, setProviderInfo, hasToken])
 
   useEffect(() => () => abortRef.current?.abort(), [])
+
+  useEffect(() => {
+    if (!open || enabled === false || (surface === 'shop' && !hasToken)) return
+    if (messages.length > 0 || skipHistoryRestore) return
+
+    const loadHistory = async () => {
+      try {
+        const list = await api.get<{ items: Array<{ id: string }> }>(
+          `/celestial/conversations?surface=${surface}&limit=5`,
+        )
+        const targetId = conversationId ?? list.items[0]?.id
+        if (!targetId) return
+
+        const detail = await api.get<{
+          id: string
+          messages: Array<{
+            id: string
+            role: 'user' | 'assistant'
+            content: string
+            links?: Array<{ label: string; href: string }>
+            meta?: string
+          }>
+        }>(`/celestial/conversations/${targetId}`)
+
+        if (detail.messages.length === 0) return
+
+        setConversationId(surface, detail.id)
+        setMessages(
+          surface,
+          detail.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            links: m.links,
+            meta: m.meta,
+          })),
+        )
+      } catch {
+        // keep local-only state
+      }
+    }
+
+    void loadHistory()
+  }, [
+    open,
+    enabled,
+    hasToken,
+    surface,
+    messages.length,
+    skipHistoryRestore,
+    conversationId,
+    api,
+    setConversationId,
+    setMessages,
+  ])
 
   const send = useCallback(
     async (text: string) => {
@@ -75,6 +162,7 @@ export function CelestialChat({
       setBusy(true)
       setErr(null)
       setInput('')
+      setSkipHistoryRestore(surface, false)
 
       const userId = `${Date.now()}-u`
       const assistantId = `${Date.now()}-a`
@@ -88,21 +176,21 @@ export function CelestialChat({
       const controller = new AbortController()
       abortRef.current = controller
 
-      try {
-        const orderMatch = location.pathname.match(/\/orders\/([^/]+)/)
-        const quoteMatch = location.pathname.match(/\/quotes\/([^/]+)/)
+      const orderId = routeEntityId(location.pathname, /\/orders\/([^/]+)/)
+      const quoteId = routeEntityId(location.pathname, /\/quotes\/([^/]+)/)
 
+      const runStream = async (activeConversationId?: string) => {
         await streamCelestialChat(
           gatewayBase,
           loginPath,
           {
             message: trimmed,
-            conversationId,
+            conversationId: activeConversationId,
             surface,
             context: {
               page: location.pathname,
-              orderId: orderMatch?.[1],
-              quoteId: quoteMatch?.[1],
+              orderId,
+              quoteId,
             },
           },
           {
@@ -124,6 +212,20 @@ export function CelestialChat({
           },
           controller.signal,
         )
+      }
+
+      try {
+        try {
+          await runStream(conversationId)
+        } catch (retryErr) {
+          const retryMsg = axiosErr(retryErr)
+          if (conversationId && /conversation not found/i.test(retryMsg)) {
+            setConversationId(surface, undefined)
+            await runStream(undefined)
+            return
+          }
+          throw retryErr
+        }
       } catch (e) {
         if (controller.signal.aborted) return
         setErr(axiosErr(e))
@@ -140,12 +242,30 @@ export function CelestialChat({
       loginPath,
       setConversationId,
       setMessages,
+      setSkipHistoryRestore,
       surface,
       updateMessage,
     ],
   )
 
   const suggestions = surface === 'shop' ? BUYER_SUGGESTIONS : ADMIN_SUGGESTIONS
+
+  if (surface === 'shop' && !hasToken) return null
+  if (enabled === false) {
+    if (isPage) {
+      return (
+        <div className="celestial-page">
+          <div className="pleros-card p-8 text-center">
+            <h2 className="text-lg font-semibold mb-2">Celestial is not enabled</h2>
+            <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+              Enable the Celestial AI feature in Settings → Features, or upgrade your plan.
+            </p>
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
 
   if (!isPage && !open) {
     return (
@@ -164,7 +284,7 @@ export function CelestialChat({
 
   const panel = (
     <div
-      className={`celestial-panel cosmos-card${isPage ? ' celestial-panel--page' : ''}`}
+      className={`celestial-panel pleros-card${isPage ? ' celestial-panel--page' : ''}`}
       role={isPage ? 'main' : 'dialog'}
       aria-label="Celestial assistant"
     >
@@ -172,7 +292,7 @@ export function CelestialChat({
         <div className="celestial-panel-header-main">
           {!isPage ? <h2 className="celestial-panel-title">Celestial</h2> : null}
           <p className="celestial-panel-sub">
-            {isPage ? 'Cosmos AI copilot' : surface === 'shop' ? 'Buyer assistant' : 'Admin copilot'}
+            {isPage ? 'Pleros AI copilot' : surface === 'shop' ? 'Buyer assistant' : 'Admin copilot'}
             {providerInfo ? (
               <span className="celestial-provider-badge">{providerInfo}</span>
             ) : null}
@@ -209,8 +329,8 @@ export function CelestialChat({
             <h3 className="celestial-empty-title">How can I help?</h3>
             <p className="celestial-empty-text">
               {isPage
-                ? 'Ask about orders, inventory, warehouses, finance, or how Cosmos works.'
-                : 'Ask about orders, invoices, catalog, quotes, or platform features.'}
+                ? 'Ask how Pleros works, or about your orders, stock, and invoices.'
+                : 'Ask how Pleros works, or look up orders, inventory, warehouses, and finance.'}
             </p>
             <div className="celestial-suggestions">
               {suggestions.map((s) => (
@@ -257,7 +377,7 @@ export function CelestialChat({
         }}
       >
         <input
-          className="cosmos-input celestial-input"
+          className="pleros-input celestial-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask Celestial…"

@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Card, CardTitle } from '@cosmos/ui'
+import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 type TaskDetail = {
   id: string
@@ -130,22 +130,22 @@ export default function FulfillmentTaskDetailPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <Link to="/admin/fulfillment" className="text-xs text-cosmos-muted hover:text-cosmos-text">
+      <Link to="/admin/fulfillment" className="text-xs text-pleros-muted hover:text-pleros-text">
         ← Tasks
       </Link>
-      <h1 className="text-2xl font-bold text-cosmos-white">Fulfillment · task</h1>
+      <h1 className="text-2xl font-bold text-pleros-white">Fulfillment · task</h1>
       {!taskId ? (
         <p className="text-sm text-red-400">Missing task id.</p>
       ) : task.error ? (
         <p className="text-sm text-red-400">{errMsg(task.error)}</p>
       ) : null}
-      {task.isLoading ? <p className="text-cosmos-muted text-sm">Loading…</p> : null}
+      {task.isLoading ? <p className="text-pleros-muted text-sm">Loading…</p> : null}
 
       {t ? (
         <div className="space-y-4">
           <Card>
             <CardTitle className="font-mono text-xs truncate">{t.id}</CardTitle>
-            <div className="mt-2 text-sm space-y-2 text-cosmos-muted">
+            <div className="mt-2 text-sm space-y-2 text-pleros-muted">
               <div className="flex flex-wrap items-center gap-2">
                 <span>Status</span>
                 <StatusBadge status={t.status} />
@@ -154,22 +154,22 @@ export default function FulfillmentTaskDetailPage() {
                 Order{' '}
                 <Link
                   to={adminPath(`/orders/${encodeURIComponent(t.orderId)}`)}
-                  className="font-mono text-cosmos-primary hover:underline"
+                  className="font-mono text-pleros-primary hover:underline"
                 >
                   {t.orderId}
                 </Link>
               </div>
               <div>Warehouse {t.warehouseCode}</div>
               {t.correlationId ? (
-                <div className="font-mono text-[11px] text-cosmos-muted/90">Correlation {t.correlationId}</div>
+                <div className="font-mono text-[11px] text-pleros-muted/90">Correlation {t.correlationId}</div>
               ) : null}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-cosmos-border">
-              <p className="text-xs text-cosmos-muted mb-2">Assign picker (optional)</p>
+            <div className="mt-4 pt-4 border-t border-pleros-border">
+              <p className="text-xs text-pleros-muted mb-2">Assign picker (optional)</p>
               <div className="flex flex-wrap gap-2 items-center max-w-xl">
                 <select
-                  className="flex-1 min-w-[200px] rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+                  className="flex-1 min-w-[200px] rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
                   value={assignPick}
                   onChange={(e) => setAssignPick(e.target.value)}
                   disabled={t.status === 'CANCELLED' || t.status === 'DISPATCHED'}
@@ -187,13 +187,13 @@ export default function FulfillmentTaskDetailPage() {
                     assignMut.isPending || t.status === 'CANCELLED' || t.status === 'DISPATCHED'
                   }
                   onClick={() => assignMut.mutate(assignPick.trim() || null)}
-                  className="h-10 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+                  className="h-10 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
                 >
                   {assignMut.isPending ? 'Saving…' : 'Save assignee'}
                 </button>
               </div>
               {t.assignedUserId && (
-                <p className="text-xs text-cosmos-muted mt-2 font-mono">
+                <p className="text-xs text-pleros-muted mt-2 font-mono">
                   Current: {t.assignedUserId}
                 </p>
               )}
@@ -270,7 +270,7 @@ export default function FulfillmentTaskDetailPage() {
             <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
+                  <tr className="text-left text-pleros-muted border-b border-pleros-border">
                     <th className="pb-2 pr-3 font-medium">Line</th>
                     <th className="pb-2 pr-3 font-medium">SKU</th>
                     <th className="pb-2 pr-3 font-medium">Qty</th>
@@ -281,9 +281,9 @@ export default function FulfillmentTaskDetailPage() {
                 </thead>
                 <tbody>
                   {t.pickItems.map((p) => (
-                    <tr key={p.id} className="border-b border-cosmos-border/60">
+                    <tr key={p.id} className="border-b border-pleros-border/60">
                       <td className="py-2 pr-3 font-mono text-[11px]">{p.id.slice(0, 8)}…</td>
-                      <td className="py-2 pr-3 font-mono text-[11px] text-cosmos-text">{p.skuId}</td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-pleros-text">{p.skuId}</td>
                       <td className="py-2 pr-3">{p.quantity}</td>
                       <td className="py-2 pr-3">{p.pickedQty}</td>
                       <td className="py-2 pr-3">
@@ -292,7 +292,7 @@ export default function FulfillmentTaskDetailPage() {
                       {canPick ? (
                         <td className="py-2">
                           {p.status === 'PICKED' || p.status === 'SHORT' ? (
-                            <span className="text-xs text-cosmos-muted">Done</span>
+                            <span className="text-xs text-pleros-muted">Done</span>
                           ) : (
                             <button
                               type="button"
@@ -303,7 +303,7 @@ export default function FulfillmentTaskDetailPage() {
                                   pickedQty: p.quantity,
                                 })
                               }
-                              className="h-7 px-2 rounded bg-cosmos-surface-2 border border-cosmos-border text-xs hover:bg-cosmos-surface disabled:opacity-40"
+                              className="h-7 px-2 rounded bg-pleros-surface-2 border border-pleros-border text-xs hover:bg-pleros-surface disabled:opacity-40"
                             >
                               Pick {p.quantity}
                             </button>

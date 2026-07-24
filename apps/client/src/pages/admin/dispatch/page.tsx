@@ -18,8 +18,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { EmptyState } from '@/components/cosmos/empty-state'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
 import { api } from '@/lib/api-admin'
 import { useQueryParams } from '@/lib/use-query-params'
 
@@ -133,7 +133,7 @@ function routeMapEmbedUrl(route: DeliveryRoute): string | null {
 export default function DispatchPage() {
   return (
     <Suspense
-      fallback={<div className="p-6 text-cosmos-muted text-sm">Loading dispatch…</div>}
+      fallback={<div className="p-6 text-pleros-muted text-sm">Loading dispatch…</div>}
     >
       <DispatchDashboard />
     </Suspense>
@@ -254,13 +254,13 @@ function DispatchDashboard() {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col md:flex-row">
-      <aside className="w-full shrink-0 border-cosmos-border bg-cosmos-surface md:w-80 md:border-r flex flex-col max-h-[45vh] md:max-h-none md:h-[calc(100vh-4rem)]">
-        <div className="p-4 border-b border-cosmos-border space-y-3">
-          <h1 className="text-lg font-bold text-cosmos-white">Dispatch</h1>
-          <label className="block text-xs text-cosmos-muted">Route date</label>
+      <aside className="w-full shrink-0 border-pleros-border bg-pleros-surface md:w-80 md:border-r flex flex-col max-h-[45vh] md:max-h-none md:h-[calc(100vh-4rem)]">
+        <div className="p-4 border-b border-pleros-border space-y-3">
+          <h1 className="text-lg font-bold text-pleros-white">Dispatch</h1>
+          <label className="block text-xs text-pleros-muted">Route date</label>
           <input
             type="date"
-            className="w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+            className="w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
             value={selectedDate}
             onChange={(e) => {
               setSelectedDate(e.target.value)
@@ -271,14 +271,14 @@ function DispatchDashboard() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="w-full h-9 rounded-md bg-cosmos-primary text-white text-sm"
+            className="w-full h-9 rounded-md bg-pleros-primary text-white text-sm"
           >
             Create route
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {routes.isLoading ? (
-            <p className="text-cosmos-muted text-sm p-2">Loading routes…</p>
+            <p className="text-pleros-muted text-sm p-2">Loading routes…</p>
           ) : routes.error ? (
             <p className="text-red-400 text-sm p-2">Could not load routes.</p>
           ) : (routes.data?.length ?? 0) === 0 ? (
@@ -290,7 +290,7 @@ function DispatchDashboard() {
                 <button
                   type="button"
                   onClick={() => setCreateOpen(true)}
-                  className="h-9 px-4 rounded-md bg-cosmos-primary text-white text-sm"
+                  className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
                 >
                   Create route
                 </button>
@@ -308,14 +308,14 @@ function DispatchDashboard() {
                     }}
                     className={`w-full text-left rounded-lg px-3 py-2.5 text-sm transition-colors ${
                       selectedRouteId === r.id
-                        ? 'bg-cosmos-primary/20 border border-cosmos-primary/40 text-cosmos-white'
-                        : 'border border-transparent text-cosmos-text hover:bg-cosmos-surface-2'
+                        ? 'bg-pleros-primary/20 border border-pleros-primary/40 text-pleros-white'
+                        : 'border border-transparent text-pleros-text hover:bg-pleros-surface-2'
                     }`}
                   >
                     <div className="font-medium truncate">{r.name?.trim() || 'Route'}</div>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <StatusBadge status={r.status} />
-                      <span className="text-cosmos-muted text-xs">{r.stops?.length ?? 0} stops</span>
+                      <span className="text-pleros-muted text-xs">{r.stops?.length ?? 0} stops</span>
                     </div>
                   </button>
                 </li>
@@ -327,23 +327,23 @@ function DispatchDashboard() {
 
       <main className="flex-1 flex flex-col min-w-0 min-h-[55vh] md:min-h-[calc(100vh-4rem)]">
         {!selectedRouteId || routeDetail.isLoading ? (
-          <div className="p-6 text-cosmos-muted text-sm">Select a route…</div>
+          <div className="p-6 text-pleros-muted text-sm">Select a route…</div>
         ) : routeDetail.error || !selected ? (
           <div className="p-6 text-red-400 text-sm">Route not found.</div>
         ) : (
           <>
-            <div className="p-4 border-b border-cosmos-border flex flex-wrap items-start justify-between gap-3">
+            <div className="p-4 border-b border-pleros-border flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-semibold text-cosmos-white truncate">
+                  <h2 className="text-xl font-semibold text-pleros-white truncate">
                     {selected.name?.trim() || 'Route'}
                   </h2>
                   <StatusBadge status={selected.status} />
                 </div>
-                <p className="font-mono text-xs text-cosmos-muted mt-0.5 truncate">{selected.id}</p>
+                <p className="font-mono text-xs text-pleros-muted mt-0.5 truncate">{selected.id}</p>
                 {driverLabel && (
-                  <p className="text-xs text-cosmos-muted mt-1">
-                    Driver: <span className="text-cosmos-text">{driverLabel}</span>
+                  <p className="text-xs text-pleros-muted mt-1">
+                    Driver: <span className="text-pleros-text">{driverLabel}</span>
                   </p>
                 )}
               </div>
@@ -358,7 +358,7 @@ function DispatchDashboard() {
               </div>
             </div>
 
-            <div className="border-b border-cosmos-border bg-cosmos-surface-2/40 shrink-0">
+            <div className="border-b border-pleros-border bg-pleros-surface-2/40 shrink-0">
               {mapEmbedUrl ? (
                 <div className="relative">
                   <iframe
@@ -382,7 +382,7 @@ function DispatchDashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="h-[140px] md:h-[180px] flex flex-col items-center justify-center px-4 text-center text-cosmos-muted text-sm">
+                <div className="h-[140px] md:h-[180px] flex flex-col items-center justify-center px-4 text-center text-pleros-muted text-sm">
                   <p>No driver GPS yet for this route.</p>
                   <p className="text-xs mt-1 max-w-md">
                     When an assigned driver uses the delivery PWA (`/m/delivery`), positions appear here (refreshed every 15s while
@@ -396,14 +396,14 @@ function DispatchDashboard() {
                     referrerPolicy="no-referrer-when-downgrade"
                   />
                   <p className="text-[10px] mt-1">
-                    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-cosmos-primary underline">
+                    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-pleros-primary underline">
                       © OpenStreetMap
                     </a>
                   </p>
                 </div>
               )}
               {mapEmbedUrl && selected.lastKnownAt && (
-                <p className={`text-xs px-3 py-1 ${locationStale ? 'text-amber-400' : 'text-cosmos-muted'}`}>
+                <p className={`text-xs px-3 py-1 ${locationStale ? 'text-amber-400' : 'text-pleros-muted'}`}>
                   Last position: {new Date(selected.lastKnownAt).toLocaleString()}
                   {locationStale ? ' · may be stale' : ''}
                 </p>
@@ -412,8 +412,8 @@ function DispatchDashboard() {
 
             <div className="flex-1 overflow-y-auto p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-cosmos-white">Stops</h3>
-                <span className="text-xs text-cosmos-muted">Drag to reorder · POD records delivery</span>
+                <h3 className="text-sm font-semibold text-pleros-white">Stops</h3>
+                <span className="text-xs text-pleros-muted">Drag to reorder · POD records delivery</span>
               </div>
               {reorderStops.error && (
                 <p className="text-red-400 text-xs mb-2">{errMsg(reorderStops.error)}</p>
@@ -476,7 +476,7 @@ function AssignDriverSelect(props: {
   return (
     <div className="flex items-center gap-1 max-w-[240px]">
       <select
-        className="flex-1 min-w-0 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-2 py-1.5 text-xs text-cosmos-text"
+        className="flex-1 min-w-0 rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
         value={v}
         disabled={props.disabled}
         onChange={(e) => setV(e.target.value)}
@@ -491,7 +491,7 @@ function AssignDriverSelect(props: {
       <button
         type="button"
         disabled={props.disabled || !v}
-        className="shrink-0 px-2 py-1.5 rounded border border-cosmos-border text-xs text-cosmos-text disabled:opacity-40"
+        className="shrink-0 px-2 py-1.5 rounded border border-pleros-border text-xs text-pleros-text disabled:opacity-40"
         onClick={() => {
           props.onAssign(v)
           setV('')
@@ -522,13 +522,13 @@ function SortableStopRow(props: {
     <li
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border border-cosmos-border bg-cosmos-surface px-3 py-2 flex flex-wrap gap-2 items-start ${
+      className={`rounded-lg border border-pleros-border bg-pleros-surface px-3 py-2 flex flex-wrap gap-2 items-start ${
         isDragging ? 'opacity-70 shadow-lg z-10' : ''
       }`}
     >
       <button
         type="button"
-        className="cursor-grab active:cursor-grabbing text-cosmos-muted touch-none px-1"
+        className="cursor-grab active:cursor-grabbing text-pleros-muted touch-none px-1"
         disabled={props.disabled}
         {...attributes}
         {...listeners}
@@ -537,8 +537,8 @@ function SortableStopRow(props: {
         ⋮⋮
       </button>
       <div className="flex-1 min-w-0">
-        <div className="text-xs text-cosmos-muted">Stop {props.stop.sequence}</div>
-        <div className="text-sm text-cosmos-text truncate" title={formatAddress(props.stop.address)}>
+        <div className="text-xs text-pleros-muted">Stop {props.stop.sequence}</div>
+        <div className="text-sm text-pleros-text truncate" title={formatAddress(props.stop.address)}>
           {formatAddress(props.stop.address)}
         </div>
         <div className="mt-1">
@@ -549,7 +549,7 @@ function SortableStopRow(props: {
         <button
           type="button"
           disabled={props.stop.status === 'DELIVERED'}
-          className="text-xs px-2 py-1 rounded bg-cosmos-primary text-white disabled:opacity-40"
+          className="text-xs px-2 py-1 rounded bg-pleros-primary text-white disabled:opacity-40"
           onClick={props.onPod}
         >
           POD
@@ -557,7 +557,7 @@ function SortableStopRow(props: {
         <button
           type="button"
           disabled={props.stop.status === 'FAILED' || props.failPending}
-          className="text-xs px-2 py-1 rounded border border-cosmos-border text-cosmos-muted disabled:opacity-40"
+          className="text-xs px-2 py-1 rounded border border-pleros-border text-pleros-muted disabled:opacity-40"
           onClick={props.onFailed}
         >
           Failed
@@ -593,7 +593,7 @@ function StopsSortableSection(props: {
   }
 
   if (stops.length === 0) {
-    return <p className="text-cosmos-muted text-sm">No stops on this route.</p>
+    return <p className="text-pleros-muted text-sm">No stops on this route.</p>
   }
 
   return (
@@ -625,6 +625,7 @@ function PodModal(props: {
   const [recipient, setRecipient] = useState('')
   const [notes, setNotes] = useState('')
   const [signature, setSignature] = useState('')
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -638,6 +639,7 @@ function PodModal(props: {
           recipientName: recipient.trim() || undefined,
           notes: notes.trim() || undefined,
           signature: signature.trim() || undefined,
+          ageConfirmed,
         },
       )
       props.onDone()
@@ -651,37 +653,41 @@ function PodModal(props: {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <button type="button" className="absolute inset-0 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-xl sm:rounded-xl bg-cosmos-surface border border-cosmos-border p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-cosmos-white">Proof of delivery</h2>
-        <p className="text-xs text-cosmos-muted mt-1">
+      <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-xl sm:rounded-xl bg-pleros-surface border border-pleros-border p-6 shadow-xl">
+        <h2 className="text-lg font-semibold text-pleros-white">Proof of delivery</h2>
+        <p className="text-xs text-pleros-muted mt-1">
           Stop {props.stop.sequence} · {formatAddress(props.stop.address)}
         </p>
-        <label className="block mt-4 text-xs text-cosmos-muted">Recipient name</label>
+        <label className="block mt-4 text-xs text-pleros-muted">Recipient name</label>
         <input
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
           placeholder="Who signed"
         />
-        <label className="block mt-3 text-xs text-cosmos-muted">Notes</label>
+        <label className="block mt-3 text-xs text-pleros-muted">Notes</label>
         <textarea
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text min-h-[72px]"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text min-h-[72px]"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Condition, location, etc."
         />
-        <label className="block mt-3 text-xs text-cosmos-muted">Signature (text / ref)</label>
+        <label className="block mt-3 text-xs text-pleros-muted">Signature (text / ref)</label>
         <input
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={signature}
           onChange={(e) => setSignature(e.target.value)}
           placeholder="Signature label or image URL"
         />
+        <label className="mt-3 flex items-start gap-2 text-sm text-pleros-text cursor-pointer">
+          <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
+          <span>Recipient age confirmed (required for age-restricted orders)</span>
+        </label>
         {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
         <div className="mt-6 flex gap-2">
           <button
             type="button"
-            className="flex-1 h-10 rounded-md border border-cosmos-border text-cosmos-text text-sm"
+            className="flex-1 h-10 rounded-md border border-pleros-border text-pleros-text text-sm"
             onClick={props.onClose}
             disabled={busy}
           >
@@ -690,7 +696,7 @@ function PodModal(props: {
           <button
             type="button"
             disabled={busy}
-            className="flex-1 h-10 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+            className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() => void submit()}
           >
             {busy ? 'Saving…' : 'Mark delivered'}
@@ -784,46 +790,46 @@ function CreateRouteDrawer(props: {
   return (
     <div className="fixed inset-0 z-50 flex">
       <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="w-full max-w-lg bg-cosmos-surface border-l border-cosmos-border p-6 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-cosmos-white">New delivery route</h2>
-        <p className="text-xs text-cosmos-muted mt-1">
+      <div className="w-full max-w-lg bg-pleros-surface border-l border-pleros-border p-6 overflow-y-auto">
+        <h2 className="text-lg font-semibold text-pleros-white">New delivery route</h2>
+        <p className="text-xs text-pleros-muted mt-1">
           Scheduled for sidebar date ({props.scheduledDate}). Stops are ordered; drag after save on the main view.
         </p>
         <div className="mt-4 flex gap-2">
           <button
             type="button"
-            className={`flex-1 h-9 rounded-md text-sm ${mode === 'orders' ? 'bg-cosmos-primary text-white' : 'border border-cosmos-border text-cosmos-text'}`}
+            className={`flex-1 h-9 rounded-md text-sm ${mode === 'orders' ? 'bg-pleros-primary text-white' : 'border border-pleros-border text-pleros-text'}`}
             onClick={() => setMode('orders')}
           >
             From shipped orders
           </button>
           <button
             type="button"
-            className={`flex-1 h-9 rounded-md text-sm ${mode === 'manual' ? 'bg-cosmos-primary text-white' : 'border border-cosmos-border text-cosmos-text'}`}
+            className={`flex-1 h-9 rounded-md text-sm ${mode === 'manual' ? 'bg-pleros-primary text-white' : 'border border-pleros-border text-pleros-text'}`}
             onClick={() => setMode('manual')}
           >
             Manual stops
           </button>
         </div>
-        <label className="block mt-4 text-xs text-cosmos-muted">Name (optional)</label>
+        <label className="block mt-4 text-xs text-pleros-muted">Name (optional)</label>
         <input
-          className="mt-1 w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Monday downtown"
         />
         {mode === 'orders' ? (
           <>
-            <p className="text-xs text-cosmos-muted mt-4">Shipped orders ready for delivery</p>
+            <p className="text-xs text-pleros-muted mt-4">Shipped orders ready for delivery</p>
             {shippedOrders.isLoading ? (
-              <p className="text-cosmos-muted text-sm mt-2">Loading orders…</p>
+              <p className="text-pleros-muted text-sm mt-2">Loading orders…</p>
             ) : (shippedOrders.data?.length ?? 0) === 0 ? (
-              <p className="text-cosmos-muted text-sm mt-2">No shipped orders available.</p>
+              <p className="text-pleros-muted text-sm mt-2">No shipped orders available.</p>
             ) : (
               <ul className="mt-2 space-y-2 max-h-64 overflow-y-auto">
                 {(shippedOrders.data ?? []).map((o) => (
                   <li key={o.id}>
-                    <label className="flex items-start gap-2 rounded-md border border-cosmos-border px-3 py-2 text-sm cursor-pointer hover:bg-cosmos-surface-2">
+                    <label className="flex items-start gap-2 rounded-md border border-pleros-border px-3 py-2 text-sm cursor-pointer hover:bg-pleros-surface-2">
                       <input
                         type="checkbox"
                         className="mt-1"
@@ -831,11 +837,11 @@ function CreateRouteDrawer(props: {
                         onChange={() => toggleOrder(o.id)}
                       />
                       <span className="min-w-0">
-                        <span className="font-mono text-xs text-cosmos-muted block truncate">{o.id}</span>
-                        <span className="text-cosmos-text block truncate">
+                        <span className="font-mono text-xs text-pleros-muted block truncate">{o.id}</span>
+                        <span className="text-pleros-text block truncate">
                           {formatShippedAddress(o.shippingAddress, o.notes)}
                         </span>
-                        <span className="text-cosmos-muted text-xs">${Number(o.totalAmount).toFixed(2)}</span>
+                        <span className="text-pleros-muted text-xs">${Number(o.totalAmount).toFixed(2)}</span>
                       </span>
                     </label>
                   </li>
@@ -845,12 +851,12 @@ function CreateRouteDrawer(props: {
           </>
         ) : (
           <>
-            <p className="text-xs text-cosmos-muted mt-4">Stops</p>
+            <p className="text-xs text-pleros-muted mt-4">Stops</p>
             {stopLines.map((ln, idx) => (
               <div key={idx} className="mt-2 flex gap-2">
-                <span className="w-6 text-cosmos-muted text-sm pt-2">{idx + 1}.</span>
+                <span className="w-6 text-pleros-muted text-sm pt-2">{idx + 1}.</span>
                 <input
-                  className="flex-1 rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+                  className="flex-1 rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
                   placeholder="Address line"
                   value={ln.address}
                   onChange={(e) => {
@@ -863,7 +869,7 @@ function CreateRouteDrawer(props: {
             ))}
             <button
               type="button"
-              className="mt-2 text-xs text-cosmos-primary"
+              className="mt-2 text-xs text-pleros-primary"
               onClick={() => setStopLines((s) => [...s, { address: '' }])}
             >
               + Add stop
@@ -874,7 +880,7 @@ function CreateRouteDrawer(props: {
         <div className="mt-6 flex gap-2">
           <button
             type="button"
-            className="flex-1 h-10 rounded-md border border-cosmos-border text-cosmos-text text-sm"
+            className="flex-1 h-10 rounded-md border border-pleros-border text-pleros-text text-sm"
             onClick={props.onClose}
             disabled={busy}
           >
@@ -883,7 +889,7 @@ function CreateRouteDrawer(props: {
           <button
             type="button"
             disabled={busy}
-            className="flex-1 h-10 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+            className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() => void submit()}
           >
             {busy ? 'Creating…' : 'Create route'}

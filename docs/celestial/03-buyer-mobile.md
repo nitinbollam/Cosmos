@@ -77,7 +77,7 @@ The B2B shop is the buyer-facing storefront. Logged-in buyers browse catalog, ad
 
 - List AR invoices with status, total, balance
 - Pay balance: record payment or **Stripe card pay** (`POST /invoices/:id/pay/stripe`)
-- Download **invoice PDF** (`GET /invoices/:id/pdf` — print-ready HTML)
+- Download **invoice PDF** (`GET /invoices/:id/pdf` — native PDF)
 
 **Celestial tool:** `list_my_invoices` (buyer-scoped).
 
@@ -129,7 +129,7 @@ Shop notification inbox filtered by signed-in buyer email. Shows order shipped, 
 
 **Keywords:** mobile warehouse, pick, receiving, wave, bin, PWA
 
-**Login:** `warehouse@cosmos.local` / `warehouse1234`
+**Login:** `warehouse@pleros.local` / `warehouse1234`
 
 **Features:**
 - Pick task list with **bin-directed** pick lines (`binCode` from stock levels)
@@ -147,7 +147,7 @@ Shop notification inbox filtered by signed-in buyer email. Shows order shipped, 
 
 **Keywords:** mobile delivery, driver, route, stop, POD, proof of delivery
 
-**Login:** `driver@cosmos.local` / `driver1234`
+**Login:** `driver@pleros.local` / `driver1234`
 
 **Features:**
 - View assigned delivery routes and stops
@@ -162,7 +162,7 @@ Shop notification inbox filtered by signed-in buyer email. Shows order shipped, 
 
 **Keywords:** mobile sales, leads, CRM activities, field sales
 
-**Login:** `sales@cosmos.local` / `sales1234`
+**Login:** `sales@pleros.local` / `sales1234`
 
 **Features:**
 - View/manage leads and customers

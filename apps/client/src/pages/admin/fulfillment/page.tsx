@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { Card, CardTitle } from '@cosmos/ui'
+import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type FloorTask = {
   id: string
@@ -69,8 +69,8 @@ export default function FulfillmentTasksPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white">Fulfillment</h1>
-          <p className="text-cosmos-muted text-sm mt-1">
+          <h1 className="text-2xl font-bold text-pleros-white">Fulfillment</h1>
+          <p className="text-pleros-muted text-sm mt-1">
             WMS floor tasks (<span className="font-mono">/wms/tasks</span>). Open a task to pack or dispatch after
             picks complete.
           </p>
@@ -78,7 +78,7 @@ export default function FulfillmentTasksPage() {
         <button
           type="button"
           onClick={() => void tasks.refetch()}
-          className="h-9 px-3 rounded-md border border-cosmos-border text-xs text-cosmos-text hover:bg-cosmos-surface-2"
+          className="h-9 px-3 rounded-md border border-pleros-border text-xs text-pleros-text hover:bg-pleros-surface-2"
         >
           Refresh
         </button>
@@ -92,8 +92,8 @@ export default function FulfillmentTasksPage() {
             onClick={() => setStatusFilter(f.value)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
               statusFilter === f.value
-                ? 'border-cosmos-primary bg-cosmos-primary/20 text-cosmos-white'
-                : 'border-cosmos-border text-cosmos-muted'
+                ? 'border-pleros-primary bg-pleros-primary/20 text-pleros-white'
+                : 'border-pleros-border text-pleros-muted'
             }`}
           >
             {f.label}
@@ -103,9 +103,9 @@ export default function FulfillmentTasksPage() {
 
       <div className="flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs text-cosmos-muted mb-1">Warehouse</label>
+          <label className="block text-xs text-pleros-muted mb-1">Warehouse</label>
           <select
-            className="rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text min-w-[180px]"
+            className="rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text min-w-[180px]"
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
           >
@@ -118,9 +118,9 @@ export default function FulfillmentTasksPage() {
           </select>
         </div>
         <div className="flex-1 min-w-[200px] max-w-md">
-          <label className="block text-xs text-cosmos-muted mb-1">Order ID</label>
+          <label className="block text-xs text-pleros-muted mb-1">Order ID</label>
           <input
-            className="w-full rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text font-mono"
+            className="w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text font-mono"
             placeholder="Filter by order id…"
             value={orderSearch}
             onChange={(e) => setOrderSearch(e.target.value)}
@@ -131,7 +131,7 @@ export default function FulfillmentTasksPage() {
       <Card>
         <CardTitle>Pick tasks</CardTitle>
         {tasks.isLoading ? (
-          <p className="text-cosmos-muted text-sm mt-3">Loading…</p>
+          <p className="text-pleros-muted text-sm mt-3">Loading…</p>
         ) : tasks.isError ? (
           <p className="text-red-400 text-sm mt-3">Could not load tasks.</p>
         ) : rows.length === 0 ? (
@@ -146,7 +146,7 @@ export default function FulfillmentTasksPage() {
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
+                <tr className="text-left text-pleros-muted border-b border-pleros-border">
                   <th className="pb-2 pr-4 font-medium">Task</th>
                   <th className="pb-2 pr-4 font-medium">Order</th>
                   <th className="pb-2 pr-4 font-medium">Status</th>
@@ -158,11 +158,11 @@ export default function FulfillmentTasksPage() {
               </thead>
               <tbody>
                 {rows.map((t) => (
-                  <tr key={t.id} className="border-b border-cosmos-border/60 hover:bg-cosmos-surface-2/40">
+                  <tr key={t.id} className="border-b border-pleros-border/60 hover:bg-pleros-surface-2/40">
                     <td className="py-2 pr-4">
                       <Link
                         to={adminPath(`/fulfillment/${encodeURIComponent(t.id)}`)}
-                        className="font-mono text-xs text-cosmos-primary hover:underline"
+                        className="font-mono text-xs text-pleros-primary hover:underline"
                       >
                         {t.id.slice(0, 10)}…
                       </Link>
@@ -170,7 +170,7 @@ export default function FulfillmentTasksPage() {
                     <td className="py-2 pr-4">
                       <Link
                         to={adminPath(`/orders/${encodeURIComponent(t.orderId)}`)}
-                        className="font-mono text-xs text-cosmos-muted hover:text-cosmos-primary"
+                        className="font-mono text-xs text-pleros-muted hover:text-pleros-primary"
                       >
                         {t.orderId.slice(0, 12)}…
                       </Link>
@@ -178,12 +178,12 @@ export default function FulfillmentTasksPage() {
                     <td className="py-2 pr-4">
                       <StatusBadge status={t.status} />
                     </td>
-                    <td className="py-2 pr-4 text-cosmos-muted text-xs">{t.warehouseCode}</td>
-                    <td className="py-2 pr-4 font-mono text-[11px] text-cosmos-muted">
+                    <td className="py-2 pr-4 text-pleros-muted text-xs">{t.warehouseCode}</td>
+                    <td className="py-2 pr-4 font-mono text-[11px] text-pleros-muted">
                       {t.assignedUserId ? `${t.assignedUserId.slice(0, 8)}…` : '—'}
                     </td>
-                    <td className="py-2 pr-4 text-cosmos-muted text-xs">{t.pickItems?.length ?? '—'}</td>
-                    <td className="py-2 text-cosmos-muted text-xs whitespace-nowrap">
+                    <td className="py-2 pr-4 text-pleros-muted text-xs">{t.pickItems?.length ?? '—'}</td>
+                    <td className="py-2 text-pleros-muted text-xs whitespace-nowrap">
                       {t.createdAt ? new Date(t.createdAt).toLocaleString() : '—'}
                     </td>
                   </tr>

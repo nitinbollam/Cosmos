@@ -16,7 +16,7 @@ test('retrievePlatformDocs finds architecture content', () => {
 
 test('retrievePlatformDocs finds POS content', () => {
   clearRetrievalCache()
-  const chunks = retrievePlatformDocs('How POS works in cosmos?')
+  const chunks = retrievePlatformDocs('How POS works in pleros?')
   assert.ok(chunks.length > 0)
   assert.ok(chunks.some((c) => c.body.toLowerCase().includes('pos')))
 })
@@ -24,7 +24,7 @@ test('retrievePlatformDocs finds POS content', () => {
 test('retrievePlatformDocs finds FAQ for demo login', () => {
   clearRetrievalCache()
   const chunks = retrievePlatformDocs('demo login password admin')
-  assert.ok(chunks.some((c) => c.body.includes('admin@cosmos.local')))
+  assert.ok(chunks.some((c) => c.body.includes('admin@pleros.local')))
 })
 
 test('retrievePlatformDocs finds warehouse content', () => {
@@ -37,4 +37,14 @@ test('retrievePlatformDocs finds Celestial documentation', () => {
   clearRetrievalCache()
   const chunks = retrievePlatformDocs('how does Celestial AI work')
   assert.ok(chunks.some((c) => /celestial/i.test(c.heading + c.body)))
+})
+
+test('retrievePlatformDocs prefers plain language for how Pleros works', () => {
+  clearRetrievalCache()
+  const chunks = retrievePlatformDocs('How pleros works?', 6, true)
+  assert.ok(chunks.length > 0)
+  assert.ok(
+    chunks.some((c) => /plain language/i.test(c.heading)),
+    `expected plain-language chunk first, got: ${chunks.map((c) => c.heading).join(', ')}`,
+  )
 })

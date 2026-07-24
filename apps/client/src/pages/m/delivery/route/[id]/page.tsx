@@ -17,6 +17,8 @@ export default function DeliveryRoutePage() {
   const [route, setRoute] = useState<RouteDetail | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
+  const [recipientName, setRecipientName] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -41,8 +43,11 @@ export default function DeliveryRoutePage() {
         signatureDataUrl: null,
         photoUrl: null,
         notes: notes || undefined,
+        ageConfirmed,
+        recipientName: recipientName.trim() || undefined,
       })
       await refreshRoute()
+      setErr(null)
     } catch (e) {
       setErr(axiosErr(e))
     }
@@ -64,26 +69,39 @@ export default function DeliveryRoutePage() {
 
   return (
     <div>
-      <Link to="/m/delivery" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+      <Link to="/m/delivery" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Routes
       </Link>
-      <h1 style={{ fontFamily: 'var(--font-syne)' }}>Route {id?.slice(-8)}</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)' }}>Route {id?.slice(-8)}</h1>
       {err && <p style={{ color: 'var(--c-danger)' }}>{err}</p>}
+      <input
+        className="pleros-input"
+        placeholder="Recipient name (optional)"
+        value={recipientName}
+        onChange={(e) => setRecipientName(e.target.value)}
+        style={{ width: '100%', marginBottom: 8 }}
+      />
       <textarea
-        className="cosmos-input"
+        className="pleros-input"
         placeholder="POD notes"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={2}
-        style={{ width: '100%', marginBottom: 12 }}
+        style={{ width: '100%', marginBottom: 8 }}
       />
+      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, marginBottom: 12 }}>
+        <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
+        <span>
+          Recipient age confirmed (required when the stop includes age-restricted products)
+        </span>
+      </label>
       {(route?.stops ?? []).map((s) => (
-        <div key={s.id} className="cosmos-mobile-card">
+        <div key={s.id} className="pleros-mobile-card">
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <strong>Stop #{s.sequence}</strong>
             <span style={{ fontSize: 12 }}>{s.status}</span>
           </div>
-          {s.address && <p style={{ fontSize: 13, opacity: 0.7 }}>{s.address}</p>}
+          {s.address && <p style={{ fontSize: 13, opacity: 0.7 }}>{typeof s.address === 'string' ? s.address : JSON.stringify(s.address)}</p>}
           {s.status !== 'DELIVERED' && s.status !== 'FAILED' && (
             <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               <button type="button" className="btn-primary" onClick={() => void markDelivered(s.id)}>

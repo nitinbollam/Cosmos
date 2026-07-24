@@ -6,7 +6,7 @@ const cardStyle = {
     base: {
       color: '#E2E8F0',
       fontSize: '14px',
-      fontFamily: 'DM Sans, system-ui, sans-serif',
+      fontFamily: 'Inter, system-ui, sans-serif',
       '::placeholder': { color: '#64748B' },
       iconColor: '#94A3B8',
     },

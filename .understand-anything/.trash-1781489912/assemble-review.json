@@ -1,0 +1,20 @@
+{
+  "fixedSectionOk": true,
+  "nodesRecovered": 17,
+  "edgesRestored": 18,
+  "crossBatchEdgesAdded": 0,
+  "typesRemapped": 0,
+  "complexityRemapped": 0,
+  "notes": [
+    "Fixed section was clean: 10 duplicate node IDs removed and 11 tested_by edges flipped are both low-count, targeted corrections with no systemic concern.",
+    "No nodes had missing id fields, and all complexity values were already normalized to simple/moderate/complex — nothing to fix in those categories.",
+    "All 19 reported dangling edges were dropped because their function-node targets were never emitted by any batch (the batches covering those source files only captured some of their exported functions). All 17 unique function targets were confirmed to exist in source.",
+    "17 function nodes were reconstructed from source (line ranges, tags, and complexity inferred from sibling nodes in the same file): postApPaymentJournal, postPoReceiptJournal (operations-gl.ts); findCustomerByEmail, getCustomer (crm.ts); assertFeature (feature-flags.ts); listOrders, findOrderById (orders.ts); listInvoices (invoices.ts); listSkus, lowStockAlerts, listWarehouses, findSkuById (inventory.ts); listQuotes (quotes.ts); globalSearch (search.ts); getTenantSalesTaxRate (tenant-tax.ts); onDeliveryStopDelivered (order-orchestration.ts); syncPurchaseOrderFromSkuReceipts (po-receiving.ts).",
+    "18 call edges were restored (the 17 cross-batch calls that were dropped plus the one duplicate inventory.ts:listWarehouses call from demand-planning.ts). Contains and exports edges were also added from each parent file node to each recovered function node.",
+    "The vite.config.ts 'configures' dangling edge was caused by a type prefix mismatch: the batch emitted target 'file:apps/client/vite.config.ts' but the assembled node uses 'config:apps/client/vite.config.ts'. The corrected edge (config:apps/client/tsconfig.node.json -> config:apps/client/vite.config.ts) was added.",
+    "Import map hub verification: db.ts has 55 inbound import edges (matches), session.ts has 52 inbound + 1 outbound = 53 total degree (matches), native-router.ts has 50 outbound + 1 inbound = 51 total degree (matches). No cross-batch import edges were missing.",
+    "No unknown node types or unknown complexity values were present in the assembled graph — all 604 original nodes and their types (file, function, class, service, pipeline, config, document, resource, schema, table) were valid.",
+    "Upstream quality concern: approximately 17 of the function-level nodes in 11 server-side service files were missed by the batch LLM analysis. These are all read/list/get accessor functions — the batch likely prioritized write/mutate functions. Consider increasing function capture completeness in future batch prompts.",
+    "Final graph: 621 nodes, 1190 edges."
+  ]
+}

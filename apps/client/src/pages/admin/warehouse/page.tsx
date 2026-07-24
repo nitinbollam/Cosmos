@@ -2,14 +2,15 @@ import { Link } from 'react-router-dom'
 import { useMemo, useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
+import { showToast } from '@/lib/toast'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
-import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
-import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
+import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
 
-type Tab = 'picks' | 'waves' | 'bins' | 'receiving' | 'counts'
+type Tab = 'picks' | 'waves' | 'bins' | 'receiving' | 'putaway' | 'labor' | 'counts'
 
 type PickWaveRow = {
   id: string
@@ -83,6 +84,29 @@ type CycleDetail = Omit<CycleRow, '_count'> & {
     systemQty: number
     countedQty: number | null
   }>
+}
+
+type PutawayTaskRow = {
+  id: string
+  warehouseId: string
+  status: string
+  receivingSessionId: string | null
+  createdAt: string
+  lines: Array<{
+    id: string
+    skuId: string
+    batchId: string | null
+    quantity: number
+    suggestedBinCode: string | null
+    actualBinCode: string | null
+    status: string
+  }>
+}
+
+type LaborMetrics = {
+  since: string
+  totalEvents: number
+  byUser: Array<{ userId: string; picks: number; receives: number; putaways: number; packs: number }>
 }
 
 
@@ -218,6 +242,24 @@ export default function WarehousePage() {
     queryFn: () => api.get<CycleRow[]>('/wms/cycle-counts'),
   })
 
+  const putawayQ = useQuery({
+    queryKey: ['wms', 'putaway', 'tasks'],
+    enabled: tab === 'putaway',
+    queryFn: () => api.get<PutawayTaskRow[]>('/wms/putaway/tasks'),
+  })
+
+  const laborQ = useQuery({
+    queryKey: ['wms', 'labor', 'metrics'],
+    enabled: tab === 'labor',
+    queryFn: () => api.get<LaborMetrics>('/wms/labor/metrics?days=7'),
+  })
+
+  const confirmPutaway = useMutation({
+    mutationFn: async ({ taskId, lineId }: { taskId: string; lineId: string }) =>
+      api.patch(`/wms/putaway/tasks/${encodeURIComponent(taskId)}/lines/${encodeURIComponent(lineId)}`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['wms', 'putaway', 'tasks'] }),
+  })
+
   const countDetailQ = useQuery({
     queryKey: ['wms', 'cycle-counts', countDetailId],
     enabled: !!countDetailId,
@@ -340,7 +382,7 @@ export default function WarehousePage() {
       void qc.invalidateQueries({ queryKey: ['wms', 'cycle-counts'] })
       void qc.invalidateQueries({ queryKey: ['inventory'] })
       if (typeof res.adjustmentsPosted === 'number') {
-        alert(`Cycle count posted — ${res.adjustmentsPosted} stock adjustment(s) applied.`)
+        showToast(`Cycle count posted — ${res.adjustmentsPosted} stock adjustment(s) applied.`, 'success')
       }
       setCountDetailId(null)
     },
@@ -510,17 +552,17 @@ export default function WarehousePage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
           Warehouse
         </h1>
-        <p className="text-cosmos-text-3 text-sm mt-1">Pick tasks, wave picking, bin locations, receiving, and cycle counts</p>
+        <p className="text-pleros-text-3 text-sm mt-1">Pick tasks, wave picking, bin locations, receiving, and cycle counts</p>
       </div>
 
       {!warehousesQ.isLoading && !warehousesQ.isError && (warehousesQ.data ?? []).length === 0 ? (
-        <div className="cosmos-card flex flex-wrap items-center justify-between gap-4">
+        <div className="pleros-card flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="font-semibold text-cosmos-white">No warehouses configured</p>
-            <p className="text-sm text-cosmos-text-3 mt-1">
+            <p className="font-semibold text-pleros-white">No warehouses configured</p>
+            <p className="text-sm text-pleros-text-3 mt-1">
               Receiving, cycle counts, and warehouse filters need at least one location. Add one in Settings.
             </p>
           </div>
@@ -537,6 +579,8 @@ export default function WarehousePage() {
             ['waves', 'Wave picking'],
             ['bins', 'Bin locations'],
             ['receiving', 'Receiving'],
+            ['putaway', 'Putaway'],
+            ['labor', 'Labor'],
             ['counts', 'Cycle counts'],
           ] as const
         ).map(([k, label]) => (
@@ -564,7 +608,7 @@ export default function WarehousePage() {
                 Status
               </div>
               <select
-                className="cosmos-input w-auto min-w-[160px]"
+                className="pleros-input w-auto min-w-[160px]"
                 value={pickStatus}
                 onChange={(e) => setPickStatus(e.target.value)}
               >
@@ -580,7 +624,7 @@ export default function WarehousePage() {
                 Warehouse
               </div>
               <select
-                className="cosmos-input w-auto min-w-[200px]"
+                className="pleros-input w-auto min-w-[200px]"
                 value={pickWarehouseId}
                 onChange={(e) => setPickWarehouseId(e.target.value)}
               >
@@ -594,7 +638,7 @@ export default function WarehousePage() {
             </div>
           </div>
 
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {tasksQ.isLoading ? (
               <div className="space-y-2 py-4">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -608,7 +652,7 @@ export default function WarehousePage() {
             ) : (tasksQ.data ?? []).length === 0 ? (
               <EmptyState icon="🏭" title="No pick tasks" description="Tasks appear when orders are released to the warehouse." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Task</th>
@@ -690,7 +734,7 @@ export default function WarehousePage() {
                 Warehouse
               </div>
               <select
-                className="cosmos-input w-auto min-w-[200px]"
+                className="pleros-input w-auto min-w-[200px]"
                 value={waveWarehouseId}
                 onChange={(e) => setWaveWarehouseId(e.target.value)}
               >
@@ -714,7 +758,7 @@ export default function WarehousePage() {
               New pick wave
             </button>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {wavesQ.isLoading ? (
               <div className="space-y-2 py-4">
                 {[1, 2, 3].map((i) => (
@@ -739,7 +783,7 @@ export default function WarehousePage() {
                 }
               />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Wave</th>
@@ -799,11 +843,11 @@ export default function WarehousePage() {
               </table>
             )}
             {wavePathId && wavePathQ.data?.pickPath?.length ? (
-              <div className="cosmos-card mt-4">
-                <h3 className="text-sm font-semibold text-cosmos-white mb-3">
+              <div className="pleros-card mt-4">
+                <h3 className="text-sm font-semibold text-pleros-white mb-3">
                   Bin pick path · wave #{wavePathId.slice(-8)}
                 </h3>
-                <table className="cosmos-table text-sm">
+                <table className="pleros-table text-sm">
                   <thead>
                     <tr>
                       <th>Bin</th>
@@ -816,7 +860,7 @@ export default function WarehousePage() {
                   <tbody>
                     {wavePathQ.data.pickPath.map((line) => (
                       <tr key={line.lineId}>
-                        <td className="font-mono text-cosmos-accent">{line.binCode ?? '—'}</td>
+                        <td className="font-mono text-pleros-accent">{line.binCode ?? '—'}</td>
                         <td className="font-mono text-xs">…{line.skuId.slice(-6)}</td>
                         <td>{line.quantity}</td>
                         <td className="font-mono text-xs">…{line.orderId.slice(-6)}</td>
@@ -839,7 +883,7 @@ export default function WarehousePage() {
                 Warehouse
               </div>
               <select
-                className="cosmos-input w-auto min-w-[200px]"
+                className="pleros-input w-auto min-w-[200px]"
                 value={binWarehouseId}
                 onChange={(e) => setBinWarehouseId(e.target.value)}
               >
@@ -856,15 +900,15 @@ export default function WarehousePage() {
             <EmptyState icon="📦" title="Select a warehouse" description="Bin locations are scoped to a single warehouse." />
           ) : (
             <>
-              <div className="cosmos-card">
-                <h3 className="text-sm font-semibold text-cosmos-white mb-3">Add bin location</h3>
+              <div className="pleros-card">
+                <h3 className="text-sm font-semibold text-pleros-white mb-3">Add bin location</h3>
                 <div className="flex flex-wrap gap-3 items-end">
                   <div>
                     <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
                       Code
                     </label>
                     <input
-                      className="cosmos-input w-32"
+                      className="pleros-input w-32"
                       value={binCode}
                       onChange={(e) => setBinCode(e.target.value)}
                       placeholder="A-01-01"
@@ -874,14 +918,14 @@ export default function WarehousePage() {
                     <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
                       Aisle
                     </label>
-                    <input className="cosmos-input w-24" value={binAisle} onChange={(e) => setBinAisle(e.target.value)} />
+                    <input className="pleros-input w-24" value={binAisle} onChange={(e) => setBinAisle(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
                       Zone
                     </label>
                     <input
-                      className="cosmos-input w-24"
+                      className="pleros-input w-24"
                       value={binZone}
                       onChange={(e) => setBinZone(e.target.value)}
                       placeholder="PICK"
@@ -897,7 +941,7 @@ export default function WarehousePage() {
                   </button>
                 </div>
               </div>
-              <div className="cosmos-card overflow-x-auto">
+              <div className="pleros-card overflow-x-auto">
                 {binsQ.isLoading ? (
                   <div className="space-y-2 py-4">
                     {[1, 2, 3].map((i) => (
@@ -911,7 +955,7 @@ export default function WarehousePage() {
                 ) : (binsQ.data ?? []).length === 0 ? (
                   <EmptyState icon="📍" title="No bin locations" description="Create aisle/shelf codes for directed putaway and picking." />
                 ) : (
-                  <table className="cosmos-table">
+                  <table className="pleros-table">
                     <thead>
                       <tr>
                         <th>Code</th>
@@ -957,7 +1001,7 @@ export default function WarehousePage() {
               New session
             </button>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {sessionsQ.isLoading ? (
               <div className="space-y-2 py-4">
                 {[1, 2, 3].map((i) => (
@@ -980,7 +1024,7 @@ export default function WarehousePage() {
                 }
               />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Session</th>
@@ -1017,7 +1061,7 @@ export default function WarehousePage() {
                             disabled={completeRecvMut.isPending}
                             onClick={() => {
                               if ((s._count?.items ?? 0) < 1) {
-                                alert('Scan at least one item before completing.')
+                                showToast('Scan at least one item before completing.', 'error')
                                 return
                               }
                               completeRecvMut.mutate(s.id)
@@ -1036,6 +1080,114 @@ export default function WarehousePage() {
         </div>
       )}
 
+      {tab === 'putaway' && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+            Directed putaway tasks are created when receiving sessions complete. Confirm lines to assign stock to bins.
+          </p>
+          <div className="pleros-card overflow-x-auto">
+            {putawayQ.isLoading ? (
+              <div className="space-y-2 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="skeleton h-12 w-full" />
+                ))}
+              </div>
+            ) : (putawayQ.data ?? []).length === 0 ? (
+              <EmptyState
+                icon="📦"
+                title="No putaway tasks"
+                description="Complete a receiving session to generate putaway work."
+              />
+            ) : (
+              <table className="pleros-table">
+                <thead>
+                  <tr>
+                    <th>Task</th>
+                    <th>Warehouse</th>
+                    <th>Status</th>
+                    <th>Lines</th>
+                    <th>Suggested bin</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(putawayQ.data ?? []).flatMap((task) =>
+                    (task.lines ?? []).map((line) => (
+                      <tr key={line.id}>
+                        <td className="font-mono text-xs">{task.id.slice(-10)}</td>
+                        <td className="text-sm">{warehouseLabel.get(task.warehouseId) ?? task.warehouseId.slice(-6)}</td>
+                        <td>
+                          <StatusBadge status={line.status} />
+                        </td>
+                        <td className="font-mono text-xs">
+                          {line.skuId.slice(-8)} × {line.quantity}
+                          {line.batchId ? ` · ${line.batchId}` : ''}
+                        </td>
+                        <td className="font-mono text-sm">{line.suggestedBinCode ?? '—'}</td>
+                        <td>
+                          {line.status === 'PENDING' ? (
+                            <button
+                              type="button"
+                              className="btn-ghost !py-1.5 !px-2 !text-xs"
+                              disabled={confirmPutaway.isPending}
+                              onClick={() => confirmPutaway.mutate({ taskId: task.id, lineId: line.id })}
+                            >
+                              Confirm
+                            </button>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'var(--c-text-3)' }}>
+                              {line.actualBinCode ?? 'Done'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'labor' && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+            Warehouse productivity for the last 7 days (picks, receives, putaways, packs).
+          </p>
+          <div className="pleros-card overflow-x-auto">
+            {laborQ.isLoading ? (
+              <div className="skeleton h-24 w-full" />
+            ) : (laborQ.data?.byUser ?? []).length === 0 ? (
+              <EmptyState icon="📊" title="No labor events" description="Pick, receive, and putaway activity will appear here." />
+            ) : (
+              <table className="pleros-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Picks</th>
+                    <th>Receives</th>
+                    <th>Putaways</th>
+                    <th>Packs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(laborQ.data?.byUser ?? []).map((row) => (
+                    <tr key={row.userId}>
+                      <td className="text-sm">{userLabel.get(row.userId) ?? row.userId.slice(-8)}</td>
+                      <td>{row.picks}</td>
+                      <td>{row.receives}</td>
+                      <td>{row.putaways}</td>
+                      <td>{row.packs}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       {tab === 'counts' && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -1043,7 +1195,7 @@ export default function WarehousePage() {
               New count
             </button>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {countsQ.isLoading ? (
               <div className="space-y-2 py-4">
                 {[1, 2, 3].map((i) => (
@@ -1066,7 +1218,7 @@ export default function WarehousePage() {
                 }
               />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Count ID</th>
@@ -1119,11 +1271,11 @@ export default function WarehousePage() {
           onClick={() => setWaveDrawerOpen(false)}
         >
           <div
-            className="w-full max-w-lg h-full overflow-y-auto cosmos-card rounded-none border-l"
+            className="w-full max-w-lg h-full overflow-y-auto pleros-card rounded-none border-l"
             style={{ borderRadius: 0 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-2">New pick wave</h3>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-2">New pick wave</h3>
             <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>
               {warehouseLabel.get(waveWarehouseId) ?? waveWarehouseId}
             </p>
@@ -1188,12 +1340,12 @@ export default function WarehousePage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setAssignTaskId(null)}
         >
-          <div className="cosmos-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-4">Assign pick task</h3>
+          <div className="pleros-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-4">Assign pick task</h3>
             <label className="block text-sm mb-2" style={{ color: 'var(--c-text-2)' }}>
               Warehouse staff
             </label>
-            <select className="cosmos-input mb-4" value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}>
+            <select className="pleros-input mb-4" value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}>
               <option value="">Unassigned</option>
               {staffUsers.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -1230,10 +1382,10 @@ export default function WarehousePage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setDetailTask(null)}
         >
-          <div className="cosmos-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between gap-4 mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-cosmos-white font-display">Pick task #{detailTask.id.slice(-8)}</h3>
+                <h3 className="text-lg font-semibold text-pleros-white font-display">Pick task #{detailTask.id.slice(-8)}</h3>
                 <p className="text-sm mt-1 font-mono" style={{ color: 'var(--c-text-3)' }}>
                   Order …{detailTask.orderId.slice(-12)}
                 </p>
@@ -1243,7 +1395,7 @@ export default function WarehousePage() {
             <p className="text-sm mb-4" style={{ color: 'var(--c-text-2)' }}>
               {detailTask.warehouseCode} · Priority {detailTask.priority}
             </p>
-            <table className="cosmos-table">
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>Line</th>
@@ -1277,12 +1429,12 @@ export default function WarehousePage() {
       {/* New receiving drawer */}
       {recvDrawer && (
         <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setRecvDrawer(false)}>
-          <div className="w-full max-w-md h-full overflow-y-auto cosmos-card rounded-none border-l" style={{ borderRadius: 0 }} onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-4">New receiving session</h3>
+          <div className="w-full max-w-md h-full overflow-y-auto pleros-card rounded-none border-l" style={{ borderRadius: 0 }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-4">New receiving session</h3>
             <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
               Warehouse
             </label>
-            <select className="cosmos-input mb-4" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
+            <select className="pleros-input mb-4" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
               <option value="">Select…</option>
               {(warehousesQ.data ?? []).map((w) => (
                 <option key={w.id} value={w.id}>
@@ -1293,7 +1445,7 @@ export default function WarehousePage() {
             <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
               PO id (optional)
             </label>
-            <input className="cosmos-input mb-4" value={recvPo} onChange={(e) => setRecvPo(e.target.value)} placeholder="Purchase order id" />
+            <input className="pleros-input mb-4" value={recvPo} onChange={(e) => setRecvPo(e.target.value)} placeholder="Purchase order id" />
             <button
               type="button"
               className="btn-primary w-full"
@@ -1313,10 +1465,10 @@ export default function WarehousePage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setRecvDetailId(null)}
         >
-          <div className="cosmos-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start gap-4 mb-2">
               <div>
-                <h3 className="text-lg font-semibold text-cosmos-white font-display">Session #{recvDetailQ.data.id.slice(-8)}</h3>
+                <h3 className="text-lg font-semibold text-pleros-white font-display">Session #{recvDetailQ.data.id.slice(-8)}</h3>
                 <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
                   {warehouseLabel.get(recvDetailQ.data.warehouseId)}
                 </p>
@@ -1341,7 +1493,7 @@ export default function WarehousePage() {
                 />
               </div>
             )}
-            <table className="cosmos-table">
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>SKU</th>
@@ -1372,7 +1524,7 @@ export default function WarehousePage() {
                   disabled={completeRecvMut.isPending || (recvDetailQ.data.items?.length ?? 0) < 1}
                   onClick={() => {
                     if ((recvDetailQ.data.items?.length ?? 0) < 1) {
-                      alert('Scan at least one line item before completing.')
+                      showToast('Scan at least one line item before completing.', 'error')
                       return
                     }
                     completeRecvMut.mutate(recvDetailQ.data.id)
@@ -1386,11 +1538,11 @@ export default function WarehousePage() {
         </div>
       )}
 
-      <CosmosSheet open={countDrawerOpen} onOpenChange={setCountDrawerOpen} title="New cycle count">
+      <PlerosSheet open={countDrawerOpen} onOpenChange={setCountDrawerOpen} title="New cycle count">
         <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
           Warehouse
         </label>
-        <select className="cosmos-input mb-4" value={countWh} onChange={(e) => setCountWh(e.target.value)}>
+        <select className="pleros-input mb-4" value={countWh} onChange={(e) => setCountWh(e.target.value)}>
           <option value="">Select…</option>
           {(warehousesQ.data ?? []).map((w) => (
             <option key={w.id} value={w.id}>
@@ -1402,7 +1554,7 @@ export default function WarehousePage() {
           Type
         </label>
         <select
-          className="cosmos-input mb-4"
+          className="pleros-input mb-4"
           value={countType}
           onChange={(e) => setCountType(e.target.value as 'FULL' | 'ABC' | 'RANDOM')}
         >
@@ -1413,10 +1565,9 @@ export default function WarehousePage() {
         <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
           Scheduled date (optional)
         </label>
-        <input type="date" className="cosmos-input mb-4" value={countScheduled} onChange={(e) => setCountScheduled(e.target.value)} />
+        <input type="date" className="pleros-input mb-4" value={countScheduled} onChange={(e) => setCountScheduled(e.target.value)} />
         <p className="text-xs mb-4" style={{ color: 'var(--c-text-3)' }}>
-          Creates a count via POST /wms/cycle-counts. Lines are seeded from inventory levels for this warehouse when the
-          integration is configured.
+          Creates a cycle count for this warehouse. Lines are seeded from current inventory levels when available.
         </p>
         <button
           type="button"
@@ -1426,9 +1577,9 @@ export default function WarehousePage() {
         >
           Create
         </button>
-      </CosmosSheet>
+      </PlerosSheet>
 
-      <CosmosDialogModal
+      <PlerosDialogModal
         open={!!countDetailId}
         onOpenChange={(o) => {
           if (!o) setCountDetailId(null)
@@ -1483,7 +1634,7 @@ export default function WarehousePage() {
           <>
             <div className="flex justify-between gap-4 mb-4 flex-wrap">
               <div>
-                <p className="text-sm font-mono text-cosmos-accent break-all">{countDetailQ.data.id}</p>
+                <p className="text-sm font-mono text-pleros-accent break-all">{countDetailQ.data.id}</p>
                 <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
                   {warehouseLabel.get(countDetailQ.data.warehouseId)} · {countDetailQ.data.type}
                 </p>
@@ -1511,7 +1662,7 @@ export default function WarehousePage() {
               </p>
             ) : (
               <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
-                <table className="cosmos-table text-sm">
+                <table className="pleros-table text-sm">
                   <thead>
                     <tr>
                       <th>SKU</th>
@@ -1539,7 +1690,7 @@ export default function WarehousePage() {
                             {inProgress ? (
                               <input
                                 type="number"
-                                className="cosmos-input !py-1.5 !text-sm w-24"
+                                className="pleros-input !py-1.5 !text-sm w-24"
                                 value={countLineDrafts[ln.id] ?? ''}
                                 onChange={(e) =>
                                   setCountLineDrafts((prev) => ({ ...prev, [ln.id]: e.target.value }))
@@ -1577,7 +1728,7 @@ export default function WarehousePage() {
             )}
           </>
         ) : null}
-      </CosmosDialogModal>
+      </PlerosDialogModal>
     </div>
   )
 }

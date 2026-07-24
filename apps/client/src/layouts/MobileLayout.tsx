@@ -1,7 +1,9 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { CosmosLogo } from '@/components/cosmos-logo'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { RequireMobileAuth } from '@/components/auth/require-mobile-auth'
 import { OfflineSyncRunner } from '@/components/mobile/offline-sync-runner'
+import { ThemeSwitcher } from '@/components/theme-switcher'
+import { signOut } from '@/lib/auth-session'
 
 const TABS = [
   { href: '/m/warehouse', label: 'Warehouse' },
@@ -27,34 +29,41 @@ function MobileShell() {
   const { pathname } = useLocation()
 
   return (
-    <div className="cosmos-mobile">
-      <header className="cosmos-mobile-header">
-        <Link to="/" className="cosmos-mobile-back">
+    <div className="pleros-mobile">
+      <header className="pleros-mobile-header">
+        <Link to="/" className="pleros-mobile-back">
           ← Hub
         </Link>
-        <Link to="/m/warehouse" className="cosmos-mobile-brand" title="Cosmos Mobile">
-          <CosmosLogo variant="mark" size="sm" />
+        <Link to="/m/warehouse" className="pleros-mobile-brand" title="Pleros Mobile">
+          <PlerosLogo variant="mark" size="sm" />
           <span>Mobile</span>
         </Link>
-        <Link to="/m/login" className="cosmos-mobile-back">
-          Sign in
-        </Link>
+        <div className="pleros-mobile-header-actions">
+          <ThemeSwitcher compact />
+          <button
+            type="button"
+            className="pleros-mobile-back pleros-mobile-signout"
+            onClick={() => void signOut({ redirectTo: '/m/login' })}
+          >
+            Sign out
+          </button>
+        </div>
       </header>
-      <nav className="cosmos-mobile-nav">
+      <nav className="pleros-mobile-nav">
         {TABS.map((t) => {
           const active = pathname === t.href || pathname.startsWith(`${t.href}/`)
           return (
             <Link
               key={t.href}
               to={t.href}
-              className={`cosmos-mobile-tab${active ? ' cosmos-mobile-tab--active' : ''}`}
+              className={`pleros-mobile-tab${active ? ' pleros-mobile-tab--active' : ''}`}
             >
               {t.label}
             </Link>
           )
         })}
       </nav>
-      <main className="cosmos-mobile-main">
+      <main className="pleros-mobile-main">
         <OfflineSyncRunner />
         <Outlet />
       </main>

@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cosmos-config
-  namespace: cosmos
+  name: pleros-config
+  namespace: pleros
 data:
   NODE_ENV: "production"
   LOG_LEVEL: "info"
   NEXT_PUBLIC_GATEWAY_URL: "/api/v1"
-  COSMOS_OTEL_ENABLED: "false"
+  PLEROS_OTEL_ENABLED: "false"

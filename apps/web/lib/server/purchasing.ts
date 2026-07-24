@@ -10,7 +10,11 @@ export type CreatePurchaseOrderInput = {
   supplierId: string
   number: string
   notes?: string
-  lines: Array<{ lineNo: number; skuCode?: string; description: string; qtyOrdered: number }>
+  freightAmount?: number
+  dutyAmount?: number
+  otherLandedAmount?: number
+  landedCostNotes?: string
+  lines: Array<{ lineNo: number; skuCode?: string; description: string; qtyOrdered: number; unitCost?: number }>
 }
 
 export type ReceiveGoodsInput = {
@@ -51,6 +55,10 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
       supplierId: dto.supplierId,
       number: dto.number,
       notes: dto.notes,
+      freightAmount: new Prisma.Decimal(dto.freightAmount ?? 0),
+      dutyAmount: new Prisma.Decimal(dto.dutyAmount ?? 0),
+      otherLandedAmount: new Prisma.Decimal(dto.otherLandedAmount ?? 0),
+      landedCostNotes: dto.landedCostNotes ?? null,
       status: PurchaseOrderStatus.DRAFT,
       lines: {
         create: dto.lines.map((l) => ({
@@ -58,6 +66,7 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
           skuCode: l.skuCode,
           description: l.description,
           qtyOrdered: l.qtyOrdered,
+          ...(l.unitCost != null ? { unitCost: new Prisma.Decimal(l.unitCost) } : {}),
         })),
       },
     },
@@ -103,6 +112,55 @@ export async function receiveGoods(
     ...result.purchaseOrder,
     inventoryErrors: result.inventoryErrors,
   }
+}
+
+export async function updatePurchaseOrderLandedCosts(
+  tenantId: string,
+  id: string,
+  patch: {
+    freightAmount?: number
+    dutyAmount?: number
+    otherLandedAmount?: number
+    landedCostNotes?: string | null
+  },
+) {
+  const po = await getPurchaseOrder(tenantId, id)
+  if (po.status === PurchaseOrderStatus.CANCELLED || po.status === PurchaseOrderStatus.CLOSED) {
+    throw new ApiError(400, 'Cannot update landed costs on a closed/cancelled PO')
+  }
+  return purchasingDb.purchaseOrder.update({
+    where: { id },
+    data: {
+      ...(patch.freightAmount !== undefined ? { freightAmount: new Prisma.Decimal(patch.freightAmount) } : {}),
+      ...(patch.dutyAmount !== undefined ? { dutyAmount: new Prisma.Decimal(patch.dutyAmount) } : {}),
+      ...(patch.otherLandedAmount !== undefined
+        ? { otherLandedAmount: new Prisma.Decimal(patch.otherLandedAmount) }
+        : {}),
+      ...(patch.landedCostNotes !== undefined ? { landedCostNotes: patch.landedCostNotes } : {}),
+    },
+    include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
+  })
+}
+
+export async function getPurchaseOrderLandedCostPreview(tenantId: string, id: string) {
+  const po = await getPurchaseOrder(tenantId, id)
+  const { totalLandedCharges, allocateLandedCostPerUnit } = await import('./landed-cost')
+  const total = totalLandedCharges(po)
+  const lines = po.lines.map((line) => {
+    const qty = Math.max(line.qtyOrdered - line.qtyReceived, 1)
+    const base = line.unitCost != null ? Number(line.unitCost) : 0
+    const { landedAdderPerUnit, lineLandedTotal } = allocateLandedCostPerUnit(po, line.id, qty)
+    return {
+      lineId: line.id,
+      lineNo: line.lineNo,
+      skuCode: line.skuCode,
+      baseUnitCost: base,
+      landedAdderPerUnit: Math.round(landedAdderPerUnit * 10000) / 10000,
+      landedUnitCost: Math.round((base + landedAdderPerUnit) * 10000) / 10000,
+      lineLandedTotal: Math.round(lineLandedTotal * 100) / 100,
+    }
+  })
+  return { purchaseOrderId: id, totalLandedCharges: total, lines }
 }
 
 export async function recordPurchaseOrderPayment(

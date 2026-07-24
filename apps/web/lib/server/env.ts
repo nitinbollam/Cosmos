@@ -8,7 +8,7 @@ export function jwtRefreshSecret(): string {
   return process.env.JWT_REFRESH_SECRET?.trim() || jwtSecret()
 }
 
-/** Build a Postgres URL for a logical Cosmos database on the same host as `baseUrl` (production / scaled dev). */
+/** Build a Postgres URL for a logical Pleros database on the same host as `baseUrl` (production / scaled dev). */
 export function databaseUrlForDb(baseUrl: string, dbName: string): string {
   try {
     const u = new URL(baseUrl)

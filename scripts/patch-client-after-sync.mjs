@@ -34,7 +34,7 @@ walk(clientSrc, (f) => {
 })
 
 fs.writeFileSync(
-  path.join(clientSrc, 'components', 'cosmos-img.tsx'),
+  path.join(clientSrc, 'components', 'pleros-img.tsx'),
   `type ImgProps = {
   src: string
   alt: string
@@ -53,7 +53,7 @@ export default function Image({ src, alt, width, height, className, style }: Img
 
 fs.writeFileSync(
   path.join(clientSrc, 'lib', 'api.ts'),
-  `import { createGatewayApi, DEFAULT_GATEWAY_PATH } from '@cosmos/web-gateway-client'
+  `import { createGatewayApi, DEFAULT_GATEWAY_PATH } from '@pleros/web-gateway-client'
 
 const { api, gatewayApiBaseUrl, formatApiReachabilityError } = createGatewayApi({
   baseUrl: import.meta.env.VITE_GATEWAY_URL ?? DEFAULT_GATEWAY_PATH,
@@ -67,7 +67,7 @@ export { api, gatewayApiBaseUrl, formatApiReachabilityError }
 
 fs.writeFileSync(
   path.join(clientSrc, 'lib', 'api-admin.ts'),
-  `import { createGatewayApi, DEFAULT_GATEWAY_PATH } from '@cosmos/web-gateway-client'
+  `import { createGatewayApi, DEFAULT_GATEWAY_PATH } from '@pleros/web-gateway-client'
 
 const { api, gatewayApiBaseUrl, formatApiReachabilityError } = createGatewayApi({
   baseUrl: import.meta.env.VITE_GATEWAY_URL ?? DEFAULT_GATEWAY_PATH,

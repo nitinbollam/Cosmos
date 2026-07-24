@@ -1,20 +1,46 @@
-# Cosmos Platform Overview (LLM Knowledge Base)
+# Pleros Platform Overview (LLM Knowledge Base)
 
-This document helps Celestial and other AI assistants answer questions about Cosmos — a wholesale ERP and distribution platform for SMB distributors.
+This document helps Celestial and other AI assistants answer questions about Pleros — a wholesale ERP and distribution platform for SMB distributors.
 
-**Keywords:** Cosmos, ERP, distribution, wholesale, B2B, platform overview, what is Cosmos, modules, features
+**Keywords:** Pleros, ERP, distribution, wholesale, B2B, platform overview, what is Pleros, how Pleros works, modules, features, plain language
 
 ---
 
-## What is Cosmos?
+## How Pleros works (plain language)
 
-Cosmos is a production-oriented **ERP and distribution platform** for small and medium wholesalers. It covers the full wholesale lifecycle: product catalog, inventory and warehouses, sales orders, fulfillment and picking, purchasing, CRM, delivery dispatch, compliance (MSA), finance (AR/AP/GL), a buyer-facing B2B portal, mobile field apps, and an AI assistant called **Celestial**.
+Pleros is software that helps a **wholesale or distribution business** run day to day — from taking orders to getting paid.
+
+**The big picture:**
+
+1. **Customers order products** — Business buyers use an online catalog and checkout; your team can also enter orders in the office or ring up walk-in sales at the **Point of Sale** counter.
+2. **You fulfill from the warehouse** — Staff pick items (often guided by bin locations), pack orders, and mark them ready to ship. Mobile apps help warehouse teams scan and pick on the floor.
+3. **You deliver** — Drivers follow routes, update stops, and capture proof of delivery on a phone app.
+4. **You get paid** — Invoices go out when orders ship; customers pay online or on terms. Finance tracks money in (customer invoices) and money out (supplier bills).
+5. **You stay stocked** — Inventory shows what you have at each warehouse; purchasing brings in more from suppliers when you receive goods.
+
+**Who uses what:**
+
+| Role | What they use Pleros for |
+|------|--------------------------|
+| **Office / admin staff** | Orders, inventory, purchasing, customers, finance, settings |
+| **Warehouse team** | Picking, receiving shipments, cycle counts (phone or tablet app) |
+| **Drivers** | Delivery routes and proof of delivery (phone app) |
+| **Field sales** | Leads, customers, and visit notes (phone app) |
+| **B2B buyers** | Browse catalog, place orders, pay invoices, track shipments |
+
+**Celestial (this assistant)** can answer questions about how features work and look up your live orders, stock, and warehouses — in everyday language.
+
+---
+
+## What is Pleros?
+
+Pleros is a production-oriented **ERP and distribution platform** for small and medium wholesalers. It covers the full wholesale lifecycle: product catalog, inventory and warehouses, sales orders, fulfillment and picking, purchasing, CRM, delivery dispatch, compliance (MSA), finance (AR/AP/GL), a buyer-facing B2B portal, mobile field apps, and an AI assistant called **Celestial**.
 
 **Stack:** React 19 + Vite (UI), Express + Prisma + SQLite (API), npm workspaces monorepo.
 
 **Single-port dev:** UI and API both run on **http://localhost:4000**.
 
-**Demo tenant:** Cosmos Demo Distributors (slug `demo`).
+**Demo tenant:** Pleros Demo Distributors (slug `demo`).
 
 ---
 
@@ -36,7 +62,7 @@ Cosmos is a production-oriented **ERP and distribution platform** for small and 
 
 ## User surfaces and URLs
 
-Cosmos has four main surfaces. Each has its own login and role model.
+Pleros has four main surfaces. Each has its own login and role model.
 
 | Surface | URL prefix | Who uses it | Login |
 |---------|------------|-------------|-------|
@@ -72,7 +98,7 @@ Admin sidebar navigation is defined in `apps/client/src/components/layout/sideba
 
 ## Order status lifecycle
 
-Orders move through these statuses in Cosmos:
+Orders move through these statuses in Pleros:
 
 1. **PENDING** — Created, awaiting confirmation
 2. **CONFIRMED** — Accepted; inventory may be allocated
@@ -116,11 +142,11 @@ Admin actions: confirm, cancel, fulfill on `/admin/orders/:id`. Returns via **Pr
 
 | Role | Email | Password | URL |
 |------|-------|----------|-----|
-| Admin | `admin@cosmos.local` | `admin1234` | `/admin/login` |
+| Admin | `admin@pleros.local` | `admin1234` | `/admin/login` |
 | B2B buyer (Acme Retail) | `buyer@acme-retail.com` | `buyer1234` | `/login` |
-| Driver | `driver@cosmos.local` | `driver1234` | `/m/delivery` |
-| Warehouse | `warehouse@cosmos.local` | `warehouse1234` | `/m/warehouse` |
-| Sales | `sales@cosmos.local` | `sales1234` | `/m/sales` |
+| Driver | `driver@pleros.local` | `driver1234` | `/m/delivery` |
+| Warehouse | `warehouse@pleros.local` | `warehouse1234` | `/m/warehouse` |
+| Sales | `sales@pleros.local` | `sales1234` | `/m/sales` |
 
 Seed includes demo SKUs, orders (multiple statuses), invoices, quotes, POs, fulfillment tasks, dispatch route, MSA report, warehouses (MAIN, EAST), bin locations, pick waves, and KPI snapshots.
 
@@ -141,7 +167,7 @@ Open **http://localhost:4000**. `npm run dev` syncs root `.env` to `apps/web/.en
 
 ## Glossary and acronyms
 
-| Term | Meaning in Cosmos |
+| Term | Meaning in Pleros |
 |------|-------------------|
 | **AR** | Accounts Receivable — customer invoices, balance due |
 | **AP** | Accounts Payable — vendor bills from purchase orders |
@@ -158,6 +184,6 @@ Open **http://localhost:4000**. `npm run dev` syncs root `.env` to `apps/web/.en
 | **Volume pricing** | Quantity tier breaks for a customer |
 | **Wave picking** | Grouping pick tasks into waves with bin-sorted pick path |
 | **Bin location** | Physical warehouse slot (e.g. A-01-01) for directed picking |
-| **Celestial** | Cosmos AI assistant (RAG + live data tools) |
+| **Celestial** | Pleros AI assistant (RAG + live data tools) |
 | **Tenant** | Isolated company instance; all data is tenant-scoped |
 | **Buyer scoping** | Portal users only see their CRM customer’s orders/invoices/quotes |

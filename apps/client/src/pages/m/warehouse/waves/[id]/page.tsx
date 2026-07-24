@@ -79,14 +79,14 @@ export default function WarehouseWaveDetailPage() {
   return (
     <div>
       <OfflineBanner />
-      <Link to="/m/warehouse" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+      <Link to="/m/warehouse" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Warehouse
       </Link>
       {loading ? <p style={{ opacity: 0.6, marginTop: 16 }}>Loading…</p> : null}
       {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13, marginTop: 12 }}>{err}</p> : null}
       {wave ? (
         <div style={{ marginTop: 16 }}>
-          <h1 style={{ margin: '0 0 8px', fontSize: '1.25rem', fontFamily: 'var(--font-syne)' }}>
+          <h1 style={{ margin: '0 0 8px', fontSize: '1.25rem', fontFamily: 'var(--font-display)' }}>
             Wave #{wave.id.slice(-8)}
           </h1>
           <p style={{ margin: 0, fontSize: 13, opacity: 0.75 }}>
@@ -113,7 +113,7 @@ export default function WarehouseWaveDetailPage() {
               <Link
                 key={line.lineId}
                 to={`/m/warehouse/task/${line.taskId}`}
-                className="cosmos-mobile-card"
+                className="pleros-mobile-card"
                 style={{ display: 'block', color: 'inherit', textDecoration: 'none', marginBottom: 8 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -137,7 +137,7 @@ export default function WarehouseWaveDetailPage() {
               <Link
                 key={taskId}
                 to={`/m/warehouse/task/${taskId}`}
-                className="cosmos-mobile-card"
+                className="pleros-mobile-card"
                 style={{ display: 'block', color: 'inherit', textDecoration: 'none', marginBottom: 10 }}
               >
                 <strong style={{ fontSize: 14 }}>Task …{taskId.slice(-8)}</strong>

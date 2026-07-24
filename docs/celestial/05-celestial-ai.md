@@ -8,11 +8,11 @@ Complete reference for the Celestial AI copilot — how it works, what it can an
 
 ## What is Celestial?
 
-Celestial is Cosmos's built-in **AI assistant** (Tier 15). It answers questions about how Cosmos works and queries **live tenant data** (orders, warehouses, invoices, catalog, etc.).
+Celestial is Pleros's built-in **AI assistant** (Tier 15). It answers questions about how Pleros works and queries **live tenant data** (orders, warehouses, invoices, catalog, etc.).
 
 **Surfaces:**
 - **Admin full page:** `/admin/celestial`
-- **Floating ✦ panel** on admin and shop layouts (shared chat history via Zustand store `cosmos-celestial-v1`)
+- **Floating ✦ panel** on admin and shop layouts (shared chat history via Zustand store `pleros-celestial-v1`)
 - **Buyer portal:** same floating panel on shop pages (buyer-scoped data only)
 
 **Feature flag:** Requires `celestial` enabled in Settings → Features.
@@ -111,7 +111,7 @@ Retrieval uses keyword + acronym scoring (POS, WMS, AR, AP, ERP, MSA, etc.) with
 - "Search catalog for energy drinks"
 
 **How-to / documentation:**
-- "How does POS work in Cosmos?"
+- "How does POS work in Pleros?"
 - "Explain the order fulfillment workflow"
 - "What is wave picking?"
 - "How do I process a return?"
@@ -119,16 +119,16 @@ Retrieval uses keyword + acronym scoring (POS, WMS, AR, AP, ERP, MSA, etc.) with
 - "How does contract pricing work?"
 
 **General:**
-- "What modules does Cosmos have?"
+- "What modules does Pleros have?"
 - "What are the demo login credentials?"
-- "How do I run Cosmos locally?"
+- "How do I run Pleros locally?"
 
 ---
 
 ## Conversation persistence
 
 - Conversations stored in analytics DB: `CelestialConversation`, `CelestialMessage`
-- Client store persists messages in localStorage (`cosmos-celestial-v1`) across routes
+- Client store persists messages in localStorage (`pleros-celestial-v1`) across routes
 - Audit log records `celestial.chat` events
 
 ---

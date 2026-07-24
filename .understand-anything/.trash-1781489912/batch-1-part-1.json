@@ -1,0 +1,737 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/client/src/components/checkout-card-capture.tsx",
+      "type": "file",
+      "name": "checkout-card-capture.tsx",
+      "filePath": "apps/client/src/components/checkout-card-capture.tsx",
+      "summary": "Provides the StorefrontCardCapture React component that integrates with Stripe Elements to collect, validate, and tokenize credit card details at checkout.",
+      "tags": ["component", "payment", "stripe", "utility"],
+      "complexity": "moderate",
+      "languageNotes": "Uses Stripe's useStripe and useElements hooks with useCallback for form submission; no project-internal imports."
+    },
+    {
+      "id": "function:apps/client/src/components/checkout-card-capture.tsx:StorefrontCardCapture",
+      "type": "function",
+      "name": "StorefrontCardCapture",
+      "filePath": "apps/client/src/components/checkout-card-capture.tsx",
+      "lineRange": [17, 75],
+      "summary": "React component that renders a Stripe card input field and a save button; creates a Stripe PaymentMethod and returns its ID via a callback prop.",
+      "tags": ["component", "payment", "stripe"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "type": "file",
+      "name": "offline-banner.tsx",
+      "filePath": "apps/client/src/components/mobile/offline-banner.tsx",
+      "summary": "Displays an offline status banner for mobile pages, showing pending queue length and providing a manual sync button that calls the offline queue replay logic.",
+      "tags": ["component", "mobile", "offline", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/components/mobile/offline-banner.tsx:OfflineBanner",
+      "type": "function",
+      "name": "OfflineBanner",
+      "filePath": "apps/client/src/components/mobile/offline-banner.tsx",
+      "lineRange": [5, 70],
+      "summary": "React component that listens to online/offline browser events and queue-change events, then renders connectivity status and a sync trigger button.",
+      "tags": ["component", "mobile", "offline", "event-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/mobile/offline-sync-runner.tsx",
+      "type": "file",
+      "name": "offline-sync-runner.tsx",
+      "filePath": "apps/client/src/components/mobile/offline-sync-runner.tsx",
+      "summary": "Minimal headless component that registers offline sync event listeners on mount; intended for use inside MobileLayout to set up background sync.",
+      "tags": ["component", "mobile", "offline", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/components/status-badge.tsx",
+      "type": "file",
+      "name": "status-badge.tsx",
+      "filePath": "apps/client/src/components/status-badge.tsx",
+      "summary": "Renders a color-coded badge for ERP document statuses (orders, invoices, quotes) by mapping status strings to Tailwind CSS color classes.",
+      "tags": ["component", "utility", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/components/status-badge.tsx:StatusBadge",
+      "type": "function",
+      "name": "StatusBadge",
+      "filePath": "apps/client/src/components/status-badge.tsx",
+      "lineRange": [12, 36],
+      "summary": "React component that receives a status string and renders a styled span with color mapping for various ERP document lifecycle states.",
+      "tags": ["component", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "file",
+      "name": "api-mobile.ts",
+      "filePath": "apps/client/src/lib/api.ts",
+      "summary": "Exports a pre-configured axios instance and helpers (api, gatewayApiBaseUrl, formatApiReachabilityError) for use in the mobile sub-application.",
+      "tags": ["utility", "api-handler", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/api.ts",
+      "type": "file",
+      "name": "api.ts",
+      "filePath": "apps/client/src/lib/api.ts",
+      "summary": "Exports a pre-configured axios instance (api) and associated helpers (gatewayApiBaseUrl, formatApiReachabilityError) used throughout the storefront client for API calls.",
+      "tags": ["utility", "api-handler", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/axios-error.ts",
+      "type": "file",
+      "name": "axios-error.ts",
+      "filePath": "apps/client/src/lib/axios-error.ts",
+      "summary": "Provides two utility functions: axiosErr for extracting a user-readable message from axios errors, and isUnauthorized for detecting 401 responses.",
+      "tags": ["utility", "validation", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/lib/axios-error.ts:axiosErr",
+      "type": "function",
+      "name": "axiosErr",
+      "filePath": "apps/client/src/lib/axios-error.ts",
+      "lineRange": [4, 12],
+      "summary": "Extracts a human-readable error message from an axios error response, handling array and string message formats.",
+      "tags": ["utility", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/lib/axios-error.ts:isUnauthorized",
+      "type": "function",
+      "name": "isUnauthorized",
+      "filePath": "apps/client/src/lib/axios-error.ts",
+      "lineRange": [14, 16],
+      "summary": "Returns true when an error is an axios 401 Unauthorized response, used to trigger re-authentication flows.",
+      "tags": ["utility", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/lib/b2b-cart.ts",
+      "type": "file",
+      "name": "b2b-cart.ts",
+      "filePath": "apps/client/src/lib/b2b-cart.ts",
+      "summary": "Implements a localStorage-backed B2B quote cart with typed line-item validation, CRUD helpers, and a custom storage event to notify other components of cart changes.",
+      "tags": ["utility", "data-model", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/b2b-cart.ts:readCart",
+      "type": "function",
+      "name": "readCart",
+      "filePath": "apps/client/src/lib/b2b-cart.ts",
+      "lineRange": [10, 37],
+      "summary": "Reads and validates B2B cart line items from localStorage, returning a typed array with sanitized skuCode, description, qty, and unitPrice fields.",
+      "tags": ["utility", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/b2b-cart.ts:addToCart",
+      "type": "function",
+      "name": "addToCart",
+      "filePath": "apps/client/src/lib/b2b-cart.ts",
+      "lineRange": [52, 67],
+      "summary": "Adds a line item to the B2B cart or increments its quantity if the SKU already exists, then persists via writeCart.",
+      "tags": ["utility", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/lib/offline-queue.ts",
+      "type": "file",
+      "name": "offline-queue.ts",
+      "filePath": "apps/client/src/lib/offline-queue.ts",
+      "summary": "Manages a localStorage-backed queue of offline actions (delivery/warehouse events) with UUID-stamped entries, providing enqueue, remove, clear, and length helpers.",
+      "tags": ["utility", "service", "mobile"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/offline-queue.ts:enqueueAction",
+      "type": "function",
+      "name": "enqueueAction",
+      "filePath": "apps/client/src/lib/offline-queue.ts",
+      "lineRange": [24, 34],
+      "summary": "Appends a new typed action with a UUID and ISO timestamp to the offline queue in localStorage and dispatches a storage event to notify components.",
+      "tags": ["utility", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/lib/offline-sync.ts",
+      "type": "file",
+      "name": "offline-sync.ts",
+      "filePath": "apps/client/src/lib/offline-sync.ts",
+      "summary": "Replays queued offline actions against the mobile API when connectivity is restored, and provides registerOfflineSyncListeners to hook into online/service-worker events.",
+      "tags": ["utility", "service", "mobile"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/offline-sync.ts:replayOfflineQueue",
+      "type": "function",
+      "name": "replayOfflineQueue",
+      "filePath": "apps/client/src/lib/offline-sync.ts",
+      "lineRange": [24, 39],
+      "summary": "Reads all queued offline actions and replays each against the mobile API, removing successfully processed actions from the queue.",
+      "tags": ["utility", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/lib/offline-sync.ts:registerOfflineSyncListeners",
+      "type": "function",
+      "name": "registerOfflineSyncListeners",
+      "filePath": "apps/client/src/lib/offline-sync.ts",
+      "lineRange": [41, 54],
+      "summary": "Registers event listeners on the window online event and service worker messages to automatically trigger offline queue replay when connectivity is restored.",
+      "tags": ["utility", "service", "event-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/account/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/account/page.tsx",
+      "summary": "The customer account management page allowing users to view and update their profile, address, notification preferences, saved payment cards, and B2B order templates.",
+      "tags": ["api-handler", "component", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/account/page.tsx:AccountPage",
+      "type": "function",
+      "name": "AccountPage",
+      "filePath": "apps/client/src/pages/account/page.tsx",
+      "lineRange": [42, 449],
+      "summary": "Main account page component that fetches and edits customer profile data, notification preferences, saved cards, and B2B order templates via the API.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/cart/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/cart/page.tsx",
+      "summary": "Shopping cart page that displays cart items with quantity editing and removal, shows a subtotal, and navigates to checkout or quote creation.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/cart/page.tsx:CartPage",
+      "type": "function",
+      "name": "CartPage",
+      "filePath": "apps/client/src/pages/cart/page.tsx",
+      "lineRange": [16, 102],
+      "summary": "React page component that renders the shopping cart with line item management, subtotal display, and navigation to checkout or quote creation.",
+      "tags": ["component", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/catalog/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/catalog/page.tsx",
+      "summary": "SKU catalog page with server-side paginated search, category/warehouse/price filtering, sort controls, and add-to-cart functionality for the B2B storefront.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/catalog/page.tsx:CatalogPage",
+      "type": "function",
+      "name": "CatalogPage",
+      "filePath": "apps/client/src/pages/catalog/page.tsx",
+      "lineRange": [31, 329],
+      "summary": "Full-featured SKU catalog React page with debounced search, multi-filter panel, sort controls, paginated API fetching, and cart integration.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/checkout/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/checkout/page.tsx",
+      "summary": "Multi-step checkout page handling shipping address, payment method selection (saved cards or new Stripe card), tax calculation, and order placement with idempotency key.",
+      "tags": ["component", "api-handler", "payment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/checkout/page.tsx:CheckoutPage",
+      "type": "function",
+      "name": "CheckoutPage",
+      "filePath": "apps/client/src/pages/checkout/page.tsx",
+      "lineRange": [28, 332],
+      "summary": "Multi-step checkout wizard that loads customer info, manages shipping/payment state, and submits the order with payment integration.",
+      "tags": ["component", "api-handler", "payment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/checkout/page.tsx:PaymentStep2",
+      "type": "function",
+      "name": "PaymentStep2",
+      "filePath": "apps/client/src/pages/checkout/page.tsx",
+      "lineRange": [334, 506],
+      "summary": "Payment method selection step component supporting saved cards, new Stripe card capture, and pay-later options with order total summary.",
+      "tags": ["component", "payment", "stripe"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/invoices/[id]/page.tsx",
+      "summary": "Invoice detail page that displays line items, totals, and credit memos, and supports both manual and Stripe card payment flows with PDF download.",
+      "tags": ["component", "api-handler", "payment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/invoices/[id]/page.tsx:StorefrontInvoiceDetailPage",
+      "type": "function",
+      "name": "StorefrontInvoiceDetailPage",
+      "filePath": "apps/client/src/pages/invoices/[id]/page.tsx",
+      "lineRange": [149, 288],
+      "summary": "Invoice detail page component that loads an invoice by ID, renders line items and balance summary, and provides payment and PDF download actions.",
+      "tags": ["component", "api-handler", "payment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/invoices/[id]/page.tsx:InvoicePayPanel",
+      "type": "function",
+      "name": "InvoicePayPanel",
+      "filePath": "apps/client/src/pages/invoices/[id]/page.tsx",
+      "lineRange": [47, 147],
+      "summary": "Payment panel component supporting manual payment entry or Stripe card payment against an invoice balance.",
+      "tags": ["component", "payment", "stripe"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/invoices/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/invoices/page.tsx",
+      "summary": "Invoice list page that fetches and displays paginated invoices with status filter tabs, showing balance, amount, and due dates.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/invoices/page.tsx:StorefrontInvoicesPage",
+      "type": "function",
+      "name": "StorefrontInvoicesPage",
+      "filePath": "apps/client/src/pages/invoices/page.tsx",
+      "lineRange": [25, 125],
+      "summary": "Invoice listing page with status filtering, pagination, and unauthorized-state handling, using the storefront API.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/src/components/checkout-card-capture.tsx",
+      "target": "function:apps/client/src/components/checkout-card-capture.tsx:StorefrontCardCapture",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/checkout-card-capture.tsx",
+      "target": "function:apps/client/src/components/checkout-card-capture.tsx:StorefrontCardCapture",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "target": "function:apps/client/src/components/mobile/offline-banner.tsx:OfflineBanner",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "target": "function:apps/client/src/components/mobile/offline-banner.tsx:OfflineBanner",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "target": "file:apps/client/src/lib/offline-queue.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "target": "file:apps/client/src/lib/offline-sync.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/mobile/offline-sync-runner.tsx",
+      "target": "file:apps/client/src/lib/offline-sync.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/components/status-badge.tsx",
+      "target": "function:apps/client/src/components/status-badge.tsx:StatusBadge",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/components/status-badge.tsx",
+      "target": "function:apps/client/src/components/status-badge.tsx:StatusBadge",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/axios-error.ts",
+      "target": "function:apps/client/src/lib/axios-error.ts:axiosErr",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/axios-error.ts",
+      "target": "function:apps/client/src/lib/axios-error.ts:axiosErr",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/axios-error.ts",
+      "target": "function:apps/client/src/lib/axios-error.ts:isUnauthorized",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/axios-error.ts",
+      "target": "function:apps/client/src/lib/axios-error.ts:isUnauthorized",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/b2b-cart.ts",
+      "target": "function:apps/client/src/lib/b2b-cart.ts:readCart",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/b2b-cart.ts",
+      "target": "function:apps/client/src/lib/b2b-cart.ts:readCart",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/b2b-cart.ts",
+      "target": "function:apps/client/src/lib/b2b-cart.ts:addToCart",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/b2b-cart.ts",
+      "target": "function:apps/client/src/lib/b2b-cart.ts:addToCart",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-queue.ts",
+      "target": "function:apps/client/src/lib/offline-queue.ts:enqueueAction",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-queue.ts",
+      "target": "function:apps/client/src/lib/offline-queue.ts:enqueueAction",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-sync.ts",
+      "target": "function:apps/client/src/lib/offline-sync.ts:replayOfflineQueue",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-sync.ts",
+      "target": "function:apps/client/src/lib/offline-sync.ts:replayOfflineQueue",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-sync.ts",
+      "target": "function:apps/client/src/lib/offline-sync.ts:registerOfflineSyncListeners",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-sync.ts",
+      "target": "function:apps/client/src/lib/offline-sync.ts:registerOfflineSyncListeners",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-sync.ts",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/lib/offline-sync.ts",
+      "target": "file:apps/client/src/lib/offline-queue.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/account/page.tsx",
+      "target": "function:apps/client/src/pages/account/page.tsx:AccountPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/account/page.tsx",
+      "target": "function:apps/client/src/pages/account/page.tsx:AccountPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/account/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/account/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/account/page.tsx",
+      "target": "file:apps/client/src/lib/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/account/page.tsx",
+      "target": "file:apps/client/src/stores/cart.store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/cart/page.tsx",
+      "target": "function:apps/client/src/pages/cart/page.tsx:CartPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/cart/page.tsx",
+      "target": "function:apps/client/src/pages/cart/page.tsx:CartPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/cart/page.tsx",
+      "target": "file:apps/client/src/stores/cart.store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/catalog/page.tsx",
+      "target": "function:apps/client/src/pages/catalog/page.tsx:CatalogPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/catalog/page.tsx",
+      "target": "function:apps/client/src/pages/catalog/page.tsx:CatalogPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/catalog/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/catalog/page.tsx",
+      "target": "file:apps/client/src/stores/cart.store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "function:apps/client/src/pages/checkout/page.tsx:CheckoutPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "function:apps/client/src/pages/checkout/page.tsx:CheckoutPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "function:apps/client/src/pages/checkout/page.tsx:PaymentStep2",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "file:apps/client/src/components/checkout-card-capture.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "file:apps/client/src/lib/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/checkout/page.tsx",
+      "target": "file:apps/client/src/stores/cart.store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/invoices/[id]/page.tsx:StorefrontInvoiceDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/invoices/[id]/page.tsx:StorefrontInvoiceDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/invoices/[id]/page.tsx:InvoicePayPanel",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "target": "file:apps/client/src/components/checkout-card-capture.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "target": "file:apps/client/src/components/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/page.tsx",
+      "target": "function:apps/client/src/pages/invoices/page.tsx:StorefrontInvoicesPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/page.tsx",
+      "target": "function:apps/client/src/pages/invoices/page.tsx:StorefrontInvoicesPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/page.tsx",
+      "target": "file:apps/client/src/components/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/invoices/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

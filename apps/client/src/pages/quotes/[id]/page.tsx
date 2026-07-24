@@ -138,49 +138,49 @@ export default function QuoteDetailPage() {
   const canCounter = q && ['OPEN', 'PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(q.status)
 
   return (
-    <main className="cosmos-shop-page-main">
+    <main className="pleros-shop-page-main">
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <Link to="/quotes" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+        <Link to="/quotes" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
           ← All quotes
         </Link>
-        <Link to="/login" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+        <Link to="/login" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
           Re-authenticate →
         </Link>
       </div>
       {err ? (
-        <p className="cosmos-shop-error" style={{ marginTop: 16 }}>
+        <p className="pleros-shop-error" style={{ marginTop: 16 }}>
           {err}
         </p>
       ) : null}
       {!q && !err ? (
-        <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>
+        <p className="pleros-shop-muted" style={{ marginTop: 24 }}>
           Loading…
         </p>
       ) : null}
       {q ? (
         <div style={{ marginTop: 24 }}>
           <h1 style={{ fontSize: 22, color: 'var(--c-heading)' }}>Quote · {q.id.slice(0, 12)}…</h1>
-          <p className="cosmos-shop-muted" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <p className="pleros-shop-muted" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <strong style={{ color: 'var(--c-text)' }}>{q.customerRef.slice(0, 16)}…</strong>
             <StatusBadge status={q.status} />
             {q.createdAt ? ` · ${new Date(q.createdAt).toLocaleString()}` : ''}
           </p>
           {q.rejectionReason ? (
-            <p className="cosmos-shop-error" style={{ marginTop: 12, fontSize: 14 }}>
+            <p className="pleros-shop-error" style={{ marginTop: 12, fontSize: 14 }}>
               Rejected: {q.rejectionReason}
             </p>
           ) : null}
           {q.notes ? (
-            <p className="cosmos-shop-subtle" style={{ marginTop: 12, fontSize: 14, whiteSpace: 'pre-wrap' }}>
+            <p className="pleros-shop-subtle" style={{ marginTop: 12, fontSize: 14, whiteSpace: 'pre-wrap' }}>
               {q.notes}
             </p>
           ) : null}
           {q.convertedOrderId ? (
-            <p className="cosmos-shop-inset">
-              <span className="cosmos-shop-muted" style={{ fontSize: 12 }}>
+            <p className="pleros-shop-inset">
+              <span className="pleros-shop-muted" style={{ fontSize: 12 }}>
                 Order created ·{' '}
               </span>
-              <Link to={`/orders/${q.convertedOrderId}`} className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+              <Link to={`/orders/${q.convertedOrderId}`} className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
                 View order →
               </Link>
             </p>
@@ -192,7 +192,7 @@ export default function QuoteDetailPage() {
               </button>
             ) : null}
             {q.status === 'PENDING_APPROVAL' ? (
-              <p className="cosmos-shop-muted" style={{ fontSize: 14 }}>
+              <p className="pleros-shop-muted" style={{ fontSize: 14 }}>
                 Awaiting admin approval…
               </p>
             ) : null}
@@ -209,7 +209,7 @@ export default function QuoteDetailPage() {
           </div>
 
           {offers.length > 0 ? (
-            <div className="cosmos-card" style={{ marginTop: 24, padding: 16 }}>
+            <div className="pleros-card" style={{ marginTop: 24, padding: 16 }}>
               <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Counter-offers</h2>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 12 }}>
                 {offers.map((o) => (
@@ -258,7 +258,7 @@ export default function QuoteDetailPage() {
           ) : null}
 
           <h2 style={{ fontSize: 16, marginTop: 28, marginBottom: 12, color: 'var(--c-heading)' }}>Lines</h2>
-          <table className="cosmos-shop-table">
+          <table className="pleros-shop-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -289,11 +289,11 @@ export default function QuoteDetailPage() {
           style={{ background: 'rgba(0,0,0,0.65)' }}
           onClick={() => setCounterOpen(false)}
         >
-          <div className="cosmos-card max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 style={{ marginTop: 0, color: 'var(--c-heading)' }}>Propose counter-offer</h3>
             <p style={{ fontSize: 13, color: 'var(--c-text-3)' }}>Adjust quantities or unit prices per line.</p>
             <textarea
-              className="cosmos-input min-h-[60px] mt-3"
+              className="pleros-input min-h-[60px] mt-3"
               placeholder="Notes (optional)"
               value={counterNotes}
               onChange={(e) => setCounterNotes(e.target.value)}
@@ -304,7 +304,7 @@ export default function QuoteDetailPage() {
                   <span style={{ flex: 1, fontSize: 13 }}>{ln.description}</span>
                   <input
                     type="number"
-                    className="cosmos-input"
+                    className="pleros-input"
                     style={{ width: 64 }}
                     value={counterLines[ln.lineNo]?.qty ?? ''}
                     onChange={(e) =>
@@ -317,7 +317,7 @@ export default function QuoteDetailPage() {
                   <input
                     type="number"
                     step="0.01"
-                    className="cosmos-input"
+                    className="pleros-input"
                     style={{ width: 88 }}
                     value={counterLines[ln.lineNo]?.unitPrice ?? ''}
                     onChange={(e) =>

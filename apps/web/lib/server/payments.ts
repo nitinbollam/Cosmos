@@ -78,10 +78,14 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
   }
 }
 
-async function recordSale(
+/**
+ * A capture is a *payment receipt*, not a sale — revenue is recognized once, by the
+ * invoice journal at ship time. This posts Dr Cash / Cr AR in the payment ledger and
+ * mirrors it to the main GL.
+ */
+async function recordPaymentReceived(
   tenantId: string,
   amount: number,
-  taxAmount: number,
   orderId: string,
   correlationId: string,
 ) {
@@ -91,11 +95,11 @@ async function recordSale(
       data: {
         tenantId,
         entryGroupId,
-        accountCode: '1100',
+        accountCode: '1000',
         accountType: 'ASSET',
-        debit: new Prisma.Decimal(amount + taxAmount),
+        debit: new Prisma.Decimal(amount),
         credit: new Prisma.Decimal(0),
-        description: `Sale - Order ${orderId}`,
+        description: `Payment received - Order ${orderId}`,
         referenceId: orderId,
         referenceType: 'ORDER',
         correlationId,
@@ -105,33 +109,25 @@ async function recordSale(
       data: {
         tenantId,
         entryGroupId,
-        accountCode: '4000',
-        accountType: 'REVENUE',
+        accountCode: '1200',
+        accountType: 'ASSET',
         debit: new Prisma.Decimal(0),
         credit: new Prisma.Decimal(amount),
-        description: `Revenue - Order ${orderId}`,
-        referenceId: orderId,
-        referenceType: 'ORDER',
-        correlationId,
-      },
-    }),
-    paymentDb.ledgerEntry.create({
-      data: {
-        tenantId,
-        entryGroupId,
-        accountCode: '2200',
-        accountType: 'LIABILITY',
-        debit: new Prisma.Decimal(0),
-        credit: new Prisma.Decimal(taxAmount),
-        description: `Sales Tax - Order ${orderId}`,
+        description: `AR settled - Order ${orderId}`,
         referenceId: orderId,
         referenceType: 'ORDER',
         correlationId,
       },
     }),
   ])
+
+  const { postArPaymentJournal } = await import('./operations-gl')
+  await postArPaymentJournal(tenantId, orderId, amount).catch((err) =>
+    console.error(`[gl] AR payment journal failed for order ${orderId}:`, err),
+  )
 }
 
+/** Refund reverses the cash receipt: Dr AR / Cr Cash. Revenue reverses via credit memo. */
 async function recordRefund(tenantId: string, amount: number, orderId: string, correlationId: string) {
   const entryGroupId = randomUUID()
   await paymentDb.$transaction([
@@ -139,11 +135,11 @@ async function recordRefund(tenantId: string, amount: number, orderId: string, c
       data: {
         tenantId,
         entryGroupId,
-        accountCode: '4000',
-        accountType: 'REVENUE',
+        accountCode: '1200',
+        accountType: 'ASSET',
         debit: new Prisma.Decimal(amount),
         credit: new Prisma.Decimal(0),
-        description: `Refund (revenue reversal) - ${orderId}`,
+        description: `Refund (AR restored) - ${orderId}`,
         referenceId: orderId,
         referenceType: 'REFUND',
         correlationId,
@@ -153,17 +149,22 @@ async function recordRefund(tenantId: string, amount: number, orderId: string, c
       data: {
         tenantId,
         entryGroupId,
-        accountCode: '1100',
+        accountCode: '1000',
         accountType: 'ASSET',
         debit: new Prisma.Decimal(0),
         credit: new Prisma.Decimal(amount),
-        description: `Refund (AR reduction) - ${orderId}`,
+        description: `Refund (cash out) - ${orderId}`,
         referenceId: orderId,
         referenceType: 'REFUND',
         correlationId,
       },
     }),
   ])
+
+  const { postArRefundJournal } = await import('./operations-gl')
+  await postArRefundJournal(tenantId, orderId, amount).catch((err) =>
+    console.error(`[gl] AR refund journal failed for order ${orderId}:`, err),
+  )
 }
 
 export async function capture(tenantId: string, paymentIntentId: string, correlationId: string) {
@@ -183,7 +184,7 @@ export async function capture(tenantId: string, paymentIntentId: string, correla
     data: { status: 'CAPTURED', capturedAmount: intent.amount },
   })
 
-  await recordSale(tenantId, Number(intent.amount), 0, intent.orderId, correlationId)
+  await recordPaymentReceived(tenantId, Number(intent.amount), intent.orderId, correlationId)
   await applyCapturedPayment(tenantId, intent.orderId, Number(intent.amount))
   await linkPaymentIntent(tenantId, intent.orderId, paymentIntentId)
   return { paymentIntentId: updated.id, status: updated.status }
@@ -234,11 +235,90 @@ export async function refund(
   }
 }
 
-export function handleStripeWebhook(rawBody: Buffer, signature: string) {
+/**
+ * Verify and process Stripe webhook events so async outcomes (ACH settlement,
+ * out-of-band captures/refunds, failures) reconcile back into our payment state.
+ */
+export async function handleStripeWebhook(rawBody: Buffer, signature: string) {
+  let event: ReturnType<typeof stripe.verifyStripeWebhook>
   try {
-    const event = stripe.verifyStripeWebhook(rawBody, signature)
-    return { received: true, type: event.type }
+    event = stripe.verifyStripeWebhook(rawBody, signature)
   } catch {
-    return { received: false }
+    return { received: false as const }
   }
+
+  try {
+    const { handleBillingWebhookEvent } = await import('./billing')
+    if (await handleBillingWebhookEvent(event)) {
+      return { received: true as const, type: event.type }
+    }
+
+    switch (event.type) {
+      case 'payment_intent.succeeded': {
+        const pi = event.data.object as { id: string }
+        const intent = await paymentDb.paymentIntent.findFirst({
+          where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
+        })
+        if (intent) {
+          await paymentDb.paymentIntent.update({
+            where: { id: intent.id },
+            data: { status: 'CAPTURED', capturedAmount: intent.amount },
+          })
+          await recordPaymentReceived(intent.tenantId, Number(intent.amount), intent.orderId, `stripe-${event.id}`)
+          await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
+          await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
+        }
+        break
+      }
+      case 'payment_intent.payment_failed': {
+        const pi = event.data.object as { id: string; last_payment_error?: { message?: string } }
+        await paymentDb.paymentIntent.updateMany({
+          where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
+          data: { status: 'FAILED', failureReason: pi.last_payment_error?.message ?? 'Payment failed' },
+        })
+        break
+      }
+      case 'payment_intent.canceled': {
+        const pi = event.data.object as { id: string }
+        await paymentDb.paymentIntent.updateMany({
+          where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
+          data: { status: 'VOIDED' },
+        })
+        break
+      }
+      case 'charge.refunded': {
+        const charge = event.data.object as { payment_intent?: string | null; amount_refunded?: number }
+        const stripeIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
+        if (stripeIntentId) {
+          const intent = await paymentDb.paymentIntent.findFirst({
+            where: { stripeIntentId, status: { in: ['CAPTURED', 'REFUNDED'] } },
+          })
+          if (intent) {
+            const refundedTotal = (charge.amount_refunded ?? 0) / 100
+            const alreadyRecorded = Number(intent.refundedAmount ?? 0)
+            const delta = +(refundedTotal - alreadyRecorded).toFixed(2)
+            if (delta > 0.009) {
+              await paymentDb.paymentIntent.update({
+                where: { id: intent.id },
+                data: {
+                  refundedAmount: new Prisma.Decimal(refundedTotal),
+                  status: refundedTotal >= Number(intent.amount) ? 'REFUNDED' : 'CAPTURED',
+                },
+              })
+              await recordRefund(intent.tenantId, delta, intent.orderId, `stripe-${event.id}`)
+            }
+          }
+        }
+        break
+      }
+      default:
+        break
+    }
+  } catch (err) {
+    console.error(`[stripe] webhook processing failed for event ${event.id} (${event.type}):`, err)
+    // Return received so Stripe does not retry forever on poison events; the
+    // failure is logged for investigation.
+  }
+
+  return { received: true as const, type: event.type }
 }

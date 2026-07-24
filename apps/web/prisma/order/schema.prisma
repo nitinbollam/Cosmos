@@ -39,18 +39,54 @@ model Order {
 }
 
 model OrderLineItem {
-  id          String   @id @default(cuid())
-  orderId     String
-  skuId       String
-  warehouseId String
-  quantity    Int
-  returnedQty Int      @default(0)
-  unitPrice   Decimal 
-  taxAmount   Decimal  @default(0)
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(cuid())
+  orderId             String
+  skuId               String
+  warehouseId         String
+  quantity            Int
+  quantityAllocated   Int      @default(0)
+  quantityBackordered Int      @default(0)
+  returnedQty         Int      @default(0)
+  fulfillmentType     String   @default("STOCK")
+  supplierId          String?
+  dropShipPoId        String?
+  preferredBatchId    String?
+  promiseDate         DateTime?
+  unitPrice           Decimal 
+  taxAmount           Decimal  @default(0)
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  backorder           BackorderLine?
 
   @@index([orderId])
   @@index([skuId])
+  @@index([fulfillmentType])
+}
+
+model BackorderLine {
+  id              String           @id @default(cuid())
+  tenantId        String
+  orderId         String
+  orderLineItemId String           @unique
+  skuId           String
+  warehouseId     String
+  quantity        Int
+  quantityFilled  Int              @default(0)
+  status          BackorderStatus  @default(OPEN)
+  promiseDate     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  orderLineItem   OrderLineItem    @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, skuId, warehouseId])
+  @@index([orderId])
+}
+
+enum BackorderStatus {
+  OPEN
+  PARTIAL
+  FILLED
+  CANCELLED
 }
 
 model OrderSaga {
@@ -72,6 +108,7 @@ model OrderSaga {
 enum OrderStatus {
   PENDING
   CONFIRMED
+  BACKORDERED
   PROCESSING
   PACKED
   SHIPPED
@@ -86,6 +123,7 @@ enum OrderChannel {
   B2B_PORTAL
   SALES_REP
   API
+  EDI
 }
 
 enum PaymentMethod {

@@ -1,5 +1,5 @@
 /**
- * Seed demo data across all Cosmos domains (14 SQLite DBs).
+ * Seed demo data across all Pleros domains (14 SQLite DBs).
  * Idempotent — safe to re-run: npm run seed
  *
  *   npm run db:migrate && npm run seed
@@ -17,7 +17,7 @@ const { sqliteDatabaseUrl, DB_BY_SCHEMA } = createRequire(__filename)('./db-urls
 const bcrypt = requireWeb('bcrypt') as typeof import('bcrypt')
 
 const DEMO_SLUG = 'demo'
-const ADMIN_EMAIL = 'admin@cosmos.local'
+const ADMIN_EMAIL = 'admin@pleros.local'
 const ADMIN_PASSWORD = 'admin1234'
 const BUYER_EMAIL = 'buyer@acme-retail.com'
 const BUYER_PASSWORD = 'buyer1234'
@@ -90,7 +90,7 @@ type SeedCtx = {
 }
 
 function dbUrl(dbName: string): string {
-  return sqliteDatabaseUrl(dbName, process.env.COSMOS_DATA_DIR ?? '.data')
+  return sqliteDatabaseUrl(dbName, process.env.PLEROS_DATA_DIR ?? '.data')
 }
 
 function loadPrisma<T>(envVar: string, dbName: string, relImport: string): T {
@@ -103,7 +103,7 @@ const NO_BATCH = ''
 async function seedAuth(): Promise<{ tenantId: string; adminId: string; driverId: string }> {
   const { PrismaClient } = loadPrisma<{ PrismaClient: new () => import('../apps/web/generated/prisma-auth').PrismaClient }>(
     'AUTH_DATABASE_URL',
-    'cosmos_auth',
+    'pleros_auth',
     './generated/prisma-auth',
   )
   const prisma = new PrismaClient()
@@ -111,23 +111,30 @@ async function seedAuth(): Promise<{ tenantId: string; adminId: string; driverId
   try {
     const tenant = await prisma.tenant.upsert({
       where: { slug: DEMO_SLUG },
-      update: { name: 'Cosmos Demo Distributors', plan: 'GROWTH', isActive: true },
-      create: { name: 'Cosmos Demo Distributors', slug: DEMO_SLUG, plan: 'GROWTH', settings: {} },
+      update: { name: 'Pleros Demo Distributors', plan: 'GROWTH', isActive: true },
+      create: { name: 'Pleros Demo Distributors', slug: DEMO_SLUG, plan: 'GROWTH', settings: {} },
     })
 
     const users = [
-      { email: ADMIN_EMAIL, firstName: 'Admin', lastName: 'Cosmos', role: 'SUPER_ADMIN' as const, password: ADMIN_PASSWORD },
+      { email: ADMIN_EMAIL, firstName: 'Admin', lastName: 'Pleros', role: 'SUPER_ADMIN' as const, password: ADMIN_PASSWORD },
       { email: BUYER_EMAIL, firstName: 'Alex', lastName: 'Buyer', role: 'STAFF' as const, password: BUYER_PASSWORD },
-      { email: 'driver@cosmos.local', firstName: 'Dan', lastName: 'Driver', role: 'DRIVER' as const, password: 'driver1234' },
-      { email: 'warehouse@cosmos.local', firstName: 'Wendy', lastName: 'Warehouse', role: 'WAREHOUSE_STAFF' as const, password: 'warehouse1234' },
-      { email: 'sales@cosmos.local', firstName: 'Sam', lastName: 'Sales', role: 'SALES_REP' as const, password: 'sales1234' },
+      { email: 'driver@pleros.local', firstName: 'Dan', lastName: 'Driver', role: 'DRIVER' as const, password: 'driver1234' },
+      { email: 'warehouse@pleros.local', firstName: 'Wendy', lastName: 'Warehouse', role: 'WAREHOUSE_STAFF' as const, password: 'warehouse1234' },
+      { email: 'sales@pleros.local', firstName: 'Sam', lastName: 'Sales', role: 'SALES_REP' as const, password: 'sales1234' },
     ]
 
     const ids: Record<string, string> = {}
     for (const u of users) {
       const row = await prisma.user.upsert({
         where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
-        update: { passwordHash: await hash(u.password), role: u.role, isActive: true, firstName: u.firstName, lastName: u.lastName },
+        update: {
+          passwordHash: await hash(u.password),
+          role: u.role,
+          isActive: true,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          emailVerifiedAt: new Date(),
+        },
         create: {
           tenantId: tenant.id,
           email: u.email,
@@ -136,12 +143,13 @@ async function seedAuth(): Promise<{ tenantId: string; adminId: string; driverId
           lastName: u.lastName,
           role: u.role,
           permissions: [],
+          emailVerifiedAt: new Date(),
         },
       })
       ids[u.email] = row.id
     }
 
-    return { tenantId: tenant.id, adminId: ids[ADMIN_EMAIL], driverId: ids['driver@cosmos.local'] }
+    return { tenantId: tenant.id, adminId: ids[ADMIN_EMAIL], driverId: ids['driver@pleros.local'] }
   } finally {
     await prisma.$disconnect()
   }
@@ -150,7 +158,7 @@ async function seedAuth(): Promise<{ tenantId: string; adminId: string; driverId
 async function seedTenantOrg(tenantId: string) {
   const { PrismaClient } = loadPrisma<{ PrismaClient: new () => import('../apps/web/generated/prisma-tenant').PrismaClient }>(
     'TENANT_DATABASE_URL',
-    'cosmos_tenant',
+    'pleros_tenant',
     './generated/prisma-tenant',
   )
   const prisma = new PrismaClient()
@@ -158,25 +166,45 @@ async function seedTenantOrg(tenantId: string) {
     await prisma.tenantOrganization.upsert({
       where: { id: tenantId },
       update: {
-        displayName: 'Cosmos Demo Distributors',
+        displayName: 'Pleros Demo Distributors',
         slug: DEMO_SLUG,
         plan: 'GROWTH',
         industry: 'GENERAL_WHOLESALE',
         billingEmail: ADMIN_EMAIL,
         timeZone: 'America/Chicago',
         onboardingPhase: 'READY',
-        settings: { currency: 'USD', salesTaxRate: 0.07 },
+        settings: {
+          currency: 'USD',
+          salesTaxRate: 0.07,
+          ageVerification: {
+            enabled: true,
+            minimumAge: 21,
+            requireTobaccoLicense: true,
+            requirePosAttestation: true,
+            requireDeliveryConfirmation: true,
+          },
+        },
       },
       create: {
         id: tenantId,
         slug: DEMO_SLUG,
-        displayName: 'Cosmos Demo Distributors',
+        displayName: 'Pleros Demo Distributors',
         plan: 'GROWTH',
         industry: 'GENERAL_WHOLESALE',
         billingEmail: ADMIN_EMAIL,
         timeZone: 'America/Chicago',
         onboardingPhase: 'READY',
-        settings: { currency: 'USD', salesTaxRate: 0.07 },
+        settings: {
+          currency: 'USD',
+          salesTaxRate: 0.07,
+          ageVerification: {
+            enabled: true,
+            minimumAge: 21,
+            requireTobaccoLicense: true,
+            requirePosAttestation: true,
+            requireDeliveryConfirmation: true,
+          },
+        },
         metadata: { seeded: true },
       },
     })
@@ -208,7 +236,7 @@ async function seedTenantOrg(tenantId: string) {
         id: 'seed_webhook_orders',
         tenantId,
         event: 'order.confirmed',
-        url: 'https://example.com/webhooks/cosmos/orders',
+        url: 'https://example.com/webhooks/pleros/orders',
         description: 'Demo order webhook',
         active: true,
       },
@@ -221,7 +249,7 @@ async function seedTenantOrg(tenantId: string) {
 async function seedInventory(tenantId: string): Promise<{ warehouseId: string; warehouseEastId: string; skuIds: Record<string, string> }> {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-inventory')>(
     'INVENTORY_DATABASE_URL',
-    'cosmos_inventory',
+    'pleros_inventory',
     './generated/prisma-inventory',
   )
   const prisma = new mod.PrismaClient()
@@ -259,12 +287,84 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
     })
 
     const skus = [
-      { id: ID.skuVapePod, code: 'VAP-POD-001', name: 'Premium Widget 5pk', category: 'General Merchandise', price: 24.99, cost: 12.5, qty: 420, reorder: 50 },
-      { id: ID.skuVapeMod, code: 'VAP-MOD-010', name: 'Pro Tool Kit', category: 'Tools & Equipment', price: 89.99, cost: 45, qty: 85, reorder: 20 },
-      { id: ID.skuEnergy, code: 'BEV-ENG-200', name: 'Energy Drink Case (24)', category: 'Beverages', price: 36, cost: 22, qty: 200, reorder: 40 },
-      { id: ID.skuSnack, code: 'SNK-CHP-050', name: 'Spicy Chips Box', category: 'Snacks', price: 18.5, cost: 9, qty: 310, reorder: 60 },
-      { id: ID.skuLowStock, code: 'ACC-CBL-USB', name: 'USB-C Cable 3ft', category: 'Accessories', price: 8.99, cost: 3.2, qty: 8, reorder: 25 },
-      { id: ID.skuAccessory, code: 'ACC-STAND-01', name: 'Display Stand', category: 'Accessories', price: 45, cost: 18, qty: 64, reorder: 10 },
+      {
+        id: ID.skuVapePod,
+        code: 'VAP-POD-001',
+        name: 'Premium Nicotine Pod 5pk',
+        category: 'Vape',
+        price: 24.99,
+        cost: 12.5,
+        qty: 420,
+        reorder: 50,
+        isTobacco: true,
+        ageRestricted: true,
+        minimumAge: 21,
+      },
+      {
+        id: ID.skuVapeMod,
+        code: 'VAP-MOD-010',
+        name: 'Pro Vape Mod Kit',
+        category: 'Vape',
+        price: 89.99,
+        cost: 45,
+        qty: 85,
+        reorder: 20,
+        isTobacco: true,
+        ageRestricted: true,
+        minimumAge: 21,
+      },
+      {
+        id: ID.skuEnergy,
+        code: 'BEV-ENG-200',
+        name: 'Energy Drink Case (24)',
+        category: 'Beverages',
+        price: 36,
+        cost: 22,
+        qty: 200,
+        reorder: 40,
+        isTobacco: false,
+        ageRestricted: false,
+        minimumAge: null as number | null,
+      },
+      {
+        id: ID.skuSnack,
+        code: 'SNK-CHP-050',
+        name: 'Spicy Chips Box',
+        category: 'Snacks',
+        price: 18.5,
+        cost: 9,
+        qty: 310,
+        reorder: 60,
+        isTobacco: false,
+        ageRestricted: false,
+        minimumAge: null as number | null,
+      },
+      {
+        id: ID.skuLowStock,
+        code: 'ACC-CBL-USB',
+        name: 'USB-C Cable 3ft',
+        category: 'Accessories',
+        price: 8.99,
+        cost: 3.2,
+        qty: 8,
+        reorder: 25,
+        isTobacco: false,
+        ageRestricted: false,
+        minimumAge: null as number | null,
+      },
+      {
+        id: ID.skuAccessory,
+        code: 'ACC-STAND-01',
+        name: 'Display Stand',
+        category: 'Accessories',
+        price: 45,
+        cost: 18,
+        qty: 64,
+        reorder: 10,
+        isTobacco: false,
+        ageRestricted: false,
+        minimumAge: null as number | null,
+      },
     ] as const
 
     const skuIds: Record<string, string> = {}
@@ -274,10 +374,14 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
         update: {
           id: s.id,
           name: s.name,
+          category: s.category,
           price: new D(s.price),
           cost: new D(s.cost),
           isActive: true,
-          isTobacco: false,
+          isTobacco: s.isTobacco,
+          isRegulated: s.isTobacco,
+          ageRestricted: s.ageRestricted,
+          minimumAge: s.minimumAge,
         },
         create: {
           id: s.id,
@@ -288,7 +392,10 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
           category: s.category,
           cost: new D(s.cost),
           price: new D(s.price),
-          isTobacco: false,
+          isTobacco: s.isTobacco,
+          isRegulated: s.isTobacco,
+          ageRestricted: s.ageRestricted,
+          minimumAge: s.minimumAge,
           imageUrls: [],
           attributes: { demo: true },
         },
@@ -331,13 +438,21 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
 }
 
 async function seedCrm(tenantId: string, adminId: string) {
-  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-crm')>('CRM_DATABASE_URL', 'cosmos_crm', './generated/prisma-crm')
+  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-crm')>('CRM_DATABASE_URL', 'pleros_crm', './generated/prisma-crm')
   const prisma = new mod.PrismaClient()
   const D = mod.Prisma.Decimal
   try {
     await prisma.customer.upsert({
       where: { id: ID.customerAcme },
-      update: { name: 'Acme Retail Group', email: BUYER_EMAIL, phone: '+1-214-555-0101', creditLimit: new D(50000), paymentTermsDays: 30 },
+      update: {
+        name: 'Acme Retail Group',
+        email: BUYER_EMAIL,
+        phone: '+1-214-555-0101',
+        creditLimit: new D(50000),
+        paymentTermsDays: 30,
+        isLicensedTobacco: true,
+        tobaccoLicenseNumber: 'TX-TOB-ACME-001',
+      },
       create: {
         id: ID.customerAcme,
         tenantId,
@@ -349,6 +464,8 @@ async function seedCrm(tenantId: string, adminId: string) {
         creditUsed: new D(1250),
         paymentTermsDays: 30,
         salesRepUserId: adminId,
+        isLicensedTobacco: true,
+        tobaccoLicenseNumber: 'TX-TOB-ACME-001',
         primaryAddressLine1: '500 Commerce St',
         primaryCity: 'Fort Worth',
         primaryState: 'TX',
@@ -358,7 +475,7 @@ async function seedCrm(tenantId: string, adminId: string) {
 
     await prisma.customer.upsert({
       where: { id: ID.customerBeta },
-      update: {},
+      update: { isLicensedTobacco: false, tobaccoLicenseNumber: null },
       create: {
         id: ID.customerBeta,
         tenantId,
@@ -368,6 +485,7 @@ async function seedCrm(tenantId: string, adminId: string) {
         customerKind: 'BUSINESS',
         creditLimit: new D(15000),
         paymentTermsDays: 15,
+        isLicensedTobacco: false,
         primaryAddressLine1: '88 Main St',
         primaryCity: 'Plano',
         primaryState: 'TX',
@@ -382,7 +500,7 @@ async function seedCrm(tenantId: string, adminId: string) {
         id: ID.customerWalkIn,
         tenantId,
         name: 'Walk-in Customer',
-        email: 'walkin@cosmos.local',
+        email: 'walkin@pleros.local',
         customerKind: 'INDIVIDUAL',
         creditLimit: new D(0),
         paymentTermsDays: 0,
@@ -448,7 +566,7 @@ async function seedCrm(tenantId: string, adminId: string) {
 }
 
 async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' | 'warehouseId' | 'skuIds' | 'adminId'>) {
-  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-order')>('ORDER_DATABASE_URL', 'cosmos_order', './generated/prisma-order')
+  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-order')>('ORDER_DATABASE_URL', 'pleros_order', './generated/prisma-order')
   const prisma = new mod.PrismaClient()
   const D = mod.Prisma.Decimal
 
@@ -514,7 +632,7 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
 async function seedOrderShipments(tenantId: string, ctx: Pick<SeedCtx, 'warehouseId' | 'skuIds'>) {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-order')>(
     'ORDER_DATABASE_URL',
-    'cosmos_order',
+    'pleros_order',
     './generated/prisma-order',
   )
   const prisma = new mod.PrismaClient()
@@ -570,7 +688,7 @@ async function seedOrderShipments(tenantId: string, ctx: Pick<SeedCtx, 'warehous
 async function seedAuditEvents(tenantId: string, adminId: string) {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-tenant')>(
     'TENANT_DATABASE_URL',
-    'cosmos_tenant',
+    'pleros_tenant',
     './generated/prisma-tenant',
   )
   const prisma = new mod.PrismaClient()
@@ -607,7 +725,7 @@ async function seedAuditEvents(tenantId: string, adminId: string) {
 }
 
 async function seedInvoices(tenantId: string, customerAcmeId: string) {
-  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-order')>('ORDER_DATABASE_URL', 'cosmos_order', './generated/prisma-order')
+  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-order')>('ORDER_DATABASE_URL', 'pleros_order', './generated/prisma-order')
   const prisma = new mod.PrismaClient()
   const D = mod.Prisma.Decimal
   const specs = [
@@ -667,7 +785,7 @@ async function seedInvoices(tenantId: string, customerAcmeId: string) {
 async function seedQuotes(tenantId: string) {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-storefront')>(
     'STOREFRONT_DATABASE_URL',
-    'cosmos_storefront',
+    'pleros_storefront',
     './generated/prisma-storefront',
   )
   const prisma = new mod.PrismaClient()
@@ -715,7 +833,7 @@ async function seedQuotes(tenantId: string) {
 async function seedPurchasing(tenantId: string) {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-purchasing')>(
     'PURCHASING_DATABASE_URL',
-    'cosmos_purchasing',
+    'pleros_purchasing',
     './generated/prisma-purchasing',
   )
   const prisma = new mod.PrismaClient()
@@ -781,7 +899,7 @@ async function seedPurchasing(tenantId: string) {
 }
 
 async function seedWms(tenantId: string, ctx: Pick<SeedCtx, 'warehouseId' | 'adminId' | 'orderProcessingId' | 'orderShippedId'>) {
-  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-wms')>('WMS_DATABASE_URL', 'cosmos_wms', './generated/prisma-wms')
+  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-wms')>('WMS_DATABASE_URL', 'pleros_wms', './generated/prisma-wms')
   const prisma = new mod.PrismaClient()
   try {
     await prisma.fulfillmentTask.upsert({
@@ -826,7 +944,7 @@ async function seedWms(tenantId: string, ctx: Pick<SeedCtx, 'warehouseId' | 'adm
             tenantId,
             cartonNumber: 1,
             weightGrams: 12000,
-            carrier: 'Cosmos Freight',
+            carrier: 'Pleros Freight',
             trackingNum: 'CFX-DEMO-001',
             sealedAt: new Date(),
             items: { create: [{ id: 'seed_carton_item_1', skuId: ID.skuEnergy, quantity: 2 }] },
@@ -915,7 +1033,7 @@ async function seedWms(tenantId: string, ctx: Pick<SeedCtx, 'warehouseId' | 'adm
 async function seedDispatch(tenantId: string, driverId: string) {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-dispatch')>(
     'DISPATCH_DATABASE_URL',
-    'cosmos_dispatch',
+    'pleros_dispatch',
     './generated/prisma-dispatch',
   )
   const prisma = new mod.PrismaClient()
@@ -974,7 +1092,7 @@ async function seedDispatch(tenantId: string, driverId: string) {
 async function seedCompliance(tenantId: string) {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-compliance')>(
     'COMPLIANCE_DATABASE_URL',
-    'cosmos_compliance',
+    'pleros_compliance',
     './generated/prisma-compliance',
   )
   const prisma = new mod.PrismaClient()
@@ -985,22 +1103,22 @@ async function seedCompliance(tenantId: string) {
   try {
     const msaRow = await prisma.mSATenant.upsert({
       where: { tenantId },
-      update: { reporterDid: 'did:cosmos:demo-reporter', msaEnabled: true },
+      update: { reporterDid: 'did:pleros:demo-reporter', msaEnabled: true },
       create: {
         id: ID.msaTenant,
         tenantId,
-        reporterDid: 'did:cosmos:demo-reporter',
+        reporterDid: 'did:pleros:demo-reporter',
         msaEnabled: true,
       },
     })
     await prisma.mSAManufacturerDid.upsert({
-      where: { msaTenantId_manufacturerDid: { msaTenantId: msaRow.id, manufacturerDid: 'did:cosmos:demo-mfg' } },
+      where: { msaTenantId_manufacturerDid: { msaTenantId: msaRow.id, manufacturerDid: 'did:pleros:demo-mfg' } },
       update: { manufacturerName: 'Demo Manufacturer Co', isActive: true },
       create: {
         id: 'seed_msa_mfg_1',
         msaTenantId: msaRow.id,
-        reporterDid: 'did:cosmos:demo-reporter',
-        manufacturerDid: 'did:cosmos:demo-mfg',
+        reporterDid: 'did:pleros:demo-reporter',
+        manufacturerDid: 'did:pleros:demo-mfg',
         manufacturerName: 'Demo Manufacturer Co',
         ediEndpoint: 'https://edi.example.com/msa',
         autoSubmit: false,
@@ -1018,7 +1136,7 @@ async function seedCompliance(tenantId: string) {
         create: {
           id: tx.id,
           tenantId,
-          manufacturerDid: 'did:cosmos:demo-mfg',
+          manufacturerDid: 'did:pleros:demo-mfg',
           upcCode: tx.upc,
           transactionDate: new Date(),
           quantityPurchased: tx.qty,
@@ -1036,8 +1154,8 @@ async function seedCompliance(tenantId: string) {
       create: {
         id: ID.msaReport,
         tenantId,
-        reporterDid: 'did:cosmos:demo-reporter',
-        manufacturerDid: 'did:cosmos:demo-mfg',
+        reporterDid: 'did:pleros:demo-reporter',
+        manufacturerDid: 'did:pleros:demo-mfg',
         weekStart,
         weekEnding: weekEnd,
         filePath: '/demo/msa-report.xml',
@@ -1053,7 +1171,7 @@ async function seedCompliance(tenantId: string) {
 }
 
 async function seedLedger(tenantId: string) {
-  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-ledger')>('LEDGER_DATABASE_URL', 'cosmos_ledger', './generated/prisma-ledger')
+  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-ledger')>('LEDGER_DATABASE_URL', 'pleros_ledger', './generated/prisma-ledger')
   const prisma = new mod.PrismaClient()
   const D = mod.Prisma.Decimal
   try {
@@ -1097,7 +1215,7 @@ async function seedLedger(tenantId: string) {
 async function seedTier8Extras(ctx: SeedCtx) {
   const { tenantId, customerAcmeId, skuIds, warehouseId } = ctx
 
-  const crmMod = loadPrisma<typeof import('../apps/web/generated/prisma-crm')>('CRM_DATABASE_URL', 'cosmos_crm', './generated/prisma-crm')
+  const crmMod = loadPrisma<typeof import('../apps/web/generated/prisma-crm')>('CRM_DATABASE_URL', 'pleros_crm', './generated/prisma-crm')
   const crm = new crmMod.PrismaClient()
   try {
     await crm.volumePriceBreak.upsert({
@@ -1116,7 +1234,7 @@ async function seedTier8Extras(ctx: SeedCtx) {
     await crm.$disconnect()
   }
 
-  const sfMod = loadPrisma<typeof import('../apps/web/generated/prisma-storefront')>('STOREFRONT_DATABASE_URL', 'cosmos_storefront', './generated/prisma-storefront')
+  const sfMod = loadPrisma<typeof import('../apps/web/generated/prisma-storefront')>('STOREFRONT_DATABASE_URL', 'pleros_storefront', './generated/prisma-storefront')
   const sf = new sfMod.PrismaClient()
   try {
     await sf.orderTemplate.upsert({
@@ -1139,7 +1257,7 @@ async function seedTier8Extras(ctx: SeedCtx) {
     await sf.$disconnect()
   }
 
-  const invMod = loadPrisma<typeof import('../apps/web/generated/prisma-inventory')>('INVENTORY_DATABASE_URL', 'cosmos_inventory', './generated/prisma-inventory')
+  const invMod = loadPrisma<typeof import('../apps/web/generated/prisma-inventory')>('INVENTORY_DATABASE_URL', 'pleros_inventory', './generated/prisma-inventory')
   const inv = new invMod.PrismaClient()
   try {
     await inv.binLocation.upsert({
@@ -1151,7 +1269,7 @@ async function seedTier8Extras(ctx: SeedCtx) {
     await inv.$disconnect()
   }
 
-  const ledgerMod = loadPrisma<typeof import('../apps/web/generated/prisma-ledger')>('LEDGER_DATABASE_URL', 'cosmos_ledger', './generated/prisma-ledger')
+  const ledgerMod = loadPrisma<typeof import('../apps/web/generated/prisma-ledger')>('LEDGER_DATABASE_URL', 'pleros_ledger', './generated/prisma-ledger')
   const ledger = new ledgerMod.PrismaClient()
   try {
     await ledger.bankAccount.upsert({
@@ -1190,7 +1308,7 @@ async function seedTier8Extras(ctx: SeedCtx) {
     await ledger.$disconnect()
   }
 
-  const tenantMod = loadPrisma<typeof import('../apps/web/generated/prisma-tenant')>('TENANT_DATABASE_URL', 'cosmos_tenant', './generated/prisma-tenant')
+  const tenantMod = loadPrisma<typeof import('../apps/web/generated/prisma-tenant')>('TENANT_DATABASE_URL', 'pleros_tenant', './generated/prisma-tenant')
   const tenant = new tenantMod.PrismaClient()
   try {
     await tenant.posRegister.upsert({
@@ -1204,7 +1322,7 @@ async function seedTier8Extras(ctx: SeedCtx) {
 }
 
 async function seedPayments(tenantId: string) {
-  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-payment')>('PAYMENT_DATABASE_URL', 'cosmos_payment', './generated/prisma-payment')
+  const mod = loadPrisma<typeof import('../apps/web/generated/prisma-payment')>('PAYMENT_DATABASE_URL', 'pleros_payment', './generated/prisma-payment')
   const prisma = new mod.PrismaClient()
   const D = mod.Prisma.Decimal
   try {
@@ -1232,7 +1350,7 @@ async function seedPayments(tenantId: string) {
 async function seedNotifications(tenantId: string) {
   const mod = loadPrisma<typeof import('../apps/web/generated/prisma-notification')>(
     'NOTIFICATION_DATABASE_URL',
-    'cosmos_notification',
+    'pleros_notification',
     './generated/prisma-notification',
   )
   const prisma = new mod.PrismaClient()
@@ -1335,7 +1453,7 @@ async function seedNotifications(tenantId: string) {
 
   const tenantMod = loadPrisma<typeof import('../apps/web/generated/prisma-tenant')>(
     'TENANT_DATABASE_URL',
-    'cosmos_tenant',
+    'pleros_tenant',
     './generated/prisma-tenant',
   )
   const tenant = new tenantMod.PrismaClient()
@@ -1361,7 +1479,7 @@ async function seedNotifications(tenantId: string) {
 }
 
 async function bootstrapWebEnv() {
-  const dataDir = process.env.COSMOS_DATA_DIR ?? '.data'
+  const dataDir = process.env.PLEROS_DATA_DIR ?? '.data'
   for (const [schema, dbName] of Object.entries(DB_BY_SCHEMA)) {
     const key = `${schema.toUpperCase()}_DATABASE_URL`
     if (!process.env[key]) process.env[key] = sqliteDatabaseUrl(dbName, dataDir)
@@ -1411,8 +1529,8 @@ async function main() {
     login: {
       admin: { url: 'http://localhost:4000/admin/login', email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
       buyer: { url: 'http://localhost:4000/login', email: BUYER_EMAIL, password: BUYER_PASSWORD, note: 'Links to Acme Retail customer for B2B shop' },
-      driver: { email: 'driver@cosmos.local', password: 'driver1234', mobile: 'http://localhost:4000/m/delivery' },
-      warehouse: { email: 'warehouse@cosmos.local', password: 'warehouse1234', mobile: 'http://localhost:4000/m/warehouse' },
+      driver: { email: 'driver@pleros.local', password: 'driver1234', mobile: 'http://localhost:4000/m/delivery' },
+      warehouse: { email: 'warehouse@pleros.local', password: 'warehouse1234', mobile: 'http://localhost:4000/m/warehouse' },
     },
     scenarios: {
       dashboard: 'http://localhost:4000/admin — KPIs, cashflow, low-stock alert (ACC-CBL-USB)',

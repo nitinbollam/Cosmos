@@ -1,29 +1,32 @@
 {
-  "name": "@cosmos/web",
-  "description": "Cosmos API layer — Prisma + lib/server (served by @cosmos/client Vite server)",
+  "name": "@pleros/web",
+  "description": "Pleros API layer — Prisma + lib/server (served by @pleros/client Vite server)",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "npm run db:generate",
-    "dev": "echo 'Use npm run dev from repo root (@cosmos/client Vite server)'",
+    "dev": "echo 'Use npm run dev from repo root (@pleros/client Vite server)'",
     "lint": "node ../../scripts/eslint-soft.mjs .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "test": "node --import ./server/register-paths.mjs --import tsx --test lib/server/**/*.test.ts",
     "db:generate": "prisma generate --schema prisma/auth/schema.prisma && prisma generate --schema prisma/tenant/schema.prisma && prisma generate --schema prisma/inventory/schema.prisma && prisma generate --schema prisma/order/schema.prisma && prisma generate --schema prisma/crm/schema.prisma && prisma generate --schema prisma/storefront/schema.prisma && prisma generate --schema prisma/wms/schema.prisma && prisma generate --schema prisma/dispatch/schema.prisma && prisma generate --schema prisma/purchasing/schema.prisma && prisma generate --schema prisma/payment/schema.prisma && prisma generate --schema prisma/compliance/schema.prisma && prisma generate --schema prisma/notification/schema.prisma && prisma generate --schema prisma/ledger/schema.prisma && prisma generate --schema prisma/analytics/schema.prisma"
   },
   "dependencies": {
-    "@cosmos/analytics-engine": "*",
-    "@cosmos/types": "*",
+    "@pleros/analytics-engine": "*",
+    "@pleros/types": "*",
     "@prisma/client": "^6.9.0",
     "bcrypt": "^5.1.1",
+    "bwip-js": "^4.11.2",
     "date-fns": "^3.6.0",
     "jose": "^5.9.3",
+    "pdfkit": "^0.19.1",
     "stripe": "^16.5.0",
     "tsconfig-paths": "^4.2.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
     "@types/node": "^20.14.10",
+    "@types/pdfkit": "^0.17.6",
     "eslint": "^9.39.4",
     "prisma": "^6.9.0",
     "typescript": "^5.5.3"

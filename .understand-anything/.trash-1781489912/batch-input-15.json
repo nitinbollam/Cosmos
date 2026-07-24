@@ -1,0 +1,15 @@
+{
+  "batchIndex": 15,
+  "files": [
+    {
+      "path": "apps/web/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 37,
+      "fileCategory": "infra"
+    }
+  ],
+  "batchImportData": {
+    "apps/web/Dockerfile": []
+  },
+  "neighborMap": {}
+}

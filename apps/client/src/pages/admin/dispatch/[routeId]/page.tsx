@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { useState } from 'react'
-import { Card, CardTitle } from '@cosmos/ui'
+import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 type RouteStop = { id: string; sequence: number; status: string; address: unknown }
 type DeliveryRoute = {
@@ -91,25 +91,25 @@ export default function DispatchRouteDetailPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <Link to="/admin/dispatch" className="text-sm text-cosmos-muted hover:text-cosmos-white">
+      <Link to="/admin/dispatch" className="text-sm text-pleros-muted hover:text-pleros-white">
         ← Dispatch
       </Link>
 
       {route.isLoading ? (
-        <p className="text-cosmos-muted">Loading…</p>
+        <p className="text-pleros-muted">Loading…</p>
       ) : route.error || !r ? (
         <p className="text-red-400">Route not found</p>
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-cosmos-white">{r.name?.trim() || 'Route'}</h1>
-              <p className="font-mono text-xs text-cosmos-muted mt-1">{r.id}</p>
+              <h1 className="text-2xl font-bold text-pleros-white">{r.name?.trim() || 'Route'}</h1>
+              <p className="font-mono text-xs text-pleros-muted mt-1">{r.id}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge status={r.status} />
                 {r.driverId && (
-                  <span className="text-xs text-cosmos-muted">
-                    Driver: <span className="font-mono text-cosmos-text">{r.driverId}</span>
+                  <span className="text-xs text-pleros-muted">
+                    Driver: <span className="font-mono text-pleros-text">{r.driverId}</span>
                   </span>
                 )}
               </div>
@@ -118,12 +118,12 @@ export default function DispatchRouteDetailPage() {
 
           <Card>
             <CardTitle>Assign driver</CardTitle>
-            <p className="text-xs text-cosmos-muted mt-1">
+            <p className="text-xs text-pleros-muted mt-1">
               Requires tenant admin. Sets route to in progress.
             </p>
             <div className="mt-4 flex flex-wrap gap-2 max-w-xl">
               <select
-                className="flex-1 min-w-[200px] rounded-md bg-cosmos-surface-2 border border-cosmos-border px-3 py-2 text-sm text-cosmos-text"
+                className="flex-1 min-w-[200px] rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
                 value={driverId}
                 onChange={(e) => setDriverId(e.target.value)}
                 disabled={r.status === 'COMPLETED' || r.status === 'CANCELLED'}
@@ -139,7 +139,7 @@ export default function DispatchRouteDetailPage() {
                 type="button"
                 disabled={!driverId || assign.isPending || r.status === 'COMPLETED' || r.status === 'CANCELLED'}
                 onClick={() => assign.mutate()}
-                className="h-10 px-4 rounded-md bg-cosmos-primary text-white text-sm disabled:opacity-40"
+                className="h-10 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
               >
                 {assign.isPending ? 'Saving…' : 'Assign'}
               </button>
@@ -149,13 +149,13 @@ export default function DispatchRouteDetailPage() {
 
           <Card>
             <CardTitle>Stops</CardTitle>
-            <p className="text-xs text-cosmos-muted mt-1">
+            <p className="text-xs text-pleros-muted mt-1">
               Mark delivered/failed for testing; drivers use `/m/delivery` POD in the field.
             </p>
             <div className="mt-4 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-left text-cosmos-muted border-b border-cosmos-border">
+                  <tr className="text-left text-pleros-muted border-b border-pleros-border">
                     <th className="pb-2 pr-4">#</th>
                     <th className="pb-2 pr-4">Address</th>
                     <th className="pb-2 pr-4">Status</th>
@@ -164,9 +164,9 @@ export default function DispatchRouteDetailPage() {
                 </thead>
                 <tbody>
                   {r.stops.map((s) => (
-                    <tr key={s.id} className="border-b border-cosmos-border/60">
-                      <td className="py-2 pr-4 text-cosmos-muted">{s.sequence}</td>
-                      <td className="py-2 pr-4 text-cosmos-text max-w-xs truncate" title={formatAddress(s.address)}>
+                    <tr key={s.id} className="border-b border-pleros-border/60">
+                      <td className="py-2 pr-4 text-pleros-muted">{s.sequence}</td>
+                      <td className="py-2 pr-4 text-pleros-text max-w-xs truncate" title={formatAddress(s.address)}>
                         {formatAddress(s.address)}
                       </td>
                       <td className="py-2 pr-4">
@@ -177,7 +177,7 @@ export default function DispatchRouteDetailPage() {
                           <button
                             type="button"
                             disabled={s.status === 'DELIVERED' || markDelivered.isPending}
-                            className="text-xs px-2 py-1 rounded border border-cosmos-border text-cosmos-text disabled:opacity-40"
+                            className="text-xs px-2 py-1 rounded border border-pleros-border text-pleros-text disabled:opacity-40"
                             onClick={() => markDelivered.mutate(s.id)}
                           >
                             Delivered
@@ -185,7 +185,7 @@ export default function DispatchRouteDetailPage() {
                           <button
                             type="button"
                             disabled={s.status === 'FAILED' || markFailed.isPending}
-                            className="text-xs px-2 py-1 rounded border border-cosmos-border text-cosmos-muted disabled:opacity-40"
+                            className="text-xs px-2 py-1 rounded border border-pleros-border text-pleros-muted disabled:opacity-40"
                             onClick={() => {
                               const reason = window.prompt('Failure reason (optional)') ?? undefined
                               markFailed.mutate({ stopId: s.id, reason: reason || undefined })

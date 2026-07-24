@@ -6,7 +6,7 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function Card({ className, tone = 'white', ...rest }: CardProps) {
-  return <div className={cn('cosmos-card', tone === 'blush' && 'bento-tone-blush', className)} {...rest} />
+  return <div className={cn('pleros-card', tone === 'blush' && 'bento-tone-blush', className)} {...rest} />
 }
 
 export function CardTitle({ className, ...rest }: CardProps) {

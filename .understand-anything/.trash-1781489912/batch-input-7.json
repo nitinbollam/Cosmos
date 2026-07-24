@@ -1,0 +1,670 @@
+{
+  "batchIndex": 7,
+  "files": [
+    {
+      "path": "apps/client/src/lib/auth-events.ts",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/auth-session.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/jwt.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/session.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/lib/theme.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/main.tsx",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/accept-invite/page.tsx",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/celestial/page.tsx",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/admin/login/page.tsx",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/forgot-password/page.tsx",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/home/page.tsx",
+      "language": "typescript",
+      "sizeLines": 268,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/legal/privacy/page.tsx",
+      "language": "typescript",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/legal/terms/page.tsx",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/login/page.tsx",
+      "language": "typescript",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/reset-password/page.tsx",
+      "language": "typescript",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/signup/page.tsx",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/pages/verify-email/page.tsx",
+      "language": "typescript",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/providers.tsx",
+      "language": "typescript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/router.tsx",
+      "language": "typescript",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/client/src/stores/celestial-store.ts",
+      "language": "typescript",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/client/src/lib/auth-events.ts": [],
+    "apps/client/src/lib/auth-session.ts": [
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/session.ts"
+    ],
+    "apps/client/src/lib/jwt.ts": [],
+    "apps/client/src/lib/session.ts": [],
+    "apps/client/src/lib/theme.ts": [],
+    "apps/client/src/main.tsx": [
+      "apps/client/src/App.tsx",
+      "apps/client/src/globals-admin.css",
+      "apps/client/src/globals-shop.css",
+      "apps/client/src/globals.css",
+      "apps/client/src/lib/theme.ts"
+    ],
+    "apps/client/src/pages/accept-invite/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts"
+    ],
+    "apps/client/src/pages/admin/celestial/page.tsx": [
+      "apps/client/src/components/celestial/celestial-chat.tsx"
+    ],
+    "apps/client/src/pages/admin/login/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api-admin.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/forgot-password/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/home/page.tsx": [
+      "apps/client/src/components/landing-nav.tsx"
+    ],
+    "apps/client/src/pages/legal/privacy/page.tsx": [
+      "apps/client/src/components/cosmos-logo.tsx"
+    ],
+    "apps/client/src/pages/legal/terms/page.tsx": [
+      "apps/client/src/components/cosmos-logo.tsx"
+    ],
+    "apps/client/src/pages/login/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/auth-events.ts",
+      "apps/client/src/lib/axios-error.ts",
+      "apps/client/src/lib/session.ts"
+    ],
+    "apps/client/src/pages/reset-password/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/pages/signup/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx"
+    ],
+    "apps/client/src/pages/verify-email/page.tsx": [
+      "apps/client/src/components/auth-theme-toolbar.tsx",
+      "apps/client/src/components/cosmos-logo.tsx",
+      "apps/client/src/lib/api.ts",
+      "apps/client/src/lib/axios-error.ts"
+    ],
+    "apps/client/src/providers.tsx": [],
+    "apps/client/src/router.tsx": [
+      "apps/client/src/layouts/AdminLayout.tsx",
+      "apps/client/src/layouts/MobileLayout.tsx",
+      "apps/client/src/layouts/RootLayout.tsx",
+      "apps/client/src/layouts/ShopLayout.tsx"
+    ],
+    "apps/client/src/stores/celestial-store.ts": []
+  },
+  "neighborMap": {
+    "apps/client/src/lib/auth-events.ts": [
+      {
+        "path": "apps/client/src/components/landing-nav.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "LandingNav"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/shop-header.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "ShopHeader"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/storefront-nav.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "StorefrontNav"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/user-menu.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "UserMenu"
+        ]
+      }
+    ],
+    "apps/client/src/lib/auth-session.ts": [
+      {
+        "path": "apps/client/src/lib/api.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "api",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/landing-nav.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "LandingNav"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/shop-header.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "ShopHeader"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/storefront-nav.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "StorefrontNav"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/user-menu.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "UserMenu"
+        ]
+      },
+      {
+        "path": "apps/client/src/layouts/MobileLayout.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "MobileLayout"
+        ]
+      }
+    ],
+    "apps/client/src/lib/jwt.ts": [
+      {
+        "path": "apps/client/src/components/shop-header.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "ShopHeader"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/user-menu.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "UserMenu"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/m/login/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "MobileLoginPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/notifications/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "BuyerNotificationsPage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/session.ts": [
+      {
+        "path": "apps/client/src/pages/account/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "AccountPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/checkout/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "CheckoutPage"
+        ]
+      },
+      {
+        "path": "apps/client/src/pages/orders/page.tsx",
+        "batchIndex": 1,
+        "symbols": [
+          "StorefrontOrdersPage"
+        ]
+      }
+    ],
+    "apps/client/src/lib/theme.ts": [
+      {
+        "path": "apps/client/src/components/theme-switcher.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "ThemeSwitcher"
+        ]
+      }
+    ],
+    "apps/client/src/main.tsx": [
+      {
+        "path": "apps/client/src/App.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "App"
+        ]
+      },
+      {
+        "path": "apps/client/src/globals-admin.css",
+        "batchIndex": 19,
+        "symbols": []
+      },
+      {
+        "path": "apps/client/src/globals-shop.css",
+        "batchIndex": 19,
+        "symbols": []
+      },
+      {
+        "path": "apps/client/src/globals.css",
+        "batchIndex": 19,
+        "symbols": []
+      }
+    ],
+    "apps/client/src/pages/accept-invite/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "api",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/axios-error.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "axiosErr",
+          "isUnauthorized"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/celestial/page.tsx": [
+      {
+        "path": "apps/client/src/components/celestial/celestial-chat.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CelestialChat"
+        ]
+      }
+    ],
+    "apps/client/src/pages/admin/login/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api-admin.ts",
+        "batchIndex": 6,
+        "symbols": [
+          "api",
+          "adminApi",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/axios-error.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "axiosErr",
+          "isUnauthorized"
+        ]
+      }
+    ],
+    "apps/client/src/pages/forgot-password/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "api",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/axios-error.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "axiosErr",
+          "isUnauthorized"
+        ]
+      }
+    ],
+    "apps/client/src/pages/home/page.tsx": [
+      {
+        "path": "apps/client/src/components/landing-nav.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "LandingNav"
+        ]
+      }
+    ],
+    "apps/client/src/pages/legal/privacy/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      }
+    ],
+    "apps/client/src/pages/legal/terms/page.tsx": [
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      }
+    ],
+    "apps/client/src/pages/login/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "api",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/axios-error.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "axiosErr",
+          "isUnauthorized"
+        ]
+      }
+    ],
+    "apps/client/src/pages/reset-password/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "api",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/axios-error.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "axiosErr",
+          "isUnauthorized"
+        ]
+      }
+    ],
+    "apps/client/src/pages/signup/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      }
+    ],
+    "apps/client/src/pages/verify-email/page.tsx": [
+      {
+        "path": "apps/client/src/components/auth-theme-toolbar.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AuthThemeToolbar"
+        ]
+      },
+      {
+        "path": "apps/client/src/components/cosmos-logo.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CosmosLogo"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/api.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "api",
+          "gatewayApiBaseUrl",
+          "formatApiReachabilityError"
+        ]
+      },
+      {
+        "path": "apps/client/src/lib/axios-error.ts",
+        "batchIndex": 1,
+        "symbols": [
+          "axiosErr",
+          "isUnauthorized"
+        ]
+      }
+    ],
+    "apps/client/src/providers.tsx": [
+      {
+        "path": "apps/client/src/App.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "App"
+        ]
+      }
+    ],
+    "apps/client/src/router.tsx": [
+      {
+        "path": "apps/client/src/layouts/AdminLayout.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "AdminLayout"
+        ]
+      },
+      {
+        "path": "apps/client/src/layouts/MobileLayout.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "MobileLayout"
+        ]
+      },
+      {
+        "path": "apps/client/src/layouts/RootLayout.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "RootLayout"
+        ]
+      },
+      {
+        "path": "apps/client/src/layouts/ShopLayout.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "ShopLayout"
+        ]
+      },
+      {
+        "path": "apps/client/src/App.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "App"
+        ]
+      }
+    ],
+    "apps/client/src/stores/celestial-store.ts": [
+      {
+        "path": "apps/client/src/components/celestial/celestial-chat.tsx",
+        "batchIndex": 5,
+        "symbols": [
+          "CelestialChat"
+        ]
+      }
+    ]
+  }
+}

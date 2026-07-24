@@ -1,5 +1,94 @@
-/* Cosmos theme — Powder Petal · Mauve · Wisteria · Soft Periwinkle · Medium Slate Blue */
+/* Pleros themes — shared tokens */
 :root {
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --bento-gap: 16px;
+  --bento-radius: 8px;
+  --bento-radius-sm: 6px;
+  --border-width: 1px;
+}
+
+/* Enterprise typography: all headings render in uppercase */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Obsidian — matte black enterprise (default) */
+[data-theme='obsidian'] {
+  color-scheme: dark;
+
+  --palette-powder-petal: #1e1e21;
+  --palette-mauve: #141416;
+  --palette-wisteria: #2e2e32;
+  --palette-soft-periwinkle: #6b9fd4;
+  --palette-medium-slate-blue: #5b8def;
+
+  --c-bg: #09090b;
+  --c-bg-elevated: #0f0f11;
+  --c-surface: #141416;
+  --c-surface-muted: #111113;
+  --c-surface-blush: #18181b;
+  --c-surface-1: #141416;
+  --c-surface-2: #1a1a1d;
+  --c-surface-3: #222226;
+
+  --c-ink: #fafafa;
+  --c-heading: #fafafa;
+  --c-text: #e4e4e7;
+  --c-text-2: #a1a1aa;
+  --c-text-3: #71717a;
+  --c-on-dark: #fafafa;
+  --c-on-primary: #ffffff;
+
+  --c-border: rgba(255, 255, 255, 0.08);
+  --c-border-card: rgba(255, 255, 255, 0.1);
+
+  --c-primary: #5b8def;
+  --c-primary-hover: #4a7de0;
+  --c-primary-fg: #ffffff;
+  --c-primary-dim: rgba(91, 141, 239, 0.12);
+
+  --c-accent: #6b9fd4;
+  --c-accent-soft: #1c1c1f;
+  --c-accent-dim: rgba(107, 159, 212, 0.14);
+
+  --c-success: #34d399;
+  --c-success-soft: rgba(52, 211, 153, 0.12);
+  --c-warning: #fbbf24;
+  --c-warning-soft: rgba(251, 191, 36, 0.12);
+  --c-danger: #f87171;
+  --c-danger-soft: rgba(248, 113, 113, 0.12);
+
+  --c-white: #fafafa;
+  --c-chart-grid: rgba(255, 255, 255, 0.06);
+  --c-chart-line: #5b8def;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  --pleros-bg: var(--c-bg);
+  --pleros-surface: var(--c-surface);
+  --pleros-surface-2: var(--c-surface-2);
+  --pleros-border: var(--c-border);
+  --pleros-primary: var(--c-primary);
+  --pleros-accent: var(--c-accent);
+  --pleros-success: var(--c-success);
+  --pleros-warning: var(--c-warning);
+  --pleros-danger: var(--c-danger);
+  --pleros-white: var(--c-heading);
+  --pleros-muted: var(--c-text-3);
+  --pleros-text: var(--c-text);
+}
+
+/* Aurora — light wholesale theme */
+[data-theme='aurora'] {
+  color-scheme: light;
+
   --palette-powder-petal: #efd9ce;
   --palette-mauve: #dec0f1;
   --palette-wisteria: #b79ced;
@@ -11,6 +100,7 @@
   --c-surface: var(--palette-powder-petal);
   --c-surface-muted: var(--palette-powder-petal);
   --c-surface-blush: #f3e4f8;
+  --c-surface-1: var(--palette-powder-petal);
   --c-surface-2: #f3e4f8;
   --c-surface-3: #e8d4f5;
 
@@ -44,28 +134,20 @@
   --c-white: var(--c-heading);
   --c-chart-grid: rgba(113, 97, 239, 0.16);
   --c-chart-line: var(--palette-medium-slate-blue);
-
-  --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --bento-gap: 16px;
-  --bento-radius: 10px;
-  --bento-radius-sm: 8px;
   --shadow-card: 0 1px 3px rgba(45, 38, 64, 0.06);
-  --border-width: 1px;
 
-  --cosmos-bg: var(--c-bg);
-  --cosmos-surface: var(--c-surface);
-  --cosmos-surface-2: var(--c-surface-2);
-  --cosmos-border: var(--c-border);
-  --cosmos-primary: var(--c-primary);
-  --cosmos-accent: var(--c-accent);
-  --cosmos-success: var(--c-success);
-  --cosmos-warning: var(--c-warning);
-  --cosmos-danger: var(--c-danger);
-  --cosmos-white: var(--c-heading);
-  --cosmos-muted: var(--c-text-3);
-  --cosmos-text: var(--c-text);
+  --pleros-bg: var(--c-bg);
+  --pleros-surface: var(--c-surface);
+  --pleros-surface-2: var(--c-surface-2);
+  --pleros-border: var(--c-border);
+  --pleros-primary: var(--c-primary);
+  --pleros-accent: var(--c-accent);
+  --pleros-success: var(--c-success);
+  --pleros-warning: var(--c-warning);
+  --pleros-danger: var(--c-danger);
+  --pleros-white: var(--c-heading);
+  --pleros-muted: var(--c-text-3);
+  --pleros-text: var(--c-text);
 }
 
 /* Celestial AI assistant */
@@ -79,10 +161,10 @@
   gap: 8px;
   padding: 12px 16px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--c-accent) 40%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--c-accent) 25%, var(--c-surface-2)), var(--c-surface-1));
-  color: var(--c-heading, var(--c-text));
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--c-border-card);
+  background: var(--c-surface-2);
+  color: var(--c-heading);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
@@ -106,7 +188,8 @@
   flex-direction: column;
   padding: 0;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--c-accent) 22%, var(--c-border));
+  border: 1px solid var(--c-border-card);
+  background: var(--c-surface);
 }
 .celestial-panel-header {
   display: flex;
@@ -115,7 +198,7 @@
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--c-border);
-  background: color-mix(in srgb, var(--c-accent) 6%, var(--c-surface-1));
+  background: var(--c-surface-2);
   flex-shrink: 0;
 }
 .celestial-panel-header-main { min-width: 0; flex: 1; }
@@ -129,7 +212,7 @@
   margin: 0;
   font-size: 16px;
   font-family: var(--font-display, inherit);
-  color: var(--c-heading, var(--c-text));
+  color: var(--c-heading);
 }
 .celestial-panel-sub {
   margin: 0;
@@ -148,7 +231,7 @@
   font-size: 10px;
   font-weight: 600;
   color: var(--c-text-2);
-  background: color-mix(in srgb, var(--c-accent) 10%, var(--c-surface-2));
+  background: var(--c-surface-3);
   border: 1px solid var(--c-border);
 }
 .celestial-messages {
@@ -159,25 +242,23 @@
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-  background:
-    radial-gradient(ellipse at top, color-mix(in srgb, var(--c-accent) 8%, transparent), transparent 55%),
-    var(--c-bg, var(--c-surface-1));
+  background: var(--c-bg);
 }
 .celestial-msg {
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 10px;
   font-size: 13px;
   line-height: 1.5;
   max-width: 92%;
 }
 .celestial-msg--user {
   align-self: flex-end;
-  background: color-mix(in srgb, var(--c-accent) 20%, var(--c-surface-2));
-  border: 1px solid color-mix(in srgb, var(--c-accent) 28%, transparent);
+  background: var(--c-primary-dim);
+  border: 1px solid var(--c-border-card);
 }
 .celestial-msg--assistant {
   align-self: flex-start;
-  background: var(--c-surface-1);
+  background: var(--c-surface-2);
   border: 1px solid var(--c-border);
   max-width: 100%;
 }
@@ -200,8 +281,8 @@
   font-weight: 600;
   text-decoration: none;
   color: var(--c-accent);
-  background: color-mix(in srgb, var(--c-accent) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c-accent) 25%, var(--c-border));
+  background: var(--c-accent-dim);
+  border: 1px solid var(--c-border);
 }
 .celestial-link-chip:hover { opacity: 0.85; }
 .celestial-meta {
@@ -212,11 +293,11 @@
 .celestial-error {
   margin: 0;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 12px;
   color: var(--c-danger);
-  background: color-mix(in srgb, var(--c-danger) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c-danger) 25%, transparent);
+  background: var(--c-danger-soft);
+  border: 1px solid rgba(248, 113, 113, 0.25);
 }
 .celestial-empty {
   margin: auto 0;
@@ -234,7 +315,7 @@
   margin: 0 0 8px;
   font-size: 18px;
   font-family: var(--font-display, inherit);
-  color: var(--c-heading, var(--c-text));
+  color: var(--c-heading);
 }
 .celestial-empty-text {
   margin: 0 auto 16px;
@@ -256,23 +337,23 @@
   text-align: left;
   cursor: pointer;
   color: var(--c-text);
-  background: var(--c-surface-1);
+  background: var(--c-surface-2);
   border: 1px solid var(--c-border);
   transition: border-color 0.15s, background 0.15s;
 }
 .celestial-suggestion-chip:hover {
-  border-color: color-mix(in srgb, var(--c-accent) 40%, var(--c-border));
-  background: color-mix(in srgb, var(--c-accent) 8%, var(--c-surface-1));
+  border-color: var(--c-border-card);
+  background: var(--c-surface-3);
 }
 .celestial-input-row {
   display: flex;
   gap: 8px;
   padding: 14px 16px;
   border-top: 1px solid var(--c-border);
-  background: var(--c-surface-1);
+  background: var(--c-surface);
   flex-shrink: 0;
 }
-.celestial-input-row .cosmos-input,
+.celestial-input-row .pleros-input,
 .celestial-input { flex: 1; min-width: 0; }
 .celestial-send { flex-shrink: 0; }
 
@@ -314,7 +395,7 @@
 .celestial-md h4 {
   margin: 0.85em 0 0.4em;
   font-family: var(--font-display, inherit);
-  color: var(--c-heading, var(--c-text));
+  color: var(--c-heading);
   line-height: 1.25;
 }
 .celestial-md h1 { font-size: 1.15em; }
@@ -327,35 +408,35 @@
 }
 .celestial-md li { margin: 0.2em 0; }
 .celestial-md li::marker { color: var(--c-accent); }
-.celestial-md strong { color: var(--c-heading, var(--c-text)); font-weight: 650; }
+.celestial-md strong { color: var(--c-heading); font-weight: 650; }
 .celestial-md em { color: var(--c-text-2); }
 .celestial-md blockquote {
   margin: 0.6em 0;
   padding: 0.35em 0.75em;
-  border-left: 3px solid color-mix(in srgb, var(--c-accent) 55%, transparent);
-  background: color-mix(in srgb, var(--c-accent) 8%, transparent);
+  border-left: 3px solid var(--c-accent);
+  background: var(--c-accent-dim);
   color: var(--c-text-2);
 }
 .celestial-md code {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.92em;
   padding: 0.12em 0.35em;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--c-accent) 12%, var(--c-surface-1));
-  color: color-mix(in srgb, var(--c-accent) 70%, var(--c-text));
+  border-radius: 4px;
+  background: var(--c-surface-3);
+  color: var(--c-text);
 }
 .celestial-md pre {
   margin: 0.65em 0;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow-x: auto;
   border: 1px solid var(--c-border);
-  background: #0d1117;
+  background: #0a0a0b;
 }
 .celestial-md pre code {
   padding: 0;
   background: transparent;
-  color: #e6edf3;
+  color: #e4e4e7;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -372,8 +453,8 @@
   text-align: left;
 }
 .celestial-md th {
-  background: color-mix(in srgb, var(--c-accent) 10%, var(--c-surface-2));
-  color: var(--c-heading, var(--c-text));
+  background: var(--c-surface-3);
+  color: var(--c-heading);
 }
 .celestial-md hr {
   border: none;

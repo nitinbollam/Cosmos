@@ -1,0 +1,230 @@
+{
+  "batchIndex": 9,
+  "files": [
+    {
+      "path": "apps/web/lib/server/auth-security.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/auth.ts",
+      "language": "typescript",
+      "sizeLines": 277,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/db-health.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/env.ts",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/signup.ts",
+      "language": "typescript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/server/api-router.ts",
+      "language": "typescript",
+      "sizeLines": 297,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/web/lib/server/auth-security.ts": [
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/auth.ts": [
+      "apps/web/lib/server/auth-security.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/env.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/db-health.ts": [
+      "apps/web/lib/server/env.ts"
+    ],
+    "apps/web/lib/server/env.ts": [],
+    "apps/web/lib/server/signup.ts": [
+      "apps/web/lib/server/auth.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/server/api-router.ts": [
+      "apps/web/lib/server/auth-security.ts",
+      "apps/web/lib/server/auth.ts",
+      "apps/web/lib/server/buyer-context.ts",
+      "apps/web/lib/server/env.ts",
+      "apps/web/lib/server/native-router.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/signup.ts"
+    ]
+  },
+  "neighborMap": {
+    "apps/web/lib/server/auth-security.ts": [
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/auth.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/db-health.ts": [
+      {
+        "path": "apps/web/lib/server/native-router.ts",
+        "batchIndex": 3,
+        "symbols": [
+          "handleNativeApi"
+        ]
+      }
+    ],
+    "apps/web/lib/server/env.ts": [
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/signup.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/server/api-router.ts": [
+      {
+        "path": "apps/web/lib/server/buyer-context.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "PORTAL_BUYER_ROLES",
+          "isPortalBuyer",
+          "isAdminStaff",
+          "resolvePortalCustomerId",
+          "requirePortalCustomerId",
+          "getAuthProfile"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/native-router.ts",
+        "batchIndex": 3,
+        "symbols": [
+          "handleNativeApi"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ]
+  }
+}

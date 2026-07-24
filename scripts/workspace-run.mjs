@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Run a script across @cosmos/web workspace deps, then @cosmos/web (replaces Turborepo).
+ * Run a script across @pleros/web workspace deps, then @pleros/web (replaces Turborepo).
  *
  *   node scripts/workspace-run.mjs build
  *   node scripts/workspace-run.mjs lint
@@ -21,12 +21,12 @@ const isWin = process.platform === 'win32'
 
 /** Build order: types first, then libs, then web. */
 const WORKSPACES = [
-  '@cosmos/types',
-  '@cosmos/analytics-engine',
-  '@cosmos/ui',
-  '@cosmos/web-gateway-client',
-  '@cosmos/client',
-  '@cosmos/web',
+  '@pleros/types',
+  '@pleros/analytics-engine',
+  '@pleros/ui',
+  '@pleros/web-gateway-client',
+  '@pleros/client',
+  '@pleros/web',
 ]
 
 function run(workspace, script) {

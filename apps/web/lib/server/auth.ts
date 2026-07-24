@@ -1,7 +1,10 @@
+import { createHash, randomBytes } from 'node:crypto'
 import bcrypt from 'bcrypt'
 import * as jose from 'jose'
-import { authDb as prisma } from './db'
+import { assertPasswordPolicy } from './auth-security'
+import { authDb as prisma, tenantDb } from './db'
 import { jwtRefreshSecret, jwtSecret } from './env'
+import { ApiError, invalidateUserSessionCache } from './session'
 
 export type TokenPair = {
   accessToken: string
@@ -44,16 +47,33 @@ async function signPair(user: { id: string; email: string; role: string; tenantI
 
 export async function loginUser(email: string, password: string): Promise<TokenPair> {
   const user = await prisma.user.findFirst({
-    where: { email, isActive: true },
+    where: { email: email.trim().toLowerCase(), isActive: true },
   })
   if (!user) throw new Error('Invalid credentials')
   const ok = await bcrypt.compare(password, user.passwordHash)
   if (!ok) throw new Error('Invalid credentials')
+  // Only block accounts that were sent a verification link (new signups). Existing users
+  // without emailVerifiedAt are grandfathered until they change email.
+  if (!user.emailVerifiedAt && user.emailVerificationTokenHash) {
+    throw new ApiError(403, 'Please verify your email before signing in. Check your inbox or request a new link.')
+  }
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   })
   return signPair(user)
+}
+
+export type VerificationDelivery = {
+  userId: string
+  email: string
+  requiresVerification: true
+  /**
+   * Present only when email was not delivered via SendGrid (console/webhook fallback).
+   * Lets QA complete the production verify gate without an inbox; never returned for SendGrid.
+   */
+  verifyUrl?: string
+  delivery: 'sendgrid' | 'webhook' | 'console'
 }
 
 export async function registerUser(input: {
@@ -63,25 +83,45 @@ export async function registerUser(input: {
   firstName: string
   lastName: string
   role?: string
-}): Promise<TokenPair> {
+  /** Invite accept and admin-created users skip the verification gate. */
+  emailVerified?: boolean
+  issueTokens?: boolean
+}): Promise<TokenPair | VerificationDelivery> {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } })
   if (!tenant) throw new Error('Tenant does not exist')
+  const email = input.email.trim().toLowerCase()
   const existing = await prisma.user.findFirst({
-    where: { tenantId: input.tenantId, email: input.email },
+    where: { tenantId: input.tenantId, email },
   })
   if (existing) throw new Error('Email already registered for this tenant')
+  assertPasswordPolicy(input.password)
   const passwordHash = await bcrypt.hash(input.password, 12)
   const user = await prisma.user.create({
     data: {
       tenantId: input.tenantId,
-      email: input.email,
+      email,
       passwordHash,
       firstName: input.firstName,
       lastName: input.lastName,
       role: (input.role ?? 'STAFF') as 'STAFF',
       permissions: [],
+      ...(input.emailVerified ? { emailVerifiedAt: new Date() } : {}),
     },
   })
+
+  if (input.issueTokens === false || !input.emailVerified) {
+    if (!input.emailVerified) {
+      const delivery = await sendEmailVerification(user.id)
+      return {
+        userId: user.id,
+        email: user.email,
+        requiresVerification: true as const,
+        verifyUrl: delivery.verifyUrl,
+        delivery: delivery.provider,
+      }
+    }
+    return signPair(user)
+  }
   return signPair(user)
 }
 
@@ -97,5 +137,204 @@ export async function logoutUser(userId: string): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
     data: { refreshTokenHash: null },
+  })
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+/** Joining a team requires a valid, unexpired invite token issued by a tenant admin. */
+export async function acceptInvite(input: {
+  token: string
+  password: string
+  firstName: string
+  lastName: string
+}): Promise<TokenPair & { tenantId: string }> {
+  const invite = await tenantDb.tenantInvite.findUnique({ where: { token: input.token } })
+  if (!invite || invite.revokedAt || invite.acceptedAt) {
+    throw new ApiError(400, 'Invite is invalid or has already been used')
+  }
+  if (invite.expiresAt.getTime() < Date.now()) {
+    throw new ApiError(400, 'Invite has expired')
+  }
+
+  const result = await registerUser({
+    tenantId: invite.tenantId,
+    email: invite.email,
+    password: input.password,
+    firstName: input.firstName.trim(),
+    lastName: input.lastName.trim(),
+    role: invite.role,
+    emailVerified: true,
+    issueTokens: true,
+  })
+  if ('requiresVerification' in result) {
+    throw new ApiError(500, 'Invite accept failed unexpectedly')
+  }
+
+  await tenantDb.tenantInvite.update({
+    where: { id: invite.id },
+    data: { acceptedAt: new Date() },
+  })
+
+  return { ...result, tenantId: invite.tenantId }
+}
+
+/** Never expose raw verify tokens in production API responses. */
+function mayExposeVerifyUrl(): boolean {
+  return process.env.NODE_ENV !== 'production'
+}
+
+function appPublicUrl(): string {
+  const configured = process.env.APP_URL?.trim()
+  if (configured) return configured.replace(/\/$/, '')
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[auth] APP_URL is not set — verification links will be wrong in production')
+  }
+  return 'http://localhost:4000'
+}
+
+export async function sendEmailVerification(
+  userId: string,
+): Promise<{ provider: 'sendgrid' | 'webhook' | 'console'; verifyUrl?: string }> {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user || user.emailVerifiedAt) return { provider: 'console' }
+
+  const token = randomBytes(32).toString('hex')
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      emailVerificationTokenHash: sha256(token),
+      emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  })
+
+  const verifyUrl = `${appPublicUrl()}/verify-email?token=${token}`
+  try {
+    const { deliverNotification } = await import('./notification-provider')
+    const result = await deliverNotification({
+      tenantId: user.tenantId,
+      channel: 'EMAIL',
+      recipient: user.email,
+      templateKey: 'auth.email_verify',
+      payload: { verifyUrl, firstName: user.firstName },
+    })
+    if (result.provider === 'sendgrid') return { provider: 'sendgrid' }
+    // Dev/QA only: surface the link when no real email provider is configured.
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      const provider = result.provider === 'webhook' ? 'webhook' : 'console'
+      return { provider, verifyUrl }
+    }
+    console.info(`[auth] verification email for ${user.email} delivered via ${result.provider} (link not exposed)`)
+    return { provider: result.provider === 'webhook' ? 'webhook' : 'console' }
+  } catch (err) {
+    console.error('[auth] failed to deliver verification email:', err)
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      return { provider: 'console', verifyUrl }
+    }
+    return { provider: 'console' }
+  }
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  const user = await prisma.user.findFirst({
+    where: { emailVerificationTokenHash: sha256(token), emailVerificationExpiresAt: { gt: new Date() } },
+  })
+  if (!user) throw new ApiError(400, 'Verification link is invalid or has expired')
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailVerifiedAt: new Date(),
+      emailVerificationTokenHash: null,
+      emailVerificationExpiresAt: null,
+    },
+  })
+}
+
+export async function resendEmailVerification(
+  email: string,
+): Promise<{ ok: true; verifyUrl?: string; delivery?: 'sendgrid' | 'webhook' | 'console' }> {
+  const user = await prisma.user.findFirst({
+    where: { email: email.trim().toLowerCase(), isActive: true, emailVerifiedAt: null },
+  })
+  if (!user) return { ok: true }
+  const delivery = await sendEmailVerification(user.id)
+  // verifyUrl is only present in non-production (see mayExposeVerifyUrl).
+  return {
+    ok: true,
+    ...(delivery.verifyUrl ? { verifyUrl: delivery.verifyUrl } : {}),
+    delivery: delivery.provider,
+  }
+}
+
+/** Reveals nothing about whether the email exists; delivery happens out of band. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const user = await prisma.user.findFirst({ where: { email: email.trim().toLowerCase(), isActive: true } })
+  if (!user) return
+
+  const token = randomBytes(32).toString('hex')
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetTokenHash: sha256(token),
+      passwordResetExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+    },
+  })
+
+  const appUrl = process.env.APP_URL?.trim() || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:4000')
+  if (!appUrl) {
+    console.error('[auth] APP_URL is not set — password reset link cannot be built')
+    return
+  }
+  const resetUrl = `${appUrl.replace(/\/$/, '')}/reset-password?token=${token}`
+  try {
+    const { deliverNotification } = await import('./notification-provider')
+    await deliverNotification({
+      tenantId: user.tenantId,
+      channel: 'EMAIL',
+      recipient: user.email,
+      templateKey: 'auth.password_reset',
+      payload: { resetUrl, firstName: user.firstName },
+    })
+  } catch (err) {
+    console.error('[auth] failed to deliver password reset email:', err)
+  }
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  assertPasswordPolicy(newPassword)
+  const user = await prisma.user.findFirst({
+    where: { passwordResetTokenHash: sha256(token), passwordResetExpiresAt: { gt: new Date() } },
+  })
+  if (!user) throw new ApiError(400, 'Reset link is invalid or has expired')
+
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+      // Invalidate existing sessions on password change.
+      refreshTokenHash: null,
+    },
+  })
+  invalidateUserSessionCache(user.id)
+}
+
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user) throw new ApiError(404, 'User not found')
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!ok) throw new ApiError(401, 'Current password is incorrect')
+  assertPasswordPolicy(newPassword)
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, refreshTokenHash: null },
   })
 }

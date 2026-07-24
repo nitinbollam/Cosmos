@@ -1,0 +1,847 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/client/src/pages/m/delivery/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/delivery/page.tsx",
+      "summary": "Mobile delivery dashboard page that polls assigned delivery routes, enqueues offline pickup actions, and periodically reports driver location to the API.",
+      "tags": ["component", "mobile", "api-handler", "offline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/delivery/page.tsx:DeliveryMobilePage",
+      "type": "function",
+      "name": "DeliveryMobilePage",
+      "filePath": "apps/client/src/pages/m/delivery/page.tsx",
+      "lineRange": [15, 73],
+      "summary": "Mobile delivery list page that loads routes, displays them in a list, and periodically posts location updates while enqueuing offline pickup confirmations.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "summary": "Mobile delivery route detail page showing individual stop statuses with actions to mark stops as delivered or failed with a reason prompt.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/delivery/route/[id]/page.tsx:DeliveryRoutePage",
+      "type": "function",
+      "name": "DeliveryRoutePage",
+      "filePath": "apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "lineRange": [15, 101],
+      "summary": "Mobile route detail page that loads a specific route by ID, displays its stops, and allows drivers to mark each stop as delivered or failed.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/m/login/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/login/page.tsx",
+      "summary": "Mobile login page that authenticates field workers, stores the JWT in localStorage, and routes to the appropriate mobile home page based on the user's role.",
+      "tags": ["component", "mobile", "api-handler", "entry-point"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/login/page.tsx:MobileLoginPage",
+      "type": "function",
+      "name": "MobileLoginPage",
+      "filePath": "apps/client/src/pages/m/login/page.tsx",
+      "lineRange": [14, 75],
+      "summary": "Mobile login form component that submits credentials, parses the JWT role, and navigates to the correct mobile dashboard.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/m/sales/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/sales/page.tsx",
+      "summary": "Mobile sales rep page with tabbed views for leads, customers, and activities, supporting lead creation and activity logging via the mobile API.",
+      "tags": ["component", "mobile", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/sales/page.tsx:SalesMobilePage",
+      "type": "function",
+      "name": "SalesMobilePage",
+      "filePath": "apps/client/src/pages/m/sales/page.tsx",
+      "lineRange": [16, 192],
+      "summary": "Mobile CRM page for field sales reps that fetches leads, customers, and activity history and provides forms to create leads and log activities.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/m/warehouse/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/warehouse/page.tsx",
+      "summary": "Mobile warehouse dashboard with tabs for pick tasks and active pick waves, supporting offline queue for scan actions.",
+      "tags": ["component", "mobile", "api-handler", "offline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/warehouse/page.tsx:WarehouseMobilePage",
+      "type": "function",
+      "name": "WarehouseMobilePage",
+      "filePath": "apps/client/src/pages/m/warehouse/page.tsx",
+      "lineRange": [24, 142],
+      "summary": "Mobile warehouse home page showing open pick tasks and active pick waves in a tab layout, with offline action queuing support.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "summary": "Mobile warehouse receiving page for scanning received purchase order line items, with offline queue fallback and optimistic status messages.",
+      "tags": ["component", "mobile", "api-handler", "offline"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/warehouse/receiving/page.tsx:ReceivingMobilePage",
+      "type": "function",
+      "name": "ReceivingMobilePage",
+      "filePath": "apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "lineRange": [8, 81],
+      "summary": "Mobile receiving page that starts a receiving session for a PO and allows scanning individual line items to record inventory receipts.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "summary": "Mobile pick task detail page that displays individual pick lines with per-line or bulk-pick actions and short-quantity adjustment support.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/warehouse/task/[id]/page.tsx:WarehouseTaskPage",
+      "type": "function",
+      "name": "WarehouseTaskPage",
+      "filePath": "apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "lineRange": [27, 175],
+      "summary": "Mobile warehouse pick task page that loads a task by ID and allows pickers to confirm individual lines or bulk-pick all items.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "summary": "Mobile pick wave detail page that loads wave state, displays the pick path with task assignments, and supports start/complete wave transitions.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx:WarehouseWaveDetailPage",
+      "type": "function",
+      "name": "WarehouseWaveDetailPage",
+      "filePath": "apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "lineRange": [25, 151],
+      "summary": "Mobile wave detail page showing pick path lines and task IDs, with buttons to start or complete the wave.",
+      "tags": ["component", "mobile", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/notifications/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/notifications/page.tsx",
+      "summary": "Buyer notifications history page showing outbound notification events with filter and retry capabilities, resolved via JWT email.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/notifications/page.tsx:BuyerNotificationsPage",
+      "type": "function",
+      "name": "BuyerNotificationsPage",
+      "filePath": "apps/client/src/pages/notifications/page.tsx",
+      "lineRange": [47, 193],
+      "summary": "Notifications listing page that loads a buyer's notification history by email, supports filter by type, and allows retrying failed deliveries.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "summary": "Order confirmation page displayed after successful checkout, showing order totals and line items with a link to the order detail page.",
+      "tags": ["component", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/orders/[id]/confirmation/page.tsx:OrderConfirmationPage",
+      "type": "function",
+      "name": "OrderConfirmationPage",
+      "filePath": "apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "lineRange": [10, 72],
+      "summary": "Post-checkout confirmation page that fetches and displays the newly created order details with a success message and link to full order view.",
+      "tags": ["component", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/orders/[id]/page.tsx",
+      "summary": "Order detail page for the storefront showing order lifecycle progress, shipment tracking, invoice status, line items, and reorder/cancel/confirm actions.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/orders/[id]/page.tsx:StorefrontOrderDetailPage",
+      "type": "function",
+      "name": "StorefrontOrderDetailPage",
+      "filePath": "apps/client/src/pages/orders/[id]/page.tsx",
+      "lineRange": [73, 385],
+      "summary": "Order detail page component showing the full order with a status stepper, shipment and tracking info, invoice link, and reorder/cancel/confirm actions.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/orders/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/orders/page.tsx",
+      "summary": "Order history list page for the storefront that fetches paginated orders, supports B2B customer filtering, and provides one-click reorder.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/orders/page.tsx:StorefrontOrdersPage",
+      "type": "function",
+      "name": "StorefrontOrdersPage",
+      "filePath": "apps/client/src/pages/orders/page.tsx",
+      "lineRange": [27, 168],
+      "summary": "Orders listing page with B2B customer filtering, pagination, status badges, reorder action, and invoice link columns.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/quotes/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/quotes/[id]/page.tsx",
+      "summary": "Quote detail page supporting buyer actions: view counter-offers, submit counter-offers, accept offers, request approval, and convert the quote to an order.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/quotes/[id]/page.tsx:QuoteDetailPage",
+      "type": "function",
+      "name": "QuoteDetailPage",
+      "filePath": "apps/client/src/pages/quotes/[id]/page.tsx",
+      "lineRange": [36, 346],
+      "summary": "Quote detail page that fetches a quote and its counter-offers, renders line items, and supports full quote negotiation and order placement workflows.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/quotes/new/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/quotes/new/page.tsx",
+      "summary": "New quote creation page that pre-populates line items from the B2B cart or URL params, allows editing, and submits a quote request to the API.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/quotes/new/page.tsx:NewQuoteForm",
+      "type": "function",
+      "name": "NewQuoteForm",
+      "filePath": "apps/client/src/pages/quotes/new/page.tsx",
+      "lineRange": [30, 198],
+      "summary": "Quote form component that initializes from cart or query params, provides line-item editing with add/remove rows, and submits to the quotes API.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/quotes/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/quotes/page.tsx",
+      "summary": "Quotes list page that fetches and displays the buyer's quotes with status badges, linking to each quote's detail page.",
+      "tags": ["component", "api-handler", "data-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/pages/quotes/page.tsx:QuotesPage",
+      "type": "function",
+      "name": "QuotesPage",
+      "filePath": "apps/client/src/pages/quotes/page.tsx",
+      "lineRange": [13, 63],
+      "summary": "Quote listing page component that fetches all quotes for the current user and renders them in a table with status and navigation links.",
+      "tags": ["component", "api-handler"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/stores/cart.store.ts",
+      "type": "file",
+      "name": "cart.store.ts",
+      "filePath": "apps/client/src/stores/cart.store.ts",
+      "summary": "Zustand store managing the storefront shopping cart state including items, quantity updates, subtotal calculation, and add/remove/clear actions.",
+      "tags": ["service", "data-model", "singleton"],
+      "complexity": "moderate",
+      "languageNotes": "Uses Zustand with a persist middleware pattern; exports useCartStore hook consumed by multiple page components."
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/src/pages/m/delivery/page.tsx",
+      "target": "function:apps/client/src/pages/m/delivery/page.tsx:DeliveryMobilePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/page.tsx",
+      "target": "function:apps/client/src/pages/m/delivery/page.tsx:DeliveryMobilePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/page.tsx",
+      "target": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/page.tsx",
+      "target": "file:apps/client/src/lib/offline-queue.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/m/delivery/route/[id]/page.tsx:DeliveryRoutePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/m/delivery/route/[id]/page.tsx:DeliveryRoutePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/delivery/route/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/login/page.tsx",
+      "target": "function:apps/client/src/pages/m/login/page.tsx:MobileLoginPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/login/page.tsx",
+      "target": "function:apps/client/src/pages/m/login/page.tsx:MobileLoginPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/login/page.tsx",
+      "target": "file:apps/client/src/components/auth-theme-toolbar.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/login/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/login/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/login/page.tsx",
+      "target": "file:apps/client/src/lib/jwt.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/sales/page.tsx",
+      "target": "function:apps/client/src/pages/m/sales/page.tsx:SalesMobilePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/sales/page.tsx",
+      "target": "function:apps/client/src/pages/m/sales/page.tsx:SalesMobilePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/sales/page.tsx",
+      "target": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/sales/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/sales/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/page.tsx:WarehouseMobilePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/page.tsx:WarehouseMobilePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/page.tsx",
+      "target": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/page.tsx",
+      "target": "file:apps/client/src/lib/offline-queue.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/receiving/page.tsx:ReceivingMobilePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/receiving/page.tsx:ReceivingMobilePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "target": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/receiving/page.tsx",
+      "target": "file:apps/client/src/lib/offline-queue.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/task/[id]/page.tsx:WarehouseTaskPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/task/[id]/page.tsx:WarehouseTaskPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/task/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx:WarehouseWaveDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx:WarehouseWaveDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "target": "file:apps/client/src/components/mobile/offline-banner.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api-mobile.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/m/warehouse/waves/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/notifications/page.tsx",
+      "target": "function:apps/client/src/pages/notifications/page.tsx:BuyerNotificationsPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/notifications/page.tsx",
+      "target": "function:apps/client/src/pages/notifications/page.tsx:BuyerNotificationsPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/notifications/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/notifications/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/notifications/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/notifications/page.tsx",
+      "target": "file:apps/client/src/lib/jwt.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "target": "function:apps/client/src/pages/orders/[id]/confirmation/page.tsx:OrderConfirmationPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "target": "function:apps/client/src/pages/orders/[id]/confirmation/page.tsx:OrderConfirmationPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/confirmation/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/orders/[id]/page.tsx:StorefrontOrderDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/orders/[id]/page.tsx:StorefrontOrderDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/components/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/stores/cart.store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/page.tsx",
+      "target": "function:apps/client/src/pages/orders/page.tsx:StorefrontOrdersPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/page.tsx",
+      "target": "function:apps/client/src/pages/orders/page.tsx:StorefrontOrdersPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/page.tsx",
+      "target": "file:apps/client/src/components/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/page.tsx",
+      "target": "file:apps/client/src/lib/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/orders/page.tsx",
+      "target": "file:apps/client/src/stores/cart.store.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/quotes/[id]/page.tsx:QuoteDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/quotes/[id]/page.tsx:QuoteDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/[id]/page.tsx",
+      "target": "file:apps/client/src/components/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/axios-error.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/new/page.tsx",
+      "target": "function:apps/client/src/pages/quotes/new/page.tsx:NewQuoteForm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/new/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/new/page.tsx",
+      "target": "file:apps/client/src/lib/b2b-cart.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/new/page.tsx",
+      "target": "file:apps/client/src/lib/use-query-params.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/page.tsx",
+      "target": "function:apps/client/src/pages/quotes/page.tsx:QuotesPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/page.tsx",
+      "target": "function:apps/client/src/pages/quotes/page.tsx:QuotesPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/quotes/page.tsx",
+      "target": "file:apps/client/src/lib/api.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

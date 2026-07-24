@@ -7,7 +7,7 @@ import { Readable } from 'node:stream'
 const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 
 function msaRootDir(): string {
-  const dataDir = process.env.COSMOS_DATA_DIR ?? '.data'
+  const dataDir = process.env.PLEROS_DATA_DIR ?? '.data'
   const root = path.join(WEB_ROOT, dataDir, 'msa')
   mkdirSync(root, { recursive: true })
   return root

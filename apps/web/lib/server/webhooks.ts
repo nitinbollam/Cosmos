@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
+import { lookup } from 'node:dns/promises'
+import { isIP } from 'node:net'
 import { tenantDb } from './db'
 import { ApiError } from './session'
 
@@ -6,6 +8,64 @@ export type CreateWebhookInput = {
   event: string
   url: string
   description?: string
+}
+
+function isPrivateIp(ip: string): boolean {
+  if (ip === '::1' || ip === '0.0.0.0') return true
+  if (ip.startsWith('fc') || ip.startsWith('fd') || ip.startsWith('fe80')) return true
+  const v4 = ip.replace(/^::ffff:/, '')
+  const parts = v4.split('.').map(Number)
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false
+  const [a, b] = parts
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 172 && b! >= 16 && b! <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) // link-local / cloud metadata
+  )
+}
+
+/** SSRF guard: webhook targets must be public https endpoints, never internal hosts. */
+export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new ApiError(400, 'url must be a valid URL')
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new ApiError(400, 'Webhook URL must be http(s)')
+  }
+  const host = url.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) {
+    throw new ApiError(400, 'Webhook URL cannot target internal hosts')
+  }
+  if (isIP(host)) {
+    if (isPrivateIp(host)) throw new ApiError(400, 'Webhook URL cannot target private IP ranges')
+    return url
+  }
+  try {
+    const addrs = await lookup(host, { all: true })
+    if (addrs.some((a) => isPrivateIp(a.address))) {
+      throw new ApiError(400, 'Webhook URL resolves to a private IP range')
+    }
+  } catch (e) {
+    if (e instanceof ApiError) throw e
+    throw new ApiError(400, 'Webhook URL host could not be resolved')
+  }
+  return url
+}
+
+/** Sign outbound payloads so receivers can verify origin. */
+export function signWebhookPayload(secret: string, body: string): string {
+  return createHmac('sha256', secret).update(body).digest('hex')
+}
+
+function webhookSigningSecret(tenantId: string): string {
+  const base = process.env.WEBHOOK_SIGNING_SECRET?.trim() || 'pleros-webhook-signing'
+  return `${base}:${tenantId}`
 }
 
 function toApiShape(row: {
@@ -40,11 +100,7 @@ export async function createWebhook(tenantId: string, dto: CreateWebhookInput) {
   if (!dto.url?.trim() || !dto.event?.trim()) {
     throw new ApiError(400, 'url and event are required')
   }
-  try {
-    new URL(dto.url)
-  } catch {
-    throw new ApiError(400, 'url must be a valid URL')
-  }
+  await assertSafeWebhookUrl(dto.url.trim())
 
   const row = await tenantDb.webhookSubscription.create({
     data: {
@@ -74,13 +130,19 @@ export async function testWebhook(tenantId: string, id: string) {
     event: 'webhook.test',
     tenantId,
     timestamp: new Date().toISOString(),
-    data: { message: 'This is a test webhook from Cosmos.' },
+    data: { message: 'This is a test webhook from Pleros.' },
   })
 
   try {
+    // Re-validate at send time: DNS may have changed since the subscription was created.
+    await assertSafeWebhookUrl(sub.url)
     const res = await fetch(sub.url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Cosmos-Event': 'webhook.test' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Pleros-Event': 'webhook.test',
+        'X-Pleros-Signature': signWebhookPayload(webhookSigningSecret(tenantId), body),
+      },
       body,
       signal: AbortSignal.timeout(8000),
     })

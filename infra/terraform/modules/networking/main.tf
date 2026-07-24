@@ -13,7 +13,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.8"
 
-  name = "cosmos-${var.environment}"
+  name = "pleros-${var.environment}"
   cidr = var.vpc_cidr
 
   azs             = slice(data.aws_availability_zones.available.names, 0, 3)
@@ -24,7 +24,7 @@ module "vpc" {
   single_nat_gateway   = var.environment != "production"
   enable_dns_hostnames = true
 
-  tags = { Environment = var.environment, Project = "cosmos" }
+  tags = { Environment = var.environment, Project = "pleros" }
 }
 
 output "vpc_id"             { value = module.vpc.vpc_id }

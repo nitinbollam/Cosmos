@@ -6,9 +6,9 @@ Frequently asked questions with direct answers. Celestial should use these for q
 
 ---
 
-## What is Cosmos?
+## What is Pleros?
 
-Cosmos is a wholesale ERP and distribution platform for SMB distributors. It includes inventory, orders, warehouse operations, purchasing, CRM, dispatch, finance (AR/AP/GL), a B2B buyer portal, mobile apps, and the Celestial AI assistant. Everything runs on http://localhost:4000 in local dev.
+Pleros is a wholesale ERP and distribution platform for SMB distributors. It includes inventory, orders, warehouse operations, purchasing, CRM, dispatch, finance (AR/AP/GL), a B2B buyer portal, mobile apps, and the Celestial AI assistant. Everything runs on http://localhost:4000 in local dev.
 
 ---
 
@@ -16,17 +16,17 @@ Cosmos is a wholesale ERP and distribution platform for SMB distributors. It inc
 
 | Role | URL | Email | Password |
 |------|-----|-------|----------|
-| Admin | `/admin/login` | `admin@cosmos.local` | `admin1234` |
+| Admin | `/admin/login` | `admin@pleros.local` | `admin1234` |
 | Buyer | `/login` | `buyer@acme-retail.com` | `buyer1234` |
-| Warehouse mobile | `/m/login` | `warehouse@cosmos.local` | `warehouse1234` |
-| Driver mobile | `/m/login` | `driver@cosmos.local` | `driver1234` |
-| Sales mobile | `/m/login` | `sales@cosmos.local` | `sales1234` |
+| Warehouse mobile | `/m/login` | `warehouse@pleros.local` | `warehouse1234` |
+| Driver mobile | `/m/login` | `driver@pleros.local` | `driver1234` |
+| Sales mobile | `/m/login` | `sales@pleros.local` | `sales1234` |
 
 Run `npm run seed` first if accounts don't exist.
 
 ---
 
-## How does POS work in Cosmos?
+## How does POS work in Pleros?
 
 POS (Point of Sale) is **admin in-store checkout** at `/admin/pos` — not the B2B buyer shop.
 
@@ -77,7 +77,7 @@ On admin order detail (`/admin/orders/:id`), use **Process return** modal:
 - Invoices are **auto-created when an order ships**
 - Appear in Finance → AR tab (admin) and `/invoices` (buyer)
 - Buyers can pay balance via record payment or Stripe card
-- PDF download: print-ready HTML at `/invoices/:id/pdf`
+- PDF download: native PDF at `GET /invoices/:id/pdf` (print preview HTML at `/invoices/:id/html`)
 - GL: Dr AR / Cr Revenue on issue; Dr Cash / Cr AR on payment
 
 ---
@@ -131,7 +131,7 @@ Mock mode appears when no LLM API key is configured. Celestial still answers **d
 
 ---
 
-## How do I run Cosmos locally?
+## How do I run Pleros locally?
 
 ```bash
 npm install
@@ -164,7 +164,7 @@ Both are in Finance module with separate tabs. GL auto-posts journal entries for
 
 ## How do mobile apps work offline?
 
-Mobile PWA uses a service worker (`sw.js`) and localStorage action queue. Actions taken offline replay when connectivity returns (Background Sync). `OfflineBanner` shows sync status on mobile pages.
+Mobile PWA uses a service worker (`sw.js`) that precaches the app shell and hashed assets, plus a localStorage action queue. Enqueued offline actions call `SyncManager.register('pleros-offline-queue')` and replay when connectivity returns. Install from `/m/login` (Add to Home Screen / Install app). `OfflineBanner` shows sync status on mobile pages.
 
 ---
 
@@ -176,7 +176,7 @@ Settings → Audit log tab. Filter by entity type. Celestial chat events appear 
 
 ## What feature tiers were added?
 
-Cosmos development is organized in tiers (4–15). Key tiers:
+Pleros development is organized in tiers (4–15). Key tiers:
 - **Tier 4:** Invoicing, returns, buyer quotes
 - **Tier 5:** GL auto-posting, AP vendor bills
 - **Tier 6:** Notifications, buyer invoices, contract pricing, reorder

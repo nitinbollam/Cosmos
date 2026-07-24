@@ -12,7 +12,7 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
 
-  cluster_name    = "cosmos-${var.environment}"
+  cluster_name    = "pleros-${var.environment}"
   cluster_version = "1.29"
   vpc_id          = var.vpc_id
   subnet_ids      = var.private_subnet_ids
@@ -37,7 +37,7 @@ module "eks" {
     }
   }
 
-  tags = { Environment = var.environment, Project = "cosmos" }
+  tags = { Environment = var.environment, Project = "pleros" }
 }
 
 output "cluster_name"      { value = module.eks.cluster_name }

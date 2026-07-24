@@ -18,3 +18,16 @@ export async function getTenantTaxSettings(tenantId: string) {
   const rate = await getTenantSalesTaxRate(tenantId)
   return { salesTaxRate: rate, salesTaxPercent: +(rate * 100).toFixed(2) }
 }
+
+export async function updateTenantSalesTaxRate(tenantId: string, salesTaxRate: number) {
+  const org = await tenantDb.tenantOrganization.findUnique({ where: { id: tenantId } })
+  const settings =
+    org?.settings && typeof org.settings === 'object' && !Array.isArray(org.settings)
+      ? (org.settings as Record<string, unknown>)
+      : {}
+  await tenantDb.tenantOrganization.update({
+    where: { id: tenantId },
+    data: { settings: { ...settings, salesTaxRate } },
+  })
+  return getTenantTaxSettings(tenantId)
+}

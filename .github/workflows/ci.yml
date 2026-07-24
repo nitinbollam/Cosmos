@@ -1,4 +1,4 @@
-name: Cosmos CI
+name: Pleros CI
 
 on:
   push:
@@ -12,15 +12,15 @@ concurrency:
 
 jobs:
   node:
-    name: Build & test (@cosmos/web)
+    name: Build & test (@pleros/web)
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: cosmos
-          POSTGRES_PASSWORD: cosmos
-          POSTGRES_DB: cosmos_test
+          POSTGRES_USER: pleros
+          POSTGRES_PASSWORD: pleros
+          POSTGRES_DB: pleros_test
         ports:
           - 5432:5432
         options: >-
@@ -38,13 +38,13 @@ jobs:
         run: npm ci
       - name: Preflight (lint · test · build)
         env:
-          DATABASE_URL: postgresql://cosmos:cosmos@localhost:5432/cosmos_test
+          DATABASE_URL: postgresql://pleros:pleros@localhost:5432/pleros_test
           JWT_SECRET: ci-test-jwt-secret-please-rotate-256bit
           JWT_REFRESH_SECRET: ci-test-jwt-refresh-secret-please-rotate
         run: npm run prod:preflight
 
   docker:
-    name: Build @cosmos/web image
+    name: Build @pleros/web image
     runs-on: ubuntu-latest
     needs: [node]
     if: github.event_name == 'push'
@@ -57,4 +57,8 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           push: false
-          tags: cosmos/web:ci
+          tags: pleros/web:ci
+          build-args: |
+            VITE_GATEWAY_URL=/api/v1
+            VITE_STRIPE_PUBLISHABLE_KEY=pk_test_ci_placeholder
+            VITE_WEB_ADMIN_ORIGIN=
