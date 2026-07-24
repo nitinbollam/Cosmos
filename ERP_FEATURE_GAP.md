@@ -175,7 +175,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | RBAC | ⚠️ | Coarse role map (`permissions.ts`); not module-level everywhere |
 | Global search | ✅ | Admin |
 | AI assistant (Celestial) | ✅ | RAG + live data tools — rare in ERPs |
-| Deep BI / custom reports | ⚠️ | KPIs + EWMA demand/cashflow; no report builder or anomaly UI |
+| Deep BI / custom reports | ⚠️ | KPIs + EWMA demand/cashflow + saved report builder (orders/inventory/AR CSV); no anomaly UI |
 | HR / payroll | ❌ | Not implemented |
 | Manufacturing / BOM | ❌ | Not implemented |
 
@@ -214,7 +214,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 9 | Deeper sales tax (nexus, exemptions) |
 | 10 | ~~Native PDF documents~~ | ✅ Invoice PDF via pdfkit |
 | 11 | Fine-grained RBAC per module |
-| 12 | Report builder / export suite |
+| 12 | ~~Report builder / export suite~~ | ✅ Saved reports + CSV for orders, inventory, AR aging |
 
 ### Enterprise — usually phase 2+
 

@@ -217,6 +217,25 @@ Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list
 
 ---
 
+## Reports — how it works
+
+**Route:** `/admin/reports`
+
+**Keywords:** reports, report builder, CSV export, saved reports, AR aging, orders export, inventory export
+
+Build ad-hoc operational reports, save filter presets, and download CSV.
+
+**Report types:**
+- **Orders** — status, channel, date range, search
+- **Inventory** — SKU stock (on hand / reserved / available), warehouse, low-stock filter
+- **AR aging** — open invoice balances in 0–30 / 31–60 / 61–90 / 91–120 / 120+ buckets
+
+**API:** `GET /report-builder/types`, `POST /report-builder/run`, `GET/POST/PATCH/DELETE /report-builder/saved`, `POST /report-builder/saved/:id/run`.
+
+**Related:** Finance shows live AR aging widgets; Reports is the exportable / savable version.
+
+---
+
 ## POS (Point of Sale) — how it works
 
 **Route:** `/admin/pos`

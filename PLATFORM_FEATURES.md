@@ -101,6 +101,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | **Quotes** | `/admin/quotes` | Admin quote approval, counter-offers |
 | **Dispatch** | `/admin/dispatch` | Delivery routes, stop reorder, driver assignment, map, proof of delivery |
 | **Finance** | `/admin/finance` | **AR invoices**, AP (PO bills), 3-way match, bank recon, trial balance, cashflow chart, record payment |
+| **Reports** | `/admin/reports` | Saved report builder — orders, inventory, AR aging with CSV export |
 | **POS** | `/admin/pos` | In-store checkout: register, customer, SKU cart, cash/card/check, receipt print |
 | **Notifications** | `/admin/notifications` | Notification request inbox (SendGrid/Twilio when configured) |
 | **Celestial** | `/admin/celestial` | Full-page AI copilot (also floating ✦ panel on all admin pages) |
@@ -192,7 +193,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | `ledger` | ChartAccount, JournalEntry, JournalLine |
 | `compliance` | MSATenant, MSAReport, Batch, … |
 | `notification` | NotificationRequest |
-| `analytics` | DailyKpiSnapshot, **CelestialConversation**, **CelestialMessage** |
+| `analytics` | DailyKpiSnapshot, **CelestialConversation**, **CelestialMessage**, **SavedReport** |
 
 **Commands:** `npm run db:setup`, `db:generate`, `db:migrate`, `seed`.
 
@@ -205,6 +206,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | Dashboard KPIs | `GET /api/v1/analytics/kpis`, admin dashboard |
 | KPI snapshots | `GET /api/v1/kpi/snapshots` — feeds revenue chart |
 | Cashflow history | `GET /api/v1/analytics/cashflow-history` — weekly AR/AP collections (revenue proxy fallback) |
+| Report builder | `GET/POST /api/v1/report-builder/*` — saved reports + run/export for orders, inventory, AR aging |
 | Cashflow forecast | `POST /api/cashflow` — `@pleros/analytics-engine` EWMA (+ seasonal when history ≥ 8 weeks) |
 | Demand forecast | `forecastDemandUsage` in analytics-engine; `GET /inventory/demand-plan` uses ledger daily series + EWMA |
 | Anomaly detection | `POST /api/anomaly` (engine only; no admin UI yet) |

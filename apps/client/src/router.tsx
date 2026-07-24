@@ -87,6 +87,7 @@ const router = createBrowserRouter([
             path: 'finance/journals/:id',
             element: page(() => import('@/pages/admin/finance/journals/[id]/page')),
           },
+          { path: 'reports', element: page(() => import('@/pages/admin/reports/page')) },
           { path: 'fulfillment', element: page(() => import('@/pages/admin/fulfillment/page')) },
           {
             path: 'fulfillment/:taskId',
