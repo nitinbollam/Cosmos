@@ -22,7 +22,7 @@ export function RequireOnboardingComplete({ children }: { children: React.ReactN
     )
   }
 
-  if (tenantQ.data && tenantQ.data.onboardingPhase !== 'READY' && pathname !== '/admin/onboarding') {
+  if (tenantQ.data?.onboardingPhase !== 'READY' && pathname !== '/admin/onboarding') {
     return <Navigate to="/admin/onboarding" replace />
   }
 
