@@ -100,7 +100,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion, contract/volume pricing |
 | **Quotes** | `/admin/quotes` | Admin quote approval, counter-offers |
 | **Dispatch** | `/admin/dispatch` | Delivery routes, stop reorder, driver assignment, map, proof of delivery |
-| **Finance** | `/admin/finance` | **AR invoices**, AP (PO bills), 3-way match, bank recon, trial balance, cashflow chart, record payment |
+| **Finance** | `/admin/finance` | **AR invoices** (paginated + CSV + `GET /invoices/ar-summary`), AP (PO bills), 3-way match, bank recon, trial balance, cashflow chart, record payment |
 | **Reports** | `/admin/reports` | Saved report builder — orders, inventory, AR aging with CSV export |
 | **POS** | `/admin/pos` | In-store checkout: register, customer, SKU cart, cash/card/check, receipt print |
 | **Notifications** | `/admin/notifications` | Notification request inbox (SendGrid/Twilio when configured) |
@@ -270,7 +270,7 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **4.1 Invoicing & AR** | `Invoice` model; auto-issue on ship (`issueInvoiceForOrder`); `GET /invoices`, `GET /invoices/:id`, `GET /orders/:id/invoice`; Finance AR tab; GL posting via `invoice-gl.ts` |
+| **4.1 Invoicing & AR** | `Invoice` model; auto-issue on ship (`issueInvoiceForOrder`); `GET /invoices` (page/pageSize), `GET /invoices/ar-summary`, `GET /invoices/:id`, `GET /orders/:id/invoice`; Finance AR tab with CSV export; GL posting via `invoice-gl.ts` |
 | **4.2 Returns / RMA** | `POST /orders/:id/returns` — restock, credit memo, `returnedQty` on line items, `RETURNED` status; admin order detail “Process return” modal |
 | **4.3 Buyer-scoped quotes** | Quote list/create/get filtered by buyer `customerRef`; wired in `native-router.ts` |
 | **4.4 UI, seed & tests** | Finance/orders/quotes UI updates; `seedInvoices` in seed script; `tier4.test.ts` |

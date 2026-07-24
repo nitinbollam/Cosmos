@@ -683,10 +683,15 @@ async function routeInvoices(method: string, seg: string[], req: Request): Promi
         {
           status: url.searchParams.get('status') ?? undefined,
           customerId: buyerCustomerId ? undefined : url.searchParams.get('customerId') ?? undefined,
+          excludeCancelled: url.searchParams.get('excludeCancelled') === '1',
         },
         buyerOpts,
       ),
     )
+  }
+  if (seg.length === 2 && seg[1] === 'ar-summary' && method === 'GET') {
+    assertNotBuyer(session)
+    return Response.json(await invoices.getArSummary(session.tenantId))
   }
   if (seg.length === 2 && method === 'GET') {
     return Response.json(await invoices.getInvoice(session.tenantId, seg[1], buyerOpts))

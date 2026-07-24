@@ -200,9 +200,9 @@ Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list
 **Keywords:** finance, AR, AP, invoice, bill, payment, trial balance, GL, bank reconciliation, cashflow
 
 **Tabs:**
-- **AR (Accounts Receivable)** — customer invoices, balance, overdue, record payment
+- **AR (Accounts Receivable)** — paginated invoices (`page`/`pageSize`), AR summary KPIs (`GET /invoices/ar-summary`), Export CSV, overdue filters, record payment
 - **AP (Accounts Payable)** — vendor bills from PO receive, 3-way match status, pay bill
-- **Trial balance** — GL accounts from ledger
+- **Trial balance** — GL accounts from ledger (+ Export CSV)
 - **Cashflow chart** — forecast via analytics engine
 - **Bank reconciliation** — bank accounts, statement lines, reconcile
 
