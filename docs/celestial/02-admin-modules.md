@@ -32,7 +32,7 @@ Inventory manages the product catalog (SKUs) and stock levels per warehouse.
 - Transfer stock between warehouses
 - Spreadsheet import for bulk SKU updates
 - Low-stock alerts when quantity falls below reorder point
-- Print barcode labels (`GET /skus/:id/label` — printable HTML)
+- Print barcode labels (`GET /skus/:id/label?qty=&size=&symbols=` — printable HTML with Code128 + QR; sizes `4x2`|`4x1`|`3x2`|`2x1`)
 
 **Stock model:** Each SKU has `StockLevel` rows per warehouse, optional `binCode` on location, and a `StockLedgerEntry` audit trail.
 

@@ -353,7 +353,7 @@ Summary of major work completed in the current development cycle.
 | **8.8 Split shipments & ETA** | `OrderShipment` model; `GET /orders/:id/tracking` |
 | **8.9 Saved payment methods** | `SavedPaymentMethod` + buyer API |
 | **8.10 Wave picking & bins** | `PickWave`, `BinLocation` models + APIs |
-| **8.11 Barcode labels** | `GET /skus/:id/label` printable HTML |
+| **8.11 Barcode labels** | `GET /skus/:id/label` printable HTML with Code128 + QR (`size`, `symbols`, `qty`) |
 | **8.12 Platform** | Audit log, RBAC permissions map, feature flags, global search, public signup, POS registers |
 
 **Key files:** `operations-gl.ts`, `bank-recon.ts`, `order-templates.ts`, `order-shipments.ts`, `wave-picking.ts`, `audit-log.ts`, `pos.ts`, `search.ts`, `signup.ts`.
@@ -401,7 +401,7 @@ Summary of major work completed in the current development cycle.
 | Item | What was added |
 |------|----------------|
 | **12.1 3-way AP match UI** | Finance → Bills: match status column, filters, detail modal, re-run match |
-| **12.2 Barcode label print** | SKU detail: print qty + opens printable HTML label (`GET /skus/:id/label`) |
+| **12.2 Barcode label print** | SKU detail: size / Code128·QR / qty → printable HTML (`GET /skus/:id/label`) |
 | **12.3 Mobile wave picking** | `/m/warehouse` Waves tab + wave detail with start/complete and task links |
 | **12.4 Seed polish** | Demo vendor bill MATCHED; seed pick wave for mobile warehouse demo |
 

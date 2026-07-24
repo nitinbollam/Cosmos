@@ -264,7 +264,9 @@ async function routeSkus(method: string, seg: string[], req: Request): Promise<R
   }
   if (seg.length === 3 && seg[2] === 'label' && method === 'GET') {
     const qty = +(url.searchParams.get('qty') ?? 1)
-    const html = await barcodeLabels.buildSkuLabelHtml(session.tenantId, seg[1], qty)
+    const size = url.searchParams.get('size') ?? undefined
+    const symbols = url.searchParams.get('symbols') ?? undefined
+    const html = await barcodeLabels.buildSkuLabelHtml(session.tenantId, seg[1], { quantity: qty, size, symbols })
     return new Response(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="label-${seg[1]}.html"` },
     })
