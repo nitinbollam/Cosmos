@@ -118,3 +118,30 @@ test('removeAction and clearQueue update storage', async () => {
   mod.clearQueue()
   assert.equal(mod.readQueue().length, 0)
 })
+
+test('discardFailedActions and resetFailedForRetry manage conflict UX', async () => {
+  installBrowserMocks()
+  const mod = await import('./offline-queue')
+
+  mod.clearQueue()
+  mod.enqueueAction('receiving_scan', { sessionId: 'a', code: '1' })
+  mod.enqueueAction('receiving_scan', { sessionId: 'b', code: '2' })
+  const [a, b] = mod.readQueue()
+  mod.patchAction(a!.id, { status: 'conflict', lastError: 'stale' })
+  mod.patchAction(b!.id, { status: 'pending' })
+
+  assert.equal(mod.conflictCount(), 1)
+  assert.equal(mod.replayableCount(), 1)
+  assert.equal(mod.failedCount(), 1)
+
+  const reset = mod.resetFailedForRetry()
+  assert.equal(reset, 1)
+  assert.equal(mod.readQueue().find((x) => x.id === a!.id)?.status, 'pending')
+  assert.equal(mod.readQueue().find((x) => x.id === a!.id)?.lastError, undefined)
+
+  mod.patchAction(a!.id, { status: 'conflict', lastError: 'stale again' })
+  const discarded = mod.discardFailedActions()
+  assert.equal(discarded, 1)
+  assert.equal(mod.queueLength(), 1)
+  assert.equal(mod.readQueue()[0]?.id, b!.id)
+})
