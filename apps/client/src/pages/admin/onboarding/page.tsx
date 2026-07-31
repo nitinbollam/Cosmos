@@ -156,13 +156,6 @@ export default function OnboardingPage() {
             </button>
           ) : null}
         </div>
-
-        <p className="text-center text-xs text-pleros-text-3">
-          Prefer the full settings page?{' '}
-          <a href="/admin/settings" className="text-pleros-accent">
-            Open Settings
-          </a>
-        </p>
       </div>
     </div>
   )
