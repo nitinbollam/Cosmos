@@ -10,8 +10,12 @@ import { createRequire } from 'node:module'
 const ROOT = path.resolve(__dirname, '..')
 const WEB = path.join(ROOT, 'apps/web')
 const requireWeb = createRequire(path.join(WEB, 'package.json'))
-const { sqliteDatabaseUrl, DB_BY_SCHEMA } = createRequire(__filename)('./db-urls.mjs') as {
+const { sqliteDatabaseUrl, postgresDatabaseUrl, getDbProvider, DB_BY_SCHEMA } = createRequire(__filename)(
+  './db-urls.mjs',
+) as {
   sqliteDatabaseUrl: (dbName: string, dataDir?: string) => string
+  postgresDatabaseUrl: (baseUrl: string, dbName: string) => string
+  getDbProvider: () => 'sqlite' | 'postgresql'
   DB_BY_SCHEMA: Record<string, string>
 }
 const bcrypt = requireWeb('bcrypt') as typeof import('bcrypt')
@@ -90,11 +94,17 @@ type SeedCtx = {
 }
 
 function dbUrl(dbName: string): string {
+  if (getDbProvider() === 'postgresql') {
+    const base = process.env.DATABASE_URL?.trim() || 'postgresql://pleros:pleros@localhost:5432/postgres'
+    return postgresDatabaseUrl(base, dbName)
+  }
   return sqliteDatabaseUrl(dbName, process.env.PLEROS_DATA_DIR ?? '.data')
 }
 
 function loadPrisma<T>(envVar: string, dbName: string, relImport: string): T {
-  process.env[envVar] = dbUrl(dbName)
+  // Respect an already-set connection string (e.g. Render's per-domain *_DATABASE_URL)
+  // instead of clobbering it with a locally-computed one.
+  process.env[envVar] = process.env[envVar]?.trim() || dbUrl(dbName)
   return requireWeb(relImport) as T
 }
 
