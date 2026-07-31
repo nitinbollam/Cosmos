@@ -10,6 +10,33 @@
 # Set secrets marked `sync: false` in the Render dashboard:
 #   Staging:    VITE_STRIPE_PUBLISHABLE_KEY=pk_test_…
 #   Production: VITE_STRIPE_PUBLISHABLE_KEY=pk_live_…
+#
+# ── Postgres ──────────────────────────────────────────────────────────────
+# One Postgres instance per environment; each schema below is a separate
+# *logical* database on that instance (same host/user/password, only the
+# trailing db name differs) — see infra/sql/init-databases.sql. Because
+# fromDatabase only resolves the instance's single default database, the
+# 14 per-schema *_DATABASE_URL vars below stay `sync: false` and are set by
+# hand in the Dashboard (Environment tab -> "Add from .env").
+#
+# Staging instance: pleros-staging-postgres
+#   https://dashboard.render.com/d/dpg-d9lutf67bikc739ol07g-a
+#   Logical databases: pleros_auth, pleros_tenant, pleros_inventory,
+#   pleros_order, pleros_crm, pleros_storefront, pleros_purchasing,
+#   pleros_payment, pleros_wms, pleros_dispatch, pleros_compliance,
+#   pleros_ledger, pleros_notification, pleros_analytics.
+#
+# NOTE: the live pleros-staging web service (region ohio, branch staging,
+# plan free, Node runtime) was configured by hand in the Dashboard and
+# currently differs from the staging block below (region oregon, branch
+# develop, plan starter, Docker runtime) — this file is not yet connected
+# as a live Blueprint for that service.
+
+databases:
+  - name: pleros-staging-postgres
+    plan: free
+    region: ohio
+    postgresMajorVersion: "16"
 
 services:
   - type: web
