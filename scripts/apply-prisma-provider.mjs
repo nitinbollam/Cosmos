@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Sets `provider = "sqlite" | "postgresql"` in all apps/web/prisma/*/schema.prisma files.
+ * Sets `provider = "sqlite" | "postgresql"` in every apps/web/prisma schema.prisma file.
  * Run before db:generate / db:migrate when PLEROS_DB_PROVIDER=postgres.
  */
 import fs from 'node:fs'
