@@ -92,9 +92,31 @@ model Batch {
   @@index([tenantId, expiryDate])
 }
 
+model BatchRecall {
+  id          String    @id @default(cuid())
+  tenantId    String
+  recallCode  String
+  skuId       String
+  batchNumber String
+  reason      String
+  severity    String    @default("MANDATORY")
+  status      String    @default("ACTIVE")
+  initiatedBy String?
+  notes       String?
+  recalledAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([tenantId, recallCode])
+  @@index([tenantId, skuId, batchNumber])
+  @@index([tenantId, status])
+}
+
 enum MSAStatus {
   GENERATED
   SUBMITTED
   SUBMISSION_FAILED
   ACCEPTED
 }
+

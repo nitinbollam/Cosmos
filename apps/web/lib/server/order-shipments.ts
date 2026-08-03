@@ -25,6 +25,13 @@ export async function createOrderShipments(
   if (!order) throw new ApiError(404, 'Order not found')
   if (shipments.length === 0) throw new ApiError(400, 'At least one shipment required')
 
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const li of order.lineItems) {
+    if (li.preferredBatchId) {
+      await checkBatchNotRecalled(tenantId, li.preferredBatchId, li.skuId)
+    }
+  }
+
   const allocated = new Map<string, number>()
   for (const ship of shipments) {
     for (const li of ship.lineItems) {
@@ -63,6 +70,20 @@ export async function createOrderShipments(
 export async function markShipmentShipped(tenantId: string, shipmentId: string) {
   const row = await orderDb.orderShipment.findFirst({ where: { id: shipmentId, tenantId } })
   if (!row) throw new ApiError(404, 'Shipment not found')
+
+  const order = await orderDb.order.findFirst({
+    where: { id: row.orderId, tenantId },
+    include: { lineItems: true },
+  })
+  if (order) {
+    const { checkBatchNotRecalled } = await import('./compliance-recall')
+    for (const li of order.lineItems) {
+      if (li.preferredBatchId) {
+        await checkBatchNotRecalled(tenantId, li.preferredBatchId, li.skuId)
+      }
+    }
+  }
+
   return orderDb.orderShipment.update({
     where: { id: shipmentId },
     data: { status: ShipmentStatus.SHIPPED, shippedAt: new Date() },

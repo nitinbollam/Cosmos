@@ -21,6 +21,7 @@ import * as payments from './payments'
 import * as paymentIdempotency from './payment-idempotency'
 import * as complianceMsa from './compliance-msa'
 import * as complianceTax from './compliance-tax'
+import type { InitiateRecallInput } from './compliance-recall'
 import * as notifications from './notifications'
 import * as ledger from './ledger'
 import * as analytics from './analytics'
@@ -1263,6 +1264,12 @@ async function routeRoutes(method: string, seg: string[], req: Request): Promise
     if (!body.stopIds?.length) throw new ApiError(400, 'stopIds required')
     return Response.json(await dispatch.reorderRouteStops(session.tenantId, seg[1], body.stopIds))
   }
+  if (
+    ((seg.length === 3 && seg[2] === 'optimize') || (seg.length === 4 && seg[2] === 'stops' && seg[3] === 'optimize')) &&
+    (method === 'POST' || method === 'PATCH')
+  ) {
+    return Response.json(await dispatch.optimizeRouteStopsNearestNeighbor(session.tenantId, seg[1]))
+  }
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'delivered' && method === 'POST') {
     const body = (await req.json()) as Record<string, unknown>
     return Response.json(
@@ -1418,6 +1425,39 @@ async function routeCompliance(method: string, seg: string[], req: Request): Pro
       ),
     )
   }
+
+  const recall = await import('./compliance-recall')
+  const url = new URL(req.url)
+
+  if (seg.length === 2 && seg[1] === 'batches' && method === 'GET') {
+    assertNotBuyer(session)
+    return Response.json(await recall.listTenantBatches(session.tenantId))
+  }
+  if (seg.length === 2 && seg[1] === 'recalls' && method === 'GET') {
+    assertNotBuyer(session)
+    const st = url.searchParams.get('status') ?? undefined
+    return Response.json(await recall.listBatchRecalls(session.tenantId, st))
+  }
+  if (seg.length === 2 && seg[1] === 'recalls' && method === 'POST') {
+    assertNotBuyer(session)
+    assertRole(session, ADMIN_ROLES)
+    const body = (await req.json()) as InitiateRecallInput
+    return Response.json(await recall.initiateBatchRecall(session.tenantId, body))
+  }
+  if (seg.length === 3 && seg[1] === 'recalls' && method === 'GET') {
+    assertNotBuyer(session)
+    return Response.json(await recall.getBatchRecallImpactReport(session.tenantId, seg[2]))
+  }
+  if (seg.length === 4 && seg[1] === 'recalls' && seg[3] === 'impact-report' && method === 'GET') {
+    assertNotBuyer(session)
+    return Response.json(await recall.getBatchRecallImpactReport(session.tenantId, seg[2]))
+  }
+  if (seg.length === 4 && seg[1] === 'recalls' && seg[3] === 'resolve' && method === 'POST') {
+    assertNotBuyer(session)
+    assertRole(session, ADMIN_ROLES)
+    return Response.json(await recall.resolveBatchRecall(session.tenantId, seg[2]))
+  }
+
   throw new ApiError(404, 'Compliance route not found')
 }
 

@@ -226,6 +226,19 @@ function DispatchDashboard() {
     },
   })
 
+  const [viewMode, setViewMode] = useState<'split' | 'list' | 'map'>('split')
+  const [optimizeMessage, setOptimizeMessage] = useState<string | null>(null)
+
+  const optimizeRoute = useMutation({
+    mutationFn: (routeId: string) => api.post(`/routes/${encodeURIComponent(routeId)}/optimize`, {}),
+    onSuccess: (_data, routeId) => {
+      void qc.invalidateQueries({ queryKey: ['dispatch-route', routeId] })
+      void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
+      setOptimizeMessage('Route stops optimized using nearest-neighbor spatial algorithm!')
+      setTimeout(() => setOptimizeMessage(null), 4000)
+    },
+  })
+
   const markFailed = useMutation({
     mutationFn: ({ routeId, stopId, reason }: { routeId: string; stopId: string; reason?: string }) =>
       api.post(`/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/failed`, {
@@ -348,6 +361,38 @@ function DispatchDashboard() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={optimizeRoute.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'}
+                  onClick={() => optimizeRoute.mutate(selected.id)}
+                  className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow disabled:opacity-40"
+                  title="Sort stops using Nearest-Neighbor spatial algorithm"
+                >
+                  <span>⚡</span> {optimizeRoute.isPending ? 'Optimizing…' : 'Optimize Route (Nearest-Neighbor)'}
+                </button>
+                <div className="flex rounded border border-pleros-border overflow-hidden text-xs">
+                  <button
+                    type="button"
+                    className={`px-2.5 py-1.5 ${viewMode === 'split' ? 'bg-pleros-primary text-white font-medium' : 'text-pleros-muted hover:text-pleros-white'}`}
+                    onClick={() => setViewMode('split')}
+                  >
+                    Split
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2.5 py-1.5 ${viewMode === 'map' ? 'bg-pleros-primary text-white font-medium' : 'text-pleros-muted hover:text-pleros-white'}`}
+                    onClick={() => setViewMode('map')}
+                  >
+                    Map
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2.5 py-1.5 ${viewMode === 'list' ? 'bg-pleros-primary text-white font-medium' : 'text-pleros-muted hover:text-pleros-white'}`}
+                    onClick={() => setViewMode('list')}
+                  >
+                    List
+                  </button>
+                </div>
                 <AssignDriverSelect
                   disabled={
                     assign.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'
@@ -358,63 +403,77 @@ function DispatchDashboard() {
               </div>
             </div>
 
-            <div className="border-b border-pleros-border bg-pleros-surface-2/40 shrink-0">
-              {mapEmbedUrl ? (
-                <div className="relative">
-                  <iframe
-                    title="Route map"
-                    src={mapEmbedUrl}
-                    className="w-full h-[200px] md:h-[260px] border-0 block"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px] text-white/90 bg-black/50">
-                    ©{' '}
-                    <a
-                      href="https://www.openstreetmap.org/copyright"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline"
-                    >
-                      OpenStreetMap
-                    </a>{' '}
-                    contributors
-                  </div>
-                </div>
-              ) : (
-                <div className="h-[140px] md:h-[180px] flex flex-col items-center justify-center px-4 text-center text-pleros-muted text-sm">
-                  <p>No driver GPS yet for this route.</p>
-                  <p className="text-xs mt-1 max-w-md">
-                    When an assigned driver uses the delivery PWA (`/m/delivery`), positions appear here (refreshed every 15s while
-                    the route is active).
-                  </p>
-                  <iframe
-                    title="OpenStreetMap embed"
-                    className="mt-3 w-full max-w-xl h-24 border-0 rounded opacity-90"
-                    loading="lazy"
-                    src="https://www.openstreetmap.org/export/embed.html?bbox=-125%2C24%2C-66%2C50&layer=mapnik"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                  <p className="text-[10px] mt-1">
-                    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-pleros-primary underline">
-                      © OpenStreetMap
-                    </a>
-                  </p>
-                </div>
-              )}
-              {mapEmbedUrl && selected.lastKnownAt && (
-                <p className={`text-xs px-3 py-1 ${locationStale ? 'text-amber-400' : 'text-pleros-muted'}`}>
-                  Last position: {new Date(selected.lastKnownAt).toLocaleString()}
-                  {locationStale ? ' · may be stale' : ''}
-                </p>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-pleros-white">Stops</h3>
-                <span className="text-xs text-pleros-muted">Drag to reorder · POD records delivery</span>
+            {optimizeMessage && (
+              <div className="p-2.5 px-4 bg-emerald-500/10 border-b border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2">
+                <span>✅</span> {optimizeMessage}
               </div>
+            )}
+
+            {(viewMode === 'split' || viewMode === 'map') && (
+              <div className="border-b border-pleros-border bg-pleros-surface-2/40 shrink-0">
+                {mapEmbedUrl ? (
+                  <div className="relative">
+                    <iframe
+                      title="Route map"
+                      src={mapEmbedUrl}
+                      className={`w-full ${viewMode === 'map' ? 'h-[380px] md:h-[480px]' : 'h-[200px] md:h-[260px]'} border-0 block`}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px] text-white/90 bg-black/50 flex justify-between items-center">
+                      <span>
+                        ©{' '}
+                        <a
+                          href="https://www.openstreetmap.org/copyright"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          OpenStreetMap
+                        </a>{' '}
+                        contributors
+                      </span>
+                      <span className="font-mono text-emerald-400">
+                        {selected.stops.length} Stops Sequence Active
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-[140px] md:h-[180px] flex flex-col items-center justify-center px-4 text-center text-pleros-muted text-sm">
+                    <p>No driver GPS yet for this route.</p>
+                    <p className="text-xs mt-1 max-w-md">
+                      When an assigned driver uses the delivery PWA (`/m/delivery`), positions appear here (refreshed every 15s while
+                      the route is active).
+                    </p>
+                    <iframe
+                      title="OpenStreetMap embed"
+                      className="mt-3 w-full max-w-xl h-24 border-0 rounded opacity-90"
+                      loading="lazy"
+                      src="https://www.openstreetmap.org/export/embed.html?bbox=-125%2C24%2C-66%2C50&layer=mapnik"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                    <p className="text-[10px] mt-1">
+                      <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-pleros-primary underline">
+                        © OpenStreetMap
+                      </a>
+                    </p>
+                  </div>
+                )}
+                {mapEmbedUrl && selected.lastKnownAt && (
+                  <p className={`text-xs px-3 py-1 ${locationStale ? 'text-amber-400' : 'text-pleros-muted'}`}>
+                    Last position: {new Date(selected.lastKnownAt).toLocaleString()}
+                    {locationStale ? ' · may be stale' : ''}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {(viewMode === 'split' || viewMode === 'list') && (
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-pleros-white">Stops ({selected.stops.length})</h3>
+                  <span className="text-xs text-pleros-muted">Drag to reorder manually · ⚡ Nearest-Neighbor for spatial optimization</span>
+                </div>
               {reorderStops.error && (
                 <p className="text-red-400 text-xs mb-2">{errMsg(reorderStops.error)}</p>
               )}
@@ -435,7 +494,8 @@ function DispatchDashboard() {
               {markFailed.error && (
                 <p className="text-red-400 text-xs mt-2">{errMsg(markFailed.error)}</p>
               )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </main>
