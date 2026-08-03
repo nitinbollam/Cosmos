@@ -896,7 +896,12 @@ async function routeBills(method: string, seg: string[], req: Request): Promise<
 
   if (seg.length === 1 && method === 'GET') {
     assertRole(session, ADMIN_ROLES)
-    return Response.json(await apBills.listVendorBills(session.tenantId, url.searchParams.get('status') ?? undefined))
+    return Response.json(
+      await apBills.listVendorBills(session.tenantId, url.searchParams.get('status') ?? undefined, {
+        startDate: url.searchParams.get('startDate') ?? undefined,
+        endDate: url.searchParams.get('endDate') ?? undefined,
+      }),
+    )
   }
   if (seg.length === 2 && method === 'GET') {
     assertRole(session, ADMIN_ROLES)
@@ -1544,9 +1549,19 @@ async function routeReports(method: string, seg: string[], req: Request): Promis
   if (seg.length === 2 && seg[1] === 'trial-balance' && method === 'GET') {
     const y = url.searchParams.get('year')
     const m = url.searchParams.get('month')
+    const q = url.searchParams.get('quarter')
+    const pType = url.searchParams.get('periodType') as 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null
     const year = y ? parseInt(y, 10) : new Date().getFullYear()
     const month = m ? parseInt(m, 10) : new Date().getMonth() + 1
-    return Response.json(await ledger.trialBalance(session.tenantId, year, month))
+    const quarter = q ? parseInt(q, 10) : 1
+    return Response.json(
+      await ledger.trialBalance(session.tenantId, year, {
+        year,
+        periodType: pType ?? 'MONTHLY',
+        month,
+        quarter,
+      }),
+    )
   }
   throw new ApiError(404, 'Report route not found')
 }
@@ -1680,7 +1695,12 @@ async function routeBankAccounts(method: string, seg: string[], req: Request): P
   const url = new URL(req.url)
   if (seg.length === 1 && method === 'GET') {
     if (url.searchParams.get('summary') === 'true') {
-      return Response.json(await bankRecon.getReconciliationSummary(session.tenantId))
+      return Response.json(
+        await bankRecon.getReconciliationSummary(session.tenantId, {
+          startDate: url.searchParams.get('startDate') ?? undefined,
+          endDate: url.searchParams.get('endDate') ?? undefined,
+        }),
+      )
     }
     return Response.json(await bankRecon.listBankAccounts(session.tenantId))
   }
@@ -1688,8 +1708,19 @@ async function routeBankAccounts(method: string, seg: string[], req: Request): P
     const body = (await req.json()) as Parameters<typeof bankRecon.createBankAccount>[1]
     return Response.json(await bankRecon.createBankAccount(session.tenantId, body), { status: 201 })
   }
+  if (seg.length === 2 && seg[1] === 'lines' && method === 'GET') {
+    return Response.json(
+      await bankRecon.listStatementLines(session.tenantId, {
+        bankAccountId: url.searchParams.get('bankAccountId') ?? undefined,
+        reconciled: url.searchParams.has('reconciled') ? url.searchParams.get('reconciled') === 'true' : undefined,
+        type: (url.searchParams.get('type') as 'DEBIT' | 'CREDIT' | 'ALL') ?? undefined,
+        startDate: url.searchParams.get('startDate') ?? undefined,
+        endDate: url.searchParams.get('endDate') ?? undefined,
+      }),
+    )
+  }
   if (seg.length === 2 && seg[1] === 'unreconciled' && method === 'GET') {
-    const bankAccountId = new URL(req.url).searchParams.get('bankAccountId') ?? undefined
+    const bankAccountId = url.searchParams.get('bankAccountId') ?? undefined
     return Response.json(await bankRecon.listUnreconciledLines(session.tenantId, bankAccountId))
   }
   if (seg.length === 3 && seg[2] === 'import' && method === 'POST') {
