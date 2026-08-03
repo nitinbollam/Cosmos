@@ -242,6 +242,10 @@ export async function confirmPickLine(
 
   const line = task.pickLines.find((p) => p.id === lineId)
   if (!line) throw new ApiError(404, 'Pick line not found')
+  if (line.batchId) {
+    const { checkBatchNotRecalled } = await import('./compliance-recall')
+    await checkBatchNotRecalled(tenantId, line.batchId, line.skuId)
+  }
   if (pickedQty > line.quantity) {
     throw new ApiError(400, `pickedQty cannot exceed ordered quantity (${line.quantity})`)
   }
@@ -288,6 +292,13 @@ export async function confirmAllPickLines(tenantId: string, taskId: string) {
   if (!task) throw new ApiError(404, 'Task not found')
   assertTaskPickable(task.status)
   if (task.pickLines.length === 0) throw new ApiError(400, 'Task has no pick lines')
+
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const line of task.pickLines) {
+    if (line.batchId) {
+      await checkBatchNotRecalled(tenantId, line.batchId, line.skuId)
+    }
+  }
 
   await wmsDb.$transaction(
     task.pickLines.map((line) =>
@@ -345,6 +356,13 @@ export async function markFulfillmentPacked(tenantId: string, taskId: string) {
   const ready = t.pickLines.every((p) => p.status === 'PICKED' || p.status === 'SHORT')
   if (!ready) throw new ApiError(400, 'All lines must be PICKED or SHORT before packing')
 
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const p of t.pickLines) {
+    if (p.batchId) {
+      await checkBatchNotRecalled(tenantId, p.batchId, p.skuId)
+    }
+  }
+
   const updated = await wmsDb.fulfillmentTask.update({
     where: { id: t.id },
     data: { status: 'PACKED' },
@@ -365,6 +383,13 @@ export async function getFulfillmentTaskRaw(tenantId: string, taskId: string) {
 export async function markFulfillmentDispatched(tenantId: string, taskId: string) {
   const t = await getFulfillmentTaskRaw(tenantId, taskId)
   if (t.status !== 'PACKED') throw new ApiError(400, 'Task must be PACKED before dispatch')
+
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const p of t.pickLines) {
+    if (p.batchId) {
+      await checkBatchNotRecalled(tenantId, p.batchId, p.skuId)
+    }
+  }
 
   const updated = await wmsDb.fulfillmentTask.update({
     where: { id: t.id },

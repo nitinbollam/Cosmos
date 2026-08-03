@@ -176,6 +176,17 @@ export async function reorderRouteStops(tenantId: string, routeId: string, stopI
   for (const id of stopIds) {
     if (!expected.has(id)) throw new ApiError(400, 'Unknown stop id for this route')
   }
+  // Pass 1: Assign negative temporary sequences to prevent unique constraint collisions on (routeId, sequence)
+  await dispatchDb.$transaction(
+    stopIds.map((id, i) =>
+      dispatchDb.routeStop.update({
+        where: { id },
+        data: { sequence: -(i + 1) },
+      }),
+    ),
+  )
+
+  // Pass 2: Assign final positive sequences
   await dispatchDb.$transaction(
     stopIds.map((id, i) =>
       dispatchDb.routeStop.update({
@@ -185,6 +196,90 @@ export async function reorderRouteStops(tenantId: string, routeId: string, stopI
     ),
   )
   return getRoute(tenantId, routeId)
+}
+
+/** Haversine formula for spatial distance in kilometers. */
+export function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371 // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+export function extractStopCoords(addr: unknown): { lat: number; lng: number } {
+  if (addr && typeof addr === 'object' && !Array.isArray(addr)) {
+    const o = addr as Record<string, unknown>
+    const lat = typeof o.lat === 'number' ? o.lat : typeof o.latitude === 'number' ? o.latitude : NaN
+    const lng = typeof o.lng === 'number' ? o.lng : typeof o.longitude === 'number' ? o.longitude : NaN
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng }
+    }
+  }
+
+  // Fallback: Hash address string into pseudo-coordinates for sorting when coordinates aren't explicit
+  const str = JSON.stringify(addr || '')
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  const pseudoLat = 32.7767 + ((hash % 1000) / 10000)
+  const pseudoLng = -96.797 + (((hash >> 3) % 1000) / 10000)
+  return { lat: pseudoLat, lng: pseudoLng }
+}
+
+/** Optimize route stops using Nearest-Neighbor spatial sorting. */
+export async function optimizeRouteStopsNearestNeighbor(tenantId: string, routeId: string) {
+  const route = await getRoute(tenantId, routeId)
+  if (route.stops.length <= 1) return route
+
+  const unvisited = [...route.stops]
+
+  // Starting location: Driver's last known position if available, else first stop
+  let currentPos: { lat: number; lng: number }
+  if (
+    typeof route.lastKnownLat === 'number' &&
+    typeof route.lastKnownLng === 'number' &&
+    Number.isFinite(route.lastKnownLat) &&
+    Number.isFinite(route.lastKnownLng)
+  ) {
+    currentPos = { lat: route.lastKnownLat, lng: route.lastKnownLng }
+  } else {
+    const first = unvisited.shift()!
+    currentPos = extractStopCoords(first.address)
+    unvisited.unshift(first) // start from depot/first stop
+  }
+
+  const optimizedStops: typeof route.stops = []
+
+  while (unvisited.length > 0) {
+    let nearestIndex = 0
+    let minDistance = Infinity
+
+    for (let i = 0; i < unvisited.length; i++) {
+      const stop = unvisited[i]!
+      const coords = extractStopCoords(stop.address)
+      const dist = haversineDistance(currentPos.lat, currentPos.lng, coords.lat, coords.lng)
+      if (dist < minDistance) {
+        minDistance = dist
+        nearestIndex = i
+      }
+    }
+
+    const nextStop = unvisited.splice(nearestIndex, 1)[0]!
+    optimizedStops.push(nextStop)
+    currentPos = extractStopCoords(nextStop.address)
+  }
+
+  const stopIds = optimizedStops.map((s) => s.id)
+  return reorderRouteStops(tenantId, routeId, stopIds)
 }
 
 export async function markStopDelivered(

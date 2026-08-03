@@ -151,3 +151,40 @@ export async function testWebhook(tenantId: string, id: string) {
     return { success: false, error: (err as Error).message }
   }
 }
+
+export async function triggerWebhook(tenantId: string, event: string, payload: Record<string, unknown>) {
+  const subs = await tenantDb.webhookSubscription.findMany({
+    where: { tenantId, event, active: true },
+  })
+  if (subs.length === 0) return { dispatched: 0 }
+
+  const body = JSON.stringify({
+    id: randomUUID(),
+    event,
+    tenantId,
+    timestamp: new Date().toISOString(),
+    data: payload,
+  })
+
+  let count = 0
+  for (const sub of subs) {
+    try {
+      await assertSafeWebhookUrl(sub.url)
+      await fetch(sub.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Pleros-Event': event,
+          'X-Pleros-Signature': signWebhookPayload(webhookSigningSecret(tenantId), body),
+        },
+        body,
+        signal: AbortSignal.timeout(5000),
+      })
+      count++
+    } catch {
+      // Ignore background dispatch errors
+    }
+  }
+  return { dispatched: count }
+}
+

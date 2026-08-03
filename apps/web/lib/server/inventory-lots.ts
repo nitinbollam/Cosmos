@@ -82,6 +82,7 @@ export async function allocateBatchesFefo(
     return aRank - bRank
   })
 
+  const { isBatchRecalled } = await import('./compliance-recall')
   const allocations: Array<{ batchId: string; quantity: number; expiryDate: Date | null }> = []
   let remaining = quantity
 
@@ -89,6 +90,8 @@ export async function allocateBatchesFefo(
     if (remaining <= 0) break
     const batchId = level.batchId ?? ''
     if (!batchId) continue
+    const recalled = await isBatchRecalled(tenantId, batchId, skuId)
+    if (recalled) continue
     const take = Math.min(remaining, level.quantityAvailable)
     if (take <= 0) continue
     const lot = lots.find((l) => l.batchCode === batchId)
