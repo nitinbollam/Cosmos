@@ -114,6 +114,10 @@ type BankAccount = {
 type BankSummary = {
   accounts: BankAccount[]
   unreconciledCount: number
+  openingBalanceTotal?: number
+  closingBalanceTotal?: number
+  totalDebits?: number
+  totalCredits?: number
 }
 
 type BankLine = {
@@ -157,6 +161,11 @@ export default function FinancePage() {
   const [apFilter, setApFilter] = useState('ALL')
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [quarter, setQuarter] = useState<number>(Math.ceil((new Date().getMonth() + 1) / 3))
+  const [trialPeriodType, setTrialPeriodType] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY'>('MONTHLY')
+  const [bankSubTab, setBankSubTab] = useState<'summary' | 'debits' | 'credits' | 'unreconciled'>('summary')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [cfHorizon, setCfHorizon] = useState<30 | 60 | 90>(30)
 
   const [payOrder, setPayOrder] = useState<InvoiceRow | null>(null)
@@ -181,26 +190,47 @@ export default function FinancePage() {
   })
 
   const billsQ = useQuery({
-    queryKey: ['finance', 'bills-ap'],
-    queryFn: () => api.get<BillRow[]>('/bills'),
+    queryKey: ['finance', 'bills-ap', startDate, endDate],
+    queryFn: () => {
+      const q = new URLSearchParams()
+      if (startDate) q.set('startDate', startDate)
+      if (endDate) q.set('endDate', endDate)
+      const qs = q.toString()
+      return api.get<BillRow[]>(`/bills${qs ? `?${qs}` : ''}`)
+    },
     enabled: tab === 'bills',
   })
 
   const bankSummaryQ = useQuery({
-    queryKey: ['finance', 'bank-summary'],
-    queryFn: () => api.get<BankSummary>('/bank-accounts?summary=true'),
+    queryKey: ['finance', 'bank-summary', startDate, endDate],
+    queryFn: () => {
+      const q = new URLSearchParams({ summary: 'true' })
+      if (startDate) q.set('startDate', startDate)
+      if (endDate) q.set('endDate', endDate)
+      return api.get<BankSummary>(`/bank-accounts?${q.toString()}`)
+    },
     enabled: tab === 'bank',
   })
 
   const bankLinesQ = useQuery({
-    queryKey: ['finance', 'bank-unreconciled'],
-    queryFn: () => api.get<BankLine[]>('/bank-accounts/unreconciled'),
+    queryKey: ['finance', 'bank-lines', bankSubTab, startDate, endDate],
+    queryFn: () => {
+      if (bankSubTab === 'unreconciled') return api.get<BankLine[]>('/bank-accounts/unreconciled')
+      const typeParam = bankSubTab === 'debits' ? 'DEBIT' : bankSubTab === 'credits' ? 'CREDIT' : 'ALL'
+      const q = new URLSearchParams({ type: typeParam })
+      if (startDate) q.set('startDate', startDate)
+      if (endDate) q.set('endDate', endDate)
+      return api.get<BankLine[]>(`/bank-accounts/lines?${q.toString()}`)
+    },
     enabled: tab === 'bank',
   })
 
   const trialQ = useQuery({
-    queryKey: ['finance', 'trial', year, month],
-    queryFn: () => api.get<TrialRow[]>(`/reports/trial-balance?year=${year}&month=${month}`),
+    queryKey: ['finance', 'trial', year, trialPeriodType, month, quarter],
+    queryFn: () =>
+      api.get<TrialRow[]>(
+        `/reports/trial-balance?year=${year}&periodType=${trialPeriodType}&month=${month}&quarter=${quarter}`,
+      ),
     enabled: tab === 'trial',
   })
 
@@ -395,6 +425,42 @@ export default function FinancePage() {
         ))}
       </div>
 
+      {tab !== 'trial' && (
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border border-pleros-border bg-pleros-surface-2/40 text-xs">
+          <span className="font-semibold text-pleros-white">Date Range Filter:</span>
+          <label className="flex items-center gap-1.5 text-pleros-muted">
+            From:
+            <input
+              type="date"
+              className="rounded bg-pleros-surface border border-pleros-border px-2 py-1 text-xs text-pleros-text"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-pleros-muted">
+            To:
+            <input
+              type="date"
+              className="rounded bg-pleros-surface border border-pleros-border px-2 py-1 text-xs text-pleros-text"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </label>
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              className="text-xs text-red-400 hover:underline ml-1"
+              onClick={() => {
+                setStartDate('')
+                setEndDate('')
+              }}
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+      )}
+
       {tab === 'invoices' && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -569,13 +635,20 @@ export default function FinancePage() {
                       <td><StatusBadge status={bill.displayStatus} /></td>
                       <td>
                         {bill.purchaseOrderId ? (
-                          <button
-                            type="button"
-                            className="btn-ghost !py-0.5 !px-1.5 !text-xs"
-                            onClick={() => setMatchBill(bill)}
-                          >
-                            <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
-                          </button>
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              className="btn-ghost !py-0.5 !px-1.5 !text-xs text-left"
+                              onClick={() => setMatchBill(bill)}
+                            >
+                              <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
+                            </button>
+                            {bill.matchStatus === 'EXCEPTION' && bill.matchNotes && (
+                              <span className="text-[10px] text-amber-400 max-w-[140px] truncate" title={bill.matchNotes}>
+                                ⚠️ {bill.matchNotes}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-xs text-pleros-text-3">—</span>
                         )}
@@ -602,26 +675,59 @@ export default function FinancePage() {
 
       {tab === 'bank' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {(bankSummaryQ.data?.accounts ?? []).map((acct) => (
-              <div key={acct.id} className="pleros-card">
-                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{acct.name}</div>
-                <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
-                  {money(Number(acct.currentBalance))}
-                </div>
-                <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{acct.accountNumber ?? '—'}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Opening Balance</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {money(bankSummaryQ.data?.openingBalanceTotal ?? 0)}
               </div>
-            ))}
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400">Total Debits (+)</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-emerald-400">
+                {money(bankSummaryQ.data?.totalDebits ?? 0)}
+              </div>
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-amber-400">Total Credits (-)</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-amber-400">
+                {money(bankSummaryQ.data?.totalCredits ?? 0)}
+              </div>
+            </div>
             <div className="pleros-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
-              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled lines</div>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled items</div>
               <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
                 {bankSummaryQ.data?.unreconciledCount ?? 0}
               </div>
             </div>
           </div>
+
+          <div className="flex gap-2 border-b border-pleros-border pb-2 text-xs">
+            {(['summary', 'debits', 'credits', 'unreconciled'] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                className={`px-3 py-1.5 rounded-md font-medium capitalize transition-colors ${
+                  bankSubTab === st
+                    ? 'bg-pleros-primary text-white'
+                    : 'text-pleros-muted hover:bg-pleros-surface-2'
+                }`}
+                onClick={() => setBankSubTab(st)}
+              >
+                {st === 'summary'
+                  ? 'All Transactions'
+                  : st === 'debits'
+                    ? 'Debit Transactions (+)'
+                    : st === 'credits'
+                      ? 'Credit Transactions (-)'
+                      : 'Unreconciled Items'}
+              </button>
+            ))}
+          </div>
+
           <div className="pleros-card overflow-x-auto">
             {bankLinesQ.isLoading ? <div className="skeleton h-40 w-full" /> : (bankLinesQ.data ?? []).length === 0 ? (
-              <EmptyState icon="🏦" title="All caught up" description="No unreconciled bank statement lines." />
+              <EmptyState icon="🏦" title="No transactions" description="No statement lines match the selected sub-tab or date filter." />
             ) : (
               <table className="pleros-table">
                 <thead>
@@ -630,28 +736,39 @@ export default function FinancePage() {
                     <th>Account</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    <th>Type</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {(bankLinesQ.data ?? []).map((line) => (
-                    <tr key={line.id}>
-                      <td>{new Date(line.postedAt).toLocaleDateString()}</td>
-                      <td>{line.bankAccount?.name ?? '—'}</td>
-                      <td>{line.description}</td>
-                      <td className="font-mono">{money(Number(line.amount))}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn-primary !py-1 !px-2 !text-xs"
-                          disabled={reconcileMut.isPending}
-                          onClick={() => reconcileMut.mutate(line.id)}
-                        >
-                          Reconcile
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {(bankLinesQ.data ?? []).map((line) => {
+                    const amt = Number(line.amount)
+                    return (
+                      <tr key={line.id}>
+                        <td>{new Date(line.postedAt).toLocaleDateString()}</td>
+                        <td>{line.bankAccount?.name ?? '—'}</td>
+                        <td>{line.description}</td>
+                        <td className={`font-mono font-medium ${amt >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {money(amt)}
+                        </td>
+                        <td>
+                          <span className={`text-xs px-2 py-0.5 rounded font-mono ${amt >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                            {amt >= 0 ? 'DEBIT (+)' : 'CREDIT (-)'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-primary !py-1 !px-2 !text-xs"
+                            disabled={reconcileMut.isPending}
+                            onClick={() => reconcileMut.mutate(line.id)}
+                          >
+                            Reconcile
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
@@ -662,12 +779,39 @@ export default function FinancePage() {
       {tab === 'trial' && (
         <div className="pleros-card space-y-4">
           <div className="flex flex-wrap gap-3 items-center">
-            <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
-            <select className="pleros-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
-              ))}
+            <label className="text-sm font-medium" style={{ color: 'var(--c-text-2)' }}>View Period:</label>
+            <select
+              className="pleros-input max-w-[130px]"
+              value={trialPeriodType}
+              onChange={(e) => setTrialPeriodType(e.target.value as 'MONTHLY' | 'QUARTERLY' | 'YEARLY')}
+            >
+              <option value="MONTHLY">Monthly</option>
+              <option value="QUARTERLY">Quarterly</option>
+              <option value="YEARLY">Yearly</option>
             </select>
+
+            {trialPeriodType === 'MONTHLY' && (
+              <>
+                <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
+                <select className="pleros-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {trialPeriodType === 'QUARTERLY' && (
+              <>
+                <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Quarter</label>
+                <select className="pleros-input max-w-[100px]" value={quarter} onChange={(e) => setQuarter(+e.target.value)}>
+                  {[1, 2, 3, 4].map((q) => (
+                    <option key={q} value={q}>Q{q}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
             <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Year</label>
             <select className="pleros-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
               {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
@@ -678,7 +822,7 @@ export default function FinancePage() {
           {trialQ.isLoading ? <div className="skeleton h-48 w-full" /> : trialQ.isError ? (
             <p style={{ color: 'var(--c-danger)' }}>Could not load trial balance</p>
           ) : (trialQ.data?.length ?? 0) === 0 ? (
-            <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this month to see balances." />
+            <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this period to see balances." />
           ) : (
             <table className="pleros-table">
               <thead>

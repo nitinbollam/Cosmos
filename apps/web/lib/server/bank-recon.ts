@@ -54,17 +54,42 @@ export async function importStatementLines(
   return created
 }
 
-export async function listUnreconciledLines(tenantId: string, bankAccountId?: string) {
+export type StatementLineFilterOpts = {
+  bankAccountId?: string
+  reconciled?: boolean
+  type?: 'DEBIT' | 'CREDIT' | 'ALL'
+  startDate?: string
+  endDate?: string
+}
+
+export async function listStatementLines(tenantId: string, opts?: StatementLineFilterOpts) {
+  const where: Prisma.BankStatementLineWhereInput = { tenantId }
+
+  if (opts?.bankAccountId) where.bankAccountId = opts.bankAccountId
+  if (typeof opts?.reconciled === 'boolean') where.reconciled = opts.reconciled
+
+  if (opts?.startDate || opts?.endDate) {
+    where.postedAt = {}
+    if (opts.startDate) where.postedAt.gte = new Date(opts.startDate)
+    if (opts.endDate) where.postedAt.lte = new Date(`${opts.endDate}T23:59:59.999Z`)
+  }
+
+  if (opts?.type === 'DEBIT') {
+    where.amount = { gt: 0 }
+  } else if (opts?.type === 'CREDIT') {
+    where.amount = { lt: 0 }
+  }
+
   return ledgerDb.bankStatementLine.findMany({
-    where: {
-      tenantId,
-      reconciled: false,
-      ...(bankAccountId ? { bankAccountId } : {}),
-    },
+    where,
     include: { bankAccount: true },
     orderBy: { postedAt: 'desc' },
-    take: 200,
+    take: 300,
   })
+}
+
+export async function listUnreconciledLines(tenantId: string, bankAccountId?: string) {
+  return listStatementLines(tenantId, { bankAccountId, reconciled: false })
 }
 
 export async function reconcileStatementLine(tenantId: string, lineId: string) {
@@ -90,16 +115,34 @@ export async function reconcileStatementLine(tenantId: string, lineId: string) {
   return updated
 }
 
-export async function getReconciliationSummary(tenantId: string) {
-  const [accounts, unreconciled] = await Promise.all([
+export async function getReconciliationSummary(tenantId: string, opts?: { startDate?: string; endDate?: string }) {
+  const [accounts, unreconciled, allLines] = await Promise.all([
     ledgerDb.bankAccount.findMany({ where: { tenantId, isActive: true } }),
     ledgerDb.bankStatementLine.count({ where: { tenantId, reconciled: false } }),
+    listStatementLines(tenantId, { startDate: opts?.startDate, endDate: opts?.endDate }),
   ])
+
+  let totalDebits = 0
+  let totalCredits = 0
+
+  for (const line of allLines) {
+    const amt = toNum(line.amount)
+    if (amt > 0) totalDebits += amt
+    else totalCredits += Math.abs(amt)
+  }
+
+  const openingBalanceTotal = accounts.reduce((sum, a) => sum + toNum(a.currentBalance) - (totalDebits - totalCredits), 0)
+  const closingBalanceTotal = accounts.reduce((sum, a) => sum + toNum(a.currentBalance), 0)
+
   return {
     accounts: accounts.map((a) => ({
       ...a,
       currentBalance: toNum(a.currentBalance),
     })),
     unreconciledCount: unreconciled,
+    openingBalanceTotal,
+    closingBalanceTotal,
+    totalDebits,
+    totalCredits,
   }
 }

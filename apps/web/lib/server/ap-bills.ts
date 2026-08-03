@@ -106,9 +106,19 @@ export async function runThreeWayMatch(tenantId: string, billId: string) {
   })
 }
 
-export async function listVendorBills(tenantId: string, status?: string) {
+export async function listVendorBills(
+  tenantId: string,
+  status?: string,
+  opts?: { startDate?: string; endDate?: string },
+) {
   const where: Prisma.VendorBillWhereInput = { tenantId }
   if (status && status !== 'ALL') where.status = status as VendorBillStatus
+
+  if (opts?.startDate || opts?.endDate) {
+    where.issuedAt = {}
+    if (opts.startDate) where.issuedAt.gte = new Date(opts.startDate)
+    if (opts.endDate) where.issuedAt.lte = new Date(`${opts.endDate}T23:59:59.999Z`)
+  }
 
   const rows = await purchasingDb.vendorBill.findMany({
     where,
