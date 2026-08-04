@@ -129,6 +129,29 @@ type BankLine = {
   bankAccount?: { name: string }
 }
 
+type FixedAssetRow = {
+  id: string
+  assetCode: string
+  name: string
+  category: string
+  acquisitionDate: string
+  cost: number
+  salvageValue: number
+  usefulLifeMonths: number
+  depreciationMethod: string
+  accumulatedDepreciation: number
+  netBookValue: number
+  status: string
+}
+
+type FixedAssetSummaryRow = {
+  totalCost: number
+  totalAccumDeprec: number
+  totalNetBookValue: number
+  activeCount: number
+  totalCount: number
+}
+
 function money(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
@@ -156,9 +179,13 @@ function apStatus(po: PoRow): string {
 
 export default function FinancePage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow' | 'bank'>('invoices')
+  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow' | 'bank' | 'fixed-assets'>('invoices')
   const [invFilter, setInvFilter] = useState('ALL')
   const [apFilter, setApFilter] = useState('ALL')
+  const [assetFilter, setAssetFilter] = useState('ALL')
+  const [createAssetOpen, setCreateAssetOpen] = useState(false)
+  const [disposeAssetTarget, setDisposeAssetTarget] = useState<FixedAssetRow | null>(null)
+  const [disposeProceeds, setDisposeProceeds] = useState('0')
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [quarter, setQuarter] = useState<number>(Math.ceil((new Date().getMonth() + 1) / 3))
@@ -175,6 +202,37 @@ export default function FinancePage() {
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
   const [invoicePage, setInvoicePage] = useState(1)
   const [exportingInvoices, setExportingInvoices] = useState(false)
+
+  const fixedAssetsQ = useQuery({
+    queryKey: ['finance', 'fixed-assets', assetFilter],
+    queryFn: () => api.get<FixedAssetRow[]>(`/fixed-assets${assetFilter !== 'ALL' ? `?status=${assetFilter}` : ''}`),
+    enabled: tab === 'fixed-assets',
+  })
+
+  const fixedAssetsSummaryQ = useQuery({
+    queryKey: ['finance', 'fixed-assets-summary'],
+    queryFn: () => api.get<FixedAssetSummaryRow>('/fixed-assets/summary'),
+    enabled: tab === 'fixed-assets',
+  })
+
+  const postDeprecMut = useMutation({
+    mutationFn: () => api.post<{ count: number; totalDepreciation: number }>('/fixed-assets/post-depreciation', {}),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets-summary'] })
+      window.alert(`Successfully posted monthly depreciation for ${data.count} active asset(s). Total expense: ${money(data.totalDepreciation)}`)
+    },
+  })
+
+  const disposeAssetMut = useMutation({
+    mutationFn: ({ id, proceeds }: { id: string; proceeds: number }) =>
+      api.post(`/fixed-assets/${encodeURIComponent(id)}/dispose`, { proceeds }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets-summary'] })
+      setDisposeAssetTarget(null)
+    },
+  })
 
   const arSummaryQ = useQuery({
     queryKey: ['finance', 'invoices-ar-summary'],
@@ -405,7 +463,7 @@ export default function FinancePage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['invoices', 'bills', 'bank', 'trial', 'cashflow'] as const).map((id) => (
+        {(['invoices', 'bills', 'bank', 'trial', 'cashflow', 'fixed-assets'] as const).map((id) => (
           <button
             key={id}
             type="button"
@@ -420,7 +478,9 @@ export default function FinancePage() {
                   ? 'Bank recon'
                   : id === 'trial'
                     ? 'Trial balance'
-                    : 'Cash flow'}
+                    : id === 'cashflow'
+                      ? 'Cash flow'
+                      : 'Fixed Assets'}
           </button>
         ))}
       </div>
@@ -929,6 +989,131 @@ export default function FinancePage() {
         </div>
       )}
 
+      {tab === 'fixed-assets' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Total Asset Cost</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {money(fixedAssetsSummaryQ.data?.totalCost ?? 0)}
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>
+                {fixedAssetsSummaryQ.data?.totalCount ?? 0} registered assets
+              </div>
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-amber-400">Accumulated Deprec.</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-amber-400">
+                {money(fixedAssetsSummaryQ.data?.totalAccumDeprec ?? 0)}
+              </div>
+            </div>
+            <div className="pleros-card metric-accent" style={{ borderLeftColor: 'var(--c-success)' }}>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Net Book Value</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {money(fixedAssetsSummaryQ.data?.totalNetBookValue ?? 0)}
+              </div>
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400">Active Equipment</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-emerald-400">
+                {fixedAssetsSummaryQ.data?.activeCount ?? 0}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {['ALL', 'ACTIVE', 'DISPOSED', 'FULLY_DEPRECIATED'].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={assetFilter === s ? 'btn-primary' : 'btn-ghost'}
+                  onClick={() => setAssetFilter(s)}
+                >
+                  {s.replace(/_/g, ' ')}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn-primary flex items-center gap-1.5"
+                disabled={postDeprecMut.isPending}
+                onClick={() => {
+                  if (window.confirm('Post monthly depreciation for all active equipment to General Ledger?')) {
+                    postDeprecMut.mutate()
+                  }
+                }}
+              >
+                <span>⚡</span> {postDeprecMut.isPending ? 'Posting…' : 'Post Monthly Depreciation'}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost border border-pleros-border"
+                onClick={() => setCreateAssetOpen(true)}
+              >
+                + Register Asset
+              </button>
+            </div>
+          </div>
+
+          <div className="pleros-card overflow-x-auto">
+            {fixedAssetsQ.isLoading ? (
+              <div className="skeleton h-40 w-full" />
+            ) : (fixedAssetsQ.data ?? []).length === 0 ? (
+              <EmptyState icon="🏗️" title="No fixed assets" description="Register equipment, vehicles, or machinery to track book value and depreciation." />
+            ) : (
+              <table className="pleros-table">
+                <thead>
+                  <tr>
+                    <th>Asset Code</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Acquisition</th>
+                    <th>Cost</th>
+                    <th>Useful Life</th>
+                    <th>Accum. Deprec.</th>
+                    <th>Net Book Value</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(fixedAssetsQ.data ?? []).map((asset) => (
+                    <tr key={asset.id}>
+                      <td className="font-mono text-xs font-semibold">{asset.assetCode}</td>
+                      <td>{asset.name}</td>
+                      <td><span className="text-xs px-2 py-0.5 rounded bg-pleros-surface-2">{asset.category}</span></td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(asset.acquisitionDate).toLocaleDateString()}</td>
+                      <td className="font-mono">{money(asset.cost)}</td>
+                      <td className="text-xs">{asset.usefulLifeMonths} mos ({Math.round(asset.usefulLifeMonths / 12)} yrs)</td>
+                      <td className="font-mono text-amber-400">{money(asset.accumulatedDepreciation)}</td>
+                      <td className="font-mono font-semibold text-emerald-400">{money(asset.netBookValue)}</td>
+                      <td><StatusBadge status={asset.status} /></td>
+                      <td className="space-x-2">
+                        {asset.status === 'ACTIVE' && (
+                          <button
+                            type="button"
+                            className="btn-ghost !py-1 !px-2 !text-xs text-amber-400"
+                            onClick={() => {
+                              setDisposeAssetTarget(asset)
+                              setDisposeProceeds(String(asset.salvageValue || 0))
+                            }}
+                          >
+                            Dispose
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       {(payOrder || payBill) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
           <div className="pleros-card max-w-md w-full space-y-4">
@@ -1013,6 +1198,144 @@ export default function FinancePage() {
           </div>
         </div>
       ) : null}
+
+      {createAssetOpen && (
+        <CreateFixedAssetModal
+          onClose={() => setCreateAssetOpen(false)}
+          onCreated={() => {
+            setCreateAssetOpen(false)
+            void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets'] })
+            void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets-summary'] })
+          }}
+        />
+      )}
+
+      {disposeAssetTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+          <div className="pleros-card max-w-md w-full space-y-4">
+            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Dispose Fixed Asset</h3>
+            <p className="text-xs text-pleros-muted">
+              {disposeAssetTarget.assetCode} — {disposeAssetTarget.name} (Current Net Book Value: {money(disposeAssetTarget.netBookValue)})
+            </p>
+            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Disposal Proceeds ($)</label>
+            <input
+              type="number"
+              className="pleros-input"
+              value={disposeProceeds}
+              onChange={(e) => setDisposeProceeds(e.target.value)}
+              placeholder="0.00"
+            />
+            <p className="text-xs text-pleros-muted">
+              Gain / Loss preview: <span className={Number(disposeProceeds) - disposeAssetTarget.netBookValue >= 0 ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                {money(Number(disposeProceeds) - disposeAssetTarget.netBookValue)}
+              </span>
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn-ghost" onClick={() => setDisposeAssetTarget(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={disposeAssetMut.isPending}
+                onClick={() => disposeAssetMut.mutate({ id: disposeAssetTarget.id, proceeds: parseFloat(disposeProceeds) || 0 })}
+              >
+                {disposeAssetMut.isPending ? 'Processing…' : 'Confirm Disposal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CreateFixedAssetModal(props: { onClose: () => void; onCreated: () => void }) {
+  const [assetCode, setAssetCode] = useState('')
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('EQUIPMENT')
+  const [acquisitionDate, setAcquisitionDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [cost, setCost] = useState('')
+  const [salvageValue, setSalvageValue] = useState('0')
+  const [usefulLifeMonths, setUsefulLifeMonths] = useState('60')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    setError(null)
+    if (!assetCode.trim() || !name.trim() || !cost || parseFloat(cost) <= 0) {
+      setError('Please fill out Code, Name, and positive Cost.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.post('/fixed-assets', {
+        assetCode: assetCode.trim(),
+        name: name.trim(),
+        category,
+        acquisitionDate,
+        cost: parseFloat(cost),
+        salvageValue: parseFloat(salvageValue) || 0,
+        usefulLifeMonths: parseInt(usefulLifeMonths, 10) || 60,
+      })
+      props.onCreated()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to register asset')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+      <div className="pleros-card max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+        <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Register New Fixed Asset</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-pleros-muted">Asset Code</label>
+            <input className="pleros-input mt-1" value={assetCode} onChange={(e) => setAssetCode(e.target.value)} placeholder="EQ-001" />
+          </div>
+          <div>
+            <label className="block text-xs text-pleros-muted">Category</label>
+            <select className="pleros-input mt-1" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="EQUIPMENT">Equipment</option>
+              <option value="VEHICLES">Vehicles</option>
+              <option value="MACHINERY">Machinery</option>
+              <option value="BUILDINGS">Buildings</option>
+              <option value="FURNITURE">Furniture & Fixtures</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs text-pleros-muted">Asset Name / Description</label>
+          <input className="pleros-input mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="Forklift / Pallet Truck" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-pleros-muted">Acquisition Date</label>
+            <input type="date" className="pleros-input mt-1" value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-pleros-muted">Acquisition Cost ($)</label>
+            <input type="number" className="pleros-input mt-1" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="12000.00" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-pleros-muted">Useful Life (Months)</label>
+            <input type="number" className="pleros-input mt-1" value={usefulLifeMonths} onChange={(e) => setUsefulLifeMonths(e.target.value)} placeholder="60" />
+          </div>
+          <div>
+            <label className="block text-xs text-pleros-muted">Salvage Value ($)</label>
+            <input type="number" className="pleros-input mt-1" value={salvageValue} onChange={(e) => setSalvageValue(e.target.value)} placeholder="0.00" />
+          </div>
+        </div>
+        {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+        <div className="flex gap-2 justify-end mt-4">
+          <button type="button" className="btn-ghost" onClick={props.onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => void submit()}>
+            {busy ? 'Saving…' : 'Register Asset'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -89,3 +89,40 @@ model BankStatementLine {
   @@index([tenantId, reconciled])
   @@index([tenantId, postedAt])
 }
+
+enum AssetStatus {
+  ACTIVE
+  DISPOSED
+  FULLY_DEPRECIATED
+}
+
+enum DepreciationMethod {
+  STRAIGHT_LINE
+  DECLINING_BALANCE
+}
+
+model FixedAsset {
+  id                         String             @id @default(cuid())
+  tenantId                   String
+  assetCode                  String
+  name                       String
+  category                   String             @default("EQUIPMENT")
+  acquisitionDate            DateTime
+  cost                       Decimal
+  salvageValue               Decimal            @default(0)
+  usefulLifeMonths           Int                @default(60)
+  depreciationMethod         DepreciationMethod @default(STRAIGHT_LINE)
+  accumulatedDepreciation    Decimal            @default(0)
+  netBookValue               Decimal
+  status                     AssetStatus        @default(ACTIVE)
+  assetAccountId             String?
+  expenseAccountId           String?
+  accumDepreciationAccountId String?
+  disposedAt                 DateTime?
+  disposalProceeds           Decimal?
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+
+  @@unique([tenantId, assetCode])
+  @@index([tenantId, status])
+}
