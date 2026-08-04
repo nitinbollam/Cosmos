@@ -38,6 +38,7 @@ import * as savedPaymentMethods from './saved-payment-methods'
 import * as wavePicking from './wave-picking'
 import * as binLocations from './bin-locations'
 import * as barcodeLabels from './barcode-labels'
+import * as fixedAssets from './fixed-assets'
 import * as pos from './pos'
 import * as posReceipt from './pos-receipt'
 import * as featureFlags from './feature-flags'
@@ -102,6 +103,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'internal') return await routeInternal(m, seg, req)
     if (seg[0] === 'webhooks') return await routeWebhooks(m, seg, req)
     if (seg[0] === 'bank-accounts') return await routeBankAccounts(m, seg, req)
+    if (seg[0] === 'fixed-assets') return await routeFixedAssets(m, seg, req)
     if (seg[0] === 'audit') return await routeAudit(m, seg, req)
     if (seg[0] === 'search') return await routeSearch(m, seg, req)
     if (seg[0] === 'order-templates') return await routeOrderTemplates(m, seg, req)
@@ -1733,6 +1735,32 @@ async function routeBankAccounts(method: string, seg: string[], req: Request): P
     return Response.json(await bankRecon.reconcileStatementLine(session.tenantId, seg[1]))
   }
   throw new ApiError(404, 'Bank account route not found')
+}
+
+async function routeFixedAssets(method: string, seg: string[], req: Request): Promise<Response> {
+  await requireRole(req, ADMIN_ROLES)
+  const session = await requireSession(req)
+  const url = new URL(req.url)
+
+  if (seg.length === 1 && method === 'GET') {
+    return Response.json(await fixedAssets.listFixedAssets(session.tenantId, url.searchParams.get('status') ?? undefined))
+  }
+  if (seg.length === 2 && seg[1] === 'summary' && method === 'GET') {
+    return Response.json(await fixedAssets.getFixedAssetSummary(session.tenantId))
+  }
+  if (seg.length === 1 && method === 'POST') {
+    const body = (await req.json()) as fixedAssets.CreateFixedAssetInput
+    return Response.json(await fixedAssets.createFixedAsset(session.tenantId, body), { status: 201 })
+  }
+  if (seg.length === 2 && seg[1] === 'post-depreciation' && method === 'POST') {
+    const body = (await req.json().catch(() => ({}))) as { date?: string }
+    return Response.json(await fixedAssets.postMonthlyDepreciation(session.tenantId, body.date))
+  }
+  if (seg.length === 3 && seg[2] === 'dispose' && method === 'POST') {
+    const body = (await req.json().catch(() => ({}))) as { disposalDate?: string; proceeds?: number }
+    return Response.json(await fixedAssets.disposeFixedAsset(session.tenantId, seg[1], body))
+  }
+  throw new ApiError(404, 'Fixed asset route not found')
 }
 
 async function routeAudit(method: string, seg: string[], req: Request): Promise<Response> {
