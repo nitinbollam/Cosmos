@@ -3054,10 +3054,10 @@ Chain: Warehouse/WMS wave picking (5.4, `wave-picking.ts`) → Fulfillment (5.3,
 - [ ] Work the wave's pick path bin-by-bin (or use `/admin/fulfillment`'s "Pick all" on the underlying task) and confirm every `PickLine` reaches `PICKED` or `SHORT`
 - [ ] On `/admin/fulfillment/:taskId`, click "Pack" once `packingReady` is true (every line `PICKED`/`SHORT`) and confirm the task status becomes `PACKED`
 - [ ] Click "Dispatch" on the `PACKED` task and confirm `wms-fulfillment.ts` calls `order-orchestration.ts`'s `dispatchFulfillmentTask`, which commits inventory and fills backorder shorts per Section 6.1's dependency table
-- [ ] Confirm the linked order now has a route stop reachable from `/admin/dispatch` (or was auto-created by the orders saga), assign a driver, and mark the stop "Delivered" via the POD modal
+- [ ] As an `ADMIN_ROLES` session, use "Create route" → "From shipped orders" (`POST /routes/from-orders`) on `/admin/dispatch` to manually build a route with a stop for the now-`SHIPPED` order (Section 5.7's Functional checklist — route/stop creation is an explicit admin action, not an automatic side effect of dispatch), then assign a driver and mark the stop "Delivered" via the POD modal
 - [ ] If the order carries age-restricted SKUs and the tenant's `requireDeliveryConfirmation` policy is enabled, confirm "Recipient age confirmed" is required before `markStopDelivered` succeeds (5.7's Edge cases)
 - [ ] Confirm the `DeliveryRoute.status` flips to `COMPLETED` once every `RouteStop` on the route is `DELIVERED`, and the order's status reflects delivery
-- [ ] Confirm a batch under an active recall (Section 5.9) cannot be picked, packed, or dispatched at any of the four `wms-fulfillment.ts` call sites, and cannot be shipped via `dispatch.ts`
+- [ ] Confirm a batch under an active recall (Section 5.9) cannot be picked, packed, or dispatched at any of the four `wms-fulfillment.ts` call sites, and cannot have a shipment created for it — `order-shipments.ts` dynamically imports `checkBatchNotRecalled` (order-shipments.ts:28,79) and throws before shipment creation, per Section 5.9's Edge cases
 - [ ] Confirm a `SALES_REP` session (outside `OPS_ROLES`/`DRIVER_ROLES`) is rejected at every step of this chain — wave/pick/pack (`OPS_ROLES`), dispatch action and route mutation (`ADMIN_ROLES`)
 
 ### 10.4 POS Sale (Scan/Select → Price → Tender → Receipt → Inventory Decrement)
