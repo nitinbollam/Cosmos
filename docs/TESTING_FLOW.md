@@ -2,6 +2,26 @@
 
 > Single source of truth for testing the Pleros / Cosmos ERP platform.
 
+## Table of Contents
+
+1. [1. Overview](#1-overview)
+2. [2. Prerequisites](#2-prerequisites)
+3. [3. Application Startup Flow](#3-application-startup-flow)
+4. [4. End-to-End Testing Flow](#4-end-to-end-testing-flow)
+5. [5. Module-by-Module Testing](#5-module-by-module-testing)
+6. [6. Feature Dependencies](#6-feature-dependencies)
+7. [7. Test Data](#7-test-data)
+8. [8. API Testing](#8-api-testing)
+9. [9. Integration Testing](#9-integration-testing)
+10. [10. Regression Testing Checklist](#10-regression-testing-checklist)
+11. [11. Smoke Testing Checklist](#11-smoke-testing-checklist)
+12. [12. Common Failure Scenarios](#12-common-failure-scenarios)
+13. [13. Troubleshooting Guide](#13-troubleshooting-guide)
+14. [14. Release Validation Flow](#14-release-validation-flow)
+15. [15. Visual Flow Diagrams](#15-visual-flow-diagrams)
+16. [16. Best Practices](#16-best-practices)
+17. [17. Appendix](#17-appendix)
+
 ## 1. Overview
 
 ### 1.1 Purpose
