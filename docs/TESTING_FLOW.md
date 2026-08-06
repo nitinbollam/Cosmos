@@ -2616,3 +2616,330 @@ Receiving any positive quantity also fires an async vendor-bill creation (`ap-bi
 **Success Response (200):** the updated `Supplier` row.
 
 **Error Cases:** 404 `{ "message": "Supplier not found" }`.
+
+### 8.2 Tier 2 — Reference Table (All Other Modules)
+
+Every route below is dispatched the same way as Tier 1 — through `handleNativeApi` in `apps/web/lib/server/native-router.ts:64-121`, one `routeXxx(method, seg, req)` function per first path segment — except the four "System" endpoints in 8.2.19, which are matched directly in `apps/web/server/api-router.ts` before the `/api/v1/*` fallthrough. The **Endpoint** column below uses the full `/api/v1/...` path (`api-router.ts:281-282` strips the `/api/v1/` prefix and hands the remaining segments to `handleNativeApi`); Tier 1's headings used the bare native-router path (e.g. `POST /orders` there is the same route as `POST /api/v1/orders` here). **Auth** values are the shared role sets from `apps/web/lib/server/session.ts:85-87` and `buyer-context.ts` (`ADMIN_ROLES = [SUPER_ADMIN, TENANT_ADMIN, MANAGER, ACCOUNTANT]`, `OPS_ROLES = ADMIN_ROLES + WAREHOUSE_STAFF`, `DRIVER_ROLES = ADMIN_ROLES + DRIVER`, and `CRM_ROLES = ADMIN_ROLES + SALES_REP` defined locally at `native-router.ts:56`), plus `any session` (any valid JWT, `requireSession`), `non-buyer session` (any role except `STAFF`/`VIEWER`, `assertNotBuyer`), and `buyer session` (portal buyer whose email resolves to a CRM customer, `requirePortalCustomerId`). This tier documents every route each module registers, but only at signature depth (path, method, role gate, one-line purpose) — not full request/response contracts.
+
+#### 8.2.1 Tenants, Billing & Users
+
+Business logic: `tenant.ts`, `billing.ts` (Stripe subscription plans, dynamically imported), `users.ts`. Dispatched by `routeTenants` (`native-router.ts:123-184`) and `routeUsers` (`native-router.ts:186-204`).
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/tenants/me | GET | non-buyer session | Get the current tenant's profile (`tenant.findTenantById`) |
+| /api/v1/tenants/me | PATCH | ADMIN_ROLES | Patch tenant settings (`tenant.patchTenant`) |
+| /api/v1/tenants/me/invites | GET | ADMIN_ROLES | List pending user invites (`tenant.listPendingInvites`) |
+| /api/v1/tenants/me/invites | POST | ADMIN_ROLES | Create a user invite by email/role (`tenant.createInvite`) |
+| /api/v1/tenants/me/invites/:id | DELETE | ADMIN_ROLES | Revoke a pending invite (`tenant.revokeInvite`) |
+| /api/v1/tenants/me/upgrade | POST | ADMIN_ROLES | Change the tenant's plan (`tenant.updateTenantPlan`) |
+| /api/v1/tenants/me/plan | PATCH | ADMIN_ROLES | Change the tenant's plan (`tenant.updateTenantPlan`, same underlying call as `/upgrade`) |
+| /api/v1/tenants/me/billing | GET | ADMIN_ROLES | Get Stripe subscription/billing status (`billing.getBillingStatus`) |
+| /api/v1/tenants/me/billing/checkout | POST | ADMIN_ROLES | Create a Stripe Checkout session for a paid plan (`billing.createCheckoutSession`) |
+| /api/v1/tenants/me/billing/portal | POST | ADMIN_ROLES | Create a Stripe customer billing-portal session (`billing.createPortalSession`) |
+| /api/v1/tenants/me/onboarding-steps/:step | PATCH | ADMIN_ROLES | Mark an onboarding checklist step complete/incomplete (`tenant.patchOnboardingStep`) |
+| /api/v1/users | GET | ADMIN_ROLES | Paginated list of tenant users (`users.listUsers`) |
+| /api/v1/users/:id | PATCH | ADMIN_ROLES | Update a user's role/active flag (`users.updateUser`) |
+| /api/v1/users/:id | DELETE | ADMIN_ROLES | Deactivate a user; cannot target your own account (`users.deactivateUser`) |
+
+#### 8.2.2 CRM (Customers, Leads, Activities)
+
+Business logic: `crm.ts`, `pricing.ts` (customer-specific prices), `customer-notification-prefs.ts`. Dispatched by `routeCustomers` (`native-router.ts:530-621`), `routeLeads` (`native-router.ts:623-650`), `routeActivities` (`native-router.ts:652-670`).
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/customers/me | GET | any session | Buyer's own linked CRM customer record (`crm.getCustomer` via `getAuthProfile`) |
+| /api/v1/customers/me | PATCH | buyer session | Update the buyer's own customer profile (`crm.patchCustomerProfile`) |
+| /api/v1/customers/me/notification-prefs | GET | buyer session | Get the buyer's notification preferences (`customerNotificationPrefs.getCustomerNotificationPrefs`) |
+| /api/v1/customers/me/notification-prefs | PATCH | buyer session | Patch the buyer's notification preferences (`customerNotificationPrefs.patchCustomerNotificationPrefs`) |
+| /api/v1/customers/me/prices | GET | any session (must have linked customer) | List the caller's negotiated customer prices (`pricing.listCustomerPrices`) |
+| /api/v1/customers/lookup | GET | non-buyer session | Find a customer by `externalRef` query param (`crm.findCustomerByExternalRef`) |
+| /api/v1/customers/import | POST | non-buyer session | Bulk-import customer rows (`crm.importCustomers`) |
+| /api/v1/customers | GET | non-buyer session | List customers — paged (`crm.listCustomersPaged`) if `?page=` present, else full list (`crm.listCustomers`) |
+| /api/v1/customers | POST | non-buyer session | Create a customer (`crm.createCustomer`) |
+| /api/v1/customers/:id | GET | non-buyer session | Get a customer by id (`crm.getCustomer`) |
+| /api/v1/customers/:id | PATCH | non-buyer session | Update a customer (`crm.patchCustomer`) |
+| /api/v1/customers/:id/prices | GET | non-buyer session | List a customer's negotiated prices (`pricing.listCustomerPrices`) |
+| /api/v1/customers/:id/prices | POST | ADMIN_ROLES | Upsert a customer-specific price (`pricing.upsertCustomerPrice`) |
+| /api/v1/customers/:id/prices/:priceId | DELETE | ADMIN_ROLES | Delete a customer-specific price (`pricing.deleteCustomerPrice`) |
+| /api/v1/leads/import | POST | CRM_ROLES | Bulk-import lead rows (`crm.importLeads`) |
+| /api/v1/leads | GET | CRM_ROLES | List leads (`crm.listLeads`) |
+| /api/v1/leads | POST | CRM_ROLES | Create a lead (`crm.createLead`) |
+| /api/v1/leads/:id | GET | CRM_ROLES | Get a lead (`crm.getLead`) |
+| /api/v1/leads/:id | PATCH | CRM_ROLES | Update a lead (`crm.patchLead`) |
+| /api/v1/leads/:id/convert | POST | CRM_ROLES | Convert a lead into a customer (`crm.convertLead`, requires `customerName`) |
+| /api/v1/activities | GET | CRM_ROLES | List CRM activities, filterable by `customerId`/`leadId` (`crm.listActivities`) |
+| /api/v1/activities | POST | CRM_ROLES | Log a CRM activity (`crm.createActivity`) |
+
+#### 8.2.3 Quotes
+
+Business logic: `quotes.ts`. Dispatched by `routeQuotes` (`native-router.ts:743-802`).
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/quotes | GET | any session | List quotes, optionally filtered by `?status=`; buyer-scoped for portal buyers (`quotes.listQuotes`) |
+| /api/v1/quotes | POST | any session | Create a draft quote (`quotes.createQuote`) |
+| /api/v1/quotes/:id | GET | any session | Get a quote (buyer-scoped) (`quotes.getQuote`) |
+| /api/v1/quotes/:id/submit | POST | any session | Submit a draft quote for review (`quotes.submitQuote`) |
+| /api/v1/quotes/:id/request-approval | POST | any session | Request manager approval on a quote (`quotes.requestQuoteApproval`) |
+| /api/v1/quotes/:id/approve | POST | ADMIN_ROLES | Approve a quote (`quotes.approveQuote`) |
+| /api/v1/quotes/:id/reject | POST | ADMIN_ROLES | Reject a quote with a required `reason` (`quotes.rejectQuote`) |
+| /api/v1/quotes/:id/counter-offers | GET | any session | List counter-offers on a quote, ownership-checked for buyers (`quotes.listQuoteCounterOffers`) |
+| /api/v1/quotes/:id/counter-offers | POST | any session | Create a counter-offer (`quotes.createQuoteCounterOffer`) |
+| /api/v1/quotes/:id/counter-offers/:offerId/accept | POST | any session | Accept a counter-offer (`quotes.acceptQuoteCounterOffer`) |
+
+#### 8.2.4 Fulfillment & Warehouse Operations (WMS, Pick Waves, Bins)
+
+Business logic: `wms-fulfillment.ts`, `wms-receiving.ts`, `wms-putaway.ts`, `wms-labor.ts`, `wms-cycle-count.ts`, `wave-picking.ts`, `bin-locations.ts`, `order-orchestration.ts` (dispatch side-effects). Dispatched by `routeFulfillment` (`native-router.ts:1022-1052`), `routeWms` (`native-router.ts:1054-1232`), `routePickWaves` (`native-router.ts:1816-1840`), `routeBins` (`native-router.ts:1842-1859`). All require `OPS_ROLES` unless noted.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/fulfillment/tasks | POST | OPS_ROLES | Create a fulfillment (pick) task for an order (`wmsFulfillment.createFulfillmentTask`) |
+| /api/v1/fulfillment/tasks/:orderId | DELETE | OPS_ROLES | Cancel the fulfillment task for an order (`wmsFulfillment.cancelFulfillmentByOrder`) |
+| /api/v1/fulfillment/tasks/:id/pack | POST | OPS_ROLES | Mark a task packed and run pack-side order effects (`wmsFulfillment.markFulfillmentPacked`, `orderOrchestration.onFulfillmentPacked`) |
+| /api/v1/fulfillment/tasks/:id/dispatch | POST | OPS_ROLES | Orchestrated dispatch: serials → inventory commit → backorder → order/invoice/COGS (`orderOrchestration.dispatchFulfillmentTask`) |
+| /api/v1/wms/tasks | GET | OPS_ROLES | List fulfillment tasks, filterable by status/warehouse/order (`wmsFulfillment.listFulfillmentTasks`) |
+| /api/v1/wms/tasks/:id | GET | OPS_ROLES | Get a fulfillment task (`wmsFulfillment.getFulfillmentTask`) |
+| /api/v1/wms/tasks/:id/assign | PATCH | OPS_ROLES | Assign/unassign a task to a warehouse user (`wmsFulfillment.assignFulfillmentTask`) |
+| /api/v1/wms/tasks/:id/pick-all | POST | OPS_ROLES | Confirm all pick lines on a task at once (`wmsFulfillment.confirmAllPickLines`) |
+| /api/v1/wms/tasks/:id/pick-lines/:lineId | PATCH | OPS_ROLES | Confirm one pick line (bin/qty/serial) (`wmsFulfillment.confirmPickLine`) |
+| /api/v1/wms/receiving/sessions | GET | OPS_ROLES | List receiving sessions, filterable by status (`wmsReceiving.listReceivingSessions`) |
+| /api/v1/wms/receiving/sessions | POST | OPS_ROLES | Start a receiving session against a warehouse/PO/ASN (`wmsReceiving.startReceivingSession`) |
+| /api/v1/wms/receiving/sessions/:id | GET | OPS_ROLES | Get a receiving session (`wmsReceiving.getReceivingSession`) |
+| /api/v1/wms/receiving/sessions/:id/scan | POST | OPS_ROLES | Scan-receive a line by barcode/code (`wmsReceiving.scanReceivingItem`) |
+| /api/v1/wms/receiving/sessions/:id/import | POST | OPS_ROLES | Bulk-import receiving lines (`wmsReceiving.importReceivingItems`) |
+| /api/v1/wms/receiving/sessions/:id/complete | PATCH | OPS_ROLES | Complete a receiving session (`wmsReceiving.completeReceivingSession`) |
+| /api/v1/wms/putaway/tasks | GET | OPS_ROLES | List putaway tasks, filterable by warehouse/status (`wmsPutaway.listPutawayTasks`) |
+| /api/v1/wms/putaway/tasks/:id/lines/:lineId | PATCH | OPS_ROLES | Confirm a putaway line's actual bin (`wmsPutaway.confirmPutawayLine`) |
+| /api/v1/wms/labor/metrics | GET | OPS_ROLES | Warehouse labor productivity metrics over N days (`wmsLabor.getLaborMetrics`) |
+| /api/v1/wms/cycle-counts | GET | OPS_ROLES | List cycle counts (`wmsCycleCount.listCycleCounts`) |
+| /api/v1/wms/cycle-counts | POST | OPS_ROLES | Create a cycle count (`wmsCycleCount.createCycleCount`) |
+| /api/v1/wms/cycle-counts/:id | GET | OPS_ROLES | Get a cycle count with lines (`wmsCycleCount.getCycleCount`) |
+| /api/v1/wms/cycle-counts/:id/lines/import | POST | OPS_ROLES | Bulk-import counted quantities (`wmsCycleCount.importCycleLineCounts`) |
+| /api/v1/wms/cycle-counts/:id/submit-for-approval | PATCH | OPS_ROLES | Submit a completed count for manager approval (`wmsCycleCount.submitCycleCountForApproval`) |
+| /api/v1/wms/cycle-counts/:id/approve | POST or PATCH | ADMIN_ROLES | Approve a cycle count and post inventory adjustments (`wmsCycleCount.approveCycleCount`) |
+| /api/v1/wms/cycle-counts/:id/lines/:lineId | PATCH | OPS_ROLES | Update one line's counted quantity (`wmsCycleCount.updateCycleLineCountedQty`) |
+| /api/v1/pick-waves | GET | OPS_ROLES | List pick waves, filterable by warehouse (`wavePicking.listPickWaves`) |
+| /api/v1/pick-waves/:id | GET | OPS_ROLES | Get a pick wave's detail (`wavePicking.getPickWaveDetail`) |
+| /api/v1/pick-waves | POST | OPS_ROLES | Batch a set of fulfillment tasks into a pick wave (`wavePicking.createPickWave`) |
+| /api/v1/pick-waves/:id/start | POST | OPS_ROLES | Start a pick wave (`wavePicking.startPickWave`) |
+| /api/v1/pick-waves/:id/complete | POST | OPS_ROLES | Complete a pick wave (`wavePicking.completePickWave`) |
+| /api/v1/bins | GET | OPS_ROLES | List bin locations for a warehouse (`?warehouseId=` required) (`binLocations.listBinLocations`) |
+| /api/v1/bins | POST | OPS_ROLES | Create a bin location (`binLocations.createBinLocation`) |
+| /api/v1/bins/:id | DELETE | OPS_ROLES | Delete a bin location (`binLocations.deleteBinLocation`) |
+
+#### 8.2.5 EDI
+
+Business logic: `edi.ts`. Dispatched by `routeEdi` (`native-router.ts:844-893`). All require `ADMIN_ROLES`.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/edi/partners | GET | ADMIN_ROLES | List EDI trading partners (`edi.listTradingPartners`) |
+| /api/v1/edi/partners | POST | ADMIN_ROLES | Create a trading partner (`edi.createTradingPartner`) |
+| /api/v1/edi/partners/:id | PATCH | ADMIN_ROLES | Update a trading partner (`edi.updateTradingPartner`) |
+| /api/v1/edi/documents | GET | ADMIN_ROLES | List recent EDI documents (`?limit=`) (`edi.listEdiDocuments`) |
+| /api/v1/edi/inbound/850 | POST | ADMIN_ROLES | Ingest an inbound 850 purchase order document (`edi.ingest850`) |
+| /api/v1/edi/documents/:id/process | POST | ADMIN_ROLES | Turn an ingested 850 document into a sales order (`edi.process850Document`) |
+| /api/v1/edi/outbound/810 | POST | ADMIN_ROLES | Generate an outbound 810 invoice document (`edi.generate810ForInvoice`) |
+| /api/v1/edi/outbound/856 | POST | ADMIN_ROLES | Generate an outbound 856 ASN/shipment document (`edi.generate856ForShipment`) |
+
+#### 8.2.6 AP Bills (Vendor Payables)
+
+Business logic: `ap-bills.ts` (posts through `operations-gl.ts`). Dispatched by `routeBills` (`native-router.ts:895-927`). All require `ADMIN_ROLES`.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/bills | GET | ADMIN_ROLES | List vendor bills, filterable by status/date range (`apBills.listVendorBills`) |
+| /api/v1/bills/:id | GET | ADMIN_ROLES | Get a vendor bill (`apBills.getVendorBill`) |
+| /api/v1/bills/from-po | POST | ADMIN_ROLES | Create a vendor bill from a received PO (`apBills.createBillFromPurchaseOrder`) |
+| /api/v1/bills/:id/payments | POST | ADMIN_ROLES | Record a payment against a vendor bill (`apBills.recordBillPayment`) |
+| /api/v1/bills/:id/match | POST | ADMIN_ROLES | Run 3-way match (PO / receipt / bill) (`apBills.runThreeWayMatch`) |
+
+#### 8.2.7 Payments (Stripe Integration)
+
+Business logic: `payments.ts`, `payment-idempotency.ts`, `stripe.ts`. Dispatched by `routePayments` (`native-router.ts:935-997`). Mutating calls require an `Idempotency-Key` header (`requireIdempotencyKey`, `native-router.ts:929-933`). This is distinct from the order/invoice payment-recording endpoints already covered in Tier 1 — these routes talk to Stripe PaymentIntents directly.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/payments/stripe/status | GET | public | Whether Stripe is configured for this deployment (`payments.stripeIntegrationStatus`) |
+| /api/v1/payments/webhook/stripe | POST | public (Stripe-signature verified) | Stripe webhook receiver (`payments.handleStripeWebhook`) |
+| /api/v1/payments/authorize | POST | any session | Authorize a PaymentIntent for an order; buyers restricted to their own orders (`payments.authorize`) |
+| /api/v1/payments/capture | POST | ADMIN_ROLES | Capture a previously authorized PaymentIntent (`payments.capture`) |
+| /api/v1/payments/void | POST | ADMIN_ROLES | Void an authorized PaymentIntent (`payments.voidIntent`) |
+| /api/v1/payments/refund | POST | ADMIN_ROLES | Refund a captured PaymentIntent, in full or `amount` (`payments.refund`) |
+
+#### 8.2.8 Compliance (MSA, Tax, Age Verification, Batch Recalls)
+
+Business logic: `compliance-msa.ts` (+ `msa-storage.ts`), `compliance-tax.ts`, `tenant-tax.ts`, `compliance-age.ts`, `compliance-recall.ts`. Dispatched by `routeMsa` (`native-router.ts:1312-1363`), `routeTax` (`native-router.ts:1365-1390`), `routeCompliance` (`native-router.ts:1392-1469`).
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/msa/reports | GET | non-buyer session | List MSA (tobacco Master Settlement Agreement) reports (`complianceMsa.listReports`) |
+| /api/v1/msa/reports/:id | GET | non-buyer session | Get an MSA report (`complianceMsa.getReport`) |
+| /api/v1/msa/reports/generate | POST | non-buyer session | Generate MSA reports for a week offset (`complianceMsa.generateReportForTenant`) |
+| /api/v1/msa/run-now | POST | non-buyer session | Manually run the MSA automation cron for this tenant (`complianceMsa.runMsaAutomationCron`) |
+| /api/v1/msa/cron | POST | ADMIN_ROLES | Same automation run, admin-gated entry point (`complianceMsa.runMsaAutomationCron`) |
+| /api/v1/msa/reports/:id/upload | POST | ADMIN_ROLES | Upload a generated report to storage (`complianceMsa.uploadReportToStorage`) |
+| /api/v1/msa/reports/:id/submit | POST | ADMIN_ROLES | Submit a report via EDI (`complianceMsa.submitReportEdi`) |
+| /api/v1/msa/transactions/import | POST | non-buyer session | Bulk-import MSA transaction rows (`complianceMsa.importTransactions`) |
+| /api/v1/msa/config | GET | non-buyer session | Get tenant MSA configuration (`complianceMsa.getConfig`) |
+| /api/v1/msa/config | POST | non-buyer session | Upsert tenant MSA configuration (`complianceMsa.upsertConfig`) |
+| /api/v1/tax/settings | GET | non-buyer session | Get tenant sales-tax settings (`getTenantTaxSettings`) |
+| /api/v1/tax/settings | PATCH | ADMIN_ROLES | Update the tenant's sales-tax rate (0–0.5) (`updateTenantSalesTaxRate`) |
+| /api/v1/tax/summary | GET | non-buyer session | Tax collected/remitted summary (`complianceTax.taxSummary`) |
+| /api/v1/tax/record | POST | ADMIN_ROLES | Manually record a tax transaction (`complianceTax.recordTax`) |
+| /api/v1/compliance/age-verification | GET | any session | Get the tenant's age-verification policy (`age.getAgeVerificationPolicy`) |
+| /api/v1/compliance/age-verification | PATCH | ADMIN_ROLES, non-buyer | Update the age-verification policy (`age.updateAgeVerificationPolicy`) |
+| /api/v1/compliance/age-check | POST | any session (buyer scoped to self) | Preview age-restriction requirements for a cart (`age.previewOrderAgeRequirements`) |
+| /api/v1/compliance/batches | GET | non-buyer session | List lot/batch records for the tenant (`recall.listTenantBatches`) |
+| /api/v1/compliance/recalls | GET | non-buyer session | List batch recalls, filterable by status (`recall.listBatchRecalls`) |
+| /api/v1/compliance/recalls | POST | ADMIN_ROLES | Initiate a batch recall (`recall.initiateBatchRecall`) |
+| /api/v1/compliance/recalls/:id | GET | non-buyer session | Get a recall's impact report (`recall.getBatchRecallImpactReport`) |
+| /api/v1/compliance/recalls/:id/impact-report | GET | non-buyer session | Same impact report, explicit path (`recall.getBatchRecallImpactReport`) |
+| /api/v1/compliance/recalls/:id/resolve | POST | ADMIN_ROLES | Resolve/close a batch recall (`recall.resolveBatchRecall`) |
+
+#### 8.2.9 Notifications
+
+Business logic: `notifications.ts`, `notification-provider.ts`, `notification-provider-status.ts`. Dispatched by `routeNotifications` (`native-router.ts:1471-1506`). All require a non-buyer session.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/notifications | GET | non-buyer session | List sent notifications, filterable by status/channel/event/recipient (`notifications.list`) |
+| /api/v1/notifications/providers/status | GET | ADMIN_ROLES | Configured-provider status (email/SMS) (`getNotificationProviderStatus`) |
+| /api/v1/notifications/retry | POST | non-buyer session (self-scoped unless admin staff) | Retry a failed notification by id (`notifications.retry`) |
+| /api/v1/notifications/send | POST | non-buyer session | Send a notification directly (`notifications.send`) |
+
+#### 8.2.10 Finance & Reporting (Reports, Report Builder, KPIs, Analytics)
+
+Business logic: `report-builder.ts`, `analytics.ts`, `cashflow-history.ts`. Dispatched by `routeReports` (`native-router.ts:1547-1569`), `routeReportBuilder` (`native-router.ts:1571-1635`), `routeKpi` (`native-router.ts:1637-1645`), `routeAnalytics` (`native-router.ts:1647-1661`), `routeInternal` (`native-router.ts:1663-1671`). (`/journal-entries`, `/chart-accounts`, and the trial-balance data itself are Tier 1 — `ledger.ts` — this table only covers the reporting/analytics layer on top.)
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/reports/trial-balance | GET | ADMIN_ROLES | Trial balance for a year/month/quarter period (`ledger.trialBalance`) |
+| /api/v1/report-builder/types | GET | ADMIN_ROLES | Catalog of available report types (`reportBuilder.reportCatalog`) |
+| /api/v1/report-builder/run | POST | ADMIN_ROLES | Run an ad-hoc report, optionally as CSV (`reportBuilder.runReport`) |
+| /api/v1/report-builder/saved | GET | ADMIN_ROLES | List saved reports, optionally `?mine=1` (`reportBuilder.listSavedReports`) |
+| /api/v1/report-builder/saved | POST | ADMIN_ROLES | Save a report definition (`reportBuilder.createSavedReport`) |
+| /api/v1/report-builder/saved/:id | GET | ADMIN_ROLES | Get a saved report definition (`reportBuilder.getSavedReport`) |
+| /api/v1/report-builder/saved/:id | PATCH | ADMIN_ROLES | Update a saved report definition (`reportBuilder.updateSavedReport`) |
+| /api/v1/report-builder/saved/:id | DELETE | ADMIN_ROLES | Delete a saved report definition (`reportBuilder.deleteSavedReport`) |
+| /api/v1/report-builder/saved/:id/run | POST | ADMIN_ROLES | Run a saved report, optionally as CSV (`reportBuilder.runSavedReport`) |
+| /api/v1/kpi/snapshots | GET | non-buyer session | List historical KPI snapshots (`analytics.listSnapshots`) |
+| /api/v1/analytics/kpis | GET | non-buyer session | Live dashboard KPIs (`analytics.dashboardKpis`) |
+| /api/v1/analytics/cashflow-history | GET | non-buyer session | AR/AP cashflow history over N weeks (`cashflowHistory.buildArApCashflowHistory`) |
+| /api/v1/internal/refresh | POST | ADMIN_ROLES | Recompute and upsert a KPI snapshot (`analytics.upsertSnapshot`) |
+
+#### 8.2.11 Webhooks
+
+Business logic: `webhooks.ts`. Dispatched by `routeWebhooks` (`native-router.ts:1673-1692`). All require `ADMIN_ROLES` (outbound webhooks can exfiltrate tenant data).
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/webhooks | GET | ADMIN_ROLES | List configured outbound webhooks (`webhooks.listWebhooks`) |
+| /api/v1/webhooks | POST | ADMIN_ROLES | Register an outbound webhook (`webhooks.createWebhook`) |
+| /api/v1/webhooks/:id | DELETE | ADMIN_ROLES | Delete a webhook (`webhooks.deleteWebhook`) |
+| /api/v1/webhooks/:id/test | POST | ADMIN_ROLES | Fire a test delivery to a webhook (`webhooks.testWebhook`) |
+
+#### 8.2.12 Bank Reconciliation
+
+Business logic: `bank-recon.ts`. Dispatched by `routeBankAccounts` (`native-router.ts:1694-1738`). All require `ADMIN_ROLES`.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/bank-accounts | GET | ADMIN_ROLES | List bank accounts, or reconciliation summary with `?summary=true` (`bankRecon.listBankAccounts` / `getReconciliationSummary`) |
+| /api/v1/bank-accounts | POST | ADMIN_ROLES | Create a bank account (`bankRecon.createBankAccount`) |
+| /api/v1/bank-accounts/lines | GET | ADMIN_ROLES | List statement lines, filterable by account/reconciled/type/date (`bankRecon.listStatementLines`) |
+| /api/v1/bank-accounts/unreconciled | GET | ADMIN_ROLES | List unreconciled statement lines (`bankRecon.listUnreconciledLines`) |
+| /api/v1/bank-accounts/:id/import | POST | ADMIN_ROLES | Import statement lines for an account (`bankRecon.importStatementLines`) |
+| /api/v1/bank-accounts/:id/reconcile | POST | ADMIN_ROLES | Reconcile a statement line (`bankRecon.reconcileStatementLine`) |
+
+#### 8.2.13 Audit Log, Search, Feature Flags & Pricing
+
+Business logic: `audit-log.ts`, `search.ts`, `feature-flags.ts`, `pricing.ts`. Dispatched by `routeAudit` (`native-router.ts:1766-1780`), `routeSearch` (`native-router.ts:1782-1790`), `routeFeatures` (`native-router.ts:1901-1907`), `routeVolumePrices` (`native-router.ts:1909-1927`).
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/audit | GET | ADMIN_ROLES | List audit-log events, filterable by entity type/id (`auditLog.listAuditEvents`) |
+| /api/v1/search | GET | non-buyer session | Global cross-module search (`?q=`) (`search.globalSearch`) |
+| /api/v1/features | GET | any session | Tenant's enabled feature flags, with plan-gate detail (`featureFlags.getTenantFeaturesDetail`) |
+| /api/v1/volume-prices | GET | ADMIN_ROLES | List volume/quantity-break prices, filterable by sku/customer (`pricing.listVolumePriceBreaks`) |
+| /api/v1/volume-prices | POST | ADMIN_ROLES | Upsert a volume price break (`pricing.upsertVolumePriceBreak`) |
+
+#### 8.2.14 Order Templates & Saved Payment Methods (Buyer Portal)
+
+Business logic: `order-templates.ts`, `saved-payment-methods.ts`. Dispatched by `routeOrderTemplates` (`native-router.ts:1792-1814`) and `routeSavedPaymentMethods` (`native-router.ts:1861-1878`).
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/order-templates | GET | any session | List a customer's saved reorder templates (`?customerRef=`, required for non-buyers) (`orderTemplates.listOrderTemplates`) |
+| /api/v1/order-templates | POST | any session | Create a reorder template (`orderTemplates.createOrderTemplate`) |
+| /api/v1/order-templates/:id/cart-lines | GET | buyer session | Expand a template into cart lines for checkout (`orderTemplates.templateToCartLines`) |
+| /api/v1/order-templates/:id | DELETE | any session | Delete a reorder template, buyer-scoped (`orderTemplates.deleteOrderTemplate`) |
+| /api/v1/saved-payment-methods | GET | buyer session | List the buyer's saved payment methods (`savedPaymentMethods.listSavedPaymentMethods`) |
+| /api/v1/saved-payment-methods | POST | buyer session | Save a new payment method (`savedPaymentMethods.savePaymentMethod`) |
+| /api/v1/saved-payment-methods/:id/default | POST | buyer session | Set a saved method as default (`savedPaymentMethods.setDefaultPaymentMethod`) |
+| /api/v1/saved-payment-methods/:id | DELETE | buyer session | Delete a saved payment method (`savedPaymentMethods.deleteSavedPaymentMethod`) |
+
+#### 8.2.15 Celestial AI
+
+Business logic: `celestial/orchestrator.ts` (+ `compose.ts`, `intent.ts`, `llm.ts`, `prompts.ts`, `retrieval.ts`, `conversations.ts`, `tools.ts`). Dispatched by `routeCelestial` (`native-router.ts:1929-1971`). All require a non-buyer session.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/celestial/status | GET | non-buyer session | Whether Celestial AI is enabled for the tenant, plus model info (`celestial.getCelestialModelInfo`, `featureFlags.getTenantFeatures`) |
+| /api/v1/celestial/chat | POST | non-buyer session | Send a chat message; streams (SSE/NDJSON) if `Accept`/`X-Celestial-Stream` requests it, else returns JSON (`celestial.chat` / `celestial.chatStream`) |
+| /api/v1/celestial/chat/stream | POST | non-buyer session | Explicit streaming chat endpoint (`celestial.chatStream`) |
+| /api/v1/celestial/conversations | GET | non-buyer session | List recent Celestial conversations, filterable by `surface`/`limit` (`celestial.listCelestialConversations`) |
+| /api/v1/celestial/conversations/:id | GET | non-buyer session | Get one conversation's full history (`celestial.getCelestialConversation`) |
+
+> [!NOTE]
+> `celestial/tools.ts` defines the model's function-calling tools (`get_my_orders`, `get_order_detail`, `list_my_invoices`, `search_catalog`, `list_my_quotes`, `global_search`, `list_low_stock`, `list_warehouses` — `tools.ts:48-175`, invoked via `runTools`, `tools.ts:27`). These are not separate HTTP endpoints; they only run inside a `/api/v1/celestial/chat` (or `/chat/stream`) request when the model decides to call them, reading through the same tenant-scoped Prisma queries as their REST counterparts.
+
+#### 8.2.16 System, Health & Standalone Analytics Endpoints
+
+These four are the only routes in the app not dispatched through `handleNativeApi` — three are matched directly in `apps/web/server/api-router.ts` before the auth block, and `/api/v1/health/db` is matched inline inside `handleNativeApi` itself rather than through a `routeXxx` function.
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| /api/v1/health | GET | public | Liveness check — static `{ status: 'ok', service: 'pleros', api: 'native' }` (`api-router.ts:33-40`) |
+| /api/v1/health/db | GET | ADMIN_ROLES | Checks connectivity of all Prisma schema clients (`checkDatabaseConnections`, `native-router.ts:86-89`) |
+| /api/anomaly | POST | public | Stateless time-series anomaly detection via `@pleros/analytics-engine` — not tenant-scoped, no `/api/v1` prefix (`detectSeriesAnomalies`, `api-router.ts:42-55`) |
+| /api/cashflow | POST | public | Stateless cash-flow forecast via `@pleros/analytics-engine` — not tenant-scoped, no `/api/v1` prefix (`forecastCashFlow`, `api-router.ts:57-70`) |
+
+#### 8.2.17 Internal-Only Modules (No HTTP Routes)
+
+The following `apps/web/lib/server/*.ts` files are imported by other business-logic modules but never appear on the right-hand side of a `seg[0] ===` check in `native-router.ts` or a `pathname ===`/`pathname.startsWith` check in `api-router.ts` — confirmed with `grep -rn "from './<module>'"` across `lib/server`. They have no independent test-plan entry beyond whatever route exercises the module that imports them (see Section 6.1/6.3 for those call chains):
+
+| Module | Role |
+| --- | --- |
+| `db.ts` | Exports the 14 per-schema Prisma client singletons; no routes of its own. |
+| `db-health.ts` | Backs `GET /api/v1/health/db` (8.2.16) — not itself route-dispatched. |
+| `env.ts` | Reads/validates process env vars (`jwtSecret()`, etc.). |
+| `prisma.ts` | Prisma client bootstrap helper. |
+| `session.ts` | `ApiError`, `requireSession`/`requireRole`/`assertRole`, role-set constants — the shared auth contract every route uses. |
+| `buyer-context.ts` | `isPortalBuyer`/`isAdminStaff`/`requirePortalCustomerId`/`getAuthProfile` — backs `GET /api/v1/auth/me` (Tier 1) and buyer-scoping logic throughout this table, but registers no route of its own beyond that. |
+| `permissions.ts` | A coarse role→permission map (`hasPermission`/`assertPermission`); not currently called from any route handler. |
+| `background-jobs.ts` | `startBackgroundJobs()` — an in-process 10-minute sweep that releases expired stock reservations (`inventory.releaseExpiredReservations`); started once at server boot, not HTTP-triggered. |
+| `event-bus.ts` | `publishEvent`/`publishOrderEvent` — logs to console (or a Redis stub if `REDIS_URL` is set); called from order lifecycle code, not itself a route. |
+| `credit-limit.ts` | Credit-check logic used by `orders.ts`/`order-orchestration.ts` (Tier 1 order routes). |
+| `cycle-count-adjust.ts` | Inventory-adjustment logic used by `wms-cycle-count.ts` (8.2.4). |
+| `notification-triggers.ts` | Fires notifications from `orders.ts`/`invoices.ts` state changes; no route of its own. |
+| `operations-gl.ts` | GL-posting logic used by `ap-bills.ts` (8.2.6). |
+| `order-payment-sync.ts` | Syncs payment state back onto orders; used by `payments.ts`/`order-orchestration.ts`. |
+| `order-saga.ts` | Saga/compensation logic used by `orders.ts`. |
+| `order-status.ts` | Order status-transition helper used by `order-orchestration.ts`. |
+| `pick-bin-resolver.ts` | Bin-suggestion logic used by `wms-fulfillment.ts`/`wave-picking.ts`. |
+| `pick-line-status.ts` | Pick-line state-machine helper used by `wms-fulfillment.ts`. |
+| `dispatch-order.ts` | Order-lookup helper used by `dispatch.ts` (Tier 1). |
+| `invoice-status.ts` | Invoice status-transition helper used by `invoices.ts` (Tier 1). |
+| `invoice-gl.ts` | GL-posting logic used by `invoices.ts` (Tier 1; documented there per the task-8 scope). |
+| `invoice-document.ts` | HTML/PDF rendering used by `invoices.ts`'s `/html` and `/pdf` routes (Tier 1). |
+| `landed-cost.ts` | Landed-cost allocation used by `purchasing.ts` (Tier 1). |
+| `msa-storage.ts` | Report-file storage used by `compliance-msa.ts` (8.2.8). |
+| `notification-provider.ts` | Email/SMS provider adapter used by `notifications.ts` (8.2.9). |
+| `auth-security.ts` | Password policy + in-memory rate limiter used by `auth.ts`/`api-router.ts` (Tier 1). |
+| `signup.ts` | Tenant-creation logic backing `POST /api/v1/auth/signup` (Tier 1). |
+| `stripe.ts` | Stripe SDK client wrapper used by `payments.ts` (8.2.7) and `billing.ts` (8.2.1). |
+| `pos-receipt.ts` / `pos.ts` | Tier 1 — POS routes. |
+| `celestial/compose.ts`, `celestial/intent.ts`, `celestial/llm.ts`, `celestial/prompts.ts`, `celestial/retrieval.ts` | Internal prompt-composition/intent-classification/model-call/retrieval helpers used only by `celestial/orchestrator.ts` (8.2.15); no routes of their own. |
+| `*.test.ts` (25 files under `lib/server/`, including `tier2.test.ts`–`tier9.test.ts`, `finance-enhancements.test.ts`, and per-module `*.test.ts` files) | Vitest test suites, not route modules — out of scope for this reference table. |
