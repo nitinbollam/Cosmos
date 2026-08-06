@@ -3231,7 +3231,169 @@ Each stage gates on a different, already-documented part of this file. None of t
 - **Perf (Performance Verification).** There is no dedicated automated performance-testing section, load-testing tool, or benchmark script in this repo (no k6/Artillery/Lighthouse/autocannon config exists anywhere in the workspace tree). Performance verification at this stage is manual and observational: watch server logs while running the Section 10 regression journeys for slow queries or repeated round-trips, and be alert to the two concrete performance risks this codebase's architecture already documents — Section 12.5's single-writer SQLite contention (`SQLITE_BUSY` under concurrent load in local/dev-parity testing) and Section 12.1's lack of cross-schema transactions (a slow second call in a two-schema operation like checkout widens the window for the two schemas to end up inconsistent under load). If a release specifically needs load numbers, that tooling doesn't exist yet — this is a real gap, not an oversight in this document.
 - **Final Sign-off.** Confirm every prior stage passed with no unchecked-but-required boxes, no TBD/TODO markers introduced, and no known issue from Sections 12–13 left unexplained for the release notes. Sign-off is a manual confirmation step, not a script — there is no automated release-gate tool in this repo beyond `prod:preflight`.
 
-<!-- SECTION-15-INSERT-POINT -->
+## 15. Visual Flow Diagrams
+
+The diagrams below are drawn only from facts already established in Sections 5.3, 5.4, 5.8, 6.1, 8.1.1, 8.1.2, 10, 11, and 14 — no new source files were read for this section. Each diagram is a different view than the architecture diagram in 1.3 and the route-flow diagrams in 4.1–4.3/14: this section covers request-level auth sequencing, the `Order` status machine, the WMS pick-to-inventory data flow, the server-module dependency graph, and a testing-activity funnel.
+
+### 15.1 Auth Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as api-router.ts
+    participant Sec as auth-security.ts (rate limiter)
+    participant Auth as auth.ts
+
+    C->>API: POST /api/v1/auth/login { email, password }
+    API->>Sec: rate-limit check (>20/5min per IP or >10/5min per email -> 429)
+    Sec-->>API: within limits
+    API->>Auth: loginUser(email, password)
+    Auth-->>API: credentials valid
+    API-->>C: 200 { accessToken (15m TTL), refreshToken (7d TTL), userId, role }
+
+    Note over C,API: client attaches accessToken as a Bearer header on every subsequent request
+
+    C->>API: GET /api/v1/auth/me (Authorization: Bearer accessToken)
+    API->>API: requireSession verifies the bearer JWT
+    API-->>C: 200 { userId, email, role, tenantId, customerId, customerName, isPortalBuyer }
+
+    Note over C,API: accessToken expires after 15 minutes
+
+    C->>API: POST /api/v1/auth/refresh { userId, refreshToken }
+    API->>Auth: refreshUserTokens(userId, refreshToken)
+    Auth-->>API: rotates + re-hashes refreshToken, issues a new pair
+    API-->>C: 200 { accessToken, refreshToken, userId, role }
+
+    C->>API: POST /api/v1/auth/logout (Authorization: Bearer accessToken)
+    API->>API: manual jwtVerify (not requireSession — accepts an already-expired token)
+    API->>Auth: logoutUser clears refreshTokenHash
+    API-->>C: 200 { ok: true }
+```
+*Client login through JWT issuance, an authenticated read, token refresh, and logout — endpoint paths, response shapes, and rate limits are exactly those documented in 8.1.1.*
+
+### 15.2 Order Lifecycle State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : POST /orders (orders.createOrder; response status defaults to PENDING, 8.1.2)
+    PENDING --> PACKED : POS "Complete sale" calls transitionOrderStatus(...'PACKED') (pos.ts:97-102, 5.8)
+    PACKED --> DELIVERED : same POS request chains onFulfillmentDispatched -> onDeliveryStopDelivered to DELIVERED (pos.ts:97-102, 5.8)
+    PENDING --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
+    CONFIRMED --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
+    BACKORDERED --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
+    PROCESSING --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
+    PACKED --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
+    SHIPPED --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
+    RETURNED --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
+    SHIPPED --> RETURNED : POST /orders/:id/returns (8.1.2)
+    DELIVERED --> RETURNED : POST /orders/:id/returns (8.1.2)
+    RETURNED --> RETURNED : POST /orders/:id/returns (additional partial-line return) (8.1.2)
+
+    note right of CONFIRMED
+        CONFIRMED, BACKORDERED, and PROCESSING are also valid pre-fulfillment
+        statuses (POST /orders/:id/fulfill precondition list, orders.ts:184 - 8.1.2).
+        The document does not name the transition that produces each from PENDING.
+    end note
+    note right of SHIPPED
+        SHIPPED is confirmed as a real status by the order-tracking response
+        (orderStatus: "SHIPPED") and the returns precondition list (both 8.1.2);
+        it is reached via the admin fulfillment/dispatch pipeline, not the POS
+        synchronous path shown above.
+    end note
+    note right of CANCELLED
+        Calling cancel again on an order already CANCELLED or DELIVERED is a
+        documented no-op — the order is returned unchanged (8.1.2).
+    end note
+```
+*States and every transition trace to `order-status.ts`-backed behavior documented in 8.1.2, plus the POS synchronous path documented in 5.8 — no invented states or transitions.*
+
+### 15.3 WMS Pick Data Flow
+
+```mermaid
+flowchart LR
+    subgraph FT["Fulfillment task — wms-fulfillment.ts (5.3)"]
+        T1["PENDING / ASSIGNED"] --> T2["PICKING"]
+        T2 -- "confirmPickLine / confirmAllPickLines ('Pick all'), every line PICKED or SHORT" --> T3["PACKED"]
+        T3 -- "markFulfillmentPacked -> markFulfillmentDispatched" --> T4["DISPATCHED"]
+    end
+    T4 -- "dispatchFulfillmentTask" --> OO["order-orchestration.ts"]
+    OO -- "commits inventory" --> INV["inventory.ts: StockLevel / StockLedgerEntry (5.4)"]
+    OO -- "fills backorder shorts" --> BO["backorders.ts"]
+    OO -- "updates the order/invoice" --> ORD["Order + Invoice status"]
+```
+*A WMS pick task's pick -> pack -> dispatch progression and the inventory/backorder/order updates `dispatchFulfillmentTask` performs on dispatch, per 5.3's Expected results and Success scenario.*
+
+### 15.4 Module Dependency Graph
+
+```mermaid
+flowchart LR
+    pos["pos.ts"] --> orders["orders.ts"]
+    pos -.->|dynamic| order_orchestration["order-orchestration.ts"]
+    pos -.->|dynamic| wms_fulfillment["wms-fulfillment.ts"]
+    pos -.->|dynamic| inventory["inventory.ts"]
+    pos -.->|dynamic| inventory_serials["inventory-serials.ts"]
+
+    orders --> pricing["pricing.ts"]
+    orders --> compliance_tax["compliance-tax.ts"]
+    orders --> tenant_tax["tenant-tax.ts"]
+    orders --> credit_limit["credit-limit.ts"]
+    orders --> order_orchestration
+    orders --> invoices["invoices.ts"]
+    orders --> compliance_age["compliance-age.ts"]
+    orders --> notification_triggers["notification-triggers.ts"]
+
+    order_orchestration --> inventory
+    order_orchestration --> wms_fulfillment
+    order_orchestration --> order_payment_sync["order-payment-sync.ts"]
+    order_orchestration --> payments["payments.ts"]
+    order_orchestration --> order_status["order-status.ts"]
+    order_orchestration --> backorders["backorders.ts"]
+    order_orchestration --> drop_ship["drop-ship.ts"]
+
+    dispatch["dispatch.ts"] --> order_orchestration
+    dispatch --> crm["crm.ts"]
+    dispatch -.->|transitive, via order-orchestration.ts| wms_fulfillment
+    dispatch -.->|transitive, via order-orchestration.ts| inventory
+
+    purchasing["purchasing.ts"] --> po_receiving["po-receiving.ts"]
+    po_receiving --> inventory
+
+    ap_bills["ap-bills.ts"] --> operations_gl["operations-gl.ts"]
+    fixed_assets["fixed-assets.ts"] --> ledger["ledger.ts"]
+
+    invoices --> crm
+    invoices --> invoice_status["invoice-status.ts"]
+    invoices --> invoice_gl["invoice-gl.ts"]
+    invoices --> notification_triggers
+    invoices -.->|dynamic| orders
+    invoices -.->|dynamic| invoice_document["invoice-document.ts"]
+    invoices -.->|dynamic| payments
+    invoices -.->|dynamic| inventory
+    invoices -.->|dynamic| credit_limit
+    invoices -.->|dynamic| operations_gl
+    invoices -.->|dynamic| db["db.ts"]
+
+    invoice_gl --> ledgerDb["ledger schema (ledgerDb)"]
+
+    reports["report-builder.ts"] --> orders
+    reports --> invoices
+    reports --> inventory
+    reports --> crm
+```
+*Every edge here is a row (or a named dynamic/transitive dependency within a row) from Section 6.1's Dependency Table — solid arrows are static imports, dashed arrows are the dynamic `await import(...)`/transitive dependencies the table calls out.*
+
+### 15.5 Testing Workflow Funnel
+
+```mermaid
+flowchart TD
+    E2E["Section 4: End-to-End Testing Flow\n(Admin, Buyer Portal, Mobile PWA route walks)"]
+    Reg["Section 10: Regression Testing Checklist\n(5 cross-module journeys: Order-to-Cash, Procure-to-Pay,\nWMS Pick/Pack/Ship, POS Sale, Fixed-Asset Lifecycle)"]
+    Smoke["Section 11: Smoke Testing Checklist\n(few-minutes deploy sanity pass)"]
+    Release["Section 14: Release Validation Flow\n(Build -> Smoke -> Functional -> Integration -> Regression -> Perf -> Sign-off)"]
+
+    E2E --> Reg --> Smoke --> Release
+```
+*A funnel view of where each testing activity is documented in this file. Note this summary orders Regression before Smoke for narrative purposes (broad end-to-end coverage down to a fast sanity check); Section 14's own release pipeline sequences them the other way — Smoke gates before Functional/Integration/Regression — so always defer to Section 14's exact ordering when actually running a release.*
 
 ## 16. Best Practices
 
