@@ -2949,7 +2949,7 @@ The following `apps/web/lib/server/*.ts` files are imported by other business-lo
 | `inventory-serials.ts` | Tier 1 — backs `GET/POST /skus/:id/serials` (8.1.4 Inventory, `inventorySerials.listSerialUnits`/`registerSerialUnits`). |
 | `order-shipments.ts` | Tier 1 — backs `GET /orders/:id/tracking` and `GET/POST /orders/:id/shipments` (8.1.2 Orders, `orderShipments.*`). |
 | `celestial/compose.ts`, `celestial/intent.ts`, `celestial/llm.ts`, `celestial/prompts.ts`, `celestial/retrieval.ts` | Internal prompt-composition/intent-classification/model-call/retrieval helpers used only by `celestial/orchestrator.ts` (8.2.15); no routes of their own. |
-| `*.test.ts` (25 files under `lib/server/`, including `tier2.test.ts`–`tier9.test.ts`, `finance-enhancements.test.ts`, and per-module `*.test.ts` files) | Vitest test suites, not route modules — out of scope for this reference table. |
+| `*.test.ts` (27 files under `lib/server/`, including `tier2.test.ts`–`tier9.test.ts`, `finance-enhancements.test.ts`, and per-module `*.test.ts` files) | Node `--test` suites, not route modules — out of scope for this reference table. |
 
 ## 9. Integration Testing
 
