@@ -2920,7 +2920,7 @@ The following `apps/web/lib/server/*.ts` files are imported by other business-lo
 | `buyer-context.ts` | `isPortalBuyer`/`isAdminStaff`/`requirePortalCustomerId`/`getAuthProfile` — backs `GET /api/v1/auth/me` (Tier 1) and buyer-scoping logic throughout this table, but registers no route of its own beyond that. |
 | `permissions.ts` | A coarse role→permission map (`hasPermission`/`assertPermission`); not currently called from any route handler. |
 | `background-jobs.ts` | `startBackgroundJobs()` — an in-process 10-minute sweep that releases expired stock reservations (`inventory.releaseExpiredReservations`); started once at server boot, not HTTP-triggered. |
-| `event-bus.ts` | `publishEvent`/`publishOrderEvent` — logs to console (or a Redis stub if `REDIS_URL` is set); called from order lifecycle code, not itself a route. |
+| `event-bus.ts` | `publishEvent`/`publishOrderEvent` — logs to console (or a Redis stub if `REDIS_URL` is set); exports these but has zero call sites anywhere in the repo as of this writing — see Section 9.4. |
 | `credit-limit.ts` | Credit-check logic used by `orders.ts`/`order-orchestration.ts` (Tier 1 order routes). |
 | `cycle-count-adjust.ts` | Inventory-adjustment logic used by `wms-cycle-count.ts` (8.2.4). |
 | `notification-triggers.ts` | Fires notifications from `orders.ts`/`invoices.ts` state changes; no route of its own. |
