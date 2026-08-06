@@ -3434,3 +3434,118 @@ When adding a new DB-touching test: generate your own `randomUUID()`-based tenan
 ### 16.5 Test Maintenance
 
 Section 5's per-module `<details><summary>Test Checklist</summary>` blocks are written against the routes, role gates, and UI copy that exist as of this writing. When a module's routes, role requirements, or status enum changes — a new endpoint, a role added to `ADMIN_ROLES`/`OPS_ROLES`, a new order/task status — update that module's Section 5 entry (and any Section 10 regression journey or Section 6 dependency-table row that references the same module) in the same change, rather than letting the checklist drift out of sync with the code it's supposed to verify.
+
+---
+
+## 17. Appendix
+
+### 17.1 Useful Commands
+
+The full `scripts` object from the repo-root `package.json`, verbatim:
+
+| Script | Command |
+|---|---|
+| `build` | `node scripts/workspace-run.mjs build` |
+| `test` | `node scripts/workspace-run.mjs test` |
+| `lint` | `node scripts/workspace-run.mjs lint` |
+| `dev` | `node scripts/prepare-dev-env.mjs && node scripts/generate-all-prisma.mjs && npm run dev -w @pleros/client` |
+| `dev:client` | `npm run dev -w @pleros/client` |
+| `dev:web` | `npm run dev` |
+| `sync:client` | `node scripts/sync-client-from-web.mjs` |
+| `predev` | `node scripts/prepare-dev-env.mjs && node scripts/generate-all-prisma.mjs` |
+| `typecheck` | `node scripts/workspace-run.mjs typecheck` |
+| `db:generate` | `node scripts/generate-all-prisma.mjs` |
+| `db:generate-all` | `node scripts/generate-all-prisma.mjs` |
+| `db:migrate` | `tsx scripts/migrate-all.ts` |
+| `format` | `prettier --write "**/*.{ts,tsx,js,jsx,json,md,yaml,yml}"` |
+| `db:setup` | `node scripts/setup-sqlite.mjs` |
+| `db:setup:postgres` | `node scripts/setup-postgres.mjs` |
+| `db:provider` | `node scripts/apply-prisma-provider.mjs` |
+| `infra:up` | `npm run db:setup` |
+| `infra:docker:up` | `docker compose -f docker-compose.yml up -d` |
+| `infra:docker:down` | `docker compose -f docker-compose.yml down` |
+| `infra:docker:logs` | `docker compose -f docker-compose.yml logs -f` |
+| `seed` | `tsx scripts/seed-db.ts` |
+| `migrate:all` | `tsx scripts/migrate-all.ts` |
+| `prod:preflight` | `node scripts/production-preflight.mjs` |
+
+Notes on names that look redundant but aren't quite: `db:generate` and `db:generate-all` run the identical command, as do `db:migrate` and `migrate:all` — both pairs are kept as aliases rather than one being deprecated. `dev:web` simply re-runs `dev` under a second name; there is no separate "web-only" dev command despite the name (Section 3.1 documents what `dev` actually does).
+
+### 17.2 URLs
+
+| Environment | URL | Source |
+|---|---|---|
+| Local dev | `http://localhost:4000` | `PORT` default in `apps/client/server/index.ts` (Section 3.1) — SPA and `/api/v1` served from one origin |
+| Staging (Blueprint) | not a fixed URL in `render.yaml` — service name `pleros-staging`, region `oregon`, branch `develop`, Docker runtime | `render.yaml` |
+| Production (Blueprint) | not a fixed URL in `render.yaml` — service name `pleros-production`, region `oregon`, branch `main`, Docker runtime | `render.yaml` |
+
+`render.yaml` does not hard-code a `https://<service>.onrender.com` style URL for either web service (Render assigns/hosts those; they aren't literals in the Blueprint). The file's own top-of-file comment block flags that the **live** `pleros-staging` web service was configured by hand in the Render Dashboard and currently differs from the `pleros-staging` block committed in the file (live: region `ohio`, branch `staging`, plan `free`, Node runtime; Blueprint file: region `oregon`, branch `develop`, plan `starter`, Docker runtime) — the file "is not yet connected as a live Blueprint for that service." The one concrete URL `render.yaml` does contain is a Dashboard deep-link for the staging Postgres instance: `https://dashboard.render.com/d/dpg-d9lutf67bikc739ol07g-a`.
+
+### 17.3 Environment Variables
+
+See **Section 2.4, "Environment Variables Reference"** for the full table of environment variables, which is not duplicated here.
+
+### 17.4 Scripts
+
+Every file under `scripts/`, with its purpose confirmed by reading the file (not guessed from its name):
+
+| File | Purpose |
+|---|---|
+| `apply-prisma-provider.mjs` | Rewrites the `provider = "sqlite" \| "postgresql"` line in every `apps/web/prisma/<schema>/schema.prisma` file to match `PLEROS_DB_PROVIDER`. Run via `npm run db:provider`, and invoked internally before Postgres `db:setup:postgres`/`db:migrate`. |
+| `bootstrap.sh` | First-time setup for a fresh clone: `npm install` → copy `.env.example` to `.env` if missing → `db:setup` → `db:generate` → `db:migrate` → `seed`, then prints the demo admin login and app URL. Not wired to any `npm run` script — invoked directly as `scripts/bootstrap.sh`. |
+| `clean-client-public.mjs` | Deletes stale Vite build output (`apps/client/public/assets/`, `apps/client/public/index.html`) that can get accidentally copied into the client's static `public/` folder. Called by `prepare-dev-env.mjs`. |
+| `db-urls.mjs` | Shared helper module (not a standalone script) exporting `DB_BY_SCHEMA` (the 14 schema-name → SQLite-file-basename map), `getDbProvider()`, and functions to build the SQLite or Postgres connection URL for a given schema. Imported by most of the other `db:*`/dev scripts. |
+| `dev-admin.mjs` | Deprecated shim: prints a warning and delegates straight to `dev-web.mjs`. Not wired to any `npm run` script today. |
+| `dev-web.mjs` | Spawns `npm run dev -w @pleros/web`. Not wired to any `npm run` script today (the root `dev` script calls `npm run dev -w @pleros/client` directly instead). |
+| `diagnose-prisma-engines.ps1` | Windows-only diagnostic: scans a `services/` directory for `query_engine-windows.dll.node` files and reports which are file-locked, to help resolve `EPERM` errors during `prisma generate` on Windows. Not wired to any `npm run` script. It targets a `services/<name>/...` layout that does not exist in the current repo (no top-level `services/` directory) — a leftover from an earlier microservices layout. |
+| `eslint-soft.mjs` | Cross-platform "run eslint if it's installed locally, otherwise no-op and exit 0" wrapper, used where a workspace should not fail its `lint` script just because ESLint isn't present. |
+| `generate-all-prisma.mjs` | Runs `npm run db:generate` inside `apps/web` (which generates all 14 Prisma clients for that workspace). Used by `npm run db:generate`/`db:generate-all` and as part of `npm run dev`/`predev`. |
+| `generate-favicons.mjs` | macOS-only (`qlmanage`/`sips`): renders `apps/client/public/pleros-mark.svg` into `favicon-32.png`, `apple-touch-icon.png`, and `pleros-icon-512.png`. Skips silently if the source SVG is missing. Called by `prepare-dev-env.mjs`. |
+| `generate-types.ts` | Runs `prisma generate` for a hard-coded list of per-service schemas (`auth-service`, `inventory-service`, `wms-service`, `order-service`, `compliance-service`, `payment-service` under a top-level `services/` directory) via a `prisma-generate-retry.mjs` helper, then builds `@pleros/types`. Neither the `services/` directory nor `scripts/prisma-generate-retry.mjs` exists in the current repo, and no `npm run` script invokes this file — it is a stale leftover from an earlier microservices architecture that predates the current single `apps/web` API. |
+| `migrate-all.ts` | Pushes every `apps/web/prisma/<schema>/schema.prisma` schema against its resolved database URL via `prisma db push --accept-data-loss` (SQLite or Postgres, per `PLEROS_DB_PROVIDER`). Run via `npm run db:migrate`/`migrate:all`. |
+| `patch-client-after-sync.mjs` | Post-processes files just copied into `apps/client/src` by `sync-client-from-web.mjs`: rewrites a handful of Next.js-router idioms (`usePathname`, `useSearchParams`) to their React Router / custom-hook equivalents, and (re)writes `apps/client/src/components/pleros-img.tsx`, `lib/api.ts`, and `lib/api-admin.ts` to Vite-flavored versions. |
+| `prepare-dev-env.mjs` | Writes `apps/web/.env.local` (per-schema database URLs plus gateway/origin vars, derived from the root `.env`) and `apps/client/.env` (Vite `VITE_*` vars), then runs `clean-client-public.mjs`, `generate-favicons.mjs`, and a build of `@pleros/analytics-engine`. Run as the first step of `npm run dev`/`predev`. |
+| `production-preflight.mjs` | Runs `npm run lint`, then `npm run test`, then `npm run build` in sequence at the repo root, stopping at the first non-zero exit. Run via `npm run prod:preflight`. |
+| `scaffold-ai.ps1` | Windows-only generator that scaffolds a brand-new FastAPI microservice skeleton (`ai/<Name>/src/main.py`, `requirements.txt`, a multi-stage `Dockerfile`, and a `README.md` marked "SCAFFOLD ONLY") given a `-Name`, `-Port`, and `-Description`. Not wired to any `npm run` script; produces a Python service that has nothing to do with the current Next.js/Express `apps/web` API — for future standalone AI-service additions, not existing functionality. |
+| `seed-db.ts` | Seeds demo data across all 14 schemas (a demo tenant with slug `demo`, admin/buyer/warehouse/driver/sales accounts, warehouses, SKUs, customers, etc., using stable IDs so re-seeding is idempotent). Run via `npm run seed`. |
+| `setup-postgres.mjs` | Starts the `postgres` service from `docker-compose.yml` via `docker compose up -d postgres`, then prints the `.env` values and follow-up commands (`init-databases.sql`, `db:generate`, `db:migrate`, `seed`) needed to finish Postgres setup. Run via `npm run db:setup:postgres`. |
+| `setup-sqlite.mjs` | Creates the `apps/web/.data` directory (for embedded SQLite `.db` files) if it doesn't already exist. Run via `npm run db:setup`. |
+| `strip-web-ui.mjs` | Deletes `apps/web`'s UI routes and supporting folders (`app/(shop)`, `app/admin`, `app/m`, `app/login`, top-level `components`/`stores`/`src`, most of `lib` except `lib/server`) and replaces `app/layout.tsx` with a minimal pass-through layout, leaving `apps/web` as an API-only Next.js app. Not wired to any `npm run` script — a one-way, manually-invoked repo-restructuring tool. |
+| `sync-client-from-web.mjs` | Copies UI source from `apps/web` into `apps/client` and rewrites Next.js-specific imports/APIs (`next/link`, `next/navigation`, the `'use client'` directive, etc.) to their Vite + React Router equivalents. Run via `npm run sync:client`. |
+| `workspace-run.mjs` | Runs a given script (`build`/`lint`/`test`/`typecheck`) across the workspaces in a fixed dependency order (`@pleros/types` → `@pleros/analytics-engine` → `@pleros/ui` → `@pleros/web-gateway-client` → `@pleros/client` → `@pleros/web`), replacing what a tool like Turborepo would otherwise orchestrate. Backs the root `build`/`lint`/`test`/`typecheck` scripts. |
+
+### 17.5 Database Queries
+
+These assume the SQLite default (per Section 2.5); for Postgres, drop the `--schema`/file-path details and connect with `psql` against the relevant `*_DATABASE_URL` instead. Table/column names below (`Order`, `SKU`, `TenantOrganization`) are the real, unmapped Prisma model names — none of the schemas below use `@@map`, so the underlying table name matches the model name exactly (mixed case, so raw SQL needs to quote it, e.g. `"Order"`). Note that a tenant's `slug` (e.g. `demo`, the seeded demo tenant from `npm run seed`) is human-readable, but the `tenantId` column everywhere else is that tenant's generated `id` (a cuid) — look the `id` up from `slug` first, as in the first example below, rather than assuming the two are interchangeable.
+
+**Prisma Studio, browsing one schema (Section 16.2's recommended workflow):**
+```bash
+npx prisma studio --schema apps/web/prisma/order/schema.prisma
+```
+
+**Raw SQL — look up the demo tenant's internal id from its slug (SQLite, `tenant` schema):**
+```bash
+sqlite3 apps/web/.data/pleros_tenant.db \
+  "SELECT id, slug, plan, suspended FROM \"TenantOrganization\" WHERE slug = 'demo';"
+```
+
+**Raw SQL — that tenant's order count and total, by status (SQLite, `order` schema; substitute the `id` from the query above for `<tenantId>`):**
+```bash
+sqlite3 apps/web/.data/pleros_order.db \
+  "SELECT status, COUNT(*), SUM(totalAmount) FROM \"Order\" WHERE tenantId = '<tenantId>' GROUP BY status;"
+```
+
+**Raw SQL — find a SKU by code within that tenant (SQLite, `inventory` schema):**
+```bash
+sqlite3 apps/web/.data/pleros_inventory.db \
+  "SELECT id, code, name, category, isTobacco FROM \"SKU\" WHERE tenantId = '<tenantId>' AND code = 'SKU-CODE-HERE';"
+```
+
+### 17.6 API Collections
+
+No Postman, Insomnia, or `.http` request collection exists anywhere in this repository — a repo-wide search for `*.postman*` and `*.http` files (excluding `node_modules` and `.git`) returns no results. Section 8's per-endpoint request/response examples (`curl`-style JSON bodies) are the closest equivalent currently maintained.
+
+### 17.7 Reference Links
+
+- [`README.md`](../README.md) — the top-level project README: stack overview, the app's URL surfaces (`/`, `/admin`, the B2B shop paths, `/m/*` mobile PWA paths, `/signup`), and the local demo account table (`admin@pleros.local` / `buyer@acme-retail.com` / etc.) seeded by `npm run seed`.
+- [`docs/QA_STAGING_CHECKLIST.md`](QA_STAGING_CHECKLIST.md) — a manual, Pass/Fail/N/A checklist (tracked as Linear issue COS-12) for exercising the **staging** deployment by hand across both UI themes (Obsidian, Aurora), organized into lettered sections (landing/auth, admin dashboard, buyer catalog/checkout, etc.) to attach to a Linear issue as sign-off evidence.
