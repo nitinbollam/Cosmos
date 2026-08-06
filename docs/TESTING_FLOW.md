@@ -2686,7 +2686,7 @@ Business logic: `quotes.ts`. Dispatched by `routeQuotes` (`native-router.ts:743-
 | /api/v1/quotes/:id/reject | POST | ADMIN_ROLES | Reject a quote with a required `reason` (`quotes.rejectQuote`) |
 | /api/v1/quotes/:id/counter-offers | GET | any session | List counter-offers on a quote, ownership-checked for buyers (`quotes.listQuoteCounterOffers`) |
 | /api/v1/quotes/:id/counter-offers | POST | any session | Create a counter-offer (`quotes.createQuoteCounterOffer`) |
-| /api/v1/quotes/:id/counter-offers/:offerId/accept | POST | any session | Accept a counter-offer (`quotes.acceptQuoteCounterOffer`) |
+| /api/v1/quotes/:id/counter-offers/accept | POST | any session | Accept a counter-offer; `counterOfferId` is read from the JSON request body, not the URL (`quotes.acceptQuoteCounterOffer`, `native-router.ts:795-799`) |
 
 #### 8.2.4 Fulfillment & Warehouse Operations (WMS, Pick Waves, Bins)
 
@@ -2941,5 +2941,12 @@ The following `apps/web/lib/server/*.ts` files are imported by other business-lo
 | `signup.ts` | Tenant-creation logic backing `POST /api/v1/auth/signup` (Tier 1). |
 | `stripe.ts` | Stripe SDK client wrapper used by `payments.ts` (8.2.7) and `billing.ts` (8.2.1). |
 | `pos-receipt.ts` / `pos.ts` | Tier 1 — POS routes. |
+| `backorders.ts` | Tier 1 — backs `GET /orders/backorders` (8.1.2 Orders, `backorders.listOpenBackorders`, `native-router.ts:449-451`). |
+| `barcode-labels.ts` | Tier 1 — backs `GET /skus/:id/label` (8.1.4 Inventory, `barcodeLabels.buildSkuLabelHtml`, `native-router.ts:270-278`). |
+| `demand-planning.ts` | Tier 1 — backs `GET /skus/:id/demand-plan` and `GET /inventory/demand-plan` (8.1.4 Inventory, `demandPlanning.getSkuDemandPlan`/`listDemandPlans`). |
+| `drop-ship.ts` | Tier 1 — backs `POST /orders/:id/drop-ship/ship` and `POST /orders/:id/drop-ship/create-po` (8.1.2 Orders, `dropShip.markDropShipLinesShipped`/`createDropShipPurchaseOrders`). |
+| `inventory-lots.ts` | Tier 1 — backs `GET/PATCH /skus/:id/tracking`, `GET /skus/:id/lots`, and `GET /inventory/lots` (8.1.4 Inventory, `inventoryLots.*`). |
+| `inventory-serials.ts` | Tier 1 — backs `GET/POST /skus/:id/serials` (8.1.4 Inventory, `inventorySerials.listSerialUnits`/`registerSerialUnits`). |
+| `order-shipments.ts` | Tier 1 — backs `GET /orders/:id/tracking` and `GET/POST /orders/:id/shipments` (8.1.2 Orders, `orderShipments.*`). |
 | `celestial/compose.ts`, `celestial/intent.ts`, `celestial/llm.ts`, `celestial/prompts.ts`, `celestial/retrieval.ts` | Internal prompt-composition/intent-classification/model-call/retrieval helpers used only by `celestial/orchestrator.ts` (8.2.15); no routes of their own. |
 | `*.test.ts` (25 files under `lib/server/`, including `tier2.test.ts`–`tier9.test.ts`, `finance-enhancements.test.ts`, and per-module `*.test.ts` files) | Vitest test suites, not route modules — out of scope for this reference table. |
