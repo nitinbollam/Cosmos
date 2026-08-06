@@ -3276,7 +3276,7 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING : POST /orders (orders.createOrder; response status defaults to PENDING, 8.1.2)
-    PENDING --> PACKED : POS "Complete sale" calls transitionOrderStatus(...'PACKED') (pos.ts:97-102, 5.8)
+    [*] --> PACKED : POST /pos/orders (createPosOrder) calls transitionOrderStatus(...'PACKED') as its first status transition (pos.ts:97-102, 5.8) — a POS-created order enters here directly, not via the PENDING entry point above
     PACKED --> DELIVERED : same POS request chains onFulfillmentDispatched -> onDeliveryStopDelivered to DELIVERED (pos.ts:97-102, 5.8)
     PENDING --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
     CONFIRMED --> CANCELLED : POST /orders/:id/cancel (compensated) (8.1.2)
@@ -3299,6 +3299,13 @@ stateDiagram-v2
         (orderStatus: "SHIPPED") and the returns precondition list (both 8.1.2);
         it is reached via the admin fulfillment/dispatch pipeline, not the POS
         synchronous path shown above.
+    end note
+    note right of PACKED
+        8.1.5 (POST /pos/orders) states explicitly that this synchronous call
+        "walks the order straight to DELIVERED... a POS sale never sits in
+        PENDING/PROCESSING." PACKED is reached and left within that same
+        single request via transitionOrderStatus (5.8, pos.ts:97-102) — the
+        client only ever observes the final DELIVERED status in the response.
     end note
     note right of CANCELLED
         Calling cancel again on an order already CANCELLED or DELIVERED is a
@@ -3386,14 +3393,17 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    E2E["Section 4: End-to-End Testing Flow\n(Admin, Buyer Portal, Mobile PWA route walks)"]
-    Reg["Section 10: Regression Testing Checklist\n(5 cross-module journeys: Order-to-Cash, Procure-to-Pay,\nWMS Pick/Pack/Ship, POS Sale, Fixed-Asset Lifecycle)"]
-    Smoke["Section 11: Smoke Testing Checklist\n(few-minutes deploy sanity pass)"]
-    Release["Section 14: Release Validation Flow\n(Build -> Smoke -> Functional -> Integration -> Regression -> Perf -> Sign-off)"]
+    Build["Build\n(lint -> test -> build -> typecheck)"]
+    Smoke["Smoke\nSection 11: Smoke Testing Checklist"]
+    Functional["Functional\nSection 5: Module-by-Module Testing"]
+    Integration["Integration\nSection 9: Integration Testing"]
+    Regression["Regression\nSection 10: Regression Testing Checklist\n(5 cross-module journeys)"]
+    Perf["Perf\n(manual/observational — no dedicated automated section)"]
+    SignOff["Sign-off\n(manual confirmation)"]
 
-    E2E --> Reg --> Smoke --> Release
+    Build --> Smoke --> Functional --> Integration --> Regression --> Perf --> SignOff
 ```
-*A funnel view of where each testing activity is documented in this file. Note this summary orders Regression before Smoke for narrative purposes (broad end-to-end coverage down to a fast sanity check); Section 14's own release pipeline sequences them the other way — Smoke gates before Functional/Integration/Regression — so always defer to Section 14's exact ordering when actually running a release.*
+*Section 14's own release-validation pipeline, reproduced here in its exact documented order (14, restated by 16.1: "Follow Section 14's stage order rather than jumping straight to Regression"); Section 14's Smoke bullet names the same three surfaces (`/admin`, buyer portal, mobile PWA) that Section 4's End-to-End Testing Flow walks route-by-route.*
 
 ## 16. Best Practices
 
