@@ -1056,3 +1056,1563 @@ The real `Role` enum has nine values (`apps/web/prisma/auth/schema.prisma:49-59`
   5. `npm run db:migrate` — runs `scripts/migrate-all.ts`, which does `npx prisma db push --accept-data-loss` against every schema under `apps/web/prisma/*/schema.prisma` that exists (`scripts/migrate-all.ts:30-44`), recreating all tables from scratch.
   6. `npm run seed` — repopulates everything documented in 7.1–7.3.
 - [ ] **Postgres:** the same `db:setup` step becomes `PLEROS_DB_PROVIDER=postgres npm run db:setup:postgres`, then `db:migrate` and `seed` as usual (per `README.md`'s Postgres section) — `migrate-all.ts` pushes against Postgres instead of SQLite based on `getDbProvider()` (`scripts/migrate-all.ts:22-28`), so there's no separate reset script to run; dropping/recreating the Postgres database itself is the wipe step in that case.
+
+## 8. API Testing
+
+Every native API route (everything except the eleven `/api/v1/auth/*` endpoints) is dispatched by `handleNativeApi` in `apps/web/lib/server/native-router.ts:64-121`, which switches on the first path segment (e.g. `seg[0] === 'orders'`) and hands off to a `routeXxx(method, seg, req)` function defined further down the same file. Those `routeXxx` functions call into the per-domain business-logic modules (`orders.ts`, `invoices.ts`, `inventory.ts`, etc.) imported at the top of `native-router.ts:1-53`. The `/api/v1/auth/*` endpoints are the one exception: they're matched by literal `pathname ===` checks directly inside `handleApiRequest` in `apps/web/server/api-router.ts:72-279`, before that function's own `/api/v1/*` fallthrough (`api-router.ts:281-293`) hands everything else to `handleNativeApi`.
+
+Auth is enforced with the helpers from `apps/web/lib/server/session.ts`: `requireSession(req)` (any valid JWT), `requireRole(req, allowedRoles)` / `assertRole(session, allowedRoles)` (role allow-list), and three shared role sets — `ADMIN_ROLES = [SUPER_ADMIN, TENANT_ADMIN, MANAGER, ACCOUNTANT]`, `OPS_ROLES = [...ADMIN_ROLES, WAREHOUSE_STAFF]`, `DRIVER_ROLES = [...ADMIN_ROLES, DRIVER]` (`session.ts:85-87`). Portal buyers (`STAFF`/`VIEWER` with a matching CRM customer email, `buyer-context.ts:5-8`) are scoped to their own customer record via `buyerCustomerId` wherever a route accepts buyer traffic. All error bodies below are produced by `toJsonError` (`session.ts:101-111`): `ApiError` instances return `{ message }` at their own status; a Prisma `P2002` unique-constraint violation becomes `{ message: 'Conflict' }` at 409; anything else is `{ message }` at 404/400/500 depending on whether the message text contains "not found" / "required".
+
+### 8.1 Tier 1 — Critical Modules (Full Contract)
+
+These 8 modules cover every route they register — not a sample. Request/response shapes are read directly from each handler's destructuring, zod-less manual validation, and Prisma `select`/`create`/`include` calls; nothing here is a guessed "typical" shape.
+
+#### 8.1.1 Auth
+
+Business logic: `apps/web/lib/server/auth.ts`, `auth-security.ts` (password policy + in-memory rate limiter), `signup.ts` (tenant creation), `buyer-context.ts` (`getAuthProfile`). Wired directly in `apps/web/server/api-router.ts:72-279` (no role gate except where noted — these run before the generic native-router dispatch).
+
+##### `POST /api/v1/auth/login` — `loginUser` (`api-router.ts:72-91`, `auth.ts:48-65`)
+
+**Auth:** none (public)
+
+**Request:**
+```json
+{ "email": "buyer@acme-retail.com", "password": "buyer1234" }
+```
+
+**Success Response (200):**
+```json
+{ "accessToken": "<jwt, 15m TTL>", "refreshToken": "<jwt, 7d TTL>", "userId": "usr_...", "role": "STAFF" }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `email` or `password` missing/blank | 400 | `{ "message": "email and password required" }` |
+| >20 attempts/5min from one IP or >10/5min for one email (`auth-security.ts:35-47`) | 429 | `{ "message": "Too many attempts. Try again in Ns" }` |
+| No active user for that email, or password mismatch (`auth.ts:52-54`) | 401 | `{ "message": "Invalid credentials" }` |
+| Account has an unverified email + a pending verification token (`auth.ts:57-58`) | 403 | `{ "message": "Please verify your email before signing in. Check your inbox or request a new link." }` |
+
+##### `POST /api/v1/auth/signup` — `publicSignup` (`api-router.ts:93-127`, `signup.ts:6-68`)
+
+**Auth:** none (public — creates a brand-new tenant)
+
+**Request:**
+```json
+{ "companyName": "Acme Co", "slug": "acme-co", "email": "owner@acme.com", "password": "Passw0rd1", "firstName": "Jane", "lastName": "Doe" }
+```
+
+**Success Response (201):**
+```json
+{ "tenantId": "uuid", "slug": "acme-co", "requiresVerification": true, "email": "owner@acme.com", "verifyUrl": "http://localhost:4000/verify-email?token=...", "delivery": "console" }
+```
+(`verifyUrl` is only present outside production, `auth.ts:184-187,224-229`; the new user is always created with role `TENANT_ADMIN` and `emailVerified: false`, `signup.ts:49-51`, so this branch — not a token pair — is the normal outcome.)
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Any of the 6 fields missing | 400 | `{ "message": "Missing required fields" }` |
+| Password fails policy (< 10 or > 128 chars, or missing a letter/number, `auth-security.ts:11-21`) | 400 | `{ "message": "Password must be at least 10 characters" }` (or the matching policy message) |
+| >5 signups/hour from one IP | 429 | `{ "message": "Too many attempts. Try again in Ns" }` |
+| `slug` (after slugification) is under 3 chars (`signup.ts:15`) | 400 | `{ "message": "slug must be at least 3 characters" }` |
+| Slug already taken (`signup.ts:18`) | 409 | `{ "message": "Organization slug already taken" }` |
+| Email already registered anywhere (`signup.ts:21`) | 409 | `{ "message": "Email already registered" }` |
+
+##### `POST /api/v1/auth/accept-invite` — `acceptInvite` (`api-router.ts:131-157`, `auth.ts:148-182`)
+
+**Auth:** none (possession of a valid invite token stands in for auth)
+
+**Request:**
+```json
+{ "token": "<invite token>", "password": "Passw0rd1", "firstName": "Jane", "lastName": "Doe" }
+```
+
+**Success Response (201):**
+```json
+{ "accessToken": "...", "refreshToken": "...", "userId": "usr_...", "role": "ACCOUNTANT", "tenantId": "uuid" }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `token`, `password`, `firstName`, or `lastName` missing/blank | 400 | `{ "message": "token, password, firstName, and lastName are required" }` |
+| >10 accepts/hour from one IP | 429 | `{ "message": "Too many attempts. Try again in Ns" }` |
+| Invite not found, revoked, or already accepted (`auth.ts:155-157`) | 400 | `{ "message": "Invite is invalid or has already been used" }` |
+| Invite past `expiresAt` (`auth.ts:158-160`) | 400 | `{ "message": "Invite has expired" }` |
+| Email already registered for that tenant (`auth.ts:96`) | 409 | `{ "message": "Email already registered for this tenant" }` |
+
+##### `POST /api/v1/auth/forgot-password` — `requestPasswordReset` (`api-router.ts:159-175`, `auth.ts:275-306`)
+
+**Auth:** none
+
+**Request:**
+```json
+{ "email": "buyer@acme-retail.com" }
+```
+
+**Success Response (200):**
+```json
+{ "ok": true }
+```
+Always returns `{ ok: true }` — even when no user matches — so the endpoint cannot be used to enumerate registered emails (`auth.ts:277`).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `email` missing/blank | 400 | `{ "message": "email required" }` |
+| >5 requests/15min from one IP | 429 | `{ "message": "Too many attempts. Try again in Ns" }` |
+
+##### `POST /api/v1/auth/reset-password` — `resetPassword` (`api-router.ts:177-192`, `auth.ts:308-327`)
+
+**Auth:** none (possession of the reset token stands in for auth)
+
+**Request:**
+```json
+{ "token": "<reset token>", "password": "NewPassw0rd1" }
+```
+
+**Success Response (200):**
+```json
+{ "ok": true }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `token` or `password` missing | 400 | `{ "message": "token and password required" }` |
+| >10 resets/15min from one IP | 429 | `{ "message": "Too many attempts. Try again in Ns" }` |
+| Token unknown or `passwordResetExpiresAt` has passed (`auth.ts:313`) | 400 | `{ "message": "Reset link is invalid or has expired" }` |
+| New password fails policy | 400 | `{ "message": "Password must be at least 10 characters" }` (or matching message) |
+
+##### `POST /api/v1/auth/change-password` — `changePassword` (`api-router.ts:194-207`, `auth.ts:329-340`)
+
+**Auth:** any authenticated session (`requireSession`)
+
+**Request:**
+```json
+{ "currentPassword": "OldPassw0rd1", "newPassword": "NewPassw0rd1" }
+```
+
+**Success Response (200):**
+```json
+{ "ok": true }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Missing bearer token | 401 | `{ "message": "Unauthorized" }` |
+| `currentPassword` or `newPassword` missing | 400 | `{ "message": "currentPassword and newPassword required" }` |
+| >5 changes/15min for that user | 429 | `{ "message": "Too many attempts. Try again in Ns" }` |
+| Session's user row no longer exists (`auth.ts:331`) | 404 | `{ "message": "User not found" }` |
+| `currentPassword` doesn't match the stored hash (`auth.ts:333`) | 401 | `{ "message": "Current password is incorrect" }` |
+| `newPassword` fails policy | 400 | policy message |
+
+##### `POST /api/v1/auth/verify-email` — `verifyEmail` (`api-router.ts:209-223`, `auth.ts:242-256`)
+
+**Auth:** none (possession of the verify token stands in for auth)
+
+**Request:**
+```json
+{ "token": "<verify token>" }
+```
+
+**Success Response (200):**
+```json
+{ "ok": true }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `token` missing | 400 | `{ "message": "token required" }` |
+| Token unknown or `emailVerificationExpiresAt` has passed (`auth.ts:246`) | 400 | `{ "message": "Verification link is invalid or has expired" }` |
+
+##### `POST /api/v1/auth/resend-verification` — `resendEmailVerification` (`api-router.ts:225-239`, `auth.ts:258-272`)
+
+**Auth:** none
+
+**Request:**
+```json
+{ "email": "owner@acme.com" }
+```
+
+**Success Response (200):**
+```json
+{ "ok": true, "verifyUrl": "http://localhost:4000/verify-email?token=...", "delivery": "console" }
+```
+`verifyUrl`/`delivery` are only present when a matching, still-unverified user exists (`auth.ts:264,267-270`); otherwise the body is just `{ "ok": true }` (no account enumeration).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `email` missing/blank | 400 | `{ "message": "email required" }` |
+| >5 requests/15min from one IP | 429 | `{ "message": "Too many attempts. Try again in Ns" }` |
+
+##### `POST /api/v1/auth/refresh` — `refreshUserTokens` (`api-router.ts:241-256`, `auth.ts:128-134`)
+
+**Auth:** none in the HTTP sense — trust is placed in knowing both `userId` and a valid `refreshToken` (not a bearer header)
+
+**Request:**
+```json
+{ "userId": "usr_...", "refreshToken": "<jwt>" }
+```
+
+**Success Response (200):**
+```json
+{ "accessToken": "...", "refreshToken": "...", "userId": "usr_...", "role": "STAFF" }
+```
+Note: every successful refresh also rotates and re-hashes the refresh token (`auth.ts:39-43`), invalidating the one just used.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `userId` or `refreshToken` missing | 400 | `{ "message": "userId and refreshToken required" }` |
+| No `refreshTokenHash` on the user, or hash mismatch (`auth.ts:130-132`) | 403 | `{ "message": "Access denied" }` (route catches *any* thrown error here and forces this exact body/status, `api-router.ts:253-255`) |
+
+##### `GET /api/v1/auth/me` — `getAuthProfile` (`api-router.ts:258-265`, `buyer-context.ts:31-42`)
+
+**Auth:** any authenticated session
+
+**Success Response (200):**
+```json
+{ "userId": "usr_...", "email": "buyer@acme-retail.com", "role": "STAFF", "tenantId": "uuid", "customerId": "cust_...", "customerName": "Acme Retail Group", "isPortalBuyer": true }
+```
+`customerId`/`customerName` are `null` when no CRM `Customer` row shares the session's email.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Missing/invalid bearer token | 401 | `{ "message": "Unauthorized" }` |
+
+##### `POST /api/v1/auth/logout` — `logoutUser` (`api-router.ts:267-279`, `auth.ts:136-141`)
+
+**Auth:** raw `Authorization: Bearer <accessToken>` header, verified manually with `jwtVerify` (not `requireSession`) so an *expired* access token still logs out
+
+**Request:** none (empty body)
+
+**Success Response (200):**
+```json
+{ "ok": true }
+```
+Clears the user's `refreshTokenHash`, so any outstanding refresh token stops working.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| No `Authorization: Bearer` header, or the token fails JWT verification | 401 | `{ "message": "Unauthorized" }` |
+
+---
+
+#### 8.1.2 Orders
+
+Business logic: `apps/web/lib/server/orders.ts`, `order-status.ts` (pure state-machine helpers, not directly HTTP-exposed). Routed by `routeOrders` in `native-router.ts:406-528`. Every action requires `requireSession` at minimum; `confirm`/`fulfill`/`cancel`/`returns` additionally require `ADMIN_ROLES` (`native-router.ts:409-416`). Portal buyers (`isPortalBuyer`) are scoped to their own `buyerCustomerId` and have `channel`/`ageAttestation` stripped from their create-order body server-side (`native-router.ts:424-431`) so they can't spoof a POS/age-restricted sale.
+
+##### `POST /orders` — `orders.createOrder` (`native-router.ts:422-447`, `orders.ts:35-104`)
+
+**Auth:** any authenticated session (buyers allowed, scoped to their own customer)
+
+**Request:**
+```json
+{
+  "customerId": "cust_...",
+  "channel": "B2B_PORTAL",
+  "paymentMethod": "NET_TERMS",
+  "salesRepId": "usr_...",
+  "priority": "NORMAL",
+  "notes": "string",
+  "shippingAddress": { "line1": "...", "city": "...", "state": "...", "postalCode": "..." },
+  "lineItems": [{ "skuId": "sku_...", "warehouseId": "wh_...", "quantity": 5, "unitPrice": 24.99, "fulfillmentType": "STOCK", "supplierId": "sup_...", "preferredBatchId": "batch_..." }]
+}
+```
+
+**Success Response (201):** the created `Order` row plus `lineItems` (Prisma `include`):
+```json
+{ "id": "ord_...", "tenantId": "uuid", "customerId": "cust_...", "channel": "B2B_PORTAL", "status": "PENDING", "totalAmount": 267.39, "amountPaid": 0, "taxAmount": 17.49, "paymentMethod": "NET_TERMS", "priority": "NORMAL", "createdAt": "...", "lineItems": [{ "id": "...", "skuId": "sku_...", "warehouseId": "wh_...", "quantity": 5, "unitPrice": 24.99, "quantityAllocated": 0, "quantityBackordered": 0, "fulfillmentType": "STOCK" }] }
+```
+`taxAmount`/`totalAmount` are server-computed from the tenant's sales-tax rate (`orders.ts:41-43`), never trusted from the client.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `channel` is `"POS"` | 400 | `{ "message": "POS sales must use POST /pos/orders" }` (`native-router.ts:440`) |
+| Buyer's `customerId` doesn't match their own portal customer | 403 | `{ "message": "Cannot place orders for another customer" }` (`orders.ts:48`) |
+| A line's `skuId` doesn't resolve to a price for this customer | 400 | `{ "message": "Unknown SKU <id>" }` (`pricing.ts:145`) |
+| Submitted `unitPrice` differs from the resolved price by > $0.02 | 400 | `{ "message": "Price mismatch for SKU <id>: expected X.XX" }` (`pricing.ts:148`) |
+| `unitPrice` below the SKU's `minPrice` | 400 | `{ "message": "Price below minimum for SKU <id>" }` (`pricing.ts:151`) |
+| Order contains age-restricted SKUs and the customer isn't a licensed tobacco retailer (non-POS) | 403 | `{ "message": "Age-restricted items require a licensed customer (minimum age N)..." }` (`compliance-age.ts:210-213`) |
+| `paymentMethod` is `NET_TERMS` and the order total exceeds the customer's remaining credit | 400 | `{ "message": "Credit limit exceeded. Available $X, order total $Y" }` (`credit-limit.ts:20-23`) |
+
+##### `GET /orders/backorders` — `backorders.listOpenBackorders` (`native-router.ts:449-451`)
+
+**Auth:** any authenticated session
+
+**Request:** query `?limit=50` (default 50)
+
+**Success Response (200):** array of `BackorderLine` rows:
+```json
+[{ "id": "...", "orderId": "...", "orderLineItemId": "...", "skuId": "sku_...", "warehouseId": "wh_...", "quantity": 10, "quantityFilled": 3, "status": "PARTIAL", "createdAt": "..." }]
+```
+
+**Error Cases:** none beyond the shared 401 (any authenticated session may call this).
+
+##### `GET /orders/:id` — `orders.findOrderById` (`native-router.ts:452-454`, `orders.ts:165-175`)
+
+**Auth:** any authenticated session; buyers get a 404 (not 403) for orders they don't own
+
+**Success Response (200):** the `Order` row with `lineItems` and `saga` included.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| No order with that id for the tenant, or it belongs to a different customer than the buyer | 404 | `{ "message": "Order not found" }` |
+
+##### `GET /orders` — `orders.listOrders` (`native-router.ts:455-472`, `orders.ts:106-163`)
+
+**Auth:** any authenticated session
+
+**Request:** query params `page`, `pageSize`, `status`, `channel`, `search`/`q`, `from`, `to`, `customerId` (buyers can't override `customerId` — it's forced to their own)
+
+**Success Response (200):**
+```json
+{ "items": [ { "...Order with lineItems...": true } ], "total": 4, "page": 1, "pageSize": 20, "hasMore": false }
+```
+
+**Error Cases:** none beyond shared 401.
+
+##### `POST /orders/:id/confirm` — `orders.confirmOrder` (`native-router.ts:473-475`, `orders.ts:177-179`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** the order after re-running the fulfillment pipeline (`confirmOrder` is a straight alias for `fulfillOrder`).
+
+**Error Cases:** identical to `fulfill` below.
+
+##### `POST /orders/:id/fulfill` — `orders.fulfillOrder` (`native-router.ts:476-478`, `orders.ts:181-189`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** the order after `runOrderFulfillmentPipeline` re-runs.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Order id not found | 404 | `{ "message": "Order not found" }` |
+| Order status is not one of `PENDING`/`CONFIRMED`/`BACKORDERED`/`PROCESSING` | 400 | `{ "message": "Order cannot be fulfilled from status <status>" }` (`orders.ts:184`) |
+
+##### `POST /orders/:id/cancel` — `orders.cancelOrder` (`native-router.ts:479-483`, `orders.ts:246-248`, `order-orchestration.ts:371-...`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "reason": "Customer requested cancellation" }
+```
+
+**Success Response (200):** the order (unchanged if it was already `CANCELLED`/`DELIVERED`; otherwise compensated — payments voided/refunded, WMS task cancelled, inventory released).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `reason` missing | 400 | `{ "message": "reason is required" }` |
+| Order id not found | 404 | `{ "message": "Order not found" }` |
+
+##### `GET /orders/:id/invoice` — `invoices.getInvoiceByOrderId` (`native-router.ts:484-486`)
+
+**Auth:** any authenticated session (buyer-scoped)
+
+**Success Response (200):** see `GET /invoices/:id` in 8.1.3 — same shape, resolved by `orderId` instead of invoice id.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| No invoice exists yet for this order | 404 | `{ "message": "Invoice not found" }` |
+
+##### `GET /orders/:id/reorder-lines` — `orders.getReorderLines` (`native-router.ts:487-489`, `orders.ts:250-275`)
+
+**Auth:** any authenticated session (buyer-scoped)
+
+**Success Response (200):** array of re-priced line suggestions for a "reorder this order" flow:
+```json
+[{ "skuId": "sku_...", "skuCode": "VAP-POD-001", "skuName": "Premium Nicotine Pod 5pk", "warehouseId": "wh_...", "quantity": 5, "unitPrice": 22.50, "listPrice": 24.99, "priceSource": "customer" }]
+```
+
+**Error Cases:** same as `GET /orders/:id` (404 if order not found/not owned).
+
+##### `GET /orders/:id/tracking` — `orderShipments.getOrderTracking` (`native-router.ts:490-492`, `order-shipments.ts:93-137`)
+
+**Auth:** any authenticated session (buyer-scoped)
+
+**Success Response (200):**
+```json
+{ "orderStatus": "SHIPPED", "shipments": [{ "id": "...", "shipmentNo": 1, "status": "SHIPPED", "carrier": "UPS", "trackingNumber": "1Z...", "lineItems": [] }], "delivery": { "routeId": "...", "routeStatus": "IN_PROGRESS", "stopStatus": "EN_ROUTE", "stopSequence": 2, "eta": "2026-08-06T18:30:00.000Z" } }
+```
+`delivery` is `null` when the order isn't on any currently `PLANNED`/`IN_PROGRESS` delivery route.
+
+**Error Cases:** same 404 pattern as `GET /orders/:id`.
+
+##### `GET /orders/:id/shipments` — `orderShipments.listOrderShipments` (`native-router.ts:493-497`)
+
+**Auth:** any authenticated session; buyers pass an extra ownership check via `findOrderById` first
+
+**Success Response (200):** array of `OrderShipment` rows (`id`, `shipmentNo`, `status`, `carrier`, `trackingNumber`, `lineItems`, `shippedAt`).
+
+**Error Cases:** 404 `{ "message": "Order not found" }` for a buyer requesting another customer's order.
+
+##### `POST /orders/:id/shipments` — `orderShipments.createOrderShipments` (`native-router.ts:498-502`, `order-shipments.ts:12-68`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "shipments": [{ "carrier": "UPS", "trackingNumber": "1Z...", "lineItems": [{ "skuId": "sku_...", "warehouseId": "wh_...", "quantity": 5 }] }] }
+```
+(Body is actually just the array itself, typed as `Parameters<typeof createOrderShipments>[2]` — i.e. POST body **is** the `shipments` array, not an object wrapping it.)
+
+**Success Response (200):** array of created `OrderShipment` rows.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Order not found | 404 | `{ "message": "Order not found" }` |
+| Empty shipments array | 400 | `{ "message": "At least one shipment required" }` |
+| A line item references a batch that's under an active recall (`compliance-recall.ts`) | varies | recall-specific `ApiError` (see Section 6 recall notes) |
+| Sum of shipment line quantities for a SKU/warehouse doesn't equal the order line's quantity | 400 | `{ "message": "Shipment quantities must match order for SKU <id>" }` |
+
+##### `POST /orders/:id/returns` — `invoices.applyCreditMemo` (`native-router.ts:503-508`, `invoices.ts:496-689`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "reason": "Damaged in transit", "lines": [{ "lineItemId": "...", "quantity": 2 }], "restock": true }
+```
+
+**Success Response (200):**
+```json
+{ "creditMemo": { "id": "...", "memoNumber": "CM-XXXXXX-1", "totalAmount": 49.98, "reason": "Damaged in transit" }, "invoice": { "...updated Invoice...": true }, "order": { "...Order with lineItems + invoice...": true } }
+```
+Restocking (default true) calls `adjustStock`; a `NET_TERMS` order releases the credited amount back to the customer's credit limit; up to `creditTotal` of any captured card/ACH payment is automatically refunded.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Order not found | 404 | `{ "message": "Order not found" }` |
+| Order status not `SHIPPED`/`DELIVERED`/`RETURNED` | 400 | `{ "message": "Returns not allowed from status <status>" }` |
+| `lineItemId` doesn't belong to the order | 400 | `{ "message": "Unknown line item <id>" }` |
+| Requested return quantity is ≤0 or exceeds `quantity - returnedQty` | 400 | `{ "message": "Invalid return quantity for line <id>" }` |
+
+##### `POST /orders/:id/payments` — `orders.recordOrderPayment` (`native-router.ts:509-517`, `orders.ts:208-244`)
+
+**Auth:** `ADMIN_ROLES`, or a buyer paying against their own order (ownership verified via `findOrderById` first)
+
+**Request:**
+```json
+{ "amount": 124.95, "method": "CARD", "reference": "auth_..." }
+```
+
+**Success Response (200):** the updated `Order` row with `lineItems`; also syncs the linked invoice's status and posts an AR-payment GL journal if one exists.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Order not found | 404 | `{ "message": "Order not found" }` |
+| Order already fully paid (`remaining <= 0`) | 400 | `{ "message": "Order is already fully paid" }` |
+
+##### `POST /orders/:id/drop-ship/ship` — `dropShip.markDropShipLinesShipped` (`native-router.ts:518-522`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "carrier": "FedEx Freight", "trackingNumber": "..." }
+```
+
+**Success Response (200):** the created drop-ship `OrderShipment` row.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Order not found | 404 | `{ "message": "Order not found" }` |
+| Order has no `DROP_SHIP`-fulfillment lines | 400 | `{ "message": "No drop-ship lines on order" }` |
+
+##### `POST /orders/:id/drop-ship/create-po` — `dropShip.createDropShipPurchaseOrders` (`native-router.ts:523-526`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** array of `{ lineItemId, poId }` — one purchase order per drop-ship line's supplier; `[]` if the order has no drop-ship lines.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Order not found | 404 | `{ "message": "Order not found" }` |
+| A drop-ship line has no `supplierId` | 400 | `{ "message": "Drop-ship line <id> missing supplierId" }` |
+
+---
+
+#### 8.1.3 Invoices / Ledger
+
+Business logic: `apps/web/lib/server/invoices.ts`, `invoice-status.ts` (pure status-derivation helpers), `ledger.ts`. Routed by `routeInvoices` (`native-router.ts:672-741`, `requireSession` + buyer scoping), `routeJournalEntries` (`native-router.ts:1508-1525`, `ADMIN_ROLES` only), and `routeChartAccounts` (`native-router.ts:1527-1545`, `ADMIN_ROLES` only).
+
+##### `GET /invoices` — `invoices.listInvoices` (`native-router.ts:680-694`, `invoices.ts:282-369`)
+
+**Auth:** any authenticated session (buyer-scoped)
+
+**Request:** query `page`, `pageSize`, `status` (`ALL`/`OVERDUE`/any stored `InvoiceStatus`), `customerId`, `excludeCancelled`
+
+**Success Response (200):**
+```json
+{ "items": [{ "id": "...", "invoiceNumber": "INV-XXXXXXXX", "status": "ISSUED", "totalAmount": 124.95, "amountPaid": 0, "amountCredited": 0, "balance": 124.95, "displayStatus": "ISSUED", "order": { "status": "DELIVERED", "paymentMethod": "NET_TERMS", "channel": "ADMIN" }, "creditMemos": [] }], "total": 2, "page": 1, "pageSize": 50, "hasMore": false }
+```
+`displayStatus` is computed live by `deriveInvoiceStatus` (`invoice-status.ts:7-26`) and can read `OVERDUE` even though the stored `status` column never holds that value (`toStoredInvoiceStatus` maps `OVERDUE` back to `ISSUED` at write time, `invoice-status.ts:36-38`).
+
+**Error Cases:** none beyond shared 401.
+
+##### `GET /invoices/ar-summary` — `invoices.getArSummary` (`native-router.ts:695-698`, `invoices.ts:233-280`)
+
+**Auth:** any authenticated session, but not a portal buyer (`assertNotBuyer`)
+
+**Success Response (200):**
+```json
+{ "invoiced": 12500.00, "collected": 9800.00, "outstanding": 2700.00, "count": 14, "aging": { "current": 1200.00, "d30": 800.00, "d60": 500.00, "d90": 200.00, "d90p": 0 } }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Caller is a portal buyer | 403 | `{ "message": "Forbidden" }` |
+
+##### `GET /invoices/:id` — `invoices.getInvoice` (`native-router.ts:699-701`, `invoices.ts:371-395`)
+
+**Auth:** any authenticated session (buyer-scoped)
+
+**Success Response (200):** `Invoice` row + `order` (with `lineItems`) + `creditMemos`, plus computed `balance` and `displayStatus`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Invoice not found for tenant, or belongs to a different customer than the buyer | 404 | `{ "message": "Invoice not found" }` |
+
+##### `GET /invoices/:id/html` — `invoices.getInvoiceHtmlDocument` (`native-router.ts:702-710`)
+
+**Auth:** any authenticated session (buyer-scoped)
+
+**Success Response (200):** `text/html` document (invoice document builder in `invoice-document.ts`), `Content-Disposition: inline`.
+
+**Error Cases:** same 404 as `GET /invoices/:id`.
+
+##### `GET /invoices/:id/pdf` — `invoices.getInvoicePdfDocument` (`native-router.ts:711-720`)
+
+**Auth:** any authenticated session (buyer-scoped)
+
+**Success Response (200):** `application/pdf` binary, `Content-Disposition: attachment; filename="<invoiceNumber>.pdf"`.
+
+**Error Cases:** same 404 as `GET /invoices/:id`.
+
+##### `POST /invoices/:id/payments` — `invoices.recordInvoicePayment` (`native-router.ts:721-729`, `invoices.ts:403-416`)
+
+**Auth:** `ADMIN_ROLES`, or a buyer paying their own invoice (scoping happens inside `getInvoice`)
+
+**Request:**
+```json
+{ "amount": 124.95, "method": "ACH", "reference": "..." }
+```
+
+**Success Response (200):** the invoice after `recordOrderPayment` runs against its parent order (see `POST /orders/:id/payments` above) — same enriched shape as `GET /invoices/:id`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Invoice not found / not owned | 404 | `{ "message": "Invoice not found" }` |
+| Invoice balance already ≤ $0.01 | 400 | `{ "message": "Invoice is already paid" }` |
+
+##### `POST /invoices/:id/pay/stripe` — `invoices.payInvoiceWithStripe` (`native-router.ts:730-739`, `invoices.ts:463-487`)
+
+**Auth:** `ADMIN_ROLES`, or a buyer paying their own invoice
+
+**Request:**
+```json
+{ "paymentMethodId": "pm_...", "amount": 124.95, "correlationId": "uuid" }
+```
+
+**Success Response (200):** the invoice after Stripe `authorize` + `capture` (via `payments.ts`) for `min(amount, balance)`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `paymentMethodId` or `correlationId` missing | 400 | `{ "message": "paymentMethodId and correlationId required" }` |
+| Invoice balance already ≤ $0.01 | 400 | `{ "message": "Invoice is already paid" }` |
+| Computed payment amount ≤ 0 | 400 | `{ "message": "Invalid payment amount" }` |
+
+##### `GET /journal-entries` — `ledger.listJournalEntries` (`native-router.ts:1511-1513`, `ledger.ts:22-28`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** array of `JournalEntry` rows with `lines` (each including its `account`).
+
+##### `GET /journal-entries/:id` — `ledger.getJournalEntry` (`native-router.ts:1514-1516`, `ledger.ts:30-37`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** single `JournalEntry` with `lines`/`account`.
+
+**Error Cases:** 404 `{ "message": "Journal entry not found" }`.
+
+##### `POST /journal-entries` — `ledger.createJournalDraft` (`native-router.ts:1517-1520`, `ledger.ts:52-89`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "description": "Manual adjustment", "lines": [{ "accountId": "acct_1000", "memo": "Cash", "debit": 100, "credit": 0 }, { "accountId": "acct_4000", "memo": "Revenue", "debit": 0, "credit": 100 }] }
+```
+
+**Success Response (201):** the created, unposted `JournalEntry` (`isPosted: false`) with `lines`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Fewer than 2 lines | 400 | `{ "message": "At least two lines required" }` |
+| A line has both `debit > 0` and `credit > 0` | 400 | `{ "message": "Line cannot have both debit and credit" }` |
+| Sum of debits ≠ sum of credits | 400 | `{ "message": "Journal entry must balance (debits = credits)" }` |
+| An `accountId` doesn't belong to the tenant's chart of accounts | 400 | `{ "message": "One or more accounts are invalid for this tenant" }` |
+
+##### `POST /journal-entries/:id/post` — `ledger.postJournalEntry` (`native-router.ts:1521-1523`, `ledger.ts:91-100`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** the entry with `isPosted: true`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Entry not found | 404 | `{ "message": "Journal entry not found" }` |
+| Already posted | 400 | `{ "message": "Already posted" }` |
+| Re-validated debits/credits don't balance | 400 | `{ "message": "Journal entry must balance (debits = credits)" }` |
+
+##### `GET /chart-accounts` — `ledger.listChartAccounts` (`native-router.ts:1530-1532`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** array of `ChartAccount` rows (`code`, `name`, `type: AccountType` [`ASSET`/`LIABILITY`/`EQUITY`/`REVENUE`/`EXPENSE`], `isActive`), ordered by `code`.
+
+##### `GET /chart-accounts/:id` — `ledger.getChartAccount` (`native-router.ts:1533-1535`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Error Cases:** 404 `{ "message": "Account not found" }`.
+
+##### `POST /chart-accounts` — `ledger.createChartAccount` (`native-router.ts:1536-1539`, `ledger.ts:122-139`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "code": "6000", "name": "Freight Expense", "type": "EXPENSE", "isActive": true }
+```
+
+**Success Response (201):** the created `ChartAccount`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `code` already used for this tenant | 409 | `{ "message": "Account code already exists" }` |
+
+##### `PATCH /chart-accounts/:id` — `ledger.patchChartAccount` (`native-router.ts:1540-1543`, `ledger.ts:141-151`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "name": "Freight & Shipping Expense", "isActive": false }
+```
+
+**Success Response (200):** the updated `ChartAccount`.
+
+**Error Cases:** 404 `{ "message": "Account not found" }`.
+
+---
+
+#### 8.1.4 Inventory
+
+Business logic: `apps/web/lib/server/inventory.ts` (SKUs, warehouses, stock levels, ledger entries, reservations — the core CRUD file backing all three route groups below). Related files that some SKU/inventory sub-routes delegate into, documented where used but not independently exhaustive: `inventory-lots.ts` (lot/batch tracking), `inventory-serials.ts` (serial-unit tracking), `demand-planning.ts` (reorder-quantity forecasting), `barcode-labels.ts` (label HTML). Routed by `routeSkus` (`native-router.ts:206-309`), `routeWarehouses` (`native-router.ts:311-331`), and `routeInventory` (`native-router.ts:333-404`) — all three gated by at least `requireSession`, with mutations further gated to `OPS_ROLES` (`routeSkus`, `routeWarehouses`) or the whole group gated to `OPS_ROLES` (`routeInventory`).
+
+##### `GET /skus/categories` — `inv.distinctCategories` (`native-router.ts:218-220`, `inventory.ts:33-39`)
+
+**Auth:** any authenticated session (buyers allowed)
+
+**Success Response (200):** sorted array of distinct category strings for active SKUs.
+
+##### `GET /skus/lookup/by-code` — `inv.findSkuByCode` (`native-router.ts:221-225`, `inventory.ts:154-160`)
+
+**Auth:** any authenticated session, but buyers are blocked from this path (`native-router.ts:212-216` blocks buyers from any `/skus/*` sub-path beyond `categories`/list/detail)
+
+**Request:** query `?code=VAP-POD-001`
+
+**Success Response (200):** the `SKU` row.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `code` query param missing | 400 | `{ "message": "code query required" }` |
+| No SKU with that exact code | 404 | `{ "message": "SKU code not found: <code>" }` |
+
+##### `GET /skus/lookup/scan-value` — `inv.findSkuByScanValue` (`native-router.ts:226-230`, `inventory.ts:163-175`)
+
+**Auth:** non-buyer authenticated session
+
+**Request:** query `?value=<code-or-barcode>`
+
+**Success Response (200):** the matching active `SKU` row (matched by `code` first, then `barcode`).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `value` query param missing | 400 | `{ "message": "value query required" }` |
+| Value is blank after trim | 400 | `{ "message": "scan value required" }` |
+| No active SKU matches by code or barcode | 404 | `{ "message": "No SKU for scan value: <value>" }` |
+
+##### `POST /skus/import` — `inv.importSkus` (`native-router.ts:231-234`, `inventory.ts:475-493`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "rows": [{ "code": "NEW-SKU-01", "name": "New Item", "category": "GENERAL", "cost": 5, "price": 10 }] }
+```
+
+**Success Response (200):**
+```json
+{ "created": 1, "failed": 0, "errors": [] }
+```
+Row-level failures (missing `code`/`name`/`category`, or a duplicate code) are collected per-row rather than aborting the whole import: `{ "row": 2, "message": "code, name, and category are required" }`.
+
+##### `GET /skus` — `inv.listSkus` (`native-router.ts:235-251`, `inventory.ts:41-127`)
+
+**Auth:** any authenticated session (buyers scoped to their own `customerId` for price enrichment)
+
+**Request:** query `page`, `pageSize`, `search`/`q`, `category`, `warehouseId`, `inStock`, `customerId`
+
+**Success Response (200):**
+```json
+{ "items": [{ "id": "sku_...", "code": "VAP-POD-001", "name": "Premium Nicotine Pod 5pk", "price": 24.99, "quantityOnHand": 420, "quantityReserved": 12, "quantityAvailable": 408, "reorderPoint": 50, "reorderQty": 100 }], "total": 6, "page": 1, "pageSize": 50, "hasMore": false }
+```
+When `customerId` is supplied, items are further enriched with customer-specific pricing via `pricing.enrichSkusWithCustomerPrices`.
+
+##### `POST /skus` — `inv.createSku` (`native-router.ts:252-254`, `inventory.ts:355-423`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "code": "NEW-SKU-01", "name": "New Item", "category": "GENERAL", "cost": 5, "price": 10, "isTobacco": false, "defaultWarehouseId": "wh_...", "reorderPoint": 10, "reorderQty": 50 }
+```
+
+**Success Response (200):** the created `SKU` row. (`isTobacco: true` defaults `minimumAge` to 21 unless explicitly overridden, `inventory.ts:371-376`.)
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `code` already exists for this tenant | 409 | `{ "message": "SKU code already exists for this tenant" }` |
+
+##### `GET /skus/:id` — `inv.findSkuById` (`native-router.ts:256-258`, `inventory.ts:129-133`)
+
+**Auth:** any authenticated session (buyers allowed for detail view)
+
+**Error Cases:** 404 `{ "message": "SKU not found" }`.
+
+##### `GET /skus/:id/reorder-suggestion` — `inv.getSkuReorderSuggestion` (`native-router.ts:259-262`, `inventory.ts:135-152`)
+
+**Auth:** non-buyer authenticated session
+
+**Request:** query `?warehouseId=`
+
+**Success Response (200):**
+```json
+{ "sku": { "id": "sku_...", "code": "ACC-CBL-USB", "name": "USB-C Cable 3ft", "cost": 3.20 }, "warehouseId": "wh_...", "quantityAvailable": 8, "reorderPoint": 25, "suggestedQty": 42, "demandMethod": "USAGE_EWMA", "avgDailyUsage": 3.1 }
+```
+
+##### `GET /skus/:id/demand-plan` — `demandPlanning.getSkuDemandPlan` (`native-router.ts:263-269`, `demand-planning.ts:80-166`)
+
+**Auth:** non-buyer authenticated session
+
+**Request:** query `?warehouseId=&days=30`
+
+**Success Response (200):**
+```json
+{ "sku": { "id": "sku_...", "code": "...", "name": "..." }, "warehouseId": "wh_...", "daysSampled": 30, "totalOutbound": 96, "avgDailyUsage": 3.2, "ewmaDailyUsage": 3.5, "leadTimeDays": 7, "reorderPoint": 25, "quantityAvailable": 8, "targetStock": 40, "suggestedOrderQty": 32, "staticReorderQty": 50, "method": "USAGE_EWMA", "warnings": [] }
+```
+
+**Error Cases:** `ApiError(400, 'No warehouse configured')` (`demand-planning.ts:101`) if the tenant has zero warehouses and none was passed.
+
+##### `GET /skus/:id/label` — `barcodeLabels.buildSkuLabelHtml` (`native-router.ts:270-278`)
+
+**Auth:** non-buyer authenticated session
+
+**Request:** query `?qty=1&size=&symbols=`
+
+**Success Response (200):** `text/html` label sheet, `Content-Disposition: inline`.
+
+##### `GET /skus/:id/tracking` — `inventoryLots.getSkuLotTracking` (`native-router.ts:279-281`, `inventory-lots.ts:105-109`)
+
+**Auth:** non-buyer authenticated session
+
+**Success Response (200):**
+```json
+{ "trackLot": true, "trackSerial": false }
+```
+
+**Error Cases:** 404 `{ "message": "SKU not found" }`.
+
+##### `PATCH /skus/:id/tracking` — `inventoryLots.setSkuLotTracking` (`native-router.ts:282-285`, `inventory-lots.ts:111-125`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "trackLot": true, "trackSerial": true }
+```
+
+**Success Response (200):** the updated `SKU` row.
+
+**Error Cases:** 404 `{ "message": "SKU not found" }`.
+
+##### `GET /skus/:id/lots` — `inventoryLots.listInventoryLots` (`native-router.ts:286-289`, `inventory-lots.ts:43-52`)
+
+**Auth:** non-buyer authenticated session
+
+**Request:** query `?warehouseId=`
+
+**Success Response (200):** array of `InventoryLot` rows (`batchCode`, `expiryDate`, `supplierId`, `warehouseId`), ordered by expiry then receipt date (FEFO order).
+
+##### `GET /skus/:id/serials` — `inventorySerials.listSerialUnits` (`native-router.ts:290-297`, `inventory-serials.ts:40-51`)
+
+**Auth:** non-buyer authenticated session
+
+**Request:** query `?status=`
+
+**Success Response (200):** array of `SerialUnit` rows (`serialNumber`, `warehouseId`, `batchId`, `status`, `receivedAt`), max 200.
+
+##### `POST /skus/:id/serials` — `inventorySerials.registerSerialUnits` (`native-router.ts:298-303`, `inventory-serials.ts:5-38`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "warehouseId": "wh_...", "serialNumbers": ["SN-001", "SN-002"], "batchId": "batch_...", "locationId": "loc_..." }
+```
+
+**Success Response (201):** array of created `SerialUnit` rows (blank serial strings are silently skipped).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| SKU not found | 404 | `{ "message": "SKU not found" }` |
+| SKU has `trackSerial: false` | 400 | `{ "message": "SKU is not serial-tracked" }` |
+
+##### `PATCH /skus/:id` — `inv.updateSku` (`native-router.ts:304-307`, `inventory.ts:425-473`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:** any subset of `CreateSkuInput` fields plus `isActive`.
+
+**Success Response (200):** the updated `SKU` row.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| SKU not found | 404 | `{ "message": "SKU not found" }` |
+| New `code` collides with another SKU for this tenant | 409 | `{ "message": "SKU code already exists for this tenant" }` |
+
+##### `GET /warehouses` — `inv.listWarehouses` (`native-router.ts:315-317`, `inventory.ts:495-497`)
+
+**Auth:** any authenticated session
+
+**Success Response (200):** array of `Warehouse` rows (`name`, `code`, `address`, `isDefault`).
+
+##### `POST /warehouses` — `inv.createWarehouse` (`native-router.ts:318-321`, `inventory.ts:505-533`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "name": "East Coast DC", "code": "EAST", "address": { "line1": "1 Dock Rd", "city": "Newark", "state": "NJ", "postalCode": "07102" }, "isDefault": false }
+```
+
+**Success Response (200):** the created `Warehouse` row (setting `isDefault: true` clears the flag on every other warehouse for the tenant first).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `code` already used | 409 | `{ "message": "Warehouse code already exists" }` |
+
+##### `GET /warehouses/:id` — `inv.findWarehouseById` (`native-router.ts:322-324`, `inventory.ts:499-503`)
+
+**Auth:** any authenticated session
+
+**Error Cases:** 404 `{ "message": "Warehouse not found" }`.
+
+##### `PATCH /warehouses/:id` — `inv.setDefaultWarehouse` (`native-router.ts:325-329`, `inventory.ts:535-542`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "isDefault": true }
+```
+
+**Success Response (200):** the warehouse (only `isDefault: true` actually does anything — other body shapes just return the unchanged warehouse, `native-router.ts:327-328`).
+
+**Error Cases:** 404 `{ "message": "Warehouse not found" }`.
+
+##### `GET /inventory/ledger` — `inv.ledgerForSku` (`native-router.ts:337-342`, `inventory.ts:544-550`)
+
+**Auth:** `OPS_ROLES` (entire `routeInventory` group)
+
+**Request:** query `?skuId=&limit=100` (capped to 500)
+
+**Success Response (200):** array of `StockLedgerEntry` rows (`eventType`, `quantityDelta`, `quantityAfter`, `unitCost`, `referenceId`, `referenceType`, `performedBy`, `correlationId`, `occurredAt`), newest first.
+
+**Error Cases:** `skuId` missing → 400 `{ "message": "skuId query required" }`.
+
+##### `POST /inventory/adjust` — `inv.adjustStock` (`native-router.ts:343-346`, `inventory.ts:552-634`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "skuId": "sku_...", "warehouseId": "wh_...", "quantityDelta": -5, "reason": "Cycle count correction", "batchId": "", "referenceId": "cc_...", "referenceType": "CYCLE_COUNT" }
+```
+
+**Success Response (200):** the updated `StockLevel` row. Crossing below `reorderPoint` fires a low-stock notification as a side effect.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `quantityDelta` is 0 or not finite | 400 | `{ "message": "quantityDelta must be a non-zero number" }` |
+| No matching `StockLevel` row for that sku/warehouse/batch | 404 | `{ "message": "Stock level not found" }` |
+| Adjustment would drive `quantityOnHand` negative | 400 | `{ "message": "Adjustment would drive stock negative" }` |
+| Adjustment would leave on-hand below the reserved quantity | 400 | `{ "message": "Adjustment would leave less on hand than reserved quantity" }` |
+
+##### `POST /inventory/receive` — `inv.receiveStock` (`native-router.ts:347-350`, `inventory.ts:188-256`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "skuId": "sku_...", "warehouseId": "wh_...", "quantity": 100, "unitCost": 12.50, "supplierId": "sup_...", "poId": "po_...", "batchId": "LOT-2026-08" }
+```
+
+**Success Response (200):** the created `StockLedgerEntry` (`eventType: "STOCK_RECEIVED"`). Also upserts the `StockLevel`, ensures an `InventoryLot` when `batchId` + `trackLot` are set, and tries to fill open backorders for that sku/warehouse.
+
+**Error Cases:** SKU or warehouse not found → 404 (from `findSkuById`/`findWarehouseById`).
+
+##### `POST /inventory/transfer` — `inv.transferStock` (`native-router.ts:351-354`, `inventory.ts:266-353`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "skuId": "sku_...", "fromWarehouseId": "wh_main", "toWarehouseId": "wh_east", "quantity": 20, "batchId": "" }
+```
+
+**Success Response (200):**
+```json
+{ "ok": true }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `fromWarehouseId === toWarehouseId` | 400 | `{ "message": "Source and destination warehouse must differ" }` |
+| Insufficient `quantityAvailable` at the source | 400 | `{ "message": "Insufficient available stock at source warehouse" }` |
+
+##### `GET /inventory/alerts` — `inv.lowStockAlerts` (`native-router.ts:355-357`, `inventory.ts:915-936`)
+
+**Auth:** `OPS_ROLES`
+
+**Success Response (200):**
+```json
+{ "lowStock": [{ "skuId": "sku_...", "code": "ACC-CBL-USB", "name": "USB-C Cable 3ft", "available": 8, "reorderPoint": 25 }] }
+```
+Capped to the 50 lowest rows out of up to 500 scanned `StockLevel` rows with `reorderPoint > 0`.
+
+##### `GET /inventory/levels` — `inv.getStockLevels` (`native-router.ts:358-365`, `inventory.ts:636-644`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:** query `?skuId=&warehouseId=`
+
+**Success Response (200):** array of raw `StockLevel` rows.
+
+##### `POST /inventory/levels/ensure` — `inv.ensureStockLevel` (`native-router.ts:366-369`, `inventory.ts:664-698`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "skuId": "sku_...", "warehouseId": "wh_...", "locationId": "A-01-01", "reorderPoint": 10, "reorderQty": 50 }
+```
+
+**Success Response (200):** the upserted `StockLevel` row (created at zero quantities if it didn't exist).
+
+**Error Cases:** SKU or warehouse not found → 404.
+
+##### `PATCH /inventory/levels/:id` — `inv.patchStockLevel` (`native-router.ts:370-373`, `inventory.ts:646-662`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "reorderPoint": 15, "reorderQty": 60, "leadTimeDays": 5, "locationId": "A-01-02" }
+```
+
+**Success Response (200):** the updated `StockLevel` row.
+
+**Error Cases:** 404 `{ "message": "Stock level not found" }`.
+
+##### `POST /inventory/stock/reserve` — `inv.reserveStock` (`native-router.ts:374-378`, `inventory.ts:714-760`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "skuId": "sku_...", "warehouseId": "wh_...", "quantity": 5, "orderId": "ord_...", "correlationId": "uuid", "batchId": "" }
+```
+
+**Success Response (200):**
+```json
+{ "reservationId": "uuid" }
+```
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `quantity` not a positive integer | 400 | `{ "message": "quantity must be a positive integer" }` |
+| Not enough `quantityAvailable` | 400 | `{ "message": "Insufficient stock: available X, requested Y" }` |
+| Concurrent reservation raced past the availability check | 400 | `{ "message": "Insufficient stock: requested N no longer available" }` |
+
+##### `POST /inventory/stock/release` — `inv.releaseReservation` (`native-router.ts:379-383`, `inventory.ts:881-904`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:**
+```json
+{ "reservationId": "uuid" }
+```
+
+**Success Response (200):**
+```json
+{ "released": true }
+```
+Silently no-ops if the reservation is unknown or already not `ACTIVE` — there is no 404 path here.
+
+##### `GET /inventory/demand-plan` — `demandPlanning.listDemandPlans` (`native-router.ts:384-391`, `demand-planning.ts:168-197`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:** query `?warehouseId=&days=30&limit=50`
+
+**Success Response (200):** array of the same per-SKU demand-plan objects as `GET /skus/:id/demand-plan`, filtered to only SKUs that need reordering, sorted by `suggestedOrderQty` descending.
+
+##### `GET /inventory/lots` — `inventoryLots.listInventoryLots` (`native-router.ts:392-402`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:** query `?skuId=&warehouseId=` (`skuId` required)
+
+**Success Response (200):** same `InventoryLot[]` shape as `GET /skus/:id/lots`.
+
+**Error Cases:** `skuId` missing → 400 `{ "message": "skuId query required" }`.
+
+---
+
+#### 8.1.5 POS
+
+Business logic: `apps/web/lib/server/pos.ts`, `pos-receipt.ts`. Routed by `routePos` (`native-router.ts:1880-1899`). Note the whole group is gated `ADMIN_ROLES` (`native-router.ts:1881`) — there is no dedicated cashier/`SALES_REP` role carve-out for POS despite it being a counter-sale flow.
+
+##### `GET /pos/registers` — `pos.listPosRegisters` (`native-router.ts:1883-1885`, `pos.ts:9-14`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** array of active `PosRegister` rows (`name`, `warehouseId`), ordered by name.
+
+##### `POST /pos/registers` — `pos.createPosRegister` (`native-router.ts:1886-1889`, `pos.ts:16-20`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "name": "Front Counter", "warehouseId": "wh_main" }
+```
+
+**Success Response (201):** the created `PosRegister` row.
+
+##### `POST /pos/orders` — `pos.createPosOrder` (`native-router.ts:1890-1893`, `pos.ts:22-113`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{
+  "registerId": "reg_...",
+  "customerId": "cust_...",
+  "lineItems": [{ "skuId": "sku_...", "warehouseId": "wh_...", "quantity": 2, "unitPrice": 24.99 }],
+  "paymentMethod": "CASH",
+  "ageAttestation": { "method": "ID_CHECK", "notes": "Checked driver's license" }
+}
+```
+
+**Success Response (201):**
+```json
+{ "id": "ord_...", "status": "DELIVERED", "totalAmount": 53.48, "taxAmount": 3.50, "...rest of the created Order": true }
+```
+This single call synchronously runs the entire order pipeline: reserves stock, requires the `pos` feature flag, validates age attestation, marks `CASH`/`CHECK` sales fully paid, cancels the WMS pick task, ships serials, commits inventory, and walks the order straight to `DELIVERED` — a POS sale never sits in `PENDING`/`PROCESSING`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Tenant plan doesn't have the `pos` feature enabled (`feature-flags.ts:47-52`) | 403 | `{ "message": "Feature \"pos\" is not enabled on your plan" }` |
+| `registerId` doesn't match an active register | 404 | `{ "message": "POS register not found" }` |
+| `lineItems` empty | 400 | `{ "message": "lineItems required" }` |
+| `customerId` missing/blank | 400 | `{ "message": "customerId required" }` |
+| Any line couldn't be fully allocated (backordered) — sale is auto-cancelled with compensation | 400 | `{ "message": "Insufficient stock for POS sale" }` |
+| Age-restricted items + attestation missing/failed (same rules as order creation, `compliance-age.ts`) | 403/400 | see `POST /orders` age-compliance rows |
+
+##### `GET /pos/orders/:id/receipt` — `posReceipt.buildPosReceiptHtml` (`native-router.ts:1894-1897`, `pos-receipt.ts:12-69`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** `text/html` printable receipt (subtotal/tax/total/paid).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Order not found | 404 | `{ "message": "Order not found" }` |
+| Order's `channel` isn't `POS` | 400 | `{ "message": "Receipt is only available for POS orders" }` |
+
+---
+
+#### 8.1.6 Dispatch
+
+Business logic: `apps/web/lib/server/dispatch.ts`. Routed by `routeRoutes` (`native-router.ts:1234-1291`, admin-managed delivery routes — reads need `DRIVER_ROLES`, mutations need `ADMIN_ROLES`) and `routeDispatchMobile` (`native-router.ts:1293-1310`, the driver mobile-app surface — all `DRIVER_ROLES`).
+
+##### `GET /routes/shipped-orders` — `orders.listShippedOrdersForDispatch` (`native-router.ts:1239-1241`)
+
+**Auth:** `DRIVER_ROLES` (GET) — dispatchers building a route need to see orders ready to route
+
+**Success Response (200):** up to 100 `SHIPPED`-status orders (`id`, `customerId`, `status`, `totalAmount`, `shippingAddress`, `notes`, `updatedAt`).
+
+##### `POST /routes/from-orders` — `dispatch.createRouteFromOrders` (`native-router.ts:1242-1252`, `dispatch.ts:91-127`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "orderIds": ["ord_1", "ord_2"], "name": "Dallas Metro — Route A", "scheduledFor": "2026-08-07T13:00:00Z" }
+```
+
+**Success Response (201):** the created `DeliveryRoute` with one `RouteStop` per order, sequenced in request order, `address` built from each order's `shippingAddress` (or a notes-derived fallback).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `orderIds` empty | 400 | `{ "message": "orderIds required" }` |
+| Any order doesn't exist or isn't `SHIPPED` | 400 | `{ "message": "All orders must exist and be in SHIPPED status" }` |
+
+##### `GET /routes` — `dispatch.listRoutes` (`native-router.ts:1254-1256`, `dispatch.ts:9-24`)
+
+**Auth:** `DRIVER_ROLES`
+
+**Request:** query `?date=YYYY-MM-DD` (matches `scheduledFor`, or `createdAt` when `scheduledFor` is null)
+
+**Success Response (200):** array of `DeliveryRoute` rows with `stops`, ordered by `scheduledFor` then newest-created.
+
+##### `POST /routes` — `dispatch.createRoute` (`native-router.ts:1257-1260`, `dispatch.ts:35-66`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "name": "Manual Route", "scheduledFor": "2026-08-07T13:00:00Z", "stops": [{ "sequence": 1, "address": { "line1": "..." } }] }
+```
+
+**Success Response (201):** the created `DeliveryRoute` (`status: "PLANNED"`) with `stops`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Duplicate `sequence` values among stops | 400 | `{ "message": "Duplicate stop sequence" }` |
+| `scheduledFor` doesn't parse as a date | 400 | `{ "message": "Invalid scheduledFor" }` |
+
+##### `GET /routes/:id` — `dispatch.getRoute` (`native-router.ts:1261-1263`, `dispatch.ts:26-33`)
+
+**Auth:** `DRIVER_ROLES`
+
+**Error Cases:** 404 `{ "message": "Route not found" }`.
+
+##### `PATCH /routes/:id/driver` — `dispatch.assignRouteDriver` (`native-router.ts:1264-1268`, `dispatch.ts:129-142`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "driverId": "usr_..." }
+```
+
+**Success Response (200):** the route with `driverId` set and `status` forced to `IN_PROGRESS`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `driverId` missing | 400 | `{ "message": "driverId required" }` |
+| Route already `CANCELLED`/`COMPLETED` | 400 | `{ "message": "Route is not assignable" }` |
+
+##### `PATCH /routes/:id/stops/reorder` — `dispatch.reorderRouteStops` (`native-router.ts:1269-1273`, `dispatch.ts:169-199`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "stopIds": ["stop_2", "stop_1", "stop_3"] }
+```
+
+**Success Response (200):** the route with stops resequenced 1..N in the given order (applied via a two-pass negative-then-positive sequence update to dodge the `(routeId, sequence)` unique constraint).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `stopIds` empty | 400 | `{ "message": "stopIds required" }` |
+| Count doesn't match the route's actual stop count | 400 | `{ "message": "Must include every stop id for this route" }` |
+| A stop id doesn't belong to this route | 400 | `{ "message": "Unknown stop id for this route" }` |
+
+##### `POST /routes/:id/optimize` (also accepts `PATCH /routes/:id/stops/optimize`) — `dispatch.optimizeRouteStopsNearestNeighbor` (`native-router.ts:1274-1279`, `dispatch.ts:239-283`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** the route with stops reordered by a nearest-neighbor greedy walk (Haversine distance) starting from the driver's last known GPS fix, or the first stop if none.
+
+**Error Cases:** 404 `{ "message": "Route not found" }`.
+
+##### `POST /routes/:id/stops/:stopId/delivered` — `dispatch.markStopDelivered` (`native-router.ts:1280-1285`, `dispatch.ts:285-323`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:** proof-of-delivery payload, e.g.:
+```json
+{ "signature": "data:image/png;base64,...", "ageConfirmed": true, "notes": "Left at door" }
+```
+
+**Success Response (200):** the route (marked `COMPLETED` once every stop is `DELIVERED`); if the stop's address encodes an order id, the order is advanced via `onDeliveryStopDelivered`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Route or stop not found | 404 | `{ "message": "Route not found" }` / `{ "message": "Stop not found" }` |
+| Stop's order has age-restricted lines, tenant requires delivery confirmation, and `pod.ageConfirmed` isn't truthy (`compliance-age.ts:334-337`) | 403 | `{ "message": "This delivery includes age-restricted items (minimum age N). Confirm recipient age before marking delivered." }` |
+
+##### `POST /routes/:id/stops/:stopId/failed` — `dispatch.markStopFailed` (`native-router.ts:1286-1289`, `dispatch.ts:325-335`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "reason": "Customer not home" }
+```
+
+**Success Response (200):** the route with that stop set to `FAILED`. (Note: `reason` is accepted in the body but the handler parameter is unused — it isn't persisted anywhere on the stop, `dispatch.ts:325`.)
+
+**Error Cases:** 404 `{ "message": "Route not found" }` / `{ "message": "Stop not found" }`.
+
+##### `POST /dispatch/driver/location` — `dispatch.recordDriverLocation` (`native-router.ts:1296-1298`, `dispatch.ts:144-167`)
+
+**Auth:** `DRIVER_ROLES`
+
+**Request:**
+```json
+{ "lat": 32.7767, "lng": -96.797, "timestamp": "2026-08-06T18:00:00Z", "routeId": "route_..." }
+```
+
+**Success Response (200):**
+```json
+{ "ok": true }
+```
+When `routeId` is omitted, this is a no-op success (only updates `lastKnownLat`/`lastKnownLng`/`lastKnownAt` on the named route).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `routeId` given but no such route | 404 | `{ "message": "Route not found" }` |
+| Route's `driverId` doesn't match the caller | 403 | `{ "message": "Location allowed only for the assigned driver" }` |
+
+##### `POST /dispatch/stops/:stopId/pod` — `dispatch.markStopDelivered` (`native-router.ts:1300-1307`)
+
+**Auth:** `DRIVER_ROLES`
+
+**Request:**
+```json
+{ "routeId": "route_...", "signature": "data:image/png;base64,...", "ageConfirmed": true }
+```
+`routeId` (and the path's `stopId`) are stripped out of the body before the rest is passed through as the POD payload.
+
+**Success Response (200):** same as `POST /routes/:id/stops/:stopId/delivered` above.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `routeId` missing/blank in body | 400 | `{ "message": "routeId is required in body" }` |
+| Same age-compliance/404 cases as `markStopDelivered` above | 403/404 | see above |
+
+---
+
+#### 8.1.7 Fixed Assets
+
+Business logic: `apps/web/lib/server/fixed-assets.ts` (posts depreciation/disposal journals via `ledger.ts`'s `createJournalDraft`/`postJournalEntry`). Routed by `routeFixedAssets` (`native-router.ts:1740-1764`) — the entire group requires `ADMIN_ROLES`.
+
+##### `GET /fixed-assets` — `fixedAssets.listFixedAssets` (`native-router.ts:1745-1747`, `fixed-assets.ts:29-48`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:** query `?status=ACTIVE` (or `ALL`/omitted for no filter)
+
+**Success Response (200):** array of `FixedAsset` rows with Decimal fields (`cost`, `salvageValue`, `accumulatedDepreciation`, `netBookValue`, `disposalProceeds`) coerced to plain numbers.
+
+##### `GET /fixed-assets/summary` — `fixedAssets.getFixedAssetSummary` (`native-router.ts:1748-1750`, `fixed-assets.ts:112-136`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):**
+```json
+{ "totalCost": 45000.00, "totalAccumDeprec": 12500.00, "totalNetBookValue": 32500.00, "activeCount": 8, "totalCount": 9 }
+```
+
+##### `POST /fixed-assets` — `fixedAssets.createFixedAsset` (`native-router.ts:1751-1753`, `fixed-assets.ts:66-110`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "assetCode": "FA-1001", "name": "Forklift", "category": "EQUIPMENT", "acquisitionDate": "2026-01-15", "cost": 25000, "salvageValue": 2000, "usefulLifeMonths": 60, "depreciationMethod": "STRAIGHT_LINE" }
+```
+
+**Success Response (201):** the created `FixedAsset` (`status: "ACTIVE"`, `accumulatedDepreciation: 0`, `netBookValue` = `cost`).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `assetCode` blank | 400 | `{ "message": "Asset code is required" }` |
+| `name` blank | 400 | `{ "message": "Asset name is required" }` |
+| `cost` missing or ≤0 | 400 | `{ "message": "Acquisition cost must be greater than 0" }` |
+| `usefulLifeMonths` missing or <1 | 400 | `{ "message": "Useful life months must be at least 1" }` |
+| `salvageValue` ≥ `cost` | 400 | `{ "message": "Salvage value cannot equal or exceed cost" }` |
+| `assetCode` already exists for tenant | 409 | `{ "message": "Asset code already exists" }` |
+
+##### `POST /fixed-assets/post-depreciation` — `fixedAssets.postMonthlyDepreciation` (`native-router.ts:1755-1758`, `fixed-assets.ts:165-235`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "date": "2026-08-31" }
+```
+(`date` is accepted but not actually used to select a period — `postMonthlyDepreciation` always depreciates every `ACTIVE` asset by exactly one month's worth, `fixed-assets.ts:196`.)
+
+**Success Response (200):**
+```json
+{ "count": 8, "totalDepreciation": 612.50, "journalEntries": ["je_1", "je_2"] }
+```
+Posts one balanced journal entry per asset (`Depreciation Expense` debit / `Accumulated Depreciation` credit), falling back to the first `5xxxx`/"depreciation"-named account and first `1xxxx`/"accum"-named account when an asset has no explicit GL mapping. Returns `{ count: 0, totalDepreciation: 0, journalEntries: [] }` if there are no active assets.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Tenant's chart of accounts has no usable expense/accumulated-depreciation fallback account | 400 | `{ "message": "Chart of accounts must contain accounts for depreciation GL posting" }` |
+
+##### `POST /fixed-assets/:id/dispose` — `fixedAssets.disposeFixedAsset` (`native-router.ts:1759-1762`, `fixed-assets.ts:237-270`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "disposalDate": "2026-08-06", "proceeds": 5000 }
+```
+
+**Success Response (200):**
+```json
+{ "id": "...", "status": "DISPOSED", "netBookValue": 0, "disposalProceeds": 5000, "gainLoss": -1200.00 }
+```
+`gainLoss` = `proceeds - netBookValue` at time of disposal (positive = gain, negative = loss); no journal entry is posted automatically for the gain/loss.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| Asset not found | 404 | `{ "message": "Fixed asset not found" }` |
+| Asset already `DISPOSED` | 400 | `{ "message": "Asset is already disposed" }` |
+
+---
+
+#### 8.1.8 Purchasing
+
+Business logic: `apps/web/lib/server/purchasing.ts` (delegates goods-receipt and payment specifics to `po-receiving.ts`). Routed by `routePurchaseOrders` (`native-router.ts:804-842`, reads need `OPS_ROLES`, writes need `ADMIN_ROLES`) and `routeSuppliers` (`native-router.ts:999-1020`, reads need any authenticated non-buyer session, writes need `ADMIN_ROLES`).
+
+##### `GET /purchase-orders` — `purchasing.listPurchaseOrders` (`native-router.ts:809-811`, `purchasing.ts:27-34`)
+
+**Auth:** `OPS_ROLES`
+
+**Request:** query `?status=SUBMITTED`
+
+**Success Response (200):** array of `PurchaseOrder` rows with `lines` and `supplier` included.
+
+##### `POST /purchase-orders` — `purchasing.createPurchaseOrder` (`native-router.ts:812-815`, `purchasing.ts:45-75`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "supplierId": "sup_...", "number": "PO-1002", "notes": "string", "freightAmount": 50, "dutyAmount": 0, "otherLandedAmount": 0, "lines": [{ "lineNo": 1, "skuCode": "VAP-POD-001", "description": "Nicotine pods", "qtyOrdered": 200, "unitCost": 12.50 }] }
+```
+
+**Success Response (201):** the created `PurchaseOrder` (`status: "DRAFT"`) with `lines`/`supplier`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| `supplierId` doesn't resolve to a supplier for this tenant | 400 | `{ "message": "Unknown supplier for tenant" }` |
+| Duplicate `lineNo` values | 400 | `{ "message": "Duplicate line numbers" }` |
+
+##### `GET /purchase-orders/:id` — `purchasing.getPurchaseOrder` (`native-router.ts:816-818`, `purchasing.ts:36-43`)
+
+**Auth:** `OPS_ROLES`
+
+**Error Cases:** 404 `{ "message": "Purchase order not found" }`.
+
+##### `POST /purchase-orders/:id/submit` — `purchasing.submitPurchaseOrder` (`native-router.ts:819-821`, `purchasing.ts:77-87`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** the PO with `status: "SUBMITTED"`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| PO not found | 404 | `{ "message": "Purchase order not found" }` |
+| PO isn't `DRAFT` | 400 | `{ "message": "Only DRAFT orders can be submitted" }` |
+
+##### `POST /purchase-orders/:id/cancel` — `purchasing.cancelPurchaseOrder` (`native-router.ts:822-824`, `purchasing.ts:89-102`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Success Response (200):** the PO with `status: "CANCELLED"`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| PO already `CLOSED`/`CANCELLED` | 400 | `{ "message": "PO already terminal" }` |
+| PO is `PARTIALLY_RECEIVED` | 400 | `{ "message": "Cannot cancel a partially received PO" }` |
+
+##### `POST /purchase-orders/:id/receive` — `purchasing.receiveGoods` (`native-router.ts:825-828`, `purchasing.ts:104-115`, `po-receiving.ts:208-240`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "warehouseId": "wh_main", "lines": [{ "lineId": "poline_1", "qtyReceived": 50 }] }
+```
+
+**Success Response (200):**
+```json
+{ "id": "po_...", "status": "PARTIALLY_RECEIVED", "lines": [ { "lineId": "poline_1", "qtyReceived": 50 } ], "inventoryErrors": [] }
+```
+Receiving any positive quantity also fires an async vendor-bill creation (`ap-bills.createBillFromPurchaseOrder`).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| PO not found | 404 | `{ "message": "Purchase order not found" }` |
+| PO status isn't open for receiving (not `SUBMITTED`/`PARTIALLY_RECEIVED`) | 400 | `{ "message": "PO is not open for receiving" }` / `{ "message": "Submit the PO before receiving" }` |
+| `lineId` doesn't belong to this PO | 400 | `{ "message": "Unknown line <lineId>" }` |
+| `qtyReceived` negative | 400 | `{ "message": "qtyReceived must be non-negative" }` |
+| Cumulative received would exceed `qtyOrdered` | 400 | `{ "message": "Line <lineNo> would exceed ordered quantity" }` |
+| A SKU line has quantity but no `warehouseId` supplied | 400 | `{ "message": "warehouseId is required to post inventory for SKU lines" }` |
+
+##### `POST /purchase-orders/:id/payments` — `purchasing.recordPurchaseOrderPayment` (`native-router.ts:829-831`, `purchasing.ts:166-172`, `po-receiving.ts:242-...`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "amount": 2500, "method": "ACH", "reference": "..." }
+```
+
+**Success Response (200):** the updated `PurchaseOrder` with `amountPaid` incremented (also updates the matching `VendorBill` if one exists).
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| PO not found | 404 | `{ "message": "Purchase order not found" }` |
+| PO is `CANCELLED` | 400 | `{ "message": "Cannot pay a cancelled PO" }` |
+| Nothing left to pay, or `amount` ≤ 0 | 400 | `{ "message": "Nothing to pay or invalid amount" }` |
+
+##### `GET /purchase-orders/:id/landed-costs` — `purchasing.getPurchaseOrderLandedCostPreview` (`native-router.ts:833-835`, `purchasing.ts:145-164`)
+
+**Auth:** `OPS_ROLES`
+
+**Success Response (200):**
+```json
+{ "purchaseOrderId": "po_...", "totalLandedCharges": 50.00, "lines": [{ "lineId": "poline_1", "lineNo": 1, "skuCode": "VAP-POD-001", "baseUnitCost": 12.50, "landedAdderPerUnit": 0.25, "landedUnitCost": 12.75, "lineLandedTotal": 50.00 }] }
+```
+
+**Error Cases:** 404 `{ "message": "Purchase order not found" }`.
+
+##### `PATCH /purchase-orders/:id/landed-costs` — `purchasing.updatePurchaseOrderLandedCosts` (`native-router.ts:836-839`, `purchasing.ts:117-143`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "freightAmount": 75, "dutyAmount": 10, "otherLandedAmount": 0, "landedCostNotes": "Freight adjusted after final weight" }
+```
+
+**Success Response (200):** the updated PO with `lines`/`supplier`.
+
+**Error Cases:**
+| Condition | Status | Body |
+| --- | --- | --- |
+| PO not found | 404 | `{ "message": "Purchase order not found" }` |
+| PO is `CANCELLED`/`CLOSED` | 400 | `{ "message": "Cannot update landed costs on a closed/cancelled PO" }` |
+
+##### `GET /suppliers` — `purchasing.listSuppliers` (`native-router.ts:1004-1006`, `purchasing.ts:174-176`)
+
+**Auth:** any authenticated non-buyer session
+
+**Success Response (200):** array of `Supplier` rows (`code`, `name`, `email`, `phone`), ordered by `code`.
+
+##### `POST /suppliers` — `purchasing.createSupplier` (`native-router.ts:1007-1010`, `purchasing.ts:184-197`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "code": "PAC-VAP", "name": "Pacific Supply Co.", "email": "orders@pacificsupply.com", "phone": "555-0100" }
+```
+
+**Success Response (201):** the created `Supplier` row.
+
+##### `GET /suppliers/:id` — `purchasing.getSupplier` (`native-router.ts:1011-1013`, `purchasing.ts:178-182`)
+
+**Auth:** any authenticated non-buyer session
+
+**Error Cases:** 404 `{ "message": "Supplier not found" }`.
+
+##### `PATCH /suppliers/:id` — `purchasing.updateSupplier` (`native-router.ts:1014-1017`, `purchasing.ts:199-213`)
+
+**Auth:** `ADMIN_ROLES`
+
+**Request:**
+```json
+{ "name": "Pacific Supply Co. LLC", "email": "ap@pacificsupply.com", "phone": null }
+```
+
+**Success Response (200):** the updated `Supplier` row.
+
+**Error Cases:** 404 `{ "message": "Supplier not found" }`.
