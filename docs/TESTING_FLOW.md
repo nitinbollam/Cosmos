@@ -3012,3 +3012,96 @@ For integration testing specifically (as distinct from the single-page functiona
 - **Prisma schemas touched** — the conversation/message rows live in the `analytics` schema (`CelestialConversation`/`CelestialMessage`, `apps/web/prisma/analytics/schema.prisma`), a separate schema client (`analyticsDb`) from whatever schema(s) the invoked tools query (`order`, `inventory`, `storefront` — via `orderDb`/`inventoryDb`/`storefrontDb` inside `orders.ts`/`inventory.ts`/`quotes.ts`), so a full integration test of one chat turn touches at least two schema clients even though it looks like a single request.
 
 **What to verify:** with `CELESTIAL_PROVIDER` unset (mock provider), send a tool-backed question and confirm the reply is tagged `provider: 'pleros'`/`model: 'structured'` (direct-compose, step 7) with no LLM round-trip; send a how-to question and confirm it goes through the mock LLM path instead; then set an invalid real provider key and confirm the same how-to question still returns a reply (via `buildDocFallbackReply`) rather than a 500, and that `GET /api/v1/celestial/conversations/:id` afterward shows both turns persisted.
+
+## 10. Regression Testing Checklist
+
+Sections 5–9 test each module and each cross-module seam individually. This section strings the modules together into the five critical journeys a tenant's revenue and inventory integrity depend on, so a regression that only breaks the *handoff* between two individually-passing modules doesn't slip through. Each journey below reuses the exact route paths, module names, status enums, and role lists established in Section 5 (cited per item) — no new terminology is introduced here. Run these after any change that touches more than one of the modules in a given chain, and always before a release.
+
+### 10.1 Order-to-Cash (Catalog → Cart → Checkout → Order → Invoice → Payment → Ledger)
+
+Chain: Buyer Portal (5.17) → Orders (`orders.ts`) → Order Orchestration (`order-orchestration.ts`) → Finance (5.10, Invoices (AR) / `invoices.ts` / `invoice-gl.ts`) → ledger schema (`ChartAccount`/`JournalEntry`/`JournalLine`).
+
+- [ ] Browse `/catalog` as a portal-buyer session and confirm a priced, in-stock SKU shows list price (or contract price via `resolvePricesForCustomer` if the buyer's customer has a `CustomerPrice`/`VolumePriceBreak`)
+- [ ] Add the SKU to `/cart`, click "Proceed to Checkout", and complete all 3 checkout steps (shipping → payment → review) with `NET_TERMS`
+- [ ] Confirm checkout lands on `/orders/:id/confirmation` and the order appears at `/orders/:id` with status `PENDING`, and that `assertOrderLinePrices`/`assertCreditAvailable` did not reject the line/credit check
+- [ ] As an `ADMIN_ROLES` session, call `POST /orders/:id/confirm` (the buyer-facing "Confirm order" button 403s for `STAFF`/`VIEWER` per Section 5.17's `adminAction` gate) and confirm `runOrderFulfillmentPipeline` fires the downstream WMS fulfillment task (Section 5.3)
+- [ ] Progress the order's fulfillment task through pick → pack → dispatch (Section 5.3/10.3) and confirm the order status advances accordingly and an `Invoice` row is created/updated on the order
+- [ ] Open `/admin/finance` → Invoices (AR) tab and confirm the new invoice appears with the correct `totalAmount`/balance, matching what checkout computed (tax via `compliance-tax.ts`, no re-computation elsewhere)
+- [ ] Record a payment against the invoice ("Record payment" modal, `ADMIN_ROLES`-gated per 5.10) or pay it from the buyer portal's `/invoices/:id` pay panel, and confirm the invoice balance updates immediately from the server response
+- [ ] Confirm `invoice-gl.ts`'s `postInvoiceJournal` posted a balanced journal entry (AR code `1200` debit / Revenue code `4000` credit) — verify via `/admin/finance/journals/:id` (only reachable via a direct URL using the id from the posting response, per 5.10's Navigation note) or via the Trial balance tab for the posting period
+- [ ] Confirm the Trial balance tab (5.10) for the invoice's period reflects the posted journal without needing a page other than Finance
+- [ ] Confirm a non-`ADMIN_ROLES` session (e.g. `SALES_REP`) can still view the AR invoice list (`GET /invoices`/`GET /invoices/ar-summary` only require a non-portal-buyer session) but cannot record a payment (403)
+
+### 10.2 Procure-to-Pay (PO → Receiving → AP Bill → Payment → Ledger)
+
+Chain: Purchasing (5.2, `purchasing.ts`) → PO Receiving (`po-receiving.ts`) → Finance Bills (AP) tab (5.10, `ap-bills.ts`) → `operations-gl.ts` → ledger schema.
+
+- [ ] Create a purchase order for a supplier with one line at `/admin/purchasing`, submit it (`DRAFT` → `SUBMITTED`) — requires `ADMIN_ROLES` per 5.2
+- [ ] Use the "Record receipt" drawer to receive units against the PO and confirm status becomes `PARTIALLY_RECEIVED` or `CLOSED` depending on quantity received
+- [ ] Confirm the receipt posted a `StockLedgerEntry` via `postInventoryForPoReceipts` (`po-receiving.ts`) — check the SKU's ledger history modal on `/admin/inventory/:skuId` (Section 5.1)
+- [ ] Confirm `po-receiving.ts`'s dynamic import of `createBillFromPurchaseOrder` (`./ap-bills`) created a `VendorBill` — check the Bills (AP) tab at `/admin/finance`
+- [ ] Open the vendor bill's 3-way-match modal (5.10) and confirm `computeThreeWayMatch`/`runThreeWayMatch` reconciles PO quantity/cost, receipt quantity, and bill quantity/cost, including any landed-cost proration from `landed-cost.ts`
+- [ ] Record a bill payment (`recordBillPayment`, `ADMIN_ROLES`-gated per 5.10's blanket `ADMIN_ROLES` requirement on `/bills*`) and confirm `operations-gl.ts`'s `postApPaymentJournal` posts a balanced journal entry
+- [ ] Confirm `postPoReceiptJournal` (also in `operations-gl.ts`) posted at the receiving step, independent of the later payment posting — Finance's Trial balance tab should reflect both postings for the correct period
+- [ ] Confirm a `WAREHOUSE_STAFF` session can view the PO list (`OPS_ROLES` allows read) but cannot submit/cancel/receive against it, and cannot reach the Bills (AP) tab at all (`ADMIN_ROLES`-only per 5.10)
+- [ ] Confirm a PO line's `qtyReceived` never exceeds its `qtyOrdered` across the full chain (Section 5.2's "Must never happen")
+
+### 10.3 WMS Pick/Pack/Ship (Wave → Pick → Pack → Dispatch → Delivery)
+
+Chain: Warehouse/WMS wave picking (5.4, `wave-picking.ts`) → Fulfillment (5.3, `wms-fulfillment.ts`) → Order Orchestration's `dispatchFulfillmentTask` → Dispatch (5.7, `dispatch.ts`).
+
+- [ ] On `/admin/warehouse`'s Wave picking tab, create a pick wave from a selection of pending fulfillment tasks (requires at least one task selected, per 5.4's Failure scenario) and "Start" it (`OPEN` → `IN_PROGRESS`)
+- [ ] Work the wave's pick path bin-by-bin (or use `/admin/fulfillment`'s "Pick all" on the underlying task) and confirm every `PickLine` reaches `PICKED` or `SHORT`
+- [ ] On `/admin/fulfillment/:taskId`, click "Pack" once `packingReady` is true (every line `PICKED`/`SHORT`) and confirm the task status becomes `PACKED`
+- [ ] Click "Dispatch" on the `PACKED` task and confirm `wms-fulfillment.ts` calls `order-orchestration.ts`'s `dispatchFulfillmentTask`, which commits inventory and fills backorder shorts per Section 6.1's dependency table
+- [ ] Confirm the linked order now has a route stop reachable from `/admin/dispatch` (or was auto-created by the orders saga), assign a driver, and mark the stop "Delivered" via the POD modal
+- [ ] If the order carries age-restricted SKUs and the tenant's `requireDeliveryConfirmation` policy is enabled, confirm "Recipient age confirmed" is required before `markStopDelivered` succeeds (5.7's Edge cases)
+- [ ] Confirm the `DeliveryRoute.status` flips to `COMPLETED` once every `RouteStop` on the route is `DELIVERED`, and the order's status reflects delivery
+- [ ] Confirm a batch under an active recall (Section 5.9) cannot be picked, packed, or dispatched at any of the four `wms-fulfillment.ts` call sites, and cannot be shipped via `dispatch.ts`
+- [ ] Confirm a `SALES_REP` session (outside `OPS_ROLES`/`DRIVER_ROLES`) is rejected at every step of this chain — wave/pick/pack (`OPS_ROLES`), dispatch action and route mutation (`ADMIN_ROLES`)
+
+### 10.4 POS Sale (Scan/Select → Price → Tender → Receipt → Inventory Decrement)
+
+Chain: POS (5.8, `pos.ts`) → `pricing.ts` (`resolvePricesForCustomer`) → `inventory.ts` (`commitShipmentForOrder`) → `pos-receipt.ts`.
+
+- [ ] As an `ADMIN_ROLES` session on `/admin/pos`, select a register and warehouse, add two in-stock SKUs to the cart (confirm an age-restricted SKU shows its minimum-age badge)
+- [ ] Confirm cart line prices resolve through the same `resolvePricesForCustomer` price-resolution path used elsewhere (contract/volume price before list price, per Section 5.5's precedence)
+- [ ] Choose a tender/payment method and, if the cart contains an age-restricted item under an enforcing policy, confirm age verification (DOB entry or an alternate method) is required before "Complete sale" is enabled
+- [ ] Click "Complete sale" and confirm the resulting order is walked synchronously through `transitionOrderStatus(... 'PACKED')` → `onFulfillmentDispatched` → `onDeliveryStopDelivered` to `DELIVERED` within the same request (5.8's Success scenario)
+- [ ] Confirm the auto-created WMS fulfillment task for the sale was cancelled (`wms.cancelFulfillmentByOrder`) rather than left open in the Fulfillment queue (5.3)
+- [ ] Confirm inventory was decremented via `inv.commitShipmentForOrder` and a `StockLedgerEntry` was posted, visible on the SKU's ledger history (5.1)
+- [ ] Print or view the receipt (`buildPosReceiptHtml`) and confirm its `taxAmount`/`totalAmount` match the order's, with no re-computation
+- [ ] Attempt a sale where a line would go backordered and confirm `createPosOrder` cancels the whole order (`cancelOrderWithCompensation`) rather than leaving a partially-shipped counter sale (5.8's Edge cases)
+- [ ] Confirm a `WAREHOUSE_STAFF` or `SALES_REP` session is rejected on every `/pos/*` call, including just listing registers (`ADMIN_ROLES`-only, no exception, per 5.8)
+
+### 10.5 Fixed-Asset Lifecycle (Create Asset → Depreciation Run → Ledger Posting)
+
+Chain: Finance Fixed Assets tab (5.10, `fixed-assets.ts`) → `ledger.ts` (`createJournalDraft`/`postJournalEntry`).
+
+- [ ] On the Fixed Assets tab at `/admin/finance`, "+ Register Asset" a new asset with Code, Name, a positive Cost, `usefulLifeMonths >= 1`, and a salvage value strictly less than cost
+- [ ] Confirm `createFixedAsset` rejects a salvage value that equals or exceeds cost (`ApiError(400, 'Salvage value cannot equal or exceed cost')`) even though the modal doesn't cross-validate this client-side
+- [ ] Click "⚡ Post Monthly Depreciation" and confirm `calculateMonthlyDepreciation` computes the correct depreciable amount for the asset's method (straight-line or 200%-declining-balance) and updates `accumulatedDepreciation`/`netBookValue`
+- [ ] Confirm one balanced journal entry (Depreciation Expense debit / Accumulated Depreciation credit) is posted per asset via `createJournalDraft` + `postJournalEntry`, reachable at `/admin/finance/journals/:id` using the id returned by the posting response
+- [ ] Confirm the asset's status flips to `FULLY_DEPRECIATED` once `netBookValue <= salvageValue`, and that a further depreciation run silently skips that asset (no journal, no error)
+- [ ] Confirm the Trial balance tab (any `periodType`: `MONTHLY`/`QUARTERLY`/`YEARLY`) for the posting period reflects the depreciation journal
+- [ ] "Dispose" the asset with a proceeds amount and confirm the gain/loss preview is correct, and that disposing an already-`DISPOSED` asset is rejected (`ApiError(400, 'Asset is already disposed')`)
+- [ ] Confirm a `SALES_REP`/`WAREHOUSE_STAFF` session cannot reach `/fixed-assets*` at all (`ADMIN_ROLES`-only, no read exception, per 5.10)
+- [ ] Confirm `postMonthlyDepreciation` fails cleanly (`ApiError(400, 'Chart of accounts must contain accounts for depreciation GL posting')`, no assets updated) when the tenant's chart of accounts lacks a resolvable depreciation expense/accumulated-depreciation account
+
+## 11. Smoke Testing Checklist
+
+A fast pass to confirm the app is minimally functional immediately after a deploy — not a substitute for Sections 5–10. Target: a few minutes, not a full regression pass. If any item fails, stop and treat the deploy as broken.
+
+- [ ] The single Express process (`npm run dev -w @pleros/client` in dev, or the equivalent production start command from Section 3) boots without throwing, and its listen line appears in the logs
+- [ ] No Prisma connection errors appear at boot across the schema clients (`authDb`, `tenantDb`, `inventoryDb`, `orderDb`, `crmDb`, `storefrontDb`, `wmsDb`, `dispatchDb`, `purchasingDb`, `paymentDb`, `complianceDb`, `notificationDb`, `ledgerDb`, `analyticsDb` — Section 6.3) — DB connection is healthy
+- [ ] `startBackgroundJobs()` fires its immediate sweep without throwing (console shows no uncaught error from `background-jobs.ts`, Section 9.4)
+- [ ] Log in with a seeded staff credential at `/admin/login` and land on `/admin` without error
+- [ ] `/admin` (dashboard) loads without a console error or failed network request
+- [ ] `/admin/inventory` (Inventory, 5.1) loads its SKU list without error
+- [ ] Log in with a seeded portal-buyer credential at `/login` and confirm `/catalog` loads with SKU cards rendering (not stuck on the loading skeleton)
+- [ ] Log in at `/m/login` and confirm the role-appropriate mobile PWA screen loads (e.g. `/m/warehouse` for `WAREHOUSE_STAFF`, `/m/delivery` for `DRIVER`, or `/m/sales` otherwise) without error
+- [ ] One write operation succeeds end-to-end: create a draft quote at `/quotes/new` as a portal buyer and confirm it appears in the quote list at `/admin/quotes` (exercises buyer-portal write → API → DB → admin-console read in one check)
+- [ ] The floating `CelestialChat` widget (5.13) opens without error on an admin page (a disabled `celestial` feature flag returning its 403 message is an acceptable, non-blocking result — the widget itself must still render)
+- [ ] `/admin/settings` loads the Company tab without error (confirms the tenant/session/feature-flag read path is healthy)
+- [ ] No unexpected 401/403 redirect loops occur when navigating between `/admin/login`, `/login`, and `/m/login` (confirms the three separate gateway-client login paths from Section 9.1 are each wired to the correct instance)
+- [ ] Server logs show no unhandled promise rejection or process crash after exercising the above pages/writes
