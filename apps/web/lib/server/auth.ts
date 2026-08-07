@@ -285,12 +285,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
     },
   })
 
-  const appUrl = process.env.APP_URL?.trim() || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:4000')
-  if (!appUrl) {
-    console.error('[auth] APP_URL is not set — password reset link cannot be built')
-    return
-  }
-  const resetUrl = `${appUrl.replace(/\/$/, '')}/reset-password?token=${token}`
+  const resetUrl = `${appPublicUrl()}/reset-password?token=${token}`
   try {
     const { deliverNotification } = await import('./notification-provider')
     await deliverNotification({

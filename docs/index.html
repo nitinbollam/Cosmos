@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pleros ERP — Interactive Testing Flow & Quality Knowledge Base</title>
+  <meta name="description" content="Single Source of Truth for End-to-End Testing, API Contracts, Step-by-Step UI Click Guides, and Release Validation for Pleros ERP.">
+  
+  <!-- Google Fonts: Space Grotesk, Inter, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Mermaid.js CDN for Visual Diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            neo: {
+              yellow: '#FFE600',
+              cyan: '#00E5FF',
+              pink: '#FF6B8B',
+              lime: '#00FF66',
+              purple: '#C084FC',
+              orange: '#FF9900',
+              bgLight: '#F8FAFC',
+              bgDark: '#0A0D14',
+              cardDark: '#121824',
+              cardLight: '#FFFFFF',
+              borderDark: '#000000',
+              borderLight: '#000000',
+            }
+          },
+          boxShadow: {
+            'neo': '4px 4px 0px 0px #000000',
+            'neo-lg': '6px 6px 0px 0px #000000',
+            'neo-sm': '2px 2px 0px 0px #000000',
+            'neo-yellow': '4px 4px 0px 0px #FFE600',
+            'neo-cyan': '4px 4px 0px 0px #00E5FF',
+            'neo-pink': '4px 4px 0px 0px #FF6B8B',
+            'neo-lime': '4px 4px 0px 0px #00FF66',
+            'neo-purple': '4px 4px 0px 0px #C084FC',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Neobrutalism Base Rules & Micro-Interactions */
+    body {
+      font-family: 'Inter', sans-serif;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    
+    h1, h2, h3, h4, h5, h6, .font-heading {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    code, pre, .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .neo-box {
+      border: 3px solid #000000;
+      box-shadow: 4px 4px 0px 0px #000000;
+    }
+    
+    .dark .neo-box {
+      border: 3px solid #000000;
+      box-shadow: 4px 4px 0px 0px #FFE600;
+    }
+
+    .neo-btn {
+      border: 3px solid #000000;
+      box-shadow: 4px 4px 0px 0px #000000;
+      transition: all 0.15s ease-in-out;
+      font-weight: 700;
+    }
+
+    .neo-btn:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0px 0px #000000;
+    }
+
+    .neo-btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0px 0px #000000;
+    }
+
+    .dark .neo-btn {
+      box-shadow: 4px 4px 0px 0px #FFE600;
+    }
+    
+    .dark .neo-btn:hover {
+      box-shadow: 6px 6px 0px 0px #FFE600;
+    }
+
+    /* Custom Neo Scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0A0D14;
+      border-left: 2px solid #000;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #FFE600;
+      border: 2px solid #000;
+    }
+
+    /* Custom Neo Checkbox */
+    .neo-checkbox {
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border: 2px solid #000;
+      background: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s;
+      flex-shrink: 0;
+    }
+    .neo-checkbox:checked {
+      background: #00FF66;
+    }
+    .neo-checkbox:checked::after {
+      content: '✓';
+      font-weight: 900;
+      color: #000;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body class="bg-neo-bgDark text-slate-100 min-h-screen antialiased selection:bg-neo-yellow selection:text-black">
+
+  <!-- ==================== HEADER & NAVBAR ==================== -->
+  <header class="sticky top-0 z-40 bg-neo-yellow text-black border-b-4 border-black px-4 lg:px-8 py-3 shadow-neo">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3">
+        <a href="#hero" class="flex items-center gap-2 bg-black text-neo-yellow px-3 py-1.5 border-2 border-black shadow-neo-sm font-heading font-extrabold text-xl tracking-wider hover:bg-slate-900">
+          <span>PLEROS</span>
+          <span class="bg-neo-cyan text-black px-1.5 py-0.5 text-xs font-mono">LABS</span>
+        </a>
+        <span class="hidden md:inline-block bg-white text-black font-mono text-xs font-bold px-2 py-1 border-2 border-black">
+          v1.0.0-QA MASTER
+        </span>
+      </div>
+
+      <!-- Search Trigger (⌘K) -->
+      <button onclick="openSearchModal()" class="flex-1 max-w-md hidden sm:flex items-center justify-between bg-white text-black border-3 border-black px-4 py-2 text-sm font-semibold shadow-neo-sm hover:bg-slate-50 transition">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <span class="text-slate-700">Search all 19 modules, UI click guides, APIs...</span>
+        </div>
+        <kbd class="bg-neo-yellow text-black font-mono text-xs px-2 py-0.5 border-2 border-black font-bold">⌘K</kbd>
+      </button>
+
+      <!-- Nav Quick Links & Theme Toggle -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <a href="#ui-guides" class="hidden lg:block bg-black text-white px-3 py-1.5 text-xs font-bold border-2 border-black hover:bg-neo-pink hover:text-black">UI Click Guides</a>
+        <a href="#modules" class="hidden lg:block bg-black text-white px-3 py-1.5 text-xs font-bold border-2 border-black hover:bg-neo-lime hover:text-black">All 19 Modules</a>
+        <a href="#test-data" class="hidden lg:block bg-black text-white px-3 py-1.5 text-xs font-bold border-2 border-black hover:bg-neo-purple hover:text-black">Test Data</a>
+        <a href="#release-center" class="hidden lg:block bg-black text-white px-3 py-1.5 text-xs font-bold border-2 border-black hover:bg-neo-orange hover:text-black">Release Gate</a>
+        
+        <!-- Mobile Search Button -->
+        <button onclick="openSearchModal()" class="sm:hidden bg-black text-neo-yellow p-2 border-2 border-black shadow-neo-sm">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </button>
+
+        <!-- Theme Toggle -->
+        <button onclick="toggleTheme()" id="theme-toggle-btn" class="bg-white text-black p-2 border-2 border-black font-mono text-xs font-bold shadow-neo-sm hover:bg-neo-cyan" title="Toggle Dark/Light Mode">
+          🌙 DARK
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ==================== HERO & DASHBOARD ==================== -->
+  <section id="hero" class="max-w-7xl mx-auto px-4 lg:px-8 py-8 lg:py-12">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      
+      <!-- Main Banner Text -->
+      <div class="lg:col-span-7 space-y-6">
+        <div class="inline-flex items-center gap-2 bg-neo-cyan text-black px-3 py-1 border-3 border-black shadow-neo font-mono text-xs font-extrabold uppercase">
+          <span class="animate-pulse">●</span> All 19 Modules + Step-by-Step UI Click Guides
+        </div>
+        
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white leading-none">
+          Pleros ERP <br>
+          <span class="bg-neo-yellow text-black px-2 py-0.5 border-4 border-black inline-block mt-2 shadow-neo-lg">Complete Testing Flow Master</span>
+        </h1>
+        
+        <p class="text-lg text-slate-300 font-medium leading-relaxed max-w-2xl">
+          Single Source of Truth containing all 19 ERP module testing cards, step-by-step UI click guides for Finances (AR, AP, GL, Bank Recon) and Core Operations, API payload examples, and release verification checklists.
+        </p>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap gap-3 pt-2">
+          <a href="#ui-guides" class="neo-btn bg-neo-pink text-black px-5 py-3 font-heading text-sm uppercase flex items-center gap-2">
+            <span>👇 Step-by-Step UI Click Guides</span>
+          </a>
+          <a href="#modules" class="neo-btn bg-neo-lime text-black px-5 py-3 font-heading text-sm uppercase flex items-center gap-2">
+            <span>📦 All 19 Modules Explorer</span>
+          </a>
+          <a href="#test-data" class="neo-btn bg-neo-yellow text-black px-5 py-3 font-heading text-sm uppercase flex items-center gap-2">
+            <span>🔑 Demo Accounts</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick Metrics & Progress Card -->
+      <div class="lg:col-span-5 bg-neo-cardDark border-4 border-black p-6 shadow-neo-yellow space-y-6">
+        <div class="flex items-center justify-between border-b-3 border-black pb-4">
+          <h2 class="font-heading text-xl font-extrabold text-neo-yellow flex items-center gap-2">
+            <span>📊 Release Readiness</span>
+          </h2>
+          <span class="bg-neo-lime text-black font-mono text-xs font-bold px-2 py-1 border-2 border-black" id="overall-status-badge">
+            VERIFIED
+          </span>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="space-y-2">
+          <div class="flex justify-between text-xs font-mono font-bold">
+            <span class="text-slate-300">Regression Checklist Progress</span>
+            <span class="text-neo-cyan" id="progress-percentage">0%</span>
+          </div>
+          <div class="w-full bg-slate-900 border-2 border-black h-5 p-0.5">
+            <div id="progress-bar" class="bg-neo-lime h-full border-r-2 border-black transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Metric Grid -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-900 border-2 border-black p-3 text-center shadow-neo-sm">
+            <div class="font-mono text-xs text-slate-400">Total Modules</div>
+            <div class="font-heading text-3xl font-black text-neo-yellow">19</div>
+          </div>
+          <div class="bg-slate-900 border-2 border-black p-3 text-center shadow-neo-sm">
+            <div class="font-mono text-xs text-slate-400">Prisma DBs</div>
+            <div class="font-heading text-3xl font-black text-neo-cyan">14</div>
+          </div>
+          <div class="bg-slate-900 border-2 border-black p-3 text-center shadow-neo-sm">
+            <div class="font-mono text-xs text-slate-400">UI Guides</div>
+            <div class="font-heading text-3xl font-black text-neo-pink">11</div>
+          </div>
+          <div class="bg-slate-900 border-2 border-black p-3 text-center shadow-neo-sm">
+            <div class="font-mono text-xs text-slate-400">User Roles</div>
+            <div class="font-heading text-3xl font-black text-neo-purple">5</div>
+          </div>
+        </div>
+
+        <!-- Reset Checklist Button -->
+        <button onclick="resetChecklistProgress()" class="w-full text-xs font-mono text-slate-400 hover:text-neo-pink underline text-center block">
+          Reset Saved Checklist Progress
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== STEP-BY-STEP UI TESTING GUIDES ==================== -->
+  <section id="ui-guides" class="max-w-7xl mx-auto px-4 lg:px-8 py-10 border-t-4 border-black">
+    <div class="space-y-4 mb-6">
+      <div class="inline-block bg-neo-pink text-black px-3 py-1 border-2 border-black font-mono text-xs font-bold shadow-neo-sm">
+        STEP-BY-STEP CLICK PATHS
+      </div>
+      <h2 class="text-3xl md:text-4xl font-black text-white">Application Step-by-Step UI Testing Walkthroughs</h2>
+      <p class="text-slate-300 text-sm max-w-3xl">
+        Explicit click-by-click instructions ("what to click, what to fill, and what to verify after") for every financial workflow and core scenario.
+      </p>
+    </div>
+
+    <!-- UI Guides Filter Tabs -->
+    <div class="flex gap-2 mb-6">
+      <button onclick="switchGuideTab('finance')" id="guide-tab-finance" class="neo-btn bg-neo-lime text-black px-4 py-2 text-xs">💰 Financial Workflows (6)</button>
+      <button onclick="switchGuideTab('operations')" id="guide-tab-operations" class="neo-btn bg-slate-800 text-white px-4 py-2 text-xs">📦 Core Operations (5)</button>
+    </div>
+
+    <!-- FINANCIAL WORKFLOWS CONTAINER -->
+    <div id="guide-panel-finance" class="space-y-6">
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-lime space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-lime">1. Accounts Receivable (AR) Invoicing & PDF Download</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Log in to Admin Console at <code class="text-neo-yellow">/admin/login</code> as <code class="text-neo-yellow">admin@pleros.local</code> / <code class="text-neo-yellow">admin1234</code>.</li>
+          <li>In the left sidebar, click <strong>Finance</strong> to navigate to <code class="text-neo-yellow">/admin/finance</code>.</li>
+          <li>Click the <strong>Invoices (AR)</strong> tab in the sub-header.</li>
+          <li>Locate Invoice <code class="text-neo-cyan">#INV-10092</code> (or any unpaid invoice row) and click to open Detail drawer.</li>
+          <li>Click the <strong>Download PDF</strong> button in top-right toolbar.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Browser opens/downloads a valid PDF document (`invoice-INV-10092.pdf`) generated via `pdfkit`.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-cyan space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-cyan">2. Recording Customer Payments Against AR Invoices</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Open <code class="text-neo-yellow">/admin/finance</code> → **Invoices (AR)** tab → Click unpaid invoice row (<code class="text-neo-lime">$1,250.00</code> balance).</li>
+          <li>Click <strong>Record Payment</strong> button. Select Method <code class="text-white">CHECK</code>, Check # <code class="text-white">CHK-2026-88</code>, Amount <code class="text-white">1250.00</code>.</li>
+          <li>Click <strong>Submit Payment</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Invoice status updates to `PAID`, balance shows `$0.00`, credit written to AR (`1200`), debit to Cash (`1000`).</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-pink space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-pink">3. Accounts Payable (AP) Vendor Bills & 3-Way Match</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Open <code class="text-neo-yellow">/admin/purchasing</code> → Select approved PO <code class="text-neo-cyan">#PO-4001</code> → Click <strong>Receive Goods</strong> → Confirm.</li>
+          <li>Click <strong>Generate Vendor Bill</strong> → Enter Invoice # <code class="text-white">INV-VEND-9981</code> → Click <strong>Perform 3-Way Match</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Match status displays `MATCHED` (green status badge) and AP liability posts.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-purple space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-purple">4. Bank Statement Reconciliation</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Open <code class="text-neo-yellow">/admin/finance</code> → <strong>Bank Reconciliation</strong> → Select Bank Account <code class="text-white">1000 - Chase Operating</code>.</li>
+          <li>Click <strong>Import Statement Lines</strong> → Paste raw CSV line → Click <strong>Process Statement</strong>.</li>
+          <li>Review auto-matched entries → Click <strong>Confirm Match</strong> → Click <strong>Finalize Reconciliation</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Statement ending balance matches GL book balance with $0.00 variance.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-yellow space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-yellow">5. General Ledger (GL) & Manual Journal Entries</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Open <code class="text-neo-yellow">/admin/finance</code> → <strong>General Ledger</strong> → <strong>Journal Entries</strong> → Click <strong>New Journal Entry</strong>.</li>
+          <li>Line 1: Account <code class="text-white">6100 - Depreciation Expense</code>, Debit: <code class="text-white">500.00</code>. Line 2: Account <code class="text-white">1500 - Accumulated Depreciation</code>, Credit: <code class="text-white">500.00</code>.</li>
+          <li>Click <strong>Post Journal Entry</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Status shows `POSTED`. Trial Balance confirms Total Debits equal Total Credits.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-orange space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-orange">6. B2B Buyer Storefront Invoice Payment</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Log in at <code class="text-neo-yellow">/login</code> as <code class="text-neo-yellow">buyer@acme-retail.com</code> → Open <code class="text-neo-yellow">/invoices</code>.</li>
+          <li>Select invoice <code class="text-neo-cyan">#INV-10092</code> → Click <strong>Pay Invoice Balance</strong> → Select Credit Card → Enter test card <code class="text-white">4242...</code>.</li>
+          <li>Click <strong>Submit Payment ($245.00)</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Invoice status updates to `PAID`, balance shows `$0.00`.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- CORE OPERATIONS WORKFLOWS CONTAINER -->
+    <div id="guide-panel-operations" class="space-y-6 hidden">
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-lime space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-lime">7. POS Register Checkout with Mandatory Age ID Attestation</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Open <code class="text-neo-yellow">/admin/pos</code> → Open Register #1 ($200 float) → Add SKU <code class="text-neo-cyan">SKU-TOB-002</code> (Cigars 21+).</li>
+          <li><strong>Mandatory ID Modal:</strong> Operator MUST check *"ID Verified"*, enter DOB <code class="text-white">1994-05-14</code>, select ID Type <code class="text-white">Driver License</code>.</li>
+          <li>Click <strong>Approve & Add to Cart</strong> → Pay Cash ($100.00) → Click <strong>Complete Sale</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Change calculates ($15.00), thermal receipt modal opens, stock deducts 1 unit.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-cyan space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-cyan">8. B2B Storefront Order Placement with NET 30 Terms</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Log in at <code class="text-neo-yellow">/login</code> as <code class="text-neo-yellow">buyer@acme-retail.com</code> → Open <code class="text-neo-yellow">/catalog</code> → Add SKU <code class="text-neo-cyan">SKU-BEV-001</code> to cart.</li>
+          <li>Open <code class="text-neo-yellow">/cart</code> → Click <strong>Proceed to Checkout</strong> → Select Payment Method **NET 30 Terms** → Click <strong>Place Order</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Redirects to `/orders/:id/confirmation`, order displays on buyer `/orders` and Admin `/admin/orders`.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-pink space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-pink">9. WMS Purchase Order Goods Receiving & Putaway</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Open <code class="text-neo-yellow">/admin/warehouse</code> → **Receiving Sessions** → Select PO <code class="text-neo-cyan">#PO-4001</code>.</li>
+          <li>Scan SKU, enter received quantity (<code class="text-white">100</code>), Lot <code class="text-white">LOT-2026-08A</code>, select Bin <code class="text-white">ZONE-A-R1-B04</code>.</li>
+          <li>Click <strong>Confirm Putaway</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Bin `ZONE-A-R1-B04` stock updates by +100 units.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-purple space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-purple">10. Dispatch Route Delivery & Driver POD Signature</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Admin (<code class="text-neo-yellow">/admin/dispatch</code>): Create Route, assign driver <code class="text-white">driver@pleros.local</code>, click **Optimize Route**.</li>
+          <li>Driver mobile (<code class="text-neo-yellow">/m/delivery</code>): Open route <code class="text-neo-cyan">#RT-104</code> → Tap Stop #1 → Tap **Capture POD** → Sign signature & submit.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Stop marks `COMPLETED` and order updates to `DELIVERED`.</li>
+        </ol>
+      </div>
+
+      <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-yellow space-y-4">
+        <h3 class="font-heading text-xl font-bold text-neo-yellow">11. Order RMA Return Merchandise Authorization</h3>
+        <ol class="space-y-2 text-xs font-mono text-slate-300 list-decimal list-inside bg-slate-900 p-4 border-2 border-black">
+          <li>Open <code class="text-neo-yellow">/admin/orders</code> → Click delivered order <code class="text-neo-cyan">#ORD-10092</code> → Click **Actions** → **Initiate RMA Return**.</li>
+          <li>Select return qty (<code class="text-white">2 cases</code>), Reason <code class="text-white">DAMAGED_IN_TRANSIT</code>, Disposition <code class="text-white">RESTOCK_TO_MAIN_WAREHOUSE</code>.</li>
+          <li>Click <strong>Issue RMA & Credit Memo</strong>.</li>
+          <li class="text-neo-lime font-bold">✔ Verification: Order status shows `RMA_ISSUED`, stock increases by 2 cases, AR credit memo posts in Finance.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ALL 19 MODULES EXPLORER ==================== -->
+  <section id="modules" class="max-w-7xl mx-auto px-4 lg:px-8 py-10 border-t-4 border-black">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+      <div>
+        <div class="inline-block bg-neo-yellow text-black px-3 py-1 border-2 border-black font-mono text-xs font-bold shadow-neo-sm mb-2">
+          FEATURE DEEP-DIVE
+        </div>
+        <h2 class="text-3xl md:text-4xl font-black text-white">Module-by-Module Testing Explorer (All 19 Modules)</h2>
+      </div>
+
+      <!-- Domain Category Filter Tabs -->
+      <div class="flex flex-wrap gap-2">
+        <button onclick="filterDomain('all')" class="domain-tab neo-btn bg-neo-yellow text-black px-3 py-1.5 text-xs">All (19)</button>
+        <button onclick="filterDomain('core')" class="domain-tab neo-btn bg-white text-black px-3 py-1.5 text-xs">Core & Auth</button>
+        <button onclick="filterDomain('wms')" class="domain-tab neo-btn bg-white text-black px-3 py-1.5 text-xs">WMS & Logistics</button>
+        <button onclick="filterDomain('finance')" class="domain-tab neo-btn bg-white text-black px-3 py-1.5 text-xs">Finance & POS</button>
+        <button onclick="filterDomain('field')" class="domain-tab neo-btn bg-white text-black px-3 py-1.5 text-xs">Shop & Mobile</button>
+      </div>
+    </div>
+
+    <!-- ALL 19 MODULE CARDS CONTAINER -->
+    <div class="space-y-8" id="module-cards-container">
+      
+      <!-- MODULE 1: AUTH -->
+      <div id="mod-auth" data-domain="core" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-yellow p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: Public / Guest</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: auth, tenant</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">1. Authentication, Tenant Signup & Security</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-yellow">
+            Routes: /signup, /verify-email, /admin/login, /login
+          </div>
+        </div>
+        <div class="text-xs text-slate-300">Verifies tenant registration, email verification, multi-tenant creation, password recovery, invite acceptance, and JWT security enforcement.</div>
+      </div>
+
+      <!-- MODULE 2: DASHBOARD -->
+      <div id="mod-dashboard" data-domain="core" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-cyan p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: tenant, order, analytics</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">2. Admin Dashboard & First-Run Onboarding</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-cyan">Routes: /admin, /admin/onboarding</div>
+        </div>
+        <div class="text-xs text-slate-300">Provides central executive visibility over company KPIs, cashflow forecasts, inventory alerts, recent orders, and onboarding setup wizard.</div>
+      </div>
+
+      <!-- MODULE 3: INVENTORY -->
+      <div id="mod-inventory" data-domain="wms" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-pink p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, WAREHOUSE</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: inventory, wms</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">3. Inventory Management, SKU Catalog & Barcodes</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-pink">Routes: /admin/inventory, /admin/inventory/:skuId</div>
+        </div>
+        <div class="text-xs text-slate-300">Manages SKU master records, multi-warehouse stock balances, lot numbers, stock adjustments, transfers, CSV imports, and SVG barcode label printing.</div>
+      </div>
+
+      <!-- MODULE 4: ORDERS -->
+      <div id="mod-orders" data-domain="finance" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-lime p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, SALES</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: order, inventory, crm</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">4. Order Management, Saga Lifecycle & Returns (RMA)</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-lime">Routes: /admin/orders, /admin/orders/:id</div>
+        </div>
+        <div class="text-xs text-slate-300">Handles B2B sales order processing, order status saga transitions (`PENDING` → `CONFIRMED` → `PROCESSING` → `SHIPPED` → `DELIVERED`), split shipments, and RMA returns.</div>
+      </div>
+
+      <!-- MODULE 5: FULFILLMENT -->
+      <div id="mod-fulfillment" data-domain="wms" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-purple p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, WAREHOUSE</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: wms, order</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">5. Fulfillment & Pick/Pack Operations</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-purple">Routes: /admin/fulfillment, /admin/fulfillment/:taskId</div>
+        </div>
+        <div class="text-xs text-slate-300">Orchestrates warehouse picking tasks, line confirmation, box assignment, container weight calculation, and carrier label generation.</div>
+      </div>
+
+      <!-- MODULE 6: WAREHOUSE -->
+      <div id="mod-warehouse" data-domain="wms" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-orange p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, WAREHOUSE</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: wms, inventory</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">6. Warehouse Operations, Bin Locations & Wave Picking</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-orange">Routes: /admin/warehouse</div>
+        </div>
+        <div class="text-xs text-slate-300">Manages bin location codes (Aisle-Rack-Bin), PO receiving sessions, cycle count adjustments, and multi-order wave picking plans.</div>
+      </div>
+
+      <!-- MODULE 7: PURCHASING -->
+      <div id="mod-purchasing" data-domain="wms" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-pink p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: purchasing, ledger</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">7. Purchasing & Supplier Management</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-pink">Routes: /admin/purchasing, /admin/purchasing/:poId</div>
+        </div>
+        <div class="text-xs text-slate-300">Manages vendor profiles, purchasing price lists, purchase order generation, PO approval workflows, supplier bill matching, and goods receipt.</div>
+      </div>
+
+      <!-- MODULE 8: CRM -->
+      <div id="mod-crm" data-domain="field" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-lime p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, SALES</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: crm, storefront</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">8. CRM, B2B Customer Accounts & Contract Pricing</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-lime">Routes: /admin/crm, /admin/crm/customers/:id</div>
+        </div>
+        <div class="text-xs text-slate-300">Manages commercial buyer profiles, contract price list assignments, credit limit enforcement ($50,000), tax exemptions, and buyer portal invites.</div>
+      </div>
+
+      <!-- MODULE 9: QUOTES -->
+      <div id="mod-quotes" data-domain="field" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-yellow p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, SALES, BUYER</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: crm, order</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">9. Quotes & Volume Pricing Negotiations</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-yellow">Routes: /admin/quotes, /quotes, /quotes/new</div>
+        </div>
+        <div class="text-xs text-slate-300">Allows B2B buyers to request volume custom quotes, and enables sales admins to review, counter-offer, approve, or convert quotes into binding orders.</div>
+      </div>
+
+      <!-- MODULE 10: DISPATCH -->
+      <div id="mod-dispatch" data-domain="wms" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-cyan p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, DRIVER</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: dispatch, order</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">10. Dispatch, Route Optimization & Delivery POD</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-cyan">Routes: /admin/dispatch, /m/delivery</div>
+        </div>
+        <div class="text-xs text-slate-300">Organizes local delivery routes, assigns drivers, optimizes stop sequences geographically, and captures electronic Proof of Delivery (POD) signatures.</div>
+      </div>
+
+      <!-- MODULE 11: FINANCE -->
+      <div id="mod-finance" data-domain="finance" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-pink p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, ACCOUNTANT</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: ledger, payment</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">11. Finance, AR Invoices, Bank Recon & General Ledger</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-pink">Routes: /admin/finance, /admin/finance/journals/:id</div>
+        </div>
+        <div class="text-xs text-slate-300">Manages AR aging, AP vendor bills, PDF invoice downloads via `pdfkit`, payments recording, double-entry general ledger, trial balance, and bank reconciliations.</div>
+      </div>
+
+      <!-- MODULE 12: POS -->
+      <div id="mod-pos" data-domain="finance" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-lime p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, SALES</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: order, inventory, compliance</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">12. Point of Sale (POS) Retail Register</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-lime">Routes: /admin/pos</div>
+        </div>
+        <div class="text-xs text-slate-300">Retail register interface for item lookup, barcode scanning, customer selection, mandatory age attestation ID modals, multi-tender checkout, and receipt printing.</div>
+      </div>
+
+      <!-- MODULE 13: COMPLIANCE -->
+      <div id="mod-compliance" data-domain="core" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-purple p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: compliance</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">13. Compliance & MSA Regulatory Reports</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-purple">Routes: /admin/compliance, /admin/compliance/msa/:id</div>
+        </div>
+        <div class="text-xs text-slate-300">Tracks regulatory compliance, wholesale licensing, batch lot recalls, and generates Master Settlement Agreement (MSA) state audit reports.</div>
+      </div>
+
+      <!-- MODULE 14: REPORTS -->
+      <div id="mod-reports" data-domain="core" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-orange p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: analytics</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">14. Custom Reports & Analytics Builder</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-orange">Routes: /admin/reports</div>
+        </div>
+        <div class="text-xs text-slate-300">Enables admins to construct, execute, save, and export custom operational reports with dynamic column filtering, aggregation, and CSV exports.</div>
+      </div>
+
+      <!-- MODULE 15: NOTIFICATIONS -->
+      <div id="mod-notifications" data-domain="core" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-yellow p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN, BUYER</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: notification</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">15. Notifications Inbox & Provider Status</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-yellow">Routes: /admin/notifications, /notifications</div>
+        </div>
+        <div class="text-xs text-slate-300">Manages in-app alert badges, SendGrid email status, and Twilio SMS dispatch for order updates and inventory thresholds.</div>
+      </div>
+
+      <!-- MODULE 16: CELESTIAL AI -->
+      <div id="mod-celestial" data-domain="core" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-cyan p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-lime text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P1 HIGH</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">RAG Knowledge Engine</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">16. Celestial AI Assistant & Knowledge Engine</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-cyan">Routes: /admin/celestial, Floating ✦ Panel</div>
+        </div>
+        <div class="text-xs text-slate-300">Provides an embedded LLM-powered copilot for natural language queries, automated report generation, stock forecasts, and RAG documentation search.</div>
+      </div>
+
+      <!-- MODULE 17: SETTINGS -->
+      <div id="mod-settings" data-domain="core" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-pink p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: ADMIN</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: tenant, auth</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">17. Tenant Settings, Team Invites & Stripe Billing</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-pink">Routes: /admin/settings</div>
+        </div>
+        <div class="text-xs text-slate-300">Configures company profile, tax rules, team invites, feature flags, audit log viewing, and SaaS subscription billing via Stripe Checkout.</div>
+      </div>
+
+      <!-- MODULE 18: STOREFRONT -->
+      <div id="mod-storefront" data-domain="field" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-purple p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: BUYER</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">DB: storefront, order</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">18. B2B Buyer Portal Storefront & Checkout</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-purple">Routes: /catalog, /cart, /checkout, /orders, /invoices</div>
+        </div>
+        <div class="text-xs text-slate-300">Buyer portal for product browsing, contract price lists, cart management, NET terms checkout, and Stripe credit card payments.</div>
+      </div>
+
+      <!-- MODULE 19: MOBILE PWAS -->
+      <div id="mod-mobile" data-domain="field" class="module-card bg-neo-cardDark border-4 border-black shadow-neo-yellow p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-3 border-black pb-4 mb-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-neo-pink text-black font-mono text-xs font-black px-2 py-0.5 border border-black">P0 CRITICAL</span>
+              <span class="bg-black text-neo-yellow font-mono text-xs px-2 py-0.5 border border-black">Role: WAREHOUSE, DRIVER, SALES</span>
+              <span class="bg-neo-cyan text-black font-mono text-xs px-2 py-0.5 border border-black">Service Worker PWA</span>
+            </div>
+            <h3 class="text-2xl font-black text-white">19. Mobile Field PWAs (Warehouse, Delivery, Sales)</h3>
+          </div>
+          <div class="font-mono text-xs bg-slate-900 p-2 border-2 border-black text-neo-yellow">Routes: /m/login, /m/warehouse, /m/delivery, /m/sales</div>
+        </div>
+        <div class="text-xs text-slate-300">Responsive mobile apps for warehouse picking, delivery route execution, POD signature capture, and offline queue background sync (`offline-queue.ts`).</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== TEST DATA & PAYLOAD EXAMPLES HUB ==================== -->
+  <section id="test-data" class="max-w-7xl mx-auto px-4 lg:px-8 py-10 border-t-4 border-black">
+    <div class="space-y-4 mb-6">
+      <div class="inline-block bg-neo-lime text-black px-3 py-1 border-2 border-black font-mono text-xs font-bold shadow-neo-sm">
+        DEMO ACCOUNTS & PAYLOADS
+      </div>
+      <h2 class="text-3xl md:text-4xl font-black text-white">Test Data, Seed Credentials & API Payloads</h2>
+      <p class="text-slate-300 text-sm max-w-3xl">
+        Ready-to-use demo accounts generated via `npm run seed` and exact API request payload examples for automated or manual QA.
+      </p>
+    </div>
+
+    <!-- Demo Accounts Table -->
+    <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-lime space-y-4 mb-8">
+      <h3 class="font-heading text-xl font-bold text-neo-lime border-b-2 border-black pb-2">Pre-Configured Seed Demo Accounts</h3>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-2 border-black font-mono text-xs">
+          <thead class="bg-black text-neo-yellow border-b-2 border-black">
+            <tr>
+              <th class="p-2.5 border-r border-black">Role</th>
+              <th class="p-2.5 border-r border-black">Email Address</th>
+              <th class="p-2.5 border-r border-black">Password</th>
+              <th class="p-2.5 border-r border-black">Entry Route</th>
+              <th class="p-2.5">Copy Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black bg-slate-900 text-slate-300">
+            <tr>
+              <td class="p-2.5 font-bold text-neo-pink border-r border-black">ADMIN</td>
+              <td class="p-2.5 border-r border-black">admin@pleros.local</td>
+              <td class="p-2.5 border-r border-black">admin1234</td>
+              <td class="p-2.5 border-r border-black text-neo-yellow">/admin/login</td>
+              <td class="p-2.5"><button onclick="copyCode('admin@pleros.local')" class="bg-neo-yellow text-black px-2 py-0.5 font-bold">Copy Email</button></td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-neo-purple border-r border-black">BUYER</td>
+              <td class="p-2.5 border-r border-black">buyer@acme-retail.com</td>
+              <td class="p-2.5 border-r border-black">buyer1234</td>
+              <td class="p-2.5 border-r border-black text-neo-yellow">/login</td>
+              <td class="p-2.5"><button onclick="copyCode('buyer@acme-retail.com')" class="bg-neo-purple text-black px-2 py-0.5 font-bold">Copy Email</button></td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-neo-cyan border-r border-black">WAREHOUSE</td>
+              <td class="p-2.5 border-r border-black">warehouse@pleros.local</td>
+              <td class="p-2.5 border-r border-black">warehouse1234</td>
+              <td class="p-2.5 border-r border-black text-neo-yellow">/m/warehouse</td>
+              <td class="p-2.5"><button onclick="copyCode('warehouse@pleros.local')" class="bg-neo-cyan text-black px-2 py-0.5 font-bold">Copy Email</button></td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-neo-orange border-r border-black">DRIVER</td>
+              <td class="p-2.5 border-r border-black">driver@pleros.local</td>
+              <td class="p-2.5 border-r border-black">driver1234</td>
+              <td class="p-2.5 border-r border-black text-neo-yellow">/m/delivery</td>
+              <td class="p-2.5"><button onclick="copyCode('driver@pleros.local')" class="bg-neo-orange text-black px-2 py-0.5 font-bold">Copy Email</button></td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-neo-lime border-r border-black">SALES</td>
+              <td class="p-2.5 border-r border-black">sales@pleros.local</td>
+              <td class="p-2.5 border-r border-black">sales1234</td>
+              <td class="p-2.5 border-r border-black text-neo-yellow">/m/sales</td>
+              <td class="p-2.5"><button onclick="copyCode('sales@pleros.local')" class="bg-neo-lime text-black px-2 py-0.5 font-bold">Copy Email</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== RELEASE VALIDATION CENTER ==================== -->
+  <section id="release-center" class="max-w-7xl mx-auto px-4 lg:px-8 py-10 border-t-4 border-black">
+    <div class="space-y-4 mb-6">
+      <div class="inline-block bg-neo-lime text-black px-3 py-1 border-2 border-black font-mono text-xs font-bold shadow-neo-sm">
+        RELEASE PROTOCOL
+      </div>
+      <h2 class="text-3xl md:text-4xl font-black text-white">Release Validation & Pre-Flight Center</h2>
+      <p class="text-slate-300 text-sm max-w-3xl">
+        Complete the mandatory 7-stage release checklist before deploying to staging or production. Progress persists automatically in your local browser session.
+      </p>
+    </div>
+
+    <!-- Release Checklist Table -->
+    <div class="bg-neo-cardDark border-4 border-black p-6 shadow-neo-lime space-y-4">
+      
+      <div class="flex items-center justify-between border-b-3 border-black pb-3">
+        <h3 class="font-heading text-xl font-bold text-neo-lime">Pre-Deployment Verification Gate</h3>
+        <button onclick="clearReleaseChecklist()" class="bg-neo-pink text-black px-3 py-1 font-mono text-xs font-bold border-2 border-black">Clear Gate</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <label class="flex items-start gap-3 p-3 bg-slate-900 border-2 border-black cursor-pointer hover:bg-slate-800">
+          <input type="checkbox" class="neo-checkbox rel-check" data-rel="rel-1" onchange="updateReleaseProgress()">
+          <div>
+            <span class="font-bold text-white block">Stage 1: Workspace Preflight Build (`npm run prod:preflight`)</span>
+            <span class="text-slate-400">Verifies typescript (`tsc --noEmit`), soft linting, and production bundle compilation with 0 errors.</span>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-3 p-3 bg-slate-900 border-2 border-black cursor-pointer hover:bg-slate-800">
+          <input type="checkbox" class="neo-checkbox rel-check" data-rel="rel-2" onchange="updateReleaseProgress()">
+          <div>
+            <span class="font-bold text-white block">Stage 2: Health Endpoints Verification (`/api/v1/health/db`)</span>
+            <span class="text-slate-400">Ensures all 14 modular Prisma database connections report `status: healthy`.</span>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-3 p-3 bg-slate-900 border-2 border-black cursor-pointer hover:bg-slate-800">
+          <input type="checkbox" class="neo-checkbox rel-check" data-rel="rel-3" onchange="updateReleaseProgress()">
+          <div>
+            <span class="font-bold text-white block">Stage 3: Stripe Publishable Key Build Verification</span>
+            <span class="text-slate-400">Confirms `VITE_STRIPE_PUBLISHABLE_KEY` was embedded during Vite build, preventing runtime checkout errors.</span>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-3 p-3 bg-slate-900 border-2 border-black cursor-pointer hover:bg-slate-800">
+          <input type="checkbox" class="neo-checkbox rel-check" data-rel="rel-4" onchange="updateReleaseProgress()">
+          <div>
+            <span class="font-bold text-white block">Stage 4: Age Attestation & POS Compliance Pass</span>
+            <span class="text-slate-400">Verifies restricted SKUs trigger mandatory DOB attestation modals in POS and Mobile delivery.</span>
+          </div>
+        </label>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== SEARCH MODAL (⌘K) ==================== -->
+  <div id="search-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-neo-cardDark border-4 border-black w-full max-w-2xl shadow-neo-yellow p-6 space-y-4">
+      <div class="flex items-center justify-between border-b-3 border-black pb-3">
+        <h3 class="font-heading text-lg font-bold text-neo-yellow flex items-center gap-2">
+          <span>🔍 Global Knowledge Base Search</span>
+        </h3>
+        <button onclick="closeSearchModal()" class="bg-neo-pink text-black font-mono text-xs font-bold px-2 py-1 border-2 border-black">ESC</button>
+      </div>
+      <input type="text" id="modal-search-input" onkeyup="performSearch()" placeholder="Type to search all 19 modules, UI click guides, APIs, schemas..." class="w-full bg-white text-black font-mono text-sm border-3 border-black p-3 shadow-neo-sm focus:outline-none focus:bg-yellow-50">
+      <div id="search-results-list" class="max-h-80 overflow-y-auto space-y-2 font-mono text-xs pt-2">
+        <div class="text-slate-400 text-center py-4">Start typing to filter knowledge base...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="border-t-4 border-black bg-neo-yellow text-black py-8 px-4 lg:px-8 mt-12">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs font-bold">
+      <div>PLEROS ERP TESTING LABS — MASTER QA SUITE</div>
+      <div>Documented under <a href="file:///Users/maniteja19/Documents/GitHub/Cosmos/docs/TESTING_FLOW.md" class="underline">docs/TESTING_FLOW.md</a></div>
+    </div>
+  </footer>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadChecklistState();
+      updateChecklistProgress();
+      updateReleaseProgress();
+    });
+
+    function updateChecklistProgress() {
+      const allChecks = document.querySelectorAll('.item-check');
+      const checked = document.querySelectorAll('.item-check:checked');
+      const total = allChecks.length || 1;
+      const pct = Math.round((checked.length / total) * 100);
+      
+      const pBar = document.getElementById('progress-bar');
+      const pText = document.getElementById('progress-percentage');
+      if (pBar) pBar.style.width = pct + '%';
+      if (pText) pText.innerText = pct + '%';
+
+      allChecks.forEach(cb => {
+        const id = cb.getAttribute('data-id');
+        if (id) localStorage.setItem('chk_' + id, cb.checked ? 'true' : 'false');
+      });
+    }
+
+    function loadChecklistState() {
+      const allChecks = document.querySelectorAll('.item-check');
+      allChecks.forEach(cb => {
+        const id = cb.getAttribute('data-id');
+        if (id && localStorage.getItem('chk_' + id) === 'true') {
+          cb.checked = true;
+        }
+      });
+
+      const relChecks = document.querySelectorAll('.rel-check');
+      relChecks.forEach(cb => {
+        const id = cb.getAttribute('data-rel');
+        if (id && localStorage.getItem('rel_' + id) === 'true') {
+          cb.checked = true;
+        }
+      });
+    }
+
+    function updateReleaseProgress() {
+      const relChecks = document.querySelectorAll('.rel-check');
+      relChecks.forEach(cb => {
+        const id = cb.getAttribute('data-rel');
+        if (id) localStorage.setItem('rel_' + id, cb.checked ? 'true' : 'false');
+      });
+    }
+
+    function resetChecklistProgress() {
+      localStorage.clear();
+      document.querySelectorAll('.item-check, .rel-check').forEach(cb => cb.checked = false);
+      updateChecklistProgress();
+      updateReleaseProgress();
+    }
+
+    function clearReleaseChecklist() {
+      document.querySelectorAll('.rel-check').forEach(cb => {
+        cb.checked = false;
+        const id = cb.getAttribute('data-rel');
+        if (id) localStorage.removeItem('rel_' + id);
+      });
+    }
+
+    function switchGuideTab(tabName) {
+      const btnFin = document.getElementById('guide-tab-finance');
+      const btnOp = document.getElementById('guide-tab-operations');
+      const panFin = document.getElementById('guide-panel-finance');
+      const panOp = document.getElementById('guide-panel-operations');
+
+      if (tabName === 'finance') {
+        btnFin.className = 'neo-btn bg-neo-lime text-black px-4 py-2 text-xs';
+        btnOp.className = 'neo-btn bg-slate-800 text-white px-4 py-2 text-xs';
+        panFin.classList.remove('hidden');
+        panOp.classList.add('hidden');
+      } else {
+        btnOp.className = 'neo-btn bg-neo-lime text-black px-4 py-2 text-xs';
+        btnFin.className = 'neo-btn bg-slate-800 text-white px-4 py-2 text-xs';
+        panOp.classList.remove('hidden');
+        panFin.classList.add('hidden');
+      }
+    }
+
+    function switchTab(cardId, tabName) {
+      const card = document.getElementById(cardId);
+      if (!card) return;
+
+      card.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active', 'bg-neo-yellow', 'bg-neo-cyan', 'bg-neo-pink', 'bg-neo-lime', 'bg-neo-purple', 'bg-neo-orange', 'text-black');
+        btn.classList.add('bg-slate-800', 'text-white');
+      });
+
+      const activeBtn = event.currentTarget;
+      activeBtn.classList.remove('bg-slate-800', 'text-white');
+      activeBtn.classList.add('active', 'bg-neo-yellow', 'text-black');
+
+      card.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+
+      const targetPanel = card.querySelector(`.${cardId}-${tabName}`);
+      if (targetPanel) targetPanel.classList.remove('hidden');
+    }
+
+    function filterDomain(domain) {
+      const cards = document.querySelectorAll('.module-card');
+      cards.forEach(card => {
+        if (domain === 'all' || card.getAttribute('data-domain') === domain) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    }
+
+    function filterAndScrollModule(moduleId) {
+      filterDomain('all');
+      const el = document.getElementById(moduleId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.classList.add('ring-4', 'ring-neo-yellow');
+        setTimeout(() => el.classList.remove('ring-4', 'ring-neo-yellow'), 2000);
+      }
+    }
+
+    function openSearchModal() {
+      const modal = document.getElementById('search-modal');
+      const input = document.getElementById('modal-search-input');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      if (input) {
+        input.focus();
+        input.value = '';
+      }
+    }
+
+    function closeSearchModal() {
+      const modal = document.getElementById('search-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        openSearchModal();
+      }
+      if (e.key === 'Escape') {
+        closeSearchModal();
+      }
+    });
+
+    const searchIndex = [
+      { title: '1. Authentication, Signup & Email Verification', target: 'mod-auth', type: 'Module' },
+      { title: '2. Admin Dashboard & First-Run Onboarding', target: 'mod-dashboard', type: 'Module' },
+      { title: '3. Inventory Management, SKUs & Barcodes', target: 'mod-inventory', type: 'Module' },
+      { title: '4. Order Management & Returns (RMA)', target: 'mod-orders', type: 'Module' },
+      { title: '5. Fulfillment & Pick/Pack Operations', target: 'mod-fulfillment', type: 'Module' },
+      { title: '6. Warehouse Operations, Bins & Wave Picking', target: 'mod-warehouse', type: 'Module' },
+      { title: '7. Purchasing & Supplier Management', target: 'mod-purchasing', type: 'Module' },
+      { title: '8. CRM, B2B Accounts & Contract Pricing', target: 'mod-crm', type: 'Module' },
+      { title: '9. Quotes & Volume Negotiations', target: 'mod-quotes', type: 'Module' },
+      { title: '10. Dispatch, Route Optimization & Delivery POD', target: 'mod-dispatch', type: 'Module' },
+      { title: '11. Finance, AR Invoices & Bank Recon', target: 'mod-finance', type: 'Module' },
+      { title: '12. Point of Sale (POS) Retail Register', target: 'mod-pos', type: 'Module' },
+      { title: '13. Compliance & MSA Audit Reports', target: 'mod-compliance', type: 'Module' },
+      { title: '14. Custom Reports & Analytics Builder', target: 'mod-reports', type: 'Module' },
+      { title: '15. Notifications Inbox & Provider Status', target: 'mod-notifications', type: 'Module' },
+      { title: '16. Celestial AI Assistant & Knowledge Engine', target: 'mod-celestial', type: 'Module' },
+      { title: '17. Tenant Settings, Invites & Stripe Billing', target: 'mod-settings', type: 'Module' },
+      { title: '18. B2B Storefront & Checkout', target: 'mod-storefront', type: 'Module' },
+      { title: '19. Mobile Field PWAs (Warehouse, Delivery, Sales)', target: 'mod-mobile', type: 'Module' },
+      { title: '1. Accounts Receivable Invoicing & PDF Download', target: 'ui-guides', type: 'UI Guide' },
+      { title: '2. Recording Customer Payments Against AR', target: 'ui-guides', type: 'UI Guide' },
+      { title: '3. AP Vendor Bills & 3-Way Matching', target: 'ui-guides', type: 'UI Guide' },
+      { title: '4. Bank Statement Reconciliation', target: 'ui-guides', type: 'UI Guide' },
+      { title: '5. General Ledger & Manual Journal Entries', target: 'ui-guides', type: 'UI Guide' },
+      { title: '6. B2B Storefront Invoice Payment', target: 'ui-guides', type: 'UI Guide' },
+    ];
+
+    function performSearch() {
+      const query = document.getElementById('modal-search-input').value.toLowerCase().trim();
+      const resultsContainer = document.getElementById('search-results-list');
+      if (!query) {
+        resultsContainer.innerHTML = '<div class="text-slate-400 text-center py-4">Start typing to filter knowledge base...</div>';
+        return;
+      }
+
+      const matches = searchIndex.filter(item => item.title.toLowerCase().includes(query) || item.type.toLowerCase().includes(query));
+      if (matches.length === 0) {
+        resultsContainer.innerHTML = '<div class="text-neo-pink text-center py-4">No matching topics found.</div>';
+        return;
+      }
+
+      resultsContainer.innerHTML = matches.map(m => `
+        <div onclick="closeSearchModal(); filterAndScrollModule('${m.target}')" class="p-3 bg-slate-900 border border-black hover:bg-neo-yellow hover:text-black cursor-pointer flex items-center justify-between">
+          <span class="font-bold">${m.title}</span>
+          <span class="bg-black text-white px-2 py-0.5 text-[10px] uppercase font-mono">${m.type}</span>
+        </div>
+      `).join('');
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const btn = document.getElementById('theme-toggle-btn');
+      if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        btn.innerText = '☀️ LIGHT';
+      } else {
+        html.classList.add('dark');
+        btn.innerText = '🌙 DARK';
+      }
+    }
+
+    function copyCode(text) {
+      navigator.clipboard.writeText(text);
+      alert('Copied code / command to clipboard!');
+    }
+  </script>
+</body>
+</html>

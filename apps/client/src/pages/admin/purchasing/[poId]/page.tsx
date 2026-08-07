@@ -65,6 +65,7 @@ export default function PurchaseOrderDetailPage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
+      void qc.invalidateQueries({ queryKey: ['orders'] })
     },
   })
 
@@ -73,6 +74,7 @@ export default function PurchaseOrderDetailPage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
+      void qc.invalidateQueries({ queryKey: ['orders'] })
     },
   })
 

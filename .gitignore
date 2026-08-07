@@ -71,6 +71,7 @@ secrets/
 # misc
 .cache/
 tmp/
+.superpowers/
 
 # Prisma generated clients (per-service)
 services/*/src/generated/

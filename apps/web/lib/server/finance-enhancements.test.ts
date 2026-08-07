@@ -5,7 +5,8 @@ import { ledgerDb, purchasingDb } from './db'
 import { trialBalance, createChartAccount } from './ledger'
 import { listVendorBills } from './ap-bills'
 import { createBankAccount, importStatementLines, getReconciliationSummary } from './bank-recon'
-import { VendorBillStatus, AccountType } from '@/generated/prisma-ledger'
+import { AccountType } from '@/generated/prisma-ledger'
+import { VendorBillStatus } from '@/generated/prisma-purchasing'
 
 test('Trial Balance Monthly, Quarterly, and Yearly Views', async () => {
   const tenantId = `tenant-${randomUUID()}`

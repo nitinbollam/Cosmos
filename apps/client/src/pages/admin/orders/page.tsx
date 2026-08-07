@@ -88,6 +88,7 @@ export default function OrdersPage() {
       if (toDate) q.set('to', toDate)
       return api.get<ListResp>(`/orders?${q.toString()}`)
     },
+    refetchInterval: 5000,
   })
 
   const cancelMut = useMutation({

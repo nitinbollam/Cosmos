@@ -169,6 +169,8 @@ Checkout and invoice card pay use `import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY`,
 | [`PLATFORM_FEATURES.md`](PLATFORM_FEATURES.md) | Feature reference and tier changelog |
 | [`ERP_FEATURE_GAP.md`](ERP_FEATURE_GAP.md) | Roadmap vs industry ERPs |
 | [`MISSING.md`](MISSING.md) | Short infra backlog |
+| [`docs/TESTING_FLOW.html`](docs/TESTING_FLOW.html) | Interactive Neobrutalism Testing Knowledge Base Website |
+| [`docs/TESTING_FLOW.md`](docs/TESTING_FLOW.md) | Comprehensive end-to-end testing flow & QA master guide |
 | [`docs/QA_STAGING_CHECKLIST.md`](docs/QA_STAGING_CHECKLIST.md) | Staging QA pass (auth, admin, buyer, mobile, billing, copy) |
 | [`docs/celestial/`](docs/celestial/) | Celestial AI knowledge base |
 
