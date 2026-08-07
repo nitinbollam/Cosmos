@@ -74,6 +74,7 @@ export default function PurchasingPage() {
         ? api.get(`/purchase-orders?status=${encodeURIComponent(statusFilter)}`)
         : api.get('/purchase-orders'),
     enabled: tab === 'pos',
+    refetchInterval: 5000,
   })
 
   const suppliers = useQuery<Supplier[]>({
@@ -97,6 +98,7 @@ export default function PurchasingPage() {
     }) => api.post<PurchaseOrder>('/purchase-orders', body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
+      void qc.invalidateQueries({ queryKey: ['orders'] })
       setDrawerOpen(false)
     },
   })

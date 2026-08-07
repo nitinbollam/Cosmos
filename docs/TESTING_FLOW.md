@@ -305,6 +305,176 @@ flowchart TD
     Settings --> Logout
 ```
 
+### 4.4 Step-by-Step UI Testing Walkthroughs & Financial Workflows
+
+This section provides explicit, step-by-step UI click paths ("what to click, what to enter, and what to verify") for testing all financial workflows and core operational scenarios directly within the web application.
+
+#### A. Financial Workflows (Step-by-Step UI Click Guides)
+
+##### 1. Accounts Receivable (AR) Invoicing & PDF Download
+* **Route:** `/admin/finance`
+* **User Role Required:** `ADMIN`, `ACCOUNTANT`
+* **Step-by-Step UI Walkthrough:**
+  1. Log in to the Admin Console at `/admin/login` using credentials `admin@pleros.local` / `admin1234`.
+  2. In the left navigation sidebar, click **Finance** to open `/admin/finance`.
+  3. Click the **Invoices (AR)** tab in the sub-header.
+  4. In the invoice list table, locate Invoice `#INV-10092` (or click any row with status `ISSUED` / `UNPAID`).
+  5. Click the invoice row to open the Invoice Detail drawer/view.
+  6. Verify that line items, Subtotal, Sales Tax, Shipping, Total Amount, and Balance Due calculate accurately.
+  7. In the top-right invoice action toolbar, click the **Download PDF** button.
+  8. **Verification:** Confirm that the browser downloads or opens a clean binary PDF document (`invoice-INV-10092.pdf`) generated via `pdfkit` containing company branding, customer details, line items, and payment terms.
+
+##### 2. Recording Customer Payments Against AR Invoices
+* **Route:** `/admin/finance`
+* **User Role Required:** `ADMIN`, `ACCOUNTANT`
+* **Step-by-Step UI Walkthrough:**
+  1. Open `/admin/finance` and select the **Invoices (AR)** tab.
+  2. Click on an unpaid invoice row (e.g. Invoice `#INV-10092` with Balance Due `$1,250.00`).
+  3. In the detail drawer, click the **Record Payment** button.
+  4. In the Record Payment modal dialog:
+     * Select **Payment Method:** `CHECK` (or `WIRE_TRANSFER`, `CARD`).
+     * Enter **Reference / Check #:** `CHK-2026-88`.
+     * Enter **Payment Amount:** `1250.00`.
+     * Select **Deposit Account:** `1000 - Operating Checking Account`.
+     * Enter **Notes:** `Full payment received via postal mail`.
+  5. Click **Submit Payment**.
+  6. **Verification:**
+     * The invoice status badge updates immediately from `UNPAID` to `PAID`.
+     * The Balance Due updates to `$0.00`.
+     * General Ledger writes an automatic credit entry to Accounts Receivable (`1200`) and a debit entry to Cash (`1000`).
+
+##### 3. Accounts Payable (AP) Vendor Bills & 3-Way Match
+* **Route:** `/admin/purchasing` and `/admin/finance`
+* **User Role Required:** `ADMIN`, `ACCOUNTANT`
+* **Step-by-Step UI Walkthrough:**
+  1. Open `/admin/purchasing`.
+  2. Select an approved Purchase Order (`#PO-4001`) with status `APPROVED` or `PARTIALLY_RECEIVED`.
+  3. Click **Receive Goods**, enter received line quantities, and click **Confirm Receipt**.
+  4. Click **Generate Vendor Bill** (or navigate to `/admin/finance` → **Vendor Bills (AP)** tab → Click **New AP Bill**).
+  5. In the AP Bill form:
+     * Select **Supplier:** `Acme Supply Co.`.
+     * Enter **Vendor Invoice #:** `INV-VEND-9981`.
+     * Select **Purchase Order:** `#PO-4001`. Line items populate automatically.
+  6. Click **Save AP Bill**, then click **Perform 3-Way Match**.
+  7. **Verification:**
+     * System validates PO Unit Cost vs Bill Unit Cost vs Received Quantity.
+     * Match status updates to `MATCHED` (green status badge).
+     * Accounts Payable liability (`2000`) credits and Inventory/COGS debits.
+
+##### 4. Bank Statement Reconciliation
+* **Route:** `/admin/finance` → Bank Reconciliation
+* **User Role Required:** `ADMIN`, `ACCOUNTANT`
+* **Step-by-Step UI Walkthrough:**
+  1. Open `/admin/finance`, then click the **Bank Reconciliation** tab.
+  2. Select **Bank Account:** `1000 - Chase Operating Account (*1234)`.
+  3. Click **Import Statement Lines** button.
+  4. Paste statement raw lines or upload CSV:
+     ```text
+     2026-08-01, CHECK DEPOSIT #CHK-2026-88, 1250.00
+     2026-08-02, SUPPLIER WIRE PAYOUT #INV-VEND-9981, -4500.00
+     ```
+  5. Click **Process Statement**.
+  6. In the split matching view (Bank Lines on left, General Ledger Lines on right), review auto-matched pairs.
+  7. Click **Confirm Match** for matched entries.
+  8. Click **Finalize Reconciliation**.
+  9. **Verification:** Ending statement balance equals GL book balance, and unreconciled variance shows `$0.00`.
+
+##### 5. General Ledger (GL) & Manual Journal Entries
+* **Route:** `/admin/finance` → General Ledger
+* **User Role Required:** `ADMIN`, `ACCOUNTANT`
+* **Step-by-Step UI Walkthrough:**
+  1. Open `/admin/finance`, click **General Ledger** → **Journal Entries** tab.
+  2. Click **New Journal Entry** button.
+  3. In the entry form:
+     * Enter **Posting Date:** `2026-08-06`.
+     * Enter **Description:** `Monthly Equipment Depreciation Adjustment`.
+     * **Line 1:** Select Account `6100 - Depreciation Expense`, Debit: `500.00`, Credit: `0.00`.
+     * **Line 2:** Select Account `1500 - Accumulated Depreciation`, Debit: `0.00`, Credit: `500.00`.
+  4. Click **Post Journal Entry**.
+  5. **Verification:** Entry status updates to `POSTED`. Click **Trial Balance** tab and confirm Total Debits equal Total Credits with `$0.00` variance.
+
+##### 6. B2B Buyer Storefront Invoice Payment
+* **Route:** `/invoices` (Storefront)
+* **User Role Required:** `BUYER`
+* **Step-by-Step UI Walkthrough:**
+  1. Log in to the B2B Buyer Portal at `/login` as `buyer@acme-retail.com` / `buyer1234`.
+  2. Click **Invoices** in the top storefront navigation bar.
+  3. Locate an open invoice with balance due (e.g. `#INV-10092`, `$245.00`).
+  4. Click **Pay Invoice Balance**.
+  5. In the payment modal dialog, select **Payment Method:** `Credit Card (Stripe)`.
+  6. Enter Stripe test card details (`4242 4242 4242 4242`, Exp `12/28`, CVC `123`).
+  7. Click **Submit Payment ($245.00)**.
+  8. **Verification:** Storefront invoice status updates to `PAID`, balance shows `$0.00`, and Admin Finance dashboard reflects receipt.
+
+---
+
+#### B. Core Operational Scenarios (Step-by-Step UI Click Guides)
+
+##### 7. POS Retail Register Checkout with Age ID Attestation
+* **Route:** `/admin/pos`
+* **User Role Required:** `ADMIN`, `SALES`
+* **Step-by-Step UI Walkthrough:**
+  1. Open `/admin/pos`.
+  2. Click **Open Register #1**, enter starting float `$200.00`, click **Start Shift**.
+  3. Search or scan SKU `SKU-TOB-002` (Premium Cigars - Age Restricted 21+). Click to add to cart.
+  4. **Mandatory ID Modal:** Modal pops up with header *"Government ID / Age Attestation Required (21+)"*.
+  5. Operator checks *"ID Verified"*, enters **DOB:** `1994-05-14`, and selects **ID Type:** `Driver License`.
+  6. Click **Approve & Add to Cart**.
+  7. Click **Pay & Checkout**. Select **Cash**, enter Amount Tendered `$100.00`.
+  8. Click **Complete Sale**.
+  9. **Verification:** Change due calculates (`$15.00`), thermal receipt print modal opens, and physical inventory balance deducts by 1 unit.
+
+##### 8. B2B Storefront Order Placement with NET 30 Terms
+* **Route:** `/catalog` → `/cart` → `/checkout`
+* **User Role Required:** `BUYER`
+* **Step-by-Step UI Walkthrough:**
+  1. Log in at `/login` as `buyer@acme-retail.com`.
+  2. Open `/catalog`. Search `SKU-BEV-001` (Craft Soda Case).
+  3. Confirm unit price reflects customer contract pricing (`$24.50` vs MSRP `$30.00`).
+  4. Enter quantity `10`, click **Add to Cart**.
+  5. Open `/cart` in shop header. Review line subtotal (`$245.00`). Click **Proceed to Checkout**.
+  6. On `/checkout` page, select Shipping Address and select **Payment Method: NET 30 Terms**.
+  7. Click **Place Order**.
+  8. **Verification:** Redirects to `/orders/:id/confirmation`. Order appears on buyer `/orders` page and Admin `/admin/orders` list with status `CONFIRMED`.
+
+##### 9. WMS Purchase Order Goods Receiving & Putaway
+* **Route:** `/admin/warehouse`
+* **User Role Required:** `ADMIN`, `WAREHOUSE`
+* **Step-by-Step UI Walkthrough:**
+  1. Open `/admin/warehouse`, click **Receiving Sessions** tab.
+  2. Click **Start Receiving Session**, select Approved PO `#PO-4001`.
+  3. Scan or select received SKU (`SKU-BEV-001`).
+  4. Enter received quantity (`100`), Lot Number (`LOT-2026-08A`), and Expiration Date (`2027-08-01`).
+  5. Select destination bin location code: `ZONE-A-R1-B04`.
+  6. Click **Confirm Putaway**.
+  7. **Verification:** Bin `ZONE-A-R1-B04` stock balance updates by +100 units, PO line received count increments.
+
+##### 10. Dispatch Route Delivery & Driver POD Signature
+* **Route:** `/admin/dispatch` and `/m/delivery`
+* **User Role Required:** `ADMIN` (Dispatch) & `DRIVER` (Mobile PWA)
+* **Step-by-Step UI Walkthrough:**
+  1. On Admin side (`/admin/dispatch`): Click **Create Route**, select 4 ready orders, assign driver `driver@pleros.local`. Click **Optimize Route Sequence**.
+  2. On mobile device or phone viewport (~390px): Open `/m/login`, log in as `driver@pleros.local`.
+  3. System routes to `/m/delivery`. Tap assigned route `#RT-104`.
+  4. Tap **Stop #1 (Acme Retailers)** → Tap **Arrived at Stop**.
+  5. Tap **Capture Proof of Delivery (POD)**.
+  6. On touch canvas, sign customer signature, tap **Confirm Signature**, take delivery photo.
+  7. Tap **Submit Stop POD**.
+  8. **Verification:** Stop marks `COMPLETED`, route progress updates to 25%, and Order status on Admin side updates to `DELIVERED`.
+
+##### 11. Order RMA Return Merchandise Authorization
+* **Route:** `/admin/orders/:id`
+* **User Role Required:** `ADMIN`, `SALES`
+* **Step-by-Step UI Walkthrough:**
+  1. Open `/admin/orders` → Click delivered order `#ORD-10092`.
+  2. Click **Actions** dropdown → Click **Initiate RMA Return**.
+  3. In RMA modal dialog:
+     * Select return quantity for `SKU-BEV-001` (`2 cases`).
+     * Select Reason: `DAMAGED_IN_TRANSIT`.
+     * Select Stock Disposition: `RESTOCK_TO_MAIN_WAREHOUSE`.
+  4. Click **Issue RMA & Credit Memo**.
+  5. **Verification:** Order status displays `RMA_ISSUED`, inventory stock increases by 2 cases, and Accounts Receivable credit memo is posted under `/admin/finance`.
+
 All eight route segments in the diagram are real children of the `/admin` route in `apps/client/src/router.tsx`. The router also defines several admin routes not shown on this main line — `crm`, `quotes`, `compliance`, `compliance/msa/:reportId`, `pos`, `celestial`, `warehouse`, `notifications`, `onboarding` — which branch off the dashboard and can be tested independently; they are omitted from the diagram only to keep the primary path readable.
 
 The ordering is not arbitrary — it follows real code dependencies confirmed in Section 6:

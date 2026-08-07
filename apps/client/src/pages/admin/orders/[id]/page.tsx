@@ -345,9 +345,16 @@ export default function OrderDetailPage() {
                 </button>
               )}
               {(data.status === 'CONFIRMED' || data.status === 'PROCESSING') && !task && (
-                <button type="button" className="btn-primary !text-sm" disabled={fulfillMut.isPending} onClick={() => fulfillMut.mutate()}>
-                  Start fulfillment
-                </button>
+                <div className="flex flex-col items-start gap-1">
+                  <button type="button" className="btn-primary !text-sm" disabled={fulfillMut.isPending} onClick={() => fulfillMut.mutate()}>
+                    {fulfillMut.isPending ? 'Starting...' : 'Start fulfillment'}
+                  </button>
+                  {fulfillMut.isError && (
+                    <span className="text-xs text-red-400">
+                      {(fulfillMut.error as Error)?.message ?? 'Failed to start fulfillment'}
+                    </span>
+                  )}
+                </div>
               )}
               {['PACKED', 'SHIPPED', 'DELIVERED', 'PROCESSING'].includes(data.status) ? (
                 <button type="button" className="btn-ghost !text-sm" onClick={openShipEditor}>

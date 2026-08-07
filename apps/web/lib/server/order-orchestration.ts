@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
-import { orderDb, paymentDb } from './db'
+import { orderDb, paymentDb, wmsDb } from './db'
 import {
   applyCreditUsed,
   assertCreditAvailable,
@@ -78,21 +78,27 @@ export async function runOrderFulfillmentPipeline(
   })
 
   try {
-    if (!steps.includes('RESERVE_INVENTORY')) {
+    const unallocatedStock = order.lineItems.filter(
+      (li) => li.fulfillmentType !== 'DROP_SHIP' && (li.quantityAllocated ?? 0) < li.quantity,
+    )
+    if (!steps.includes('RESERVE_INVENTORY') || unallocatedStock.length > 0) {
       const stockLines = order.lineItems.filter((li) => li.fulfillmentType !== 'DROP_SHIP')
       let anyBackordered = false
 
       for (const item of stockLines) {
-        const result = await backorders.reserveLineWithBackorder(tenantId, {
-          orderId,
-          orderLineItemId: item.id,
-          skuId: item.skuId,
-          warehouseId: item.warehouseId,
-          quantity: item.quantity,
-          correlationId,
-          preferredBatchId: item.preferredBatchId,
-        })
-        if (result.backordered > 0) anyBackordered = true
+        const remainingToAllocate = item.quantity - (item.quantityAllocated ?? 0)
+        if (remainingToAllocate > 0) {
+          const result = await backorders.reserveLineWithBackorder(tenantId, {
+            orderId,
+            orderLineItemId: item.id,
+            skuId: item.skuId,
+            warehouseId: item.warehouseId,
+            quantity: remainingToAllocate,
+            correlationId,
+            preferredBatchId: item.preferredBatchId,
+          })
+          if (result.backordered > 0) anyBackordered = true
+        }
       }
 
       if (anyBackordered) {
@@ -102,7 +108,9 @@ export async function runOrderFulfillmentPipeline(
         })
       }
 
-      steps.push('RESERVE_INVENTORY')
+      if (!steps.includes('RESERVE_INVENTORY')) {
+        steps.push('RESERVE_INVENTORY')
+      }
       await orderDb.orderSaga.update({
         where: { id: saga.id },
         data: { completedSteps: steps },
@@ -121,11 +129,20 @@ export async function runOrderFulfillmentPipeline(
       })
     }
 
-    if (!steps.includes('CREATE_FULFILLMENT')) {
-      const fulfillLines = order.lineItems.filter(
+    const openTask = await wmsDb.fulfillmentTask.findFirst({
+      where: { tenantId, orderId, status: { in: ['PENDING', 'PICKING', 'PACKED'] } },
+    })
+
+    if (!openTask || !steps.includes('CREATE_FULFILLMENT')) {
+      const refreshedOrder = (await orderDb.order.findFirst({
+        where: { id: orderId, tenantId },
+        include: { lineItems: true },
+      })) || order
+
+      const fulfillLines = refreshedOrder.lineItems.filter(
         (li) => li.fulfillmentType !== 'DROP_SHIP' && li.quantityAllocated > 0,
       )
-      if (fulfillLines.length > 0) {
+      if (fulfillLines.length > 0 && !openTask) {
         try {
           await wmsFulfillment.createFulfillmentTask(tenantId, {
             orderId,
@@ -141,7 +158,9 @@ export async function runOrderFulfillmentPipeline(
           if (!(err instanceof ApiError && err.status === 409)) throw err
         }
       }
-      steps.push('CREATE_FULFILLMENT')
+      if (!steps.includes('CREATE_FULFILLMENT')) {
+        steps.push('CREATE_FULFILLMENT')
+      }
       await orderDb.orderSaga.update({
         where: { id: saga.id },
         data: { completedSteps: steps },
