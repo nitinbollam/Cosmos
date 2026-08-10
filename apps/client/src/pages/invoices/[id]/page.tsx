@@ -1,9 +1,9 @@
 import { Link, useParams } from 'react-router-dom'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
+import { useStripeConnect } from '@/lib/stripe-connect'
 import { StatusBadge } from '@/components/status-badge'
 import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
@@ -59,7 +59,7 @@ function InvoicePayPanel({
   const [cardPaymentMethodId, setCardPaymentMethodId] = useState<string | null>(null)
   const [payBusy, setPayBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const stripePromise = useMemo(() => (stripePublishable ? loadStripe(stripePublishable) : null), [])
+  const { stripePromise, chargesEnabled, loading: stripeLoading } = useStripeConnect(api.get.bind(api), 'invoice-stripe')
 
   async function payManual() {
     const amount = Number.parseFloat(payAmount)
@@ -131,13 +131,17 @@ function InvoicePayPanel({
             {payBusy ? 'Processing…' : 'Record payment'}
           </button>
         </>
-      ) : stripePromise ? (
+      ) : stripePromise && chargesEnabled ? (
         <Elements stripe={stripePromise} options={{ appearance: { theme: 'stripe' } }}>
           <StorefrontCardCapture onPaymentMethodId={setCardPaymentMethodId} />
           <button type="button" className="btn-primary" style={{ marginTop: 12 }} disabled={payBusy || !cardPaymentMethodId} onClick={() => void payStripe()}>
             {payBusy ? 'Processing…' : 'Pay with card'}
           </button>
         </Elements>
+      ) : !stripeLoading && !chargesEnabled ? (
+        <p className="cosmos-shop-muted" style={{ fontSize: 13 }}>
+          Card payments are unavailable until your distributor completes Stripe Connect onboarding.
+        </p>
       ) : (
         <p className="pleros-shop-muted" style={{ fontSize: 13 }}>Set VITE_STRIPE_PUBLISHABLE_KEY for card payments.</p>
       )}

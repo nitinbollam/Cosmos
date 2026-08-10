@@ -491,6 +491,8 @@ export type ApplyCreditMemoInput = {
   reason?: string
   lines: Array<{ lineItemId: string; quantity: number }>
   restock?: boolean
+  /** Refund captured Stripe payment up to credit memo total (CARD orders). */
+  refundToCard?: boolean
 }
 
 export async function applyCreditMemo(

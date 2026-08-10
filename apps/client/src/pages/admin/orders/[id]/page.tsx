@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { AdminOrderPaymentPanel } from '@/components/admin-order-payment-panel'
 
 type LineItem = {
   id: string
@@ -41,6 +42,16 @@ type OrderDetail = {
   taxAmount?: string | number
   paymentMethod: string
   paymentIntentId?: string | null
+  stripeIntentId?: string | null
+  paymentStatus?: string | null
+  paymentAmount?: number | null
+  capturedAmount?: number | null
+  refundedAmount?: number
+  refundableAmount?: number
+  paymentFailureReason?: string | null
+  amountPaidOnOrder?: number
+  orderBalance?: number
+  amountPaid?: string | number
   createdAt: string
   confirmedAt?: string | null
   cancelledAt?: string | null
@@ -107,6 +118,7 @@ export default function OrderDetailPage() {
   const [cancelReason, setCancelReason] = useState('Cancelled from admin')
   const [returnOpen, setReturnOpen] = useState(false)
   const [returnReason, setReturnReason] = useState('Customer return')
+  const [refundToCard, setRefundToCard] = useState(true)
   const [returnQtys, setReturnQtys] = useState<Record<string, number>>({})
 
   const [shipEditorOpen, setShipEditorOpen] = useState(false)
@@ -198,6 +210,7 @@ export default function OrderDetailPage() {
         reason: returnReason.trim() || undefined,
         lines,
         restock: true,
+        refundToCard: refundToCard && (orderQ.data?.paymentMethod === 'CARD' || orderQ.data?.paymentMethod === 'ACH'),
       })
     },
     onSuccess: () => {
@@ -414,29 +427,7 @@ export default function OrderDetailPage() {
               )}
             </div>
 
-            <div className="pleros-card">
-              <h3 className="text-pleros-white font-semibold font-display mb-3">Payment</h3>
-              <dl className="text-sm space-y-2">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-pleros-text-3">Method</dt>
-                  <dd className="font-mono">{data.paymentMethod}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-pleros-text-3">Intent</dt>
-                  <dd className="font-mono text-xs truncate max-w-[200px]">{data.paymentIntentId ?? '—'}</dd>
-                </div>
-              </dl>
-              {data.paymentIntentId && (
-                <a
-                  href={`https://dashboard.stripe.com/payments/${encodeURIComponent(data.paymentIntentId)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block mt-3 text-sm text-pleros-accent hover:underline"
-                >
-                  Open in Stripe →
-                </a>
-              )}
-            </div>
+            <AdminOrderPaymentPanel orderId={id} data={data} />
           </div>
 
           <div className="pleros-card overflow-x-auto">
@@ -629,6 +620,12 @@ export default function OrderDetailPage() {
           <div className="pleros-card max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-pleros-white font-display mb-3">Process return (RMA)</h3>
             <p className="text-xs text-pleros-text-3 mb-4">Restocks inventory and issues a credit memo against the invoice.</p>
+            {(data.paymentMethod === 'CARD' || data.paymentMethod === 'ACH') && (data.refundableAmount ?? 0) > 0 ? (
+              <label className="flex items-center gap-2 text-sm text-pleros-text mb-4 cursor-pointer">
+                <input type="checkbox" checked={refundToCard} onChange={(e) => setRefundToCard(e.target.checked)} />
+                Refund to card via Stripe (up to credit memo amount)
+              </label>
+            ) : null}
             <label className="text-xs text-pleros-text-3">Reason</label>
             <input className="pleros-input mb-4" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
             <ul className="space-y-3">

@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { getB2bCustomerId } from '@/lib/session'
+import { useStripeConnect } from '@/lib/stripe-connect'
+import type { Stripe } from '@stripe/stripe-js'
 import { useCartStore } from '@/stores/cart.store'
 import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
@@ -43,7 +44,7 @@ export default function CheckoutPage() {
       : Math.random().toString(36).slice(2),
   )
 
-  const stripePromise = useMemo(() => (stripePublishable ? loadStripe(stripePublishable) : null), [])
+  const { stripePromise, chargesEnabled, loading: stripeConfigLoading } = useStripeConnect(api.get.bind(api), 'checkout-stripe')
 
   const [taxRate, setTaxRate] = useState(0.07)
   const taxAmount = useMemo(() => +(cartSubtotal * taxRate).toFixed(2), [cartSubtotal, taxRate])
@@ -129,6 +130,10 @@ export default function CheckoutPage() {
         setErr('Set VITE_STRIPE_PUBLISHABLE_KEY for card checkout.')
         return
       }
+      if (!chargesEnabled) {
+        setErr('Card checkout is unavailable until your distributor completes Stripe Connect onboarding.')
+        return
+      }
       if (!cardPaymentMethodId) {
         setErr('Save your card on step 2 before placing the order.')
         return
@@ -179,7 +184,23 @@ export default function CheckoutPage() {
             correlationId: authKey,
           },
           { 'Idempotency-Key': authKey },
-        )
+        ).then(async (authRes: { requiresAction?: boolean; clientSecret?: string; paymentIntentId?: string }) => {
+          if (authRes.requiresAction && authRes.clientSecret && stripePromise) {
+            const stripe = await stripePromise
+            if (!stripe) throw new Error('Stripe not ready')
+            const { error } = await stripe.confirmCardPayment(authRes.clientSecret)
+            if (error) throw error
+            const confirmKey =
+              typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : Math.random().toString(36).slice(2)
+            await api.post(
+              '/payments/confirm',
+              { paymentIntentId: authRes.paymentIntentId, correlationId: confirmKey },
+              { 'Idempotency-Key': confirmKey },
+            )
+          }
+        })
 
         if (cardMode === 'new' && saveNewCardToAccount && cardPaymentMethodId.startsWith('pm_')) {
           await api
@@ -279,7 +300,8 @@ export default function CheckoutPage() {
           taxAmount={taxAmount}
           orderTotal={orderTotal}
           showStripe={showStripe}
-          stripeConfigured={!!stripePublishable}
+          stripeConfigured={!!stripePublishable && chargesEnabled}
+          stripeConnectPending={!stripeConfigLoading && !!stripePublishable && !chargesEnabled}
           stripePromise={stripePromise}
           cardPaymentMethodId={cardPaymentMethodId}
           setCardPaymentMethodId={setCardPaymentMethodId}
@@ -362,6 +384,7 @@ function PaymentStep2({
   orderTotal,
   showStripe,
   stripeConfigured,
+  stripeConnectPending,
   stripePromise,
   cardPaymentMethodId,
   setCardPaymentMethodId,
@@ -382,6 +405,7 @@ function PaymentStep2({
   orderTotal: number
   showStripe: boolean
   stripeConfigured: boolean
+  stripeConnectPending: boolean
   stripePromise: Promise<Stripe | null> | null
   cardPaymentMethodId: string | null
   setCardPaymentMethodId: (id: string | null) => void
@@ -492,7 +516,12 @@ function PaymentStep2({
           ) : null}
         </div>
       ) : null}
-      {payment === 'CARD' && !stripeConfigured ? (
+      {payment === 'CARD' && stripeConnectPending ? (
+        <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>
+          Card payments are not available yet — your distributor must finish Stripe Connect onboarding.
+        </p>
+      ) : null}
+      {payment === 'CARD' && !stripeConfigured && !stripeConnectPending ? (
         <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>Missing VITE_STRIPE_PUBLISHABLE_KEY.</p>
       ) : null}
       <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 12 }}>

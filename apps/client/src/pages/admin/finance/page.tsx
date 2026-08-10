@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { Elements } from '@stripe/react-stripe-js'
 import {
   Area,
   AreaChart,
@@ -15,6 +16,10 @@ import { adminPath } from '@/lib/admin-path'
 import { downloadCsv } from '@/lib/csv-download'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { AdminStripeCardForm } from '@/components/admin-stripe-card-form'
+import { useStripeConnect } from '@/lib/stripe-connect'
+
+const stripePublishable = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
 
 type InvoiceRow = {
   id: string
@@ -202,6 +207,8 @@ export default function FinancePage() {
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
   const [invoicePage, setInvoicePage] = useState(1)
   const [exportingInvoices, setExportingInvoices] = useState(false)
+  const [payUseStripe, setPayUseStripe] = useState(false)
+  const { stripePromise, chargesEnabled } = useStripeConnect(api.get.bind(api), 'finance-stripe')
 
   const fixedAssetsQ = useQuery({
     queryKey: ['finance', 'fixed-assets', assetFilter],
@@ -1117,24 +1124,54 @@ export default function FinancePage() {
       {(payOrder || payBill) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
           <div className="pleros-card max-w-md w-full space-y-4">
-            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Record payment</h3>
+            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>
+              {payOrder ? 'Receive payment' : 'Record payment'}
+            </h3>
             <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
             <input className="pleros-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
-            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
-            <select className="pleros-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
-              {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            {payOrder && stripePromise && chargesEnabled ? (
+              <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--c-text-2)' }}>
+                <input type="checkbox" checked={payUseStripe} onChange={(e) => setPayUseStripe(e.target.checked)} />
+                Charge card via Stripe
+              </label>
+            ) : payOrder && !chargesEnabled ? (
+              <p className="text-xs text-amber-400">Stripe Connect onboarding required for card collection.</p>
+            ) : null}
+            {!payUseStripe ? (
+              <>
+                <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
+                <select className="pleros-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
+                  {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </>
+            ) : payOrder && stripePromise ? (
+              <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>
+                <FinanceInvoiceStripePay
+                  invoiceId={payOrder.id}
+                  amount={parseFloat(payAmount) || payOrder.balance}
+                  onDone={() => {
+                    void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
+                    void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar-summary'] })
+                    setPayOrder(null)
+                    setPayAmount('')
+                    setPayUseStripe(false)
+                  }}
+                />
+              </Elements>
+            ) : null}
             <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null) }}>Cancel</button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={payOrderMut.isPending || payBillMut.isPending}
-                onClick={() => {
-                  if (payOrder) void payOrderMut.mutate()
-                  else void payBillMut.mutate()
-                }}
-              >Submit</button>
+              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null); setPayUseStripe(false) }}>Cancel</button>
+              {!payUseStripe ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={payOrderMut.isPending || payBillMut.isPending}
+                  onClick={() => {
+                    if (payOrder) void payOrderMut.mutate()
+                    else void payBillMut.mutate()
+                  }}
+                >Submit</button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1338,4 +1375,29 @@ function CreateFixedAssetModal(props: { onClose: () => void; onCreated: () => vo
       </div>
     </div>
   )
+}
+
+function FinanceInvoiceStripePay({
+  invoiceId,
+  amount,
+  onDone,
+}: {
+  invoiceId: string
+  amount: number
+  onDone: () => void
+}) {
+  async function pay(paymentMethodId: string) {
+    const correlationId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    await api.post(
+      `/invoices/${encodeURIComponent(invoiceId)}/pay/stripe`,
+      { paymentMethodId, amount, correlationId },
+      { 'Idempotency-Key': correlationId },
+    )
+    onDone()
+  }
+
+  return <AdminStripeCardForm submitLabel={`Charge ${money(amount)}`} onSubmit={(r) => pay(r.paymentMethodId)} />
 }

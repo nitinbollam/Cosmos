@@ -425,6 +425,9 @@ export async function cancelOrderWithCompensation(tenantId: string, orderId: str
     await releaseCreditUsed(tenantId, order.customerId, exposure).catch(() => undefined)
   }
 
+  const { voidAuthorizedPaymentsForOrder } = await import('./order-payment-admin')
+  await voidAuthorizedPaymentsForOrder(tenantId, orderId).catch(() => undefined)
+
   return orderDb.order.update({
     where: { id: orderId },
     data: {
