@@ -1,4 +1,4 @@
-import { ScannerError, type ScannerErrorKind } from "./types";
+import { ScannerError, type ScannerErrorKind } from './types'
 
 /**
  * Map a raw getUserMedia failure to a typed ScannerError. The DOMException
@@ -7,30 +7,30 @@ import { ScannerError, type ScannerErrorKind } from "./types";
  */
 export function mapGetUserMediaError(err: unknown): ScannerError {
   const name =
-    err instanceof DOMException || (err instanceof Error && "name" in err)
+    err instanceof DOMException || (err instanceof Error && 'name' in err)
       ? (err as Error).name
-      : "";
+      : ''
 
   const kind: ScannerErrorKind = ((): ScannerErrorKind => {
     switch (name) {
-      case "NotAllowedError":
-      case "SecurityError":
-        return "permission-denied";
-      case "NotFoundError":
-      case "DevicesNotFoundError":
-        return "no-camera";
-      case "NotReadableError":
-      case "TrackStartError":
-        return "camera-busy";
-      case "OverconstrainedError":
-      case "ConstraintNotSatisfiedError":
-        return "overconstrained";
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return 'permission-denied'
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        return 'no-camera'
+      case 'NotReadableError':
+      case 'TrackStartError':
+        return 'camera-busy'
+      case 'OverconstrainedError':
+      case 'ConstraintNotSatisfiedError':
+        return 'overconstrained'
       default:
-        return "unknown";
+        return 'unknown'
     }
-  })();
+  })()
 
-  return new ScannerError(kind, `getUserMedia failed: ${name || "unknown"}`, err);
+  return new ScannerError(kind, `getUserMedia failed: ${name || 'unknown'}`, err)
 }
 
 /**
@@ -38,18 +38,18 @@ export function mapGetUserMediaError(err: unknown): ScannerError {
  * short-circuit with, or null if we're clear to request the stream.
  */
 export function preflightCameraSupport(): ScannerError | null {
-  if (typeof window === "undefined") {
-    return new ScannerError("unsupported", "No window/DOM available.");
+  if (typeof window === 'undefined') {
+    return new ScannerError('unsupported', 'No window/DOM available.')
   }
   // Secure-context is the #1 silent failure in field testing (bare LAN IPs).
   if (window.isSecureContext === false) {
     return new ScannerError(
-      "insecure-context",
-      "Camera requires a secure context (HTTPS or localhost).",
-    );
+      'insecure-context',
+      'Camera requires a secure context (HTTPS or localhost).',
+    )
   }
   if (!navigator.mediaDevices?.getUserMedia) {
-    return new ScannerError("unsupported", "getUserMedia is not available.");
+    return new ScannerError('unsupported', 'getUserMedia is not available.')
   }
-  return null;
+  return null
 }

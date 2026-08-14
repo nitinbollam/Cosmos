@@ -19,15 +19,15 @@
  * GTINs and must not be zero-padded.
  */
 export function normalizeGtin(value: string): string {
-  const v = value.trim();
-  if (!/^\d+$/.test(v)) return v;
-  if (v.length > 14) return v; // not a GTIN; leave alone
-  return v.padStart(14, "0");
+  const v = value.trim()
+  if (!/^\d+$/.test(v)) return v
+  if (v.length > 14) return v // not a GTIN; leave alone
+  return v.padStart(14, '0')
 }
 
 /** True when two barcode strings denote the same GTIN (or are identical). */
 export function gtinEquals(a: string, b: string): boolean {
-  return normalizeGtin(a) === normalizeGtin(b);
+  return normalizeGtin(a) === normalizeGtin(b)
 }
 
 /**

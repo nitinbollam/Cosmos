@@ -11,23 +11,23 @@
  */
 export type WedgeParserOptions = {
   /** Max gap (ms) between keys to still count as one scan burst. Default 50. */
-  maxIntervalMs?: number;
+  maxIntervalMs?: number
   /** Minimum length to accept, filtering stray Enter presses. Default 3. */
-  minLength?: number;
-};
+  minLength?: number
+}
 
 export class WedgeParser {
-  private buffer = "";
-  private lastKeyAt = 0;
-  private readonly maxIntervalMs: number;
-  private readonly minLength: number;
+  private buffer = ''
+  private lastKeyAt = 0
+  private readonly maxIntervalMs: number
+  private readonly minLength: number
 
   constructor(
     options: WedgeParserOptions = {},
     private now: () => number = () => Date.now(),
   ) {
-    this.maxIntervalMs = options.maxIntervalMs ?? 50;
-    this.minLength = options.minLength ?? 3;
+    this.maxIntervalMs = options.maxIntervalMs ?? 50
+    this.minLength = options.minLength ?? 3
   }
 
   /**
@@ -35,33 +35,33 @@ export class WedgeParser {
    * fast-enough burst terminates with Enter; otherwise null.
    */
   handle(key: string): string | null {
-    const t = this.now();
-    const gap = t - this.lastKeyAt;
-    this.lastKeyAt = t;
+    const t = this.now()
+    const gap = t - this.lastKeyAt
+    this.lastKeyAt = t
 
     // A slow keypress means a human — abandon any partial buffer and restart
     // from this character so genuine typing never accumulates.
     if (gap > this.maxIntervalMs && this.buffer.length > 0) {
-      this.buffer = "";
+      this.buffer = ''
     }
 
-    if (key === "Enter") {
-      const value = this.buffer;
-      this.buffer = "";
-      if (value.length >= this.minLength) return value;
-      return null;
+    if (key === 'Enter') {
+      const value = this.buffer
+      this.buffer = ''
+      if (value.length >= this.minLength) return value
+      return null
     }
 
     // Only single printable characters are part of a code; ignore modifiers,
     // arrows, Tab, etc.
     if (key.length === 1) {
-      this.buffer += key;
+      this.buffer += key
     }
-    return null;
+    return null
   }
 
   reset(): void {
-    this.buffer = "";
-    this.lastKeyAt = 0;
+    this.buffer = ''
+    this.lastKeyAt = 0
   }
 }

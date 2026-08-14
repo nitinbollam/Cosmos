@@ -1,10 +1,10 @@
-import type { ScanEngine } from "./types";
-import type { BarcodeFormat } from "../types";
-import { NativeEngine } from "./native-engine";
-import { ZXingEngine } from "./zxing-engine";
+import type { ScanEngine } from './types'
+import type { BarcodeFormat } from '../types'
+import { NativeEngine } from './native-engine'
+import { ZXingEngine } from './zxing-engine'
 
-export type { ScanEngine, RawDetection } from "./types";
-export { WAREHOUSE_DEFAULT_FORMATS } from "./formats";
+export type { ScanEngine, RawDetection } from './types'
+export { WAREHOUSE_DEFAULT_FORMATS } from './formats'
 
 /**
  * Pick the best available camera engine for the requested formats.
@@ -18,7 +18,7 @@ export { WAREHOUSE_DEFAULT_FORMATS } from "./formats";
  * TRY_HARDER tuning.
  */
 export async function pickEngine(formats: BarcodeFormat[]): Promise<ScanEngine> {
-  const native = await NativeEngine.tryCreate(formats);
-  if (native) return native;
-  return new ZXingEngine(formats);
+  const native = await NativeEngine.tryCreate(formats)
+  if (native) return native
+  return new ZXingEngine(formats)
 }

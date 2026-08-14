@@ -14,5 +14,5 @@ export function ScanFrameOverlay({ scanning }: { scanning: boolean }) {
         {scanning && <span className="laser" />}
       </div>
     </div>
-  );
+  )
 }

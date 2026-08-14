@@ -1,0 +1,321 @@
+/* Barcode scanner styles.
+   Scoped to the scanner component and built entirely on Pleros theme tokens
+   (--c-*), so it follows obsidian/light like the rest of the app. Imported by
+   BarcodeScannerSheet.tsx rather than added to globals, to keep the component
+   self-contained and easy to remove. */
+
+.scanner-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--c-bg);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  color: var(--c-text);
+}
+
+.scanner-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.scanner-sheet .icon-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: none;
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* Split layout: camera pane on top, the page's own list stays usable below. */
+.split-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.scanner-pane {
+  position: relative;
+  flex: 0 0 auto;
+  height: 42dvh;
+  min-height: 220px;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  border-bottom: var(--border-width) solid var(--c-border);
+}
+
+.split-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
+}
+
+.scanner-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 0 42%, rgba(0, 0, 0, 0.55) 72%);
+}
+
+.scan-reticle {
+  position: relative;
+  width: min(74vw, 320px);
+  aspect-ratio: 1.5 / 1;
+}
+
+.scan-reticle .corner {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--c-primary);
+}
+
+.scan-reticle .corner.tl {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-top-left-radius: var(--bento-radius-sm);
+}
+
+.scan-reticle .corner.tr {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+  border-top-right-radius: var(--bento-radius-sm);
+}
+
+.scan-reticle .corner.bl {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-bottom-left-radius: var(--bento-radius-sm);
+}
+
+.scan-reticle .corner.br {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+  border-bottom-right-radius: var(--bento-radius-sm);
+}
+
+.scan-reticle .laser {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 2px;
+  background: var(--c-primary);
+  box-shadow: 0 0 12px 2px var(--c-primary);
+  animation: scanner-sweep 2s ease-in-out infinite;
+}
+
+@keyframes scanner-sweep {
+  0%,
+  100% {
+    top: 8%;
+  }
+  50% {
+    top: 92%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-reticle .laser {
+    animation: none;
+    top: 50%;
+  }
+}
+
+.scanner-hint {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.scanner-hint.success {
+  background: var(--c-success-soft);
+  border: var(--border-width) solid var(--c-success);
+}
+
+.scanner-hint code {
+  color: var(--c-success);
+  font-family: var(--font-mono);
+}
+
+.scanner-error {
+  position: absolute;
+  inset: auto 16px 24px;
+  background: var(--c-surface);
+  border: var(--border-width) solid var(--c-danger);
+  border-radius: var(--bento-radius);
+  padding: 16px;
+  text-align: center;
+  color: var(--c-text);
+}
+
+.scanner-error p {
+  margin: 0 0 12px;
+}
+
+.manual-entry {
+  width: min(92vw, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--c-text);
+}
+
+.manual-entry label {
+  font-size: 13px;
+  color: var(--c-text-2);
+}
+
+.manual-entry input {
+  height: 52px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border-card);
+  background: var(--c-surface);
+  color: var(--c-text);
+  padding: 0 14px;
+  font-size: 18px;
+}
+
+.manual-entry .row {
+  display: flex;
+  gap: 10px;
+}
+
+.scanner-sheet .btn,
+.scanner-pane .btn {
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border-card);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+}
+
+.scanner-sheet .btn.primary,
+.scanner-pane .btn.primary {
+  background: var(--c-primary);
+  color: var(--c-primary-fg);
+  border-color: transparent;
+}
+
+.scanner-sheet .btn.ghost,
+.scanner-pane .btn.ghost {
+  background: transparent;
+}
+
+.scanner-sheet .btn:disabled,
+.scanner-pane .btn:disabled {
+  opacity: 0.5;
+}
+
+.scanner-controls {
+  display: flex;
+  gap: 8px;
+  padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+  background: var(--c-bg);
+  flex-wrap: wrap;
+}
+
+.scanner-controls.compact {
+  padding: 8px 12px;
+}
+
+.scanner-controls .ctrl {
+  flex: 1;
+  min-width: 72px;
+  min-height: 56px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border-card);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.scanner-controls.compact .ctrl {
+  min-height: 46px;
+  font-size: 17px;
+}
+
+.scanner-controls .ctrl span {
+  font-size: 11px;
+  color: var(--c-text-2);
+  text-transform: none;
+}
+
+.scanner-controls .ctrl.on {
+  background: var(--c-primary-dim);
+  border-color: var(--c-primary);
+}
+
+.scanner-controls .ctrl.primary {
+  background: var(--c-primary);
+  color: var(--c-primary-fg);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.scanner-controls .ctrl.primary span {
+  color: var(--c-primary-fg);
+}
+
+.scanner-controls .ctrl.wide {
+  flex-basis: 100%;
+}

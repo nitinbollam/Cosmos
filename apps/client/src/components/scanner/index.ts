@@ -4,14 +4,14 @@
  *
  *   import { BarcodeScannerSheet, type ScanResult } from "@pleros/barcode-scanner";
  */
-export { BarcodeScannerSheet } from "./BarcodeScannerSheet";
-export { ScanFrameOverlay } from "./ScanFrameOverlay";
-export { useScanner } from "./useScanner";
-export { useKeyboardWedge } from "./useKeyboardWedge";
-export { ScanDeduper } from "./dedupe";
-export { normalizeGtin, gtinEquals } from "./gtin";
-export { WedgeParser } from "./wedge";
-export { WAREHOUSE_DEFAULT_FORMATS, pickEngine } from "./engines";
+export { BarcodeScannerSheet } from './BarcodeScannerSheet'
+export { ScanFrameOverlay } from './ScanFrameOverlay'
+export { useScanner } from './useScanner'
+export { useKeyboardWedge } from './useKeyboardWedge'
+export { ScanDeduper } from './dedupe'
+export { normalizeGtin, gtinEquals } from './gtin'
+export { WedgeParser } from './wedge'
+export { WAREHOUSE_DEFAULT_FORMATS, pickEngine } from './engines'
 export {
   ScannerError,
   DEFAULT_ERROR_COPY,
@@ -21,4 +21,4 @@ export {
   type ScanSource,
   type ScannerStatus,
   type ScannerErrorKind,
-} from "./types";
+} from './types'

@@ -7,8 +7,8 @@
  * with a fake clock and reusable across camera + wedge sources.
  */
 export class ScanDeduper {
-  private lastValue: string | null = null;
-  private lastAt = 0;
+  private lastValue: string | null = null
+  private lastAt = 0
 
   constructor(
     private windowMs: number,
@@ -17,18 +17,18 @@ export class ScanDeduper {
 
   /** True if this value should be accepted (and records it). */
   accept(value: string): boolean {
-    const t = this.now();
+    const t = this.now()
     if (this.lastValue === value && t - this.lastAt < this.windowMs) {
-      return false;
+      return false
     }
-    this.lastValue = value;
-    this.lastAt = t;
-    return true;
+    this.lastValue = value
+    this.lastAt = t
+    return true
   }
 
   /** Forget history — e.g. when the user explicitly taps "Scan next". */
   reset(): void {
-    this.lastValue = null;
-    this.lastAt = 0;
+    this.lastValue = null
+    this.lastAt = 0
   }
 }
