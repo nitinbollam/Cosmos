@@ -159,18 +159,41 @@ export async function findSkuByCode(tenantId: string, code: string) {
   return sku
 }
 
-/** Code or barcode — receiving / warehouse scans. */
+/** Generate normalized GTIN permutations (UPC-A, EAN-13, GTIN-14, stripped) for barcode lookup. */
+export function getGtinLookupCandidates(raw: string): string[] {
+  const v = raw.trim()
+  if (!v) return []
+  const set = new Set<string>([v])
+  if (/^\d+$/.test(v) && v.length <= 14) {
+    const unpadded = v.replace(/^0+/, '')
+    if (unpadded) {
+      set.add(unpadded)
+      set.add(unpadded.padStart(8, '0'))
+      set.add(unpadded.padStart(12, '0'))
+      set.add(unpadded.padStart(13, '0'))
+      set.add(unpadded.padStart(14, '0'))
+    }
+  }
+  return Array.from(set)
+}
+
+/** Code or barcode — receiving / warehouse scans with GTIN normalization. */
 export async function findSkuByScanValue(tenantId: string, raw: string) {
   const v = raw.trim()
   if (!v) throw new ApiError(400, 'scan value required')
+
+  const candidates = getGtinLookupCandidates(v)
+
   const byCode = await inventoryDb.sKU.findFirst({
-    where: { tenantId, code: { equals: v }, isActive: true },
+    where: { tenantId, code: { in: candidates }, isActive: true },
   })
   if (byCode) return byCode
+
   const byBar = await inventoryDb.sKU.findFirst({
-    where: { tenantId, barcode: v, isActive: true },
+    where: { tenantId, barcode: { in: candidates }, isActive: true },
   })
   if (byBar) return byBar
+
   throw new ApiError(404, `No SKU for scan value: ${v}`)
 }
 
