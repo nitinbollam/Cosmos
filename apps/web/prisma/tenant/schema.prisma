@@ -23,6 +23,10 @@ model TenantOrganization {
   industry         IndustryVertical     @default(GENERAL_WHOLESALE)
   suspended        Boolean              @default(false)
   metadata         Json                 
+  stripeConnectedAccountId String?
+  stripeChargesEnabled     Boolean        @default(false)
+  stripePayoutsEnabled     Boolean        @default(false)
+  stripeDetailsSubmitted   Boolean        @default(false)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   onboardingSteps  TenantOnboardingStep[]

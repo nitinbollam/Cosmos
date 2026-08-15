@@ -53,6 +53,19 @@ export async function getCustomer(tenantId: string, id: string) {
   return row
 }
 
+export async function setStripeCustomerId(
+  tenantId: string,
+  customerId: string,
+  stripeCustomerId: string,
+  stripeConnectAccountId: string,
+) {
+  await getCustomer(tenantId, customerId)
+  return crmDb.customer.update({
+    where: { id: customerId },
+    data: { stripeCustomerId, stripeConnectAccountId },
+  })
+}
+
 export function findCustomerByExternalRef(tenantId: string, externalRef: string) {
   return crmDb.customer.findFirst({ where: { tenantId, externalRef } })
 }

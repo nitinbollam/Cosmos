@@ -10,6 +10,20 @@ import { syncInvoiceFromOrder } from './invoices'
 import { assertOrderLinePrices } from './pricing'
 import * as notifyTriggers from './notification-triggers'
 import { assertAgeComplianceForOrder, type PosAgeAttestation } from './compliance-age'
+import { defersFulfillmentUntilPayment } from './order-payment-sync'
+import { buildPaymentSummary, findPrimaryPaymentIntent } from './order-payment-admin'
+
+async function enrichOrderWithPaymentDetails<
+  T extends { id: string; paymentIntentId: string | null; totalAmount: unknown; amountPaid: unknown },
+>(tenantId: string, order: T) {
+  const intent = await findPrimaryPaymentIntent(tenantId, order.id, order.paymentIntentId)
+  const { optionalStripeConnectContext } = await import('./tenant-stripe-connect')
+  const connectCtx = await optionalStripeConnectContext(tenantId)
+  const payment = buildPaymentSummary(order, intent, {
+    stripeConnectedAccountId: connectCtx?.connectedAccountId ?? null,
+  })
+  return { ...order, ...payment }
+}
 
 export type CreateOrderInput = {
   customerId: string
@@ -92,14 +106,16 @@ export async function createOrder(
     include: { lineItems: true },
   })
 
-  if (opts?.awaitPipeline) {
-    await runOrderFulfillmentPipeline(order.id, tenantId, correlationId)
-  } else {
-    void runOrderFulfillmentPipeline(order.id, tenantId, correlationId).catch((err) =>
-      console.error(`[orders] fulfillment pipeline failed for order ${order.id}:`, err),
-    )
+  if (!defersFulfillmentUntilPayment(dto.paymentMethod)) {
+    if (opts?.awaitPipeline) {
+      await runOrderFulfillmentPipeline(order.id, tenantId, correlationId)
+    } else {
+      void runOrderFulfillmentPipeline(order.id, tenantId, correlationId).catch((err) =>
+        console.error(`[orders] fulfillment pipeline failed for order ${order.id}:`, err),
+      )
+    }
+    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
   }
-  void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
   return order
 }
 
@@ -171,7 +187,7 @@ export async function findOrderById(tenantId: string, id: string, opts?: { buyer
   if (opts?.buyerCustomerId && order.customerId !== opts.buyerCustomerId) {
     throw new ApiError(404, 'Order not found')
   }
-  return order
+  return enrichOrderWithPaymentDetails(tenantId, order)
 }
 
 export async function confirmOrder(tenantId: string, id: string) {

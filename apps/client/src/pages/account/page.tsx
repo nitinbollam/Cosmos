@@ -1,9 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Elements } from '@stripe/react-stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { getB2bCustomerId } from '@/lib/session'
 import { useCartStore } from '@/stores/cart.store'
+import { useStripeConnect } from '@/lib/stripe-connect'
+import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
 type CustomerProfile = {
   id: string
@@ -51,8 +54,8 @@ export default function AccountPage() {
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [templateName, setTemplateName] = useState('')
-  const [cardLast4, setCardLast4] = useState('')
-  const [cardBrand, setCardBrand] = useState('visa')
+  const [showAddCard, setShowAddCard] = useState(false)
+  const { stripePromise, chargesEnabled } = useStripeConnect(api.get.bind(api), 'account-stripe')
 
   const [phone, setPhone] = useState('')
   const [line1, setLine1] = useState('')
@@ -194,20 +197,16 @@ export default function AccountPage() {
     setTemplates((t) => t.filter((x) => x.id !== id))
   }
 
-  async function addSavedCard() {
-    if (!cardLast4.trim()) return
+  async function handleSaveCard(paymentMethodId: string) {
     setBusy(true)
+    setErr(null)
     try {
       const row = await api.post<SavedCard>('/saved-payment-methods', {
-        stripePaymentMethodId: `pm_demo_${cardLast4}`,
-        brand: cardBrand,
-        last4: cardLast4.trim(),
-        expMonth: 12,
-        expYear: new Date().getFullYear() + 3,
+        stripePaymentMethodId: paymentMethodId,
         isDefault: cards.length === 0,
       })
       setCards((c) => [row, ...c])
-      setCardLast4('')
+      setShowAddCard(false)
     } catch (e: unknown) {
       setErr(axiosErr(e))
     } finally {
@@ -393,9 +392,9 @@ export default function AccountPage() {
           <div className="pleros-card" style={{ padding: 16 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Saved payment methods</h2>
             <p className="pleros-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
-              Store cards for faster checkout and invoice pay (demo entries use placeholder Stripe IDs).
+              Store cards securely for faster checkout and invoice pay.
             </p>
-            {cards.length === 0 ? (
+            {cards.length === 0 && !showAddCard ? (
               <p className="pleros-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>No saved cards.</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px', display: 'grid', gap: 8 }}>
@@ -419,24 +418,31 @@ export default function AccountPage() {
                 ))}
               </ul>
             )}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <select className="pleros-input" value={cardBrand} onChange={(e) => setCardBrand(e.target.value)} style={{ width: 100 }}>
-                <option value="visa">Visa</option>
-                <option value="mastercard">Mastercard</option>
-                <option value="amex">Amex</option>
-              </select>
-              <input
-                className="pleros-input"
-                placeholder="Last 4 digits"
-                maxLength={4}
-                value={cardLast4}
-                onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, ''))}
-                style={{ width: 120 }}
-              />
-              <button type="button" className="btn-ghost" disabled={busy || cardLast4.length < 4} onClick={() => void addSavedCard()}>
-                Add card
+
+            {showAddCard ? (
+              stripePromise && chargesEnabled ? (
+                <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}>
+                  <Elements stripe={stripePromise} options={{ appearance: { theme: 'stripe' } }}>
+                    <StorefrontCardCapture onPaymentMethodId={(pmId) => void handleSaveCard(pmId)} />
+                  </Elements>
+                  <button type="button" className="btn-ghost" style={{ marginTop: 8 }} onClick={() => setShowAddCard(false)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <p className="pleros-shop-muted" style={{ fontSize: 13, marginTop: 8 }}>
+                  Card saving is unavailable until your distributor completes Stripe Connect onboarding.
+                </p>
+              )
+            ) : (
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setShowAddCard(true)}
+              >
+                + Add new card
               </button>
-            </div>
+            )}
           </div>
 
           <p style={{ fontSize: 13 }}>

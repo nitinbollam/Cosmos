@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useQueryParams } from '@/lib/use-query-params'
 import { useEffect, useState } from 'react'
+import { connectStatusLabel, type StripeConnectStatus } from '@/lib/stripe-connect'
 import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
@@ -64,7 +65,9 @@ type MsaConfig = {
 } | null
 
 type StripeStatus = {
+  secretKeyConfigured?: boolean
   webhookSigningSecretConfigured: boolean
+  connectWebhookSigningSecretConfigured?: boolean
   rotation: string
 }
 
@@ -989,6 +992,7 @@ function WarehousesTab() {
 
 function IntegrationsTab() {
   const qc = useQueryClient()
+  const searchParams = useQueryParams()
   const [addOpen, setAddOpen] = useState(false)
   const [rotateOpen, setRotateOpen] = useState(false)
   const [reporterDid, setReporterDid] = useState('')
@@ -1007,6 +1011,32 @@ function IntegrationsTab() {
     queryKey: ['stripe-status'],
     queryFn: () => api.get('/payments/stripe/status'),
   })
+
+  const connectQ = useQuery<StripeConnectStatus>({
+    queryKey: ['stripe-connect-status'],
+    queryFn: () => api.get('/payments/stripe/connect/status'),
+  })
+
+  const connectOnboardMut = useMutation({
+    mutationFn: () => api.post<{ url: string }>('/payments/stripe/connect/onboard', {}),
+    onSuccess: (data) => {
+      if (data.url) window.location.href = data.url
+    },
+  })
+
+  const connectRefreshMut = useMutation({
+    mutationFn: () => api.post<{ url: string }>('/payments/stripe/connect/refresh', {}),
+    onSuccess: (data) => {
+      if (data.url) window.location.href = data.url
+    },
+  })
+
+  useEffect(() => {
+    const stripeParam = searchParams.get('stripe')
+    if (stripeParam === 'return' || stripeParam === 'refresh') {
+      void qc.invalidateQueries({ queryKey: ['stripe-connect-status'] })
+    }
+  }, [searchParams, qc])
 
   const notifProvidersQ = useQuery<NotificationProviderStatus>({
     queryKey: ['notification-providers'],
@@ -1243,8 +1273,63 @@ function IntegrationsTab() {
       <div className="pleros-card">
         <div className="flex flex-wrap justify-between gap-3 items-start mb-3">
           <div>
-            <h3 className="text-pleros-white font-semibold font-display">Stripe</h3>
-            <p className="text-pleros-text-3 text-sm mt-1">Card payments and webhook configuration</p>
+            <h3 className="text-pleros-white font-semibold font-display">Stripe Connect</h3>
+            <p className="text-pleros-text-3 text-sm mt-1">
+              Each distributor collects payments on their own connected account (FastFlyrr is the platform).
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-primary !text-sm"
+            disabled={connectOnboardMut.isPending || connectRefreshMut.isPending}
+            onClick={() => {
+              if (connectQ.data?.onboardingStatus === 'ready') {
+                connectRefreshMut.mutate()
+              } else {
+                connectOnboardMut.mutate()
+              }
+            }}
+          >
+            {connectQ.data?.onboardingStatus === 'not_started'
+              ? 'Connect Stripe'
+              : connectQ.data?.onboardingStatus === 'ready'
+                ? 'Manage in Stripe'
+                : 'Continue onboarding'}
+          </button>
+        </div>
+        {connectQ.isLoading ? (
+          <div className="skeleton h-20 w-full" />
+        ) : connectQ.isError ? (
+          <p className="text-sm text-red-400">{errMsg(connectQ.error)}</p>
+        ) : (
+          <div className="rounded-xl p-4 border space-y-2" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
+            <p className="text-sm text-pleros-text">
+              Status:{' '}
+              <strong className="text-pleros-accent">{connectStatusLabel(connectQ.data?.onboardingStatus ?? 'not_started')}</strong>
+            </p>
+            {connectQ.data?.stripeConnectedAccountId ? (
+              <p className="text-xs font-mono text-pleros-text-3 break-all">{connectQ.data.stripeConnectedAccountId}</p>
+            ) : null}
+            <p className="text-xs text-pleros-text-3">
+              Charges: {connectQ.data?.stripeChargesEnabled ? 'enabled' : 'disabled'} · Payouts:{' '}
+              {connectQ.data?.stripePayoutsEnabled ? 'enabled' : 'disabled'} · Details submitted:{' '}
+              {connectQ.data?.stripeDetailsSubmitted ? 'yes' : 'no'}
+            </p>
+            {!connectQ.data?.platformFeeConfigured ? (
+              <p className="text-xs text-amber-400/90">
+                Platform fee not configured (STRIPE_PLATFORM_APPLICATION_FEE_BPS unset) — no application_fee_amount on charges until product confirms fee %.
+              </p>
+            ) : null}
+          </div>
+        )}
+        {connectOnboardMut.error ? <p className="text-sm text-red-400 mt-2">{errMsg(connectOnboardMut.error)}</p> : null}
+      </div>
+
+      <div className="pleros-card">
+        <div className="flex flex-wrap justify-between gap-3 items-start mb-3">
+          <div>
+            <h3 className="text-pleros-white font-semibold font-display">Stripe (platform webhooks)</h3>
+            <p className="text-pleros-text-3 text-sm mt-1">GET /payments/stripe/status · POST /webhooks/stripe/connect for Connect events</p>
           </div>
           <button type="button" className="btn-ghost !text-sm" onClick={() => setRotateOpen(true)}>
             Rotate signing secret
@@ -1257,9 +1342,21 @@ function IntegrationsTab() {
         ) : (
           <div className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
             <p className="text-sm text-pleros-text">
+              Secret key:{' '}
+              <strong className={stripeQ.data?.secretKeyConfigured ? 'text-emerald-400' : 'text-amber-400'}>
+                {stripeQ.data?.secretKeyConfigured ? 'configured' : 'not configured'}
+              </strong>
+            </p>
+            <p className="text-sm text-pleros-text mt-2">
               Webhook signing secret:{' '}
               <strong className={stripeQ.data?.webhookSigningSecretConfigured ? 'text-emerald-400' : 'text-amber-400'}>
                 {stripeQ.data?.webhookSigningSecretConfigured ? 'configured' : 'not configured'}
+              </strong>
+            </p>
+            <p className="text-sm text-pleros-text mt-2">
+              Connect webhook signing secret:{' '}
+              <strong className={stripeQ.data?.connectWebhookSigningSecretConfigured ? 'text-emerald-400' : 'text-amber-400'}>
+                {stripeQ.data?.connectWebhookSigningSecretConfigured ? 'configured' : 'not configured'}
               </strong>
             </p>
           </div>
