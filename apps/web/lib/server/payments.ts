@@ -158,9 +158,17 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
 }
 
 /** Complete a card payment after client-side 3DS (confirmCardPayment). */
-export async function completeCardAuthorization(tenantId: string, paymentIntentId: string, correlationId: string) {
+export async function completeCardAuthorization(
+  tenantId: string,
+  paymentIntentId: string,
+  correlationId: string,
+  opts?: { buyerCustomerId?: string },
+) {
   const intent = await paymentDb.paymentIntent.findFirst({ where: { id: paymentIntentId, tenantId } })
   if (!intent) throw new ApiError(404, 'Payment intent not found')
+  if (opts?.buyerCustomerId && intent.customerId !== opts.buyerCustomerId) {
+    throw new ApiError(403, 'Forbidden')
+  }
   if (!intent.stripeIntentId) throw new ApiError(400, 'No Stripe payment linked')
 
   const order = await orderDb.order.findFirst({ where: { id: intent.orderId, tenantId } })
@@ -175,12 +183,25 @@ export async function completeCardAuthorization(tenantId: string, paymentIntentI
     throw new ApiError(400, `Cannot complete payment in status ${retrieved.status}`)
   }
 
+  const isAlreadySucceeded = retrieved.status === 'succeeded'
+  const nextStatus = isAlreadySucceeded ? 'CAPTURED' : 'AUTHORIZED'
+
   const updated = await paymentDb.paymentIntent.update({
     where: { id: intent.id },
-    data: { status: 'AUTHORIZED', failureReason: null },
+    data: {
+      status: nextStatus,
+      capturedAmount: isAlreadySucceeded ? intent.amount : intent.capturedAmount,
+      failureReason: null,
+    },
   })
 
   await linkPaymentIntent(tenantId, intent.orderId, updated.id)
+
+  if (isAlreadySucceeded) {
+    await applyCapturedPayment(tenantId, intent.orderId, Number(intent.amount))
+    const { syncInvoiceFromOrder } = await import('./invoices')
+    await syncInvoiceFromOrder(tenantId, intent.orderId).catch(() => undefined)
+  }
 
   if (defersFulfillmentUntilPayment(order.paymentMethod)) {
     const { runOrderFulfillmentPipeline } = await import('./order-orchestration')

@@ -471,17 +471,22 @@ export async function payInvoiceWithStripe(
   const amount = body.amount != null ? Math.min(body.amount, invoice.balance) : invoice.balance
   if (amount <= 0) throw new ApiError(400, 'Invalid payment amount')
 
-  const payments = await import('./payments')
-  const auth = await payments.authorize(tenantId, {
-    orderId: invoice.orderId,
-    amount,
-    currency: 'usd',
-    paymentMethod: 'CARD',
-    customerId: invoice.customerId,
+  const orderPaymentAdmin = await import('./order-payment-admin')
+  const result = await orderPaymentAdmin.collectOrderCardPayment(tenantId, invoice.orderId, {
     paymentMethodId: body.paymentMethodId,
+    amount,
     correlationId: body.correlationId,
+    customerId: invoice.customerId,
   })
-  await payments.capture(tenantId, auth.paymentIntentId, body.correlationId)
+
+  if (result.requiresAction && result.clientSecret) {
+    return {
+      requiresAction: true as const,
+      clientSecret: result.clientSecret,
+      paymentIntentId: result.paymentIntentId,
+      invoice: await getInvoice(tenantId, invoiceId, opts),
+    }
+  }
 
   return getInvoice(tenantId, invoiceId, opts)
 }

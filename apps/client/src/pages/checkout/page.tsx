@@ -172,7 +172,12 @@ export default function CheckoutPage() {
           typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
             ? crypto.randomUUID()
             : Math.random().toString(36).slice(2)
-        await api.post(
+        const authRes = await api.post<{
+          requiresAction?: boolean
+          clientSecret?: string
+          paymentIntentId?: string
+          status?: string
+        }>(
           '/payments/authorize',
           {
             orderId: order.id,
@@ -184,23 +189,23 @@ export default function CheckoutPage() {
             correlationId: authKey,
           },
           { 'Idempotency-Key': authKey },
-        ).then(async (authRes: { requiresAction?: boolean; clientSecret?: string; paymentIntentId?: string }) => {
-          if (authRes.requiresAction && authRes.clientSecret && stripePromise) {
-            const stripe = await stripePromise
-            if (!stripe) throw new Error('Stripe not ready')
-            const { error } = await stripe.confirmCardPayment(authRes.clientSecret)
-            if (error) throw error
-            const confirmKey =
-              typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-                ? crypto.randomUUID()
-                : Math.random().toString(36).slice(2)
-            await api.post(
-              '/payments/confirm',
-              { paymentIntentId: authRes.paymentIntentId, correlationId: confirmKey },
-              { 'Idempotency-Key': confirmKey },
-            )
-          }
-        })
+        )
+
+        if (authRes.requiresAction && authRes.clientSecret && stripePromise) {
+          const stripe = await stripePromise
+          if (!stripe) throw new Error('Stripe not ready')
+          const { error } = await stripe.confirmCardPayment(authRes.clientSecret)
+          if (error) throw error
+          const confirmKey =
+            typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+              ? crypto.randomUUID()
+              : Math.random().toString(36).slice(2)
+          await api.post(
+            '/payments/confirm',
+            { paymentIntentId: authRes.paymentIntentId, correlationId: confirmKey },
+            { 'Idempotency-Key': confirmKey },
+          )
+        }
 
         if (cardMode === 'new' && saveNewCardToAccount && cardPaymentMethodId.startsWith('pm_')) {
           await api

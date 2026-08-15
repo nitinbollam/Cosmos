@@ -87,11 +87,30 @@ function InvoicePayPanel({
     setErr(null)
     try {
       const correlationId = crypto.randomUUID()
-      await api.post(`/invoices/${encodeURIComponent(invoiceId)}/pay/stripe`, {
+      const res = await api.post<{
+        requiresAction?: boolean
+        clientSecret?: string
+        paymentIntentId?: string
+      }>(`/invoices/${encodeURIComponent(invoiceId)}/pay/stripe`, {
         paymentMethodId: cardPaymentMethodId,
         amount,
         correlationId,
       })
+
+      if (res.requiresAction && res.clientSecret && stripePromise) {
+        const stripe = await stripePromise
+        if (!stripe) throw new Error('Stripe not ready')
+        const { error } = await stripe.confirmCardPayment(res.clientSecret)
+        if (error) throw error
+        if (res.paymentIntentId) {
+          const confirmKey = crypto.randomUUID()
+          await api.post(
+            '/payments/confirm',
+            { paymentIntentId: res.paymentIntentId, correlationId: confirmKey },
+            { 'Idempotency-Key': confirmKey },
+          )
+        }
+      }
       onPaid()
     } catch (e: unknown) {
       setErr(axiosErr(e))

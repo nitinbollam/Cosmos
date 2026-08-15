@@ -1023,6 +1023,17 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
     return Response.json(result)
   }
 
+  if (seg.length === 2 && seg[1] === 'confirm' && method === 'POST') {
+    requireIdempotencyKey(req)
+    const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
+    const buyerCustomerId = isPortalBuyer(session.role) ? await requirePortalCustomerId(session) : undefined
+    return Response.json(
+      await payments.completeCardAuthorization(session.tenantId, body.paymentIntentId, body.correlationId, {
+        buyerCustomerId,
+      }),
+    )
+  }
+
   // Capture, void, and refund are back-office operations.
   assertRole(session, ADMIN_ROLES)
 
@@ -1052,13 +1063,6 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
     const result = await payments.refund(session.tenantId, body.paymentIntentId, body.amount, body.correlationId)
     await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
     return Response.json(result)
-  }
-  if (seg.length === 2 && seg[1] === 'confirm' && method === 'POST') {
-    requireIdempotencyKey(req)
-    const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
-    return Response.json(
-      await payments.completeCardAuthorization(session.tenantId, body.paymentIntentId, body.correlationId),
-    )
   }
 
   throw new ApiError(404, 'Payment route not found')
