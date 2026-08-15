@@ -11,14 +11,29 @@ export type TokenPair = {
   refreshToken: string
   userId: string
   role: string
+  permissions: string[]
 }
 
-async function signPair(user: { id: string; email: string; role: string; tenantId: string }): Promise<TokenPair> {
+async function signPair(user: {
+  id: string
+  email: string
+  role: string
+  tenantId: string
+  permissions?: unknown
+}): Promise<TokenPair> {
+  const rawPerms = user.permissions
+  const permissions: string[] = Array.isArray(rawPerms)
+    ? (rawPerms as string[])
+    : typeof rawPerms === 'string'
+      ? JSON.parse(rawPerms)
+      : []
+
   const payload = {
     sub: user.id,
     email: user.email,
     role: user.role,
     tenantId: user.tenantId,
+    permissions,
   }
   const accessTtl = process.env.JWT_ACCESS_TTL ?? '15m'
   const refreshTtl = process.env.JWT_REFRESH_TTL ?? '7d'
@@ -42,7 +57,7 @@ async function signPair(user: { id: string; email: string; role: string; tenantI
     data: { refreshTokenHash },
   })
 
-  return { accessToken, refreshToken, userId: user.id, role: user.role }
+  return { accessToken, refreshToken, userId: user.id, role: user.role, permissions }
 }
 
 export async function loginUser(email: string, password: string): Promise<TokenPair> {
@@ -83,6 +98,7 @@ export async function registerUser(input: {
   firstName: string
   lastName: string
   role?: string
+  permissions?: string[]
   /** Invite accept and admin-created users skip the verification gate. */
   emailVerified?: boolean
   issueTokens?: boolean
@@ -104,7 +120,7 @@ export async function registerUser(input: {
       firstName: input.firstName,
       lastName: input.lastName,
       role: (input.role ?? 'STAFF') as 'STAFF',
-      permissions: [],
+      permissions: input.permissions ?? [],
       ...(input.emailVerified ? { emailVerifiedAt: new Date() } : {}),
     },
   })

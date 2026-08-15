@@ -12,6 +12,7 @@ export type Role =
   | 'DRIVER'
   | 'ACCOUNTANT'
   | 'VIEWER'
+  | 'STAFF'
 
 export type Plan = 'STARTER' | 'GROWTH' | 'ENTERPRISE'
 
@@ -20,6 +21,7 @@ export interface JwtPayload {
   email: string
   role: Role
   tenantId: string
+  permissions?: string[]
   iat?: number
   exp?: number
 }
@@ -30,6 +32,18 @@ export interface AuthenticatedUser {
   role: Role
   tenantId: string
   permissions: string[]
+}
+
+export interface UserSummary {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role: Role
+  permissions: string[]
+  isActive: boolean
+  lastLoginAt?: string | null
+  createdAt: string
 }
 
 export interface PaginatedResult<T> {

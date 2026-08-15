@@ -49,8 +49,8 @@ import * as edi from './edi'
 import * as demandPlanning from './demand-planning'
 import { checkDatabaseConnections } from './db-health'
 import { getAuthProfile, isPortalBuyer, isAdminStaff, requirePortalCustomerId } from './buyer-context'
-import { getTenantTaxSettings } from './tenant-tax'
 import { ApiError, requireSession, requireRole, assertRole, ADMIN_ROLES, OPS_ROLES, DRIVER_ROLES, toJsonError, type SessionUser } from './session'
+import { hasPermission, assertPermission, requirePermission } from './permissions'
 
 /** CRM access: admins plus sales reps. */
 const CRM_ROLES = [...ADMIN_ROLES, 'SALES_REP'] as const
@@ -125,7 +125,11 @@ async function routeTenants(method: string, seg: string[], req: Request): Promis
   const tenantId = session.tenantId
   assertNotBuyer(session)
   // Tenant settings, invites, plan, and onboarding are admin-only beyond reads.
-  if (method !== 'GET' || seg[2] === 'invites') assertRole(session, ADMIN_ROLES)
+  if (method !== 'GET' || seg[2] === 'invites') {
+    assertPermission(session, seg[2] === 'invites' ? ['users.read', 'users.write', 'settings.write'] : 'settings.write')
+  } else {
+    assertPermission(session, 'settings.read')
+  }
 
   if (seg[1] === 'me' && seg.length === 2 && method === 'GET') {
     return Response.json(await tenant.findTenantById(tenantId))
@@ -184,7 +188,10 @@ async function routeTenants(method: string, seg: string[], req: Request): Promis
 }
 
 async function routeUsers(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, ADMIN_ROLES)
+  const session =
+    method === 'GET'
+      ? await requirePermission(req, 'users.read')
+      : await requirePermission(req, 'users.write')
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -193,7 +200,7 @@ async function routeUsers(method: string, seg: string[], req: Request): Promise<
     return Response.json(await users.listUsers(session.tenantId, page, pageSize))
   }
   if (seg.length === 2 && method === 'PATCH') {
-    const body = (await req.json()) as { role?: string; isActive?: boolean }
+    const body = (await req.json()) as { role?: string; isActive?: boolean; permissions?: string[] }
     return Response.json(await users.updateUser(session.tenantId, seg[1], body, session.userId))
   }
   if (seg.length === 2 && method === 'DELETE') {
@@ -208,7 +215,7 @@ async function routeSkus(method: string, seg: string[], req: Request): Promise<R
   const url = new URL(req.url)
 
   if (method !== 'GET') {
-    assertRole(session, OPS_ROLES)
+    assertPermission(session, 'inventory.write')
   } else if (isPortalBuyer(session.role) && seg[1] !== 'categories' && seg.length > 2) {
     // Buyers may browse the catalog (list, categories, detail) but not internal
     // inventory views (lots, serials, demand plans, labels, lookups).
@@ -310,7 +317,7 @@ async function routeSkus(method: string, seg: string[], req: Request): Promise<R
 
 async function routeWarehouses(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
-  if (method !== 'GET') assertRole(session, ADMIN_ROLES)
+  if (method !== 'GET') assertPermission(session, 'inventory.write')
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await inv.listWarehouses(session.tenantId))
@@ -331,7 +338,8 @@ async function routeWarehouses(method: string, seg: string[], req: Request): Pro
 }
 
 async function routeInventory(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, OPS_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'inventory.read' : 'inventory.write')
   const url = new URL(req.url)
 
   if (seg[1] === 'ledger' && method === 'GET') {
@@ -413,7 +421,7 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
       seg[2] === 'fulfill' ||
       seg[2] === 'cancel' ||
       seg[2] === 'returns')
-  const session = adminAction ? await requireRole(req, ADMIN_ROLES) : await requireSession(req)
+  const session = adminAction ? await requirePermission(req, 'orders.write') : await requireSession(req)
   const buyerCustomerId = isPortalBuyer(session.role)
     ? await requirePortalCustomerId(session)
     : undefined
@@ -496,7 +504,7 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
     return Response.json(await orderShipments.listOrderShipments(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'shipments' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'orders.write')
     const body = (await req.json()) as Parameters<typeof orderShipments.createOrderShipments>[2]
     return Response.json(await orderShipments.createOrderShipments(session.tenantId, seg[1], body), { status: 201 })
   }
@@ -511,17 +519,17 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
     if (isPortalBuyer(session.role)) {
       await orders.findOrderById(session.tenantId, seg[1], buyerOpts)
     } else {
-      assertRole(session, ADMIN_ROLES)
+      assertPermission(session, 'orders.write')
     }
     return Response.json(await orders.recordOrderPayment(session.tenantId, seg[1], body))
   }
   if (seg.length === 4 && seg[2] === 'drop-ship' && seg[3] === 'ship' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'orders.write')
     const body = (await req.json()) as { carrier?: string; trackingNumber?: string }
     return Response.json(await dropShip.markDropShipLinesShipped(session.tenantId, seg[1], body))
   }
   if (seg.length === 4 && seg[2] === 'drop-ship' && seg[3] === 'create-po' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'orders.write')
     return Response.json(await dropShip.createDropShipPurchaseOrders(session.tenantId, seg[1]))
   }
   throw new ApiError(404, 'Order route not found')
@@ -568,6 +576,7 @@ async function routeCustomers(method: string, seg: string[], req: Request): Prom
   if (isPortalBuyer(session.role)) {
     throw new ApiError(403, 'Forbidden')
   }
+  assertPermission(session, method === 'GET' ? 'crm.read' : 'crm.write')
 
   if (seg[1] === 'lookup' && method === 'GET') {
     const ref = new URL(req.url).searchParams.get('externalRef')
@@ -609,19 +618,20 @@ async function routeCustomers(method: string, seg: string[], req: Request): Prom
     return Response.json(await pricing.listCustomerPrices(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'prices' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    assertPermission(session, 'crm.write')
     const body = (await req.json()) as pricing.UpsertCustomerPriceInput
     return Response.json(await pricing.upsertCustomerPrice(session.tenantId, seg[1], body), { status: 201 })
   }
   if (seg.length === 4 && seg[2] === 'prices' && method === 'DELETE') {
-    await requireRole(req, ADMIN_ROLES)
+    assertPermission(session, 'crm.write')
     return Response.json(await pricing.deleteCustomerPrice(session.tenantId, seg[1], seg[3]))
   }
   throw new ApiError(404, 'Customer route not found')
 }
 
 async function routeLeads(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, CRM_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'crm.read' : 'crm.write')
 
   if (seg[1] === 'import' && method === 'POST') {
     const body = (await req.json()) as { rows?: Record<string, unknown>[] }
@@ -650,7 +660,8 @@ async function routeLeads(method: string, seg: string[], req: Request): Promise<
 }
 
 async function routeActivities(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, CRM_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'crm.read' : 'crm.write')
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -723,7 +734,7 @@ async function routeInvoices(method: string, seg: string[], req: Request): Promi
     if (isPortalBuyer(session.role)) {
       /* buyer-scoped via getInvoice in recordInvoicePayment */
     } else {
-      assertRole(session, ADMIN_ROLES)
+      assertPermission(session, 'finance.write')
     }
     return Response.json(await invoices.recordInvoicePayment(session.tenantId, seg[1], body, buyerOpts))
   }
@@ -731,7 +742,7 @@ async function routeInvoices(method: string, seg: string[], req: Request): Promi
     if (isPortalBuyer(session.role)) {
       /* scoped in payInvoiceWithStripe */
     } else {
-      assertRole(session, ADMIN_ROLES)
+      assertPermission(session, 'finance.write')
     }
     const body = (await req.json()) as { paymentMethodId: string; amount?: number; correlationId: string }
     if (!body.paymentMethodId || !body.correlationId) throw new ApiError(400, 'paymentMethodId and correlationId required')
@@ -771,11 +782,11 @@ async function routeQuotes(method: string, seg: string[], req: Request): Promise
     return Response.json(await quotes.requestQuoteApproval(session.tenantId, seg[1], buyerOpts))
   }
   if (seg.length === 3 && seg[2] === 'approve' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'quotes.write')
     return Response.json(await quotes.approveQuote(session.tenantId, seg[1], session.userId))
   }
   if (seg.length === 3 && seg[2] === 'reject' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'quotes.write')
     const body = (await req.json()) as { reason?: string }
     if (!body.reason?.trim()) throw new ApiError(400, 'reason is required')
     return Response.json(await quotes.rejectQuote(session.tenantId, seg[1], body.reason))
@@ -803,7 +814,7 @@ async function routeQuotes(method: string, seg: string[], req: Request): Promise
 
 async function routePurchaseOrders(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
-  const session = isRead ? await requireRole(req, OPS_ROLES) : await requireRole(req, ADMIN_ROLES)
+  const session = await requirePermission(req, isRead ? 'purchasing.read' : 'purchasing.write')
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -842,7 +853,8 @@ async function routePurchaseOrders(method: string, seg: string[], req: Request):
 }
 
 async function routeEdi(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, ADMIN_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'edi.read' : 'edi.write')
   const url = new URL(req.url)
 
   if (seg[1] === 'partners') {
@@ -897,7 +909,7 @@ async function routeBills(method: string, seg: string[], req: Request): Promise<
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
-    assertRole(session, ADMIN_ROLES)
+    assertPermission(session, 'finance.read')
     return Response.json(
       await apBills.listVendorBills(session.tenantId, url.searchParams.get('status') ?? undefined, {
         startDate: url.searchParams.get('startDate') ?? undefined,
@@ -906,21 +918,21 @@ async function routeBills(method: string, seg: string[], req: Request): Promise<
     )
   }
   if (seg.length === 2 && method === 'GET') {
-    assertRole(session, ADMIN_ROLES)
+    assertPermission(session, 'finance.read')
     return Response.json(await apBills.getVendorBill(session.tenantId, seg[1]))
   }
   if (seg.length === 2 && method === 'POST' && seg[1] === 'from-po') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'finance.write')
     const body = (await req.json()) as apBills.CreateBillFromPoInput
     return Response.json(await apBills.createBillFromPurchaseOrder(session.tenantId, body), { status: 201 })
   }
   if (seg.length === 3 && seg[2] === 'payments' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'finance.write')
     const body = (await req.json()) as { amount: number; method: string; reference?: string }
     return Response.json(await apBills.recordBillPayment(session.tenantId, seg[1], body))
   }
   if (seg.length === 3 && seg[2] === 'match' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'finance.write')
     return Response.json(await apBills.runThreeWayMatch(session.tenantId, seg[1]))
   }
   throw new ApiError(404, 'Bill route not found')
@@ -963,7 +975,7 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
   }
 
   // Capture, void, and refund are back-office operations.
-  assertRole(session, ADMIN_ROLES)
+  assertPermission(session, 'finance.write')
 
   if (seg.length === 2 && seg[1] === 'capture' && method === 'POST') {
     const key = requireIdempotencyKey(req)
@@ -999,7 +1011,7 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
 async function routeSuppliers(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   assertNotBuyer(session)
-  if (method !== 'GET') assertRole(session, ADMIN_ROLES)
+  assertPermission(session, method === 'GET' ? 'purchasing.read' : 'purchasing.write')
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await purchasing.listSuppliers(session.tenantId))
@@ -1020,7 +1032,7 @@ async function routeSuppliers(method: string, seg: string[], req: Request): Prom
 }
 
 async function routeFulfillment(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, OPS_ROLES)
+  const session = await requirePermission(req, 'wms.write')
 
   if (seg[1] === 'tasks' && seg.length === 2 && method === 'POST') {
     const body = (await req.json()) as wmsFulfillment.CreateFulfillmentTaskInput
@@ -1052,7 +1064,8 @@ async function routeFulfillment(method: string, seg: string[], req: Request): Pr
 }
 
 async function routeWms(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, OPS_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'wms.read' : 'wms.write')
   const url = new URL(req.url)
 
   if (seg[1] === 'tasks') {
@@ -1078,107 +1091,71 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
     if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
       return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2]))
     }
-    if (seg.length === 5 && seg[3] === 'pick-lines' && method === 'PATCH') {
-      const body = (await req.json()) as wmsFulfillment.ConfirmPickLineInput
-      return Response.json(
-        await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], body),
+    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'pick' && method === 'POST') {
+      const body = (await req.json()) as Parameters<typeof wmsFulfillment.confirmPickLine>[3]
+      return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], body))
+    }
+    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'short' && method === 'POST') {
+      const body = (await req.json()) as { reason?: string }
+      return Response.json(await wmsFulfillment.shortPickLine(session.tenantId, seg[2], seg[4], body.reason))
+    }
+    if (seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
+      const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
+      await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch((err) =>
+        console.error(`[orders] pack side-effects failed for order ${result.orderId}:`, err),
       )
+      return Response.json(result)
+    }
+    if (seg.length === 4 && seg[3] === 'dispatch' && method === 'POST') {
+      return Response.json(await orderOrchestration.dispatchFulfillmentTask(session.tenantId, seg[2]))
     }
   }
 
-  if (seg[1] === 'receiving' && seg[2] === 'sessions') {
+  if (seg[1] === 'receiving') {
+    if (seg.length === 2 && method === 'GET') {
+      return Response.json(
+        await wmsReceiving.listReceivingSessions(session.tenantId, url.searchParams.get('warehouseId') ?? undefined),
+      )
+    }
+    if (seg.length === 2 && method === 'POST') {
+      const body = (await req.json()) as Parameters<typeof wmsReceiving.createReceivingSession>[2]
+      return Response.json(await wmsReceiving.createReceivingSession(session.tenantId, session.userId, body), {
+        status: 201,
+      })
+    }
     if (seg.length === 3 && method === 'GET') {
-      return Response.json(
-        await wmsReceiving.listReceivingSessions(session.tenantId, url.searchParams.get('status') ?? undefined),
-      )
+      return Response.json(await wmsReceiving.getReceivingSession(session.tenantId, seg[2]))
     }
-    if (seg.length === 3 && method === 'POST') {
-      const body = (await req.json()) as {
-        warehouseId?: string
-        poId?: string
-        purchaseOrderId?: string
-        asnId?: string
-      }
-      const warehouseId =
-        body.warehouseId?.trim() ||
-        (await wmsReceiving.resolveDefaultWarehouseId(session.tenantId))
-      const poId = body.poId?.trim() || body.purchaseOrderId?.trim() || undefined
-      return Response.json(
-        await wmsReceiving.startReceivingSession(
-          session.tenantId,
-          warehouseId,
-          session.userId,
-          poId,
-          body.asnId,
-        ),
-        { status: 201 },
-      )
+    if (seg.length === 4 && seg[3] === 'line' && method === 'POST') {
+      const body = (await req.json()) as Parameters<typeof wmsReceiving.recordReceivedLine>[2]
+      return Response.json(await wmsReceiving.recordReceivedLine(session.tenantId, seg[2], body))
     }
-    if (seg.length === 4 && method === 'GET') {
-      return Response.json(await wmsReceiving.getReceivingSession(seg[3], session.tenantId))
-    }
-    if (seg.length === 5 && seg[4] === 'scan' && method === 'POST') {
-      const body = (await req.json()) as {
-        barcode?: string
-        code?: string
-        receivedQty?: number
-        quantity?: number
-        damagedQty?: number
-        batchId?: string
-        expiryDate?: string
-        locationId?: string
-      }
-      const barcode = (body.barcode ?? body.code)?.trim()
-      if (!barcode) throw new ApiError(400, 'barcode or code required')
-      const receivedQty = body.receivedQty ?? body.quantity ?? 1
-      return Response.json(
-        await wmsReceiving.scanReceivingItem(seg[3], session.tenantId, session.userId, {
-          barcode,
-          receivedQty,
-          damagedQty: body.damagedQty,
-          batchId: body.batchId,
-          expiryDate: body.expiryDate,
-          locationId: body.locationId,
-        }),
-      )
-    }
-    if (seg.length === 5 && seg[4] === 'import' && method === 'POST') {
-      const body = (await req.json()) as { rows?: Parameters<typeof wmsReceiving.importReceivingItems>[3] }
-      return Response.json(
-        await wmsReceiving.importReceivingItems(seg[3], session.tenantId, session.userId, body.rows ?? []),
-      )
-    }
-    if (seg.length === 5 && seg[4] === 'complete' && method === 'PATCH') {
-      const body = (await req.json()) as { notes?: string }
-      return Response.json(
-        await wmsReceiving.completeReceivingSession(
-          seg[3],
-          session.tenantId,
-          body.notes,
-          session.userId,
-        ),
-      )
+    if (seg.length === 4 && seg[3] === 'complete' && method === 'POST') {
+      return Response.json(await wmsReceiving.completeReceiving(session.tenantId, seg[2]))
     }
   }
 
-  if (seg[1] === 'putaway' && seg[2] === 'tasks') {
-    if (seg.length === 3 && method === 'GET') {
+  if (seg[1] === 'putaway') {
+    if (seg.length === 2 && method === 'GET') {
       return Response.json(
-        await wmsPutaway.listPutawayTasks(
-          session.tenantId,
-          url.searchParams.get('warehouseId') ?? undefined,
-          url.searchParams.get('status') ?? undefined,
-        ),
-      )
-    }
-    if (seg.length === 5 && seg[3] === 'lines' && method === 'PATCH') {
-      const body = (await req.json()) as { actualBinId?: string; actualBinCode?: string }
-      return Response.json(
-        await wmsPutaway.confirmPutawayLine(session.tenantId, seg[2], seg[4], {
-          ...body,
-          performedBy: session.userId,
+        await wmsPutaway.listPutawayTasks(session.tenantId, {
+          status: url.searchParams.get('status') ?? undefined,
+          warehouseId: url.searchParams.get('warehouseId') ?? undefined,
         }),
       )
+    }
+    if (seg.length === 3 && method === 'GET') {
+      return Response.json(await wmsPutaway.getPutawayTask(session.tenantId, seg[2]))
+    }
+    if (seg.length === 4 && seg[3] === 'suggest-bin' && method === 'GET') {
+      const skuId = url.searchParams.get('skuId')
+      const warehouseId = url.searchParams.get('warehouseId')
+      if (!skuId || !warehouseId) throw new ApiError(400, 'skuId and warehouseId required')
+      return Response.json(await wmsPutaway.suggestPutawayBin(session.tenantId, warehouseId, skuId))
+    }
+    if (seg.length === 4 && seg[3] === 'confirm' && method === 'POST') {
+      const body = (await req.json()) as Parameters<typeof wmsPutaway.confirmPutaway>[3]
+      return Response.json(await wmsPutaway.confirmPutaway(session.tenantId, seg[2], session.userId, body))
     }
   }
 
@@ -1214,7 +1191,7 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
       return Response.json(await wmsCycleCount.submitCycleCountForApproval(session.tenantId, seg[2]))
     }
     if (seg.length === 4 && seg[3] === 'approve' && (method === 'POST' || method === 'PATCH')) {
-      assertRole(session, ADMIN_ROLES)
+      assertPermission(session, ['wms.write', 'inventory.write'])
       return Response.json(
         await wmsCycleCount.approveCycleCount(session.tenantId, seg[2], session.userId),
       )
@@ -1233,7 +1210,7 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
 
 async function routeRoutes(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
-  const session = isRead ? await requireRole(req, DRIVER_ROLES) : await requireRole(req, ADMIN_ROLES)
+  const session = await requirePermission(req, isRead ? 'dispatch.read' : 'dispatch.write')
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'shipped-orders' && method === 'GET') {
@@ -1291,7 +1268,7 @@ async function routeRoutes(method: string, seg: string[], req: Request): Promise
 }
 
 async function routeDispatchMobile(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, DRIVER_ROLES)
+  const session = await requirePermission(req, 'dispatch.write')
 
   if (seg[1] === 'driver' && seg[2] === 'location' && method === 'POST') {
     const body = (await req.json()) as Parameters<typeof dispatch.recordDriverLocation>[2]
@@ -1312,6 +1289,7 @@ async function routeDispatchMobile(method: string, seg: string[], req: Request):
 async function routeMsa(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   assertNotBuyer(session)
+  assertPermission(session, method === 'GET' ? 'compliance.read' : 'compliance.write')
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'reports' && method === 'GET') {
@@ -1335,17 +1313,17 @@ async function routeMsa(method: string, seg: string[], req: Request): Promise<Re
     return Response.json(result)
   }
   if (seg.length === 2 && seg[1] === 'cron' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'compliance.write')
     const offset = url.searchParams.get('weekOffset')
     const weekOffset = offset ? parseInt(offset, 10) : 0
     return Response.json(await complianceMsa.runMsaAutomationCron(session.tenantId, weekOffset))
   }
   if (seg.length === 4 && seg[1] === 'reports' && seg[3] === 'upload' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'compliance.write')
     return Response.json(await complianceMsa.uploadReportToStorage(session.tenantId, seg[2]))
   }
   if (seg.length === 4 && seg[1] === 'reports' && seg[3] === 'submit' && method === 'POST') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'compliance.write')
     return Response.json(await complianceMsa.submitReportEdi(session.tenantId, seg[2]))
   }
   if (seg.length === 3 && seg[1] === 'transactions' && seg[2] === 'import' && method === 'POST') {
@@ -1365,12 +1343,13 @@ async function routeMsa(method: string, seg: string[], req: Request): Promise<Re
 async function routeTax(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   assertNotBuyer(session)
+  assertPermission(session, method === 'GET' ? 'compliance.read' : 'compliance.write')
 
   if (seg.length === 2 && seg[1] === 'settings' && method === 'GET') {
     return Response.json(await getTenantTaxSettings(session.tenantId))
   }
   if (seg.length === 2 && seg[1] === 'settings' && method === 'PATCH') {
-    assertRole(session, ADMIN_ROLES)
+    assertPermission(session, 'compliance.write')
     const body = (await req.json()) as { salesTaxRate?: number }
     if (typeof body.salesTaxRate !== 'number' || body.salesTaxRate < 0 || body.salesTaxRate > 0.5) {
       throw new ApiError(400, 'salesTaxRate must be a number between 0 and 0.5')
@@ -1382,7 +1361,7 @@ async function routeTax(method: string, seg: string[], req: Request): Promise<Re
     return Response.json(await complianceTax.taxSummary(session.tenantId))
   }
   if (seg.length === 2 && seg[1] === 'record' && method === 'POST') {
-    assertRole(session, ADMIN_ROLES)
+    assertPermission(session, 'compliance.write')
     const body = (await req.json()) as complianceTax.RecordTaxInput
     return Response.json(await complianceTax.recordTax(session.tenantId, body))
   }
@@ -1394,11 +1373,12 @@ async function routeCompliance(method: string, seg: string[], req: Request): Pro
   const age = await import('./compliance-age')
 
   if (seg.length === 2 && seg[1] === 'age-verification' && method === 'GET') {
+    assertPermission(session, 'compliance.read')
     return Response.json(await age.getAgeVerificationPolicy(session.tenantId))
   }
   if (seg.length === 2 && seg[1] === 'age-verification' && method === 'PATCH') {
     assertNotBuyer(session)
-    assertRole(session, ADMIN_ROLES)
+    assertPermission(session, 'compliance.write')
     const body = (await req.json()) as Partial<{
       enabled: boolean
       minimumAge: number
@@ -1438,30 +1418,34 @@ async function routeCompliance(method: string, seg: string[], req: Request): Pro
 
   if (seg.length === 2 && seg[1] === 'batches' && method === 'GET') {
     assertNotBuyer(session)
+    assertPermission(session, 'compliance.read')
     return Response.json(await recall.listTenantBatches(session.tenantId))
   }
   if (seg.length === 2 && seg[1] === 'recalls' && method === 'GET') {
     assertNotBuyer(session)
+    assertPermission(session, 'compliance.read')
     const st = url.searchParams.get('status') ?? undefined
     return Response.json(await recall.listBatchRecalls(session.tenantId, st))
   }
   if (seg.length === 2 && seg[1] === 'recalls' && method === 'POST') {
     assertNotBuyer(session)
-    assertRole(session, ADMIN_ROLES)
+    assertPermission(session, 'compliance.write')
     const body = (await req.json()) as InitiateRecallInput
     return Response.json(await recall.initiateBatchRecall(session.tenantId, body))
   }
   if (seg.length === 3 && seg[1] === 'recalls' && method === 'GET') {
     assertNotBuyer(session)
+    assertPermission(session, 'compliance.read')
     return Response.json(await recall.getBatchRecallImpactReport(session.tenantId, seg[2]))
   }
   if (seg.length === 4 && seg[1] === 'recalls' && seg[3] === 'impact-report' && method === 'GET') {
     assertNotBuyer(session)
+    assertPermission(session, 'compliance.read')
     return Response.json(await recall.getBatchRecallImpactReport(session.tenantId, seg[2]))
   }
   if (seg.length === 4 && seg[1] === 'recalls' && seg[3] === 'resolve' && method === 'POST') {
     assertNotBuyer(session)
-    assertRole(session, ADMIN_ROLES)
+    assertPermission(session, 'compliance.write')
     return Response.json(await recall.resolveBatchRecall(session.tenantId, seg[2]))
   }
 
@@ -1474,6 +1458,7 @@ async function routeNotifications(method: string, seg: string[], req: Request): 
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
+    assertPermission(session, 'notifications.read')
     const status = url.searchParams.get('status') ?? undefined
     const channel = url.searchParams.get('channel') ?? undefined
     const event = url.searchParams.get('event') ?? undefined
@@ -1483,13 +1468,13 @@ async function routeNotifications(method: string, seg: string[], req: Request): 
     )
   }
   if (seg.length === 3 && seg[1] === 'providers' && seg[2] === 'status' && method === 'GET') {
-    await requireRole(req, ADMIN_ROLES)
+    await requirePermission(req, 'notifications.read')
     return Response.json(getNotificationProviderStatus())
   }
   if (seg.length === 2 && seg[1] === 'retry' && method === 'POST') {
     const body = (await req.json()) as { id?: string }
     if (!body.id) throw new ApiError(400, 'id required')
-    if (!isAdminStaff(session.role)) {
+    if (!hasPermission(session, 'notifications.write')) {
       const rows = await notifications.list(session.tenantId, { recipient: session.email })
       if (!rows.some((r) => r.id === body.id)) {
         throw new ApiError(403, 'You can only retry notifications sent to your email')
@@ -1498,6 +1483,7 @@ async function routeNotifications(method: string, seg: string[], req: Request): 
     return Response.json(await notifications.retry(session.tenantId, body.id))
   }
   if (seg.length === 2 && seg[1] === 'send' && method === 'POST') {
+    assertPermission(session, 'notifications.write')
     const key = req.headers.get('idempotency-key')?.trim() || undefined
     const body = (await req.json()) as notifications.SendNotificationInput
     return Response.json(await notifications.send(session.tenantId, body, key))
@@ -1506,7 +1492,8 @@ async function routeNotifications(method: string, seg: string[], req: Request): 
 }
 
 async function routeJournalEntries(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, ADMIN_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'finance.read' : 'finance.write')
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await ledger.listJournalEntries(session.tenantId))
@@ -1525,7 +1512,8 @@ async function routeJournalEntries(method: string, seg: string[], req: Request):
 }
 
 async function routeChartAccounts(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, ADMIN_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'finance.read' : 'finance.write')
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await ledger.listChartAccounts(session.tenantId))
@@ -1545,7 +1533,7 @@ async function routeChartAccounts(method: string, seg: string[], req: Request): 
 }
 
 async function routeReports(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, ADMIN_ROLES)
+  const session = await requirePermission(req, 'reports.read')
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'trial-balance' && method === 'GET') {
@@ -1569,7 +1557,8 @@ async function routeReports(method: string, seg: string[], req: Request): Promis
 }
 
 async function routeReportBuilder(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, ADMIN_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'reports.read' : 'reports.write')
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'types' && method === 'GET') {
@@ -1637,6 +1626,7 @@ async function routeReportBuilder(method: string, seg: string[], req: Request): 
 async function routeKpi(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   assertNotBuyer(session)
+  assertPermission(session, 'reports.read')
 
   if (seg.length === 2 && seg[1] === 'snapshots' && method === 'GET') {
     return Response.json(await analytics.listSnapshots(session.tenantId))
@@ -1647,6 +1637,7 @@ async function routeKpi(method: string, seg: string[], req: Request): Promise<Re
 async function routeAnalytics(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   assertNotBuyer(session)
+  assertPermission(session, 'reports.read')
   const url = new URL(req.url)
 
   if (seg.length === 2 && seg[1] === 'kpis' && method === 'GET') {
@@ -1661,7 +1652,7 @@ async function routeAnalytics(method: string, seg: string[], req: Request): Prom
 }
 
 async function routeInternal(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireRole(req, ADMIN_ROLES)
+  const session = await requirePermission(req, 'reports.write')
 
   if (seg.length === 2 && seg[1] === 'refresh' && method === 'POST') {
     const body = (await req.json()) as analytics.RefreshKpiInput
@@ -1671,8 +1662,8 @@ async function routeInternal(method: string, seg: string[], req: Request): Promi
 }
 
 async function routeWebhooks(method: string, seg: string[], req: Request): Promise<Response> {
-  // Outbound webhooks can exfiltrate data — admin only.
-  const session = await requireRole(req, ADMIN_ROLES)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'settings.read' : 'settings.write')
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await webhooks.listWebhooks(session.tenantId))
@@ -1692,8 +1683,8 @@ async function routeWebhooks(method: string, seg: string[], req: Request): Promi
 }
 
 async function routeBankAccounts(method: string, seg: string[], req: Request): Promise<Response> {
-  await requireRole(req, ADMIN_ROLES)
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'finance.read' : 'finance.write')
   const url = new URL(req.url)
   if (seg.length === 1 && method === 'GET') {
     if (url.searchParams.get('summary') === 'true') {
@@ -1738,8 +1729,8 @@ async function routeBankAccounts(method: string, seg: string[], req: Request): P
 }
 
 async function routeFixedAssets(method: string, seg: string[], req: Request): Promise<Response> {
-  await requireRole(req, ADMIN_ROLES)
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'finance.read' : 'finance.write')
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
@@ -1764,8 +1755,7 @@ async function routeFixedAssets(method: string, seg: string[], req: Request): Pr
 }
 
 async function routeAudit(method: string, seg: string[], req: Request): Promise<Response> {
-  await requireRole(req, ADMIN_ROLES)
-  const session = await requireSession(req)
+  const session = await requirePermission(req, 'audit.read')
   const url = new URL(req.url)
   if (seg.length === 1 && method === 'GET') {
     return Response.json(
@@ -1814,8 +1804,8 @@ async function routeOrderTemplates(method: string, seg: string[], req: Request):
 }
 
 async function routePickWaves(method: string, seg: string[], req: Request): Promise<Response> {
-  await requireRole(req, OPS_ROLES)
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'wms.read' : 'wms.write')
   const url = new URL(req.url)
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await wavePicking.listPickWaves(session.tenantId, url.searchParams.get('warehouseId') ?? undefined))
@@ -1840,8 +1830,8 @@ async function routePickWaves(method: string, seg: string[], req: Request): Prom
 }
 
 async function routeBins(method: string, seg: string[], req: Request): Promise<Response> {
-  await requireRole(req, OPS_ROLES)
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'wms.read' : 'wms.write')
   const url = new URL(req.url)
   if (seg.length === 1 && method === 'GET') {
     const warehouseId = url.searchParams.get('warehouseId')
@@ -1878,8 +1868,8 @@ async function routeSavedPaymentMethods(method: string, seg: string[], req: Requ
 }
 
 async function routePos(method: string, seg: string[], req: Request): Promise<Response> {
-  await requireRole(req, ADMIN_ROLES)
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'pos.read' : 'pos.write')
   if (seg.length === 2 && seg[1] === 'registers' && method === 'GET') {
     return Response.json(await pos.listPosRegisters(session.tenantId))
   }
@@ -1900,6 +1890,7 @@ async function routePos(method: string, seg: string[], req: Request): Promise<Re
 
 async function routeFeatures(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
+  assertPermission(session, 'settings.read')
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await featureFlags.getTenantFeaturesDetail(session.tenantId))
   }
@@ -1907,8 +1898,8 @@ async function routeFeatures(method: string, seg: string[], req: Request): Promi
 }
 
 async function routeVolumePrices(method: string, seg: string[], req: Request): Promise<Response> {
-  await requireRole(req, ADMIN_ROLES)
-  const session = await requireSession(req)
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'inventory.read' : 'inventory.write')
   const url = new URL(req.url)
   if (seg.length === 1 && method === 'GET') {
     return Response.json(
@@ -1927,7 +1918,7 @@ async function routeVolumePrices(method: string, seg: string[], req: Request): P
 }
 
 async function routeCelestial(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requireSession(req)
+  const session = await requirePermission(req, 'celestial.chat')
   assertNotBuyer(session)
 
   if (seg.length === 2 && seg[1] === 'status' && method === 'GET') {

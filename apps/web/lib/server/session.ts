@@ -6,6 +6,7 @@ export type SessionUser = {
   tenantId: string
   email: string
   role: string
+  permissions?: string[]
 }
 
 /**
@@ -13,24 +14,35 @@ export type SessionUser = {
  * effect within a minute without a DB round trip on every request.
  */
 const USER_STATE_TTL_MS = 60_000
-const userStateCache = new Map<string, { at: number; active: boolean; role: string }>()
+const userStateCache = new Map<string, { at: number; active: boolean; role: string; permissions: string[] }>()
 
-async function revalidateUser(userId: string, tenantId: string): Promise<{ active: boolean; role: string }> {
+async function revalidateUser(userId: string, tenantId: string): Promise<{ active: boolean; role: string; permissions: string[] }> {
   const cached = userStateCache.get(userId)
   if (cached && Date.now() - cached.at < USER_STATE_TTL_MS) return cached
   try {
     const { authDb } = await import('./db')
     const user = await authDb.user.findFirst({
       where: { id: userId, tenantId },
-      select: { isActive: true, role: true },
+      select: { isActive: true, role: true, permissions: true },
     })
-    const state = { at: Date.now(), active: Boolean(user?.isActive), role: user?.role ?? 'STAFF' }
+    const rawPerms = user?.permissions
+    const permissions: string[] = Array.isArray(rawPerms)
+      ? (rawPerms as string[])
+      : typeof rawPerms === 'string'
+        ? JSON.parse(rawPerms)
+        : []
+    const state = {
+      at: Date.now(),
+      active: Boolean(user?.isActive),
+      role: user?.role ?? 'STAFF',
+      permissions,
+    }
     userStateCache.set(userId, state)
     if (userStateCache.size > 5000) userStateCache.clear()
     return state
   } catch {
     // DB unavailable — fall back to the (already signature-verified) token claims.
-    return { active: true, role: '' }
+    return { active: true, role: '', permissions: [] }
   }
 }
 
@@ -55,12 +67,16 @@ export async function getSession(req: Request): Promise<SessionUser | null> {
     const state = await revalidateUser(sub, tenantId)
     if (!state.active) return null
 
+    const rawTokenPerms = payload.permissions
+    const tokenPerms: string[] = Array.isArray(rawTokenPerms) ? (rawTokenPerms as string[]) : []
+
     return {
       userId: sub,
       tenantId,
       email: typeof email === 'string' ? email : '',
       // DB role wins so demotions don't have to wait for token expiry.
       role: state.role || (typeof role === 'string' ? role : 'STAFF'),
+      permissions: state.permissions && state.permissions.length > 0 ? state.permissions : tokenPerms,
     }
   } catch {
     return null

@@ -213,7 +213,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 8 | Lot / serial recall & compliance UI (beyond basic tracking) |
 | 9 | Deeper sales tax (nexus, exemptions) |
 | 10 | ~~Native PDF documents~~ | ✅ Invoice PDF via pdfkit |
-| 11 | Fine-grained RBAC per module |
+| 11 | ~~Fine-grained RBAC per module~~ | ✅ Role defaults + custom overrides per module, wildcard evaluators, route guards & Settings permission manager |
 | 12 | ~~Report builder / export suite~~ | ✅ Saved reports + CSV for orders, inventory, AR aging |
 
 ### Enterprise — usually phase 2+
