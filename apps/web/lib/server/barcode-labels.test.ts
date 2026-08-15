@@ -9,6 +9,7 @@ import {
   resolveLabelSymbols,
   scanValueForSku,
 } from './barcode-labels'
+import { getGtinLookupCandidates } from './inventory'
 
 test('resolveLabelSize falls back to 4x2', () => {
   assert.equal(resolveLabelSize('4x1'), '4x1')
@@ -79,3 +80,21 @@ test('buildLabelDocumentHtml supports QR-only compact size', () => {
   assert.doesNotMatch(html, /class="code128"/)
   assert.match(html, /layout-compact/)
 })
+
+test('getGtinLookupCandidates expands numeric barcodes into UPC-A, EAN-13, and GTIN-14 permutations', () => {
+  const upcACandidates = getGtinLookupCandidates('096619926626')
+  assert.ok(upcACandidates.includes('096619926626'))
+  assert.ok(upcACandidates.includes('96619926626'))
+  assert.ok(upcACandidates.includes('00096619926626'))
+  assert.ok(upcACandidates.includes('0096619926626'))
+
+  const eanCandidates = getGtinLookupCandidates('0096619926626')
+  assert.ok(eanCandidates.includes('0096619926626'))
+  assert.ok(eanCandidates.includes('096619926626'))
+  assert.ok(eanCandidates.includes('96619926626'))
+  assert.ok(eanCandidates.includes('00096619926626'))
+
+  const nonNumeric = getGtinLookupCandidates('BIN-A1')
+  assert.deepEqual(nonNumeric, ['BIN-A1'])
+})
+

@@ -86,11 +86,23 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
 
   const teardown = useCallback(() => {
     stopLoop()
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
-    engineRef.current?.dispose()
-    engineRef.current = null
-    if (videoRef.current) videoRef.current.srcObject = null
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+    if (engineRef.current) {
+      engineRef.current.dispose()
+      engineRef.current = null
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause()
+      } catch {
+        /* ignore */
+      }
+      videoRef.current.srcObject = null
+    }
+    canvasRef.current = null
     setTorchOn(false)
     setTorchSupported(false)
   }, [stopLoop])
@@ -100,14 +112,20 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
       loopTimer.current = null
       const video = videoRef.current
       const engine = engineRef.current
-      if (
-        !video ||
-        !engine ||
-        pausedRef.current ||
-        decodingRef.current ||
-        video.readyState < 2 || // HAVE_CURRENT_DATA
-        video.videoWidth === 0
-      ) {
+      const stream = streamRef.current
+
+      // If inactive or torn down, completely stop scheduling further ticks.
+      if (!video || !engine || !stream) {
+        return
+      }
+
+      // If paused, halt scheduling until resume() is called.
+      if (pausedRef.current) {
+        return
+      }
+
+      // If currently decoding previous frame or video not ready yet, check again.
+      if (decodingRef.current || video.readyState < 2 || video.videoWidth === 0) {
         loopTimer.current = window.setTimeout(tick, scanIntervalMs)
         return
       }
@@ -119,8 +137,12 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
           canvas = document.createElement('canvas')
           canvasRef.current = canvas
         }
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+        if (canvas.width !== video.videoWidth) {
+          canvas.width = video.videoWidth
+        }
+        if (canvas.height !== video.videoHeight) {
+          canvas.height = video.videoHeight
+        }
         const ctx = canvas.getContext('2d', { willReadFrequently: true })
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
@@ -136,7 +158,10 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
         )
       } finally {
         decodingRef.current = false
-        loopTimer.current = window.setTimeout(tick, scanIntervalMs)
+        // Only reschedule next tick if we are still active and not paused/torn down.
+        if (streamRef.current && engineRef.current && !pausedRef.current) {
+          loopTimer.current = window.setTimeout(tick, scanIntervalMs)
+        }
       }
     }
     stopLoop()
@@ -263,9 +288,12 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
   }, [])
 
   const resume = useCallback(() => {
-    pausedRef.current = false
-    setStatus((s) => (s === 'paused' ? 'scanning' : s))
-  }, [])
+    if (pausedRef.current) {
+      pausedRef.current = false
+      setStatus('scanning')
+      runLoop()
+    }
+  }, [runLoop])
 
   const toggleTorch = useCallback(async () => {
     const track = streamRef.current?.getVideoTracks()[0]

@@ -1,5 +1,11 @@
 import { BrowserMultiFormatReader } from '@zxing/browser'
-import { DecodeHintType, NotFoundException } from '@zxing/library'
+import {
+  DecodeHintType,
+  NotFoundException,
+  ChecksumException,
+  FormatException,
+  ReaderException,
+} from '@zxing/library'
 import type { ScanEngine, RawDetection } from './types'
 import type { BarcodeFormat } from '../types'
 import { fromZXingFormat, toZXingFormats } from './formats'
@@ -33,9 +39,16 @@ export class ZXingEngine implements ScanEngine {
       if (!raw) return null
       return { rawValue: raw, format: fromZXingFormat(result.getBarcodeFormat()) }
     } catch (err) {
-      // "Not found" is the normal per-frame outcome, not an error.
-      if (err instanceof NotFoundException) return null
-      if (err instanceof Error && /not\s*found/i.test(err.message)) return null
+      // Normal per-frame non-detection (no barcode in frame, partial frame, or checksum mismatch during sweep)
+      if (
+        err instanceof NotFoundException ||
+        err instanceof ChecksumException ||
+        err instanceof FormatException ||
+        err instanceof ReaderException
+      ) {
+        return null
+      }
+      if (err instanceof Error && /not\s*found|checksum|format/i.test(err.message)) return null
       throw err
     }
   }

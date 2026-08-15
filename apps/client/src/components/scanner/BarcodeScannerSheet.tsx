@@ -25,6 +25,9 @@ function signalHit() {
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!Ctx) return
     const ctx = new Ctx()
+    if (ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {})
+    }
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = 'sine'
@@ -33,7 +36,9 @@ function signalHit() {
     osc.connect(gain).connect(ctx.destination)
     osc.start()
     osc.stop(ctx.currentTime + 0.09)
-    osc.onended = () => ctx.close()
+    osc.onended = () => {
+      void ctx.close().catch(() => {})
+    }
   } catch {
     /* audio blocked */
   }
@@ -68,6 +73,7 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
   const [lastHit, setLastHit] = useState<ScanResult | null>(null)
   const [manualValue, setManualValue] = useState('')
   const [showManual, setShowManual] = useState(false)
+  const scannerRef = useRef<ReturnType<typeof useScanner> | null>(null)
 
   const emitError = useCallback((err: ScannerError) => onError?.(err), [onError])
 
@@ -87,11 +93,9 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
       }
       signalHit()
       setLastHit(result)
-      if (!continuous && source !== 'manual') scanner.pause()
+      if (!continuous && source !== 'manual') scannerRef.current?.pause()
       onDetected(result)
     },
-    // scanner defined below; safe because accept is only *called* post-mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [continuous, deduper, onDetected],
   )
 
@@ -101,6 +105,7 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
     onDecode: (raw, fmt) => accept(raw, fmt, 'camera'),
     onError: emitError,
   })
+  scannerRef.current = scanner
 
   useKeyboardWedge((value) => accept(value, 'unknown', 'wedge'), open && enableWedge)
 

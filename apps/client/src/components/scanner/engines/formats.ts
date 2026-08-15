@@ -26,7 +26,9 @@ const NATIVE_TO_FORMAT: Record<string, BarcodeFormat> = {
 }
 
 export function fromNativeFormat(native: string): BarcodeFormat {
-  return NATIVE_TO_FORMAT[native] ?? 'unknown'
+  if (!native) return 'unknown'
+  const norm = native.toLowerCase().replace(/-/g, '_')
+  return NATIVE_TO_FORMAT[norm] ?? 'unknown'
 }
 
 export function toNativeFormats(formats: BarcodeFormat[]): string[] {
