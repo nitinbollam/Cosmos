@@ -1,6 +1,11 @@
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 
+/** Card/ACH checkout authorizes payment after order creation — defer fulfillment until paid. */
+export function defersFulfillmentUntilPayment(paymentMethod: string): boolean {
+  return paymentMethod === 'CARD' || paymentMethod === 'ACH'
+}
+
 export async function linkPaymentIntent(tenantId: string, orderId: string, paymentIntentId: string) {
   const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
   if (!order) return

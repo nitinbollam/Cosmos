@@ -19,6 +19,7 @@ import * as dispatch from './dispatch'
 import * as purchasing from './purchasing'
 import * as payments from './payments'
 import * as paymentIdempotency from './payment-idempotency'
+import * as orderPaymentAdmin from './order-payment-admin'
 import * as complianceMsa from './compliance-msa'
 import * as complianceTax from './compliance-tax'
 import type { InitiateRecallInput } from './compliance-recall'
@@ -35,6 +36,7 @@ import * as search from './search'
 import * as orderTemplates from './order-templates'
 import * as orderShipments from './order-shipments'
 import * as savedPaymentMethods from './saved-payment-methods'
+import * as stripeConnect from './stripe-connect'
 import * as wavePicking from './wave-picking'
 import * as binLocations from './bin-locations'
 import * as barcodeLabels from './barcode-labels'
@@ -532,6 +534,48 @@ async function routeOrders(method: string, seg: string[], req: Request): Promise
     await requirePermission(req, 'orders.write')
     return Response.json(await dropShip.createDropShipPurchaseOrders(session.tenantId, seg[1]))
   }
+  if (seg.length === 4 && seg[2] === 'payments' && method === 'POST') {
+    assertRole(session, ADMIN_ROLES)
+    requireIdempotencyKey(req)
+    const body = (await req.json()) as {
+      paymentMethodId?: string
+      amount?: number
+      correlationId: string
+      customerId?: string
+    }
+    const order = await orders.findOrderById(session.tenantId, seg[1])
+    const action = seg[3]
+    if (action === 'stripe') {
+      if (!body.paymentMethodId || !body.correlationId) {
+        throw new ApiError(400, 'paymentMethodId and correlationId required')
+      }
+      return Response.json(
+        await orderPaymentAdmin.collectOrderCardPayment(session.tenantId, seg[1], {
+          paymentMethodId: body.paymentMethodId,
+          amount: body.amount,
+          correlationId: body.correlationId,
+          customerId: body.customerId ?? order.customerId,
+        }),
+      )
+    }
+    if (action === 'confirm-stripe') {
+      const piId = (body as { paymentIntentId?: string }).paymentIntentId
+      if (!piId) throw new ApiError(400, 'paymentIntentId required')
+      return Response.json(await orderPaymentAdmin.completeOrderCardCollection(session.tenantId, seg[1], piId))
+    }
+    if (action === 'refund') {
+      return Response.json(
+        await orderPaymentAdmin.refundOrderPayment(session.tenantId, seg[1], body.correlationId, body.amount),
+      )
+    }
+    if (action === 'capture') {
+      return Response.json(await orderPaymentAdmin.captureOrderPayment(session.tenantId, seg[1], body.correlationId))
+    }
+    if (action === 'void') {
+      return Response.json(await orderPaymentAdmin.voidOrderPayment(session.tenantId, seg[1], body.correlationId))
+    }
+    throw new ApiError(404, 'Order payment action not found')
+  }
   throw new ApiError(404, 'Order route not found')
 }
 
@@ -958,6 +1002,23 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
 
   const session = await requireSession(req)
 
+  if (seg[1] === 'stripe' && seg[2] === 'config' && method === 'GET') {
+    return Response.json(await payments.stripeClientConfig(session.tenantId))
+  }
+  if (seg[1] === 'stripe' && seg[2] === 'connect' && seg[3] === 'status' && method === 'GET') {
+    assertRole(session, ADMIN_ROLES)
+    return Response.json(await stripeConnect.getConnectStatus(session.tenantId))
+  }
+  if (seg[1] === 'stripe' && seg[2] === 'connect' && seg[3] === 'onboard' && method === 'POST') {
+    assertRole(session, ADMIN_ROLES)
+    const body = (await req.json().catch(() => ({}))) as { email?: string }
+    return Response.json(await stripeConnect.startConnectOnboarding(session.tenantId, body.email))
+  }
+  if (seg[1] === 'stripe' && seg[2] === 'connect' && seg[3] === 'refresh' && method === 'POST') {
+    assertRole(session, ADMIN_ROLES)
+    return Response.json(await stripeConnect.createConnectAccountLink(session.tenantId, 'account_update'))
+  }
+
   if (seg.length === 2 && seg[1] === 'authorize' && method === 'POST') {
     const key = requireIdempotencyKey(req)
     const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
@@ -972,6 +1033,17 @@ async function routePayments(method: string, seg: string[], req: Request): Promi
     const result = await payments.authorize(session.tenantId, body)
     await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
     return Response.json(result)
+  }
+
+  if (seg.length === 2 && seg[1] === 'confirm' && method === 'POST') {
+    requireIdempotencyKey(req)
+    const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
+    const buyerCustomerId = isPortalBuyer(session.role) ? await requirePortalCustomerId(session) : undefined
+    return Response.json(
+      await payments.completeCardAuthorization(session.tenantId, body.paymentIntentId, body.correlationId, {
+        buyerCustomerId,
+      }),
+    )
   }
 
   // Capture, void, and refund are back-office operations.
@@ -1662,8 +1734,16 @@ async function routeInternal(method: string, seg: string[], req: Request): Promi
 }
 
 async function routeWebhooks(method: string, seg: string[], req: Request): Promise<Response> {
-  const isRead = method === 'GET'
-  const session = await requirePermission(req, isRead ? 'settings.read' : 'settings.write')
+  if (seg[1] === 'stripe' && seg[2] === 'connect' && method === 'POST') {
+    const sig = req.headers.get('stripe-signature') ?? ''
+    const raw = Buffer.from(await req.arrayBuffer())
+    const result = stripeConnect.handleStripeConnectWebhook(raw, sig)
+    return Response.json(result)
+  }
+
+  // Outbound webhook writes can exfiltrate data — keep admin-only protections.
+  const session =
+    method === 'GET' ? await requirePermission(req, 'settings.read') : await requireRole(req, ADMIN_ROLES)
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await webhooks.listWebhooks(session.tenantId))

@@ -14,7 +14,7 @@
   "dependencies": {
     "@pleros/analytics-engine": "*",
     "@pleros/types": "*",
-    "@prisma/client": "^6.9.0",
+    "@prisma/client": "^6.19.3",
     "bcrypt": "^5.1.1",
     "bwip-js": "^4.11.2",
     "date-fns": "^3.6.0",
@@ -28,7 +28,7 @@
     "@types/node": "^20.14.10",
     "@types/pdfkit": "^0.17.6",
     "eslint": "^9.39.4",
-    "prisma": "^6.9.0",
+    "prisma": "^6.19.3",
     "typescript": "^5.5.3"
   }
 }
