@@ -30,11 +30,17 @@ export async function requirePortalCustomerId(session: SessionUser): Promise<str
 
 export async function getAuthProfile(session: SessionUser) {
   const customer = await crm.findCustomerByEmail(session.tenantId, session.email)
+  const { permissionsForRole } = await import('./permissions')
+  const permissions =
+    Array.isArray(session.permissions) && session.permissions.length > 0
+      ? session.permissions
+      : permissionsForRole(session.role)
   return {
     userId: session.userId,
     email: session.email,
     role: session.role,
     tenantId: session.tenantId,
+    permissions,
     customerId: customer?.id ?? null,
     customerName: customer?.name ?? null,
     isPortalBuyer: isPortalBuyer(session.role),
