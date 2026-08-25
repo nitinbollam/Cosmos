@@ -1184,50 +1184,114 @@ async function routeWms(method: string, seg: string[], req: Request): Promise<Re
   }
 
   if (seg[1] === 'receiving') {
-    if (seg.length === 2 && method === 'GET') {
+    const isSessions = seg[2] === 'sessions'
+    const id = isSessions ? seg[3] : seg[2]
+    const sub = isSessions ? seg[4] : seg[3]
+
+    if ((seg.length === 2 || (seg.length === 3 && isSessions)) && method === 'GET') {
       return Response.json(
-        await wmsReceiving.listReceivingSessions(session.tenantId, url.searchParams.get('warehouseId') ?? undefined),
+        await wmsReceiving.listReceivingSessions(session.tenantId, url.searchParams.get('status') ?? undefined),
       )
     }
-    if (seg.length === 2 && method === 'POST') {
-      const body = (await req.json()) as Parameters<typeof wmsReceiving.createReceivingSession>[2]
-      return Response.json(await wmsReceiving.createReceivingSession(session.tenantId, session.userId, body), {
-        status: 201,
-      })
+    if ((seg.length === 2 || (seg.length === 3 && isSessions)) && method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as {
+        warehouseId?: string
+        purchaseOrderId?: string
+        poId?: string
+        asnId?: string
+      }
+      const warehouseId = body.warehouseId || (await wmsReceiving.resolveDefaultWarehouseId(session.tenantId))
+      const poId = body.purchaseOrderId ?? body.poId
+      return Response.json(
+        await wmsReceiving.startReceivingSession(session.tenantId, warehouseId, session.userId, poId, body.asnId),
+        { status: 201 },
+      )
     }
-    if (seg.length === 3 && method === 'GET') {
-      return Response.json(await wmsReceiving.getReceivingSession(session.tenantId, seg[2]))
+    if (((seg.length === 3 && !isSessions) || (seg.length === 4 && isSessions)) && method === 'GET') {
+      return Response.json(await wmsReceiving.getReceivingSession(id, session.tenantId))
     }
-    if (seg.length === 4 && seg[3] === 'line' && method === 'POST') {
-      const body = (await req.json()) as Parameters<typeof wmsReceiving.recordReceivedLine>[2]
-      return Response.json(await wmsReceiving.recordReceivedLine(session.tenantId, seg[2], body))
+    if ((sub === 'scan' || sub === 'line') && method === 'POST') {
+      const body = (await req.json()) as {
+        code?: string
+        barcode?: string
+        quantity?: number
+        receivedQty?: number
+        damagedQty?: number
+        batchId?: string
+        expiryDate?: string
+        locationId?: string
+      }
+      return Response.json(
+        await wmsReceiving.scanReceivingItem(id, session.tenantId, session.userId, {
+          barcode: (body.barcode ?? body.code ?? '').trim(),
+          receivedQty: body.receivedQty ?? body.quantity ?? 1,
+          damagedQty: body.damagedQty,
+          batchId: body.batchId,
+          expiryDate: body.expiryDate,
+          locationId: body.locationId,
+        }),
+      )
     }
-    if (seg.length === 4 && seg[3] === 'complete' && method === 'POST') {
-      return Response.json(await wmsReceiving.completeReceiving(session.tenantId, seg[2]))
+    if (sub === 'import' && method === 'POST') {
+      const body = (await req.json()) as { rows?: Parameters<typeof wmsReceiving.importReceivingItems>[3] }
+      return Response.json(
+        await wmsReceiving.importReceivingItems(id, session.tenantId, session.userId, body.rows ?? []),
+      )
+    }
+    if (sub === 'complete' && (method === 'PATCH' || method === 'POST')) {
+      const body = ((await req.json().catch(() => ({}))) ?? {}) as { notes?: string }
+      return Response.json(
+        await wmsReceiving.completeReceivingSession(id, session.tenantId, body.notes, session.userId),
+      )
     }
   }
 
   if (seg[1] === 'putaway') {
-    if (seg.length === 2 && method === 'GET') {
+    const isTasks = seg[2] === 'tasks'
+    const id = isTasks ? seg[3] : seg[2]
+    const sub = isTasks ? seg[4] : seg[3]
+
+    if ((seg.length === 2 || (seg.length === 3 && isTasks)) && method === 'GET') {
       return Response.json(
-        await wmsPutaway.listPutawayTasks(session.tenantId, {
-          status: url.searchParams.get('status') ?? undefined,
-          warehouseId: url.searchParams.get('warehouseId') ?? undefined,
-        }),
+        await wmsPutaway.listPutawayTasks(
+          session.tenantId,
+          url.searchParams.get('warehouseId') ?? undefined,
+          url.searchParams.get('status') ?? undefined,
+        ),
       )
     }
-    if (seg.length === 3 && method === 'GET') {
-      return Response.json(await wmsPutaway.getPutawayTask(session.tenantId, seg[2]))
+    if (((seg.length === 3 && !isTasks) || (seg.length === 4 && isTasks)) && method === 'GET') {
+      const tasks = await wmsPutaway.listPutawayTasks(session.tenantId)
+      const task = tasks.find((t) => t.id === id)
+      if (!task) throw new ApiError(404, 'Putaway task not found')
+      return Response.json(task)
     }
-    if (seg.length === 4 && seg[3] === 'suggest-bin' && method === 'GET') {
+    if (sub === 'suggest-bin' && method === 'GET') {
       const skuId = url.searchParams.get('skuId')
       const warehouseId = url.searchParams.get('warehouseId')
       if (!skuId || !warehouseId) throw new ApiError(400, 'skuId and warehouseId required')
       return Response.json(await wmsPutaway.suggestPutawayBin(session.tenantId, warehouseId, skuId))
     }
-    if (seg.length === 4 && seg[3] === 'confirm' && method === 'POST') {
-      const body = (await req.json()) as Parameters<typeof wmsPutaway.confirmPutaway>[3]
-      return Response.json(await wmsPutaway.confirmPutaway(session.tenantId, seg[2], session.userId, body))
+    if (sub === 'lines' && (method === 'PATCH' || method === 'POST')) {
+      const lineId = isTasks ? seg[5] : seg[4]
+      const body = ((await req.json().catch(() => ({}))) ?? {}) as { actualBinId?: string; actualBinCode?: string }
+      return Response.json(
+        await wmsPutaway.confirmPutawayLine(session.tenantId, id, lineId, {
+          actualBinId: body.actualBinId,
+          actualBinCode: body.actualBinCode,
+          performedBy: session.userId,
+        }),
+      )
+    }
+    if (sub === 'confirm' && method === 'POST') {
+      const body = (await req.json()) as { lineId: string; actualBinId?: string; actualBinCode?: string }
+      return Response.json(
+        await wmsPutaway.confirmPutawayLine(session.tenantId, id, body.lineId, {
+          actualBinId: body.actualBinId,
+          actualBinCode: body.actualBinCode,
+          performedBy: session.userId,
+        }),
+      )
     }
   }
 
