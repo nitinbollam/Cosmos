@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { BrowserQRCodeSvgWriter } from '@zxing/browser'
+import { useMemo, useState } from 'react'
+import { QRCodeEncoder, QRCodeDecoderErrorCorrectionLevel } from '@zxing/library'
 import { PlerosDialogModal } from '@/components/pleros/radix-overlays'
 import { Link } from 'react-router-dom'
 
@@ -8,24 +8,44 @@ interface MobileScannerModalProps {
   onClose: () => void
 }
 
+function generateQrSvgData(text: string, quietZone = 2): { viewBox: string; path: string } {
+  try {
+    const code = QRCodeEncoder.encode(text, QRCodeDecoderErrorCorrectionLevel.M)
+    const matrix = code.getMatrix()
+    if (!matrix) return { viewBox: '0 0 200 200', path: '' }
+
+    const width = matrix.getWidth()
+    const height = matrix.getHeight()
+    const totalWidth = width + quietZone * 2
+    const totalHeight = height + quietZone * 2
+
+    let d = ''
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (matrix.get(x, y) === 1) {
+          const px = x + quietZone
+          const py = y + quietZone
+          d += `M${px} ${py}h1v1h-1z `
+        }
+      }
+    }
+
+    return {
+      viewBox: `0 0 ${totalWidth} ${totalHeight}`,
+      path: d.trim(),
+    }
+  } catch (e) {
+    console.error('Failed to generate QR path', e)
+    return { viewBox: '0 0 200 200', path: '' }
+  }
+}
+
 export function MobileScannerModal({ open, onClose }: MobileScannerModalProps) {
-  const qrRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const targetPath = '/m/warehouse/receiving'
   const fullUrl = typeof window !== 'undefined' ? `${window.location.origin}${targetPath}` : targetPath
 
-  useEffect(() => {
-    if (!open || !qrRef.current) return
-    try {
-      const writer = new BrowserQRCodeSvgWriter()
-      const svg = writer.write(fullUrl, 200, 200)
-      svg.setAttribute('style', 'border-radius: 8px; background: #ffffff; padding: 8px;')
-      qrRef.current.innerHTML = ''
-      qrRef.current.appendChild(svg)
-    } catch (e) {
-      console.error('Failed to generate QR code', e)
-    }
-  }, [open, fullUrl])
+  const qrData = useMemo(() => generateQrSvgData(fullUrl), [fullUrl])
 
   const copyUrl = async () => {
     try {
@@ -45,10 +65,24 @@ export function MobileScannerModal({ open, onClose }: MobileScannerModalProps) {
         </p>
 
         <div className="flex justify-center my-4">
-          <div
-            ref={qrRef}
-            className="p-3 rounded-xl bg-white shadow-lg inline-flex items-center justify-center min-w-[216px] min-h-[216px]"
-          />
+          <div className="p-3 rounded-xl bg-white shadow-lg inline-flex items-center justify-center min-w-[216px] min-h-[216px]">
+            {qrData.path ? (
+              <svg
+                viewBox={qrData.viewBox}
+                className="w-48 h-48"
+                shapeRendering="crispEdges"
+                style={{ display: 'block' }}
+                aria-label="QR Code for mobile warehouse scanner"
+              >
+                <rect width="100%" height="100%" fill="#ffffff" />
+                <path d={qrData.path} fill="#000000" />
+              </svg>
+            ) : (
+              <div className="w-48 h-48 flex items-center justify-center text-xs text-slate-500 font-mono">
+                {fullUrl}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 text-left">
