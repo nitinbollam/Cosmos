@@ -10,6 +10,8 @@ import { AdminOrderPaymentPanel } from '@/components/admin-order-payment-panel'
 type LineItem = {
   id: string
   skuId: string
+  skuCode?: string | null
+  skuName?: string | null
   warehouseId?: string
   quantity: number
   quantityAllocated?: number
@@ -83,7 +85,7 @@ type ShipmentRow = {
   carrier?: string | null
   trackingNumber?: string | null
   shippedAt?: string | null
-  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number }>
+  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; skuCode?: string | null; skuName?: string | null }>
 }
 
 type ShipmentDraft = {
@@ -450,7 +452,15 @@ export default function OrderDetailPage() {
                   const lt = li.quantity * Number(li.unitPrice)
                   return (
                     <tr key={li.id}>
-                      <td className="font-mono text-xs">{li.skuId.slice(-14)}</td>
+                      <td>
+                        <div className="font-semibold text-pleros-white">
+                          {li.skuName || li.skuCode || li.skuId}
+                        </div>
+                        <div className="font-mono text-xs text-pleros-text-3">
+                          {li.skuCode ? `${li.skuCode} · ` : ''}
+                          {li.skuId}
+                        </div>
+                      </td>
                       <td>{li.quantity}</td>
                       <td>{li.quantityAllocated ?? 0}</td>
                       <td>{li.quantityBackordered ?? 0}</td>
@@ -551,7 +561,12 @@ export default function OrderDetailPage() {
                       {s.trackingNumber ? ` · ${s.trackingNumber}` : ''}
                     </p>
                     <p className="text-xs text-pleros-text-3 mt-1">
-                      {(s.lineItems ?? []).map((li) => `${li.quantity}× ${li.skuId.slice(-8)}`).join(' · ')}
+                      {(s.lineItems ?? [])
+                        .map(
+                          (li) =>
+                            `${li.quantity}× ${li.skuCode || li.skuName || li.skuId.slice(-8)}`,
+                        )
+                        .join(' · ')}
                     </p>
                   </li>
                 ))}

@@ -214,7 +214,7 @@ export default function PosPage() {
   const registers = registersQ.data ?? []
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="pos-page p-6 space-y-6 max-w-6xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-pleros-white font-display">Point of sale</h1>

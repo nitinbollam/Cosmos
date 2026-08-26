@@ -21,6 +21,8 @@ apps/client/public/index.html
 !.env.example
 
 # embedded SQLite (dev)
+.data/
+apps/.data/
 apps/web/.data/
 apps/client/.env
 apps/client/dist/

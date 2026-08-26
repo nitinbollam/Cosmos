@@ -9,6 +9,8 @@ import { useCartStore } from '@/stores/cart.store'
 type Line = {
   id: string
   skuId: string
+  skuCode?: string | null
+  skuName?: string | null
   warehouseId: string
   quantity: number
   unitPrice: string | number
@@ -370,9 +372,17 @@ export default function StorefrontOrderDetailPage() {
             <tbody>
               {o.lineItems.map((li) => (
                 <tr key={li.id}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{li.skuId}</td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: 'var(--c-heading)' }}>
+                      {li.skuName || li.skuCode || li.skuId}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--c-text-3)' }}>
+                      {li.skuCode ? `${li.skuCode} · ` : ''}
+                      {li.skuId}
+                    </div>
+                  </td>
                   <td>{li.quantity}</td>
-                  <td>${Number(li.unitPrice).toFixed(4)}</td>
+                  <td>${Number(li.unitPrice).toFixed(2)}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{li.warehouseId.slice(0, 8)}…</td>
                 </tr>
               ))}

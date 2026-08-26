@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 
-type Line = { skuId: string; quantity: number; unitPrice: string | number }
+type Line = { skuId: string; skuCode?: string | null; skuName?: string | null; quantity: number; unitPrice: string | number }
 type OrderDetail = { id: string; status: string; totalAmount: string | number; lineItems: Line[]; notes?: string | null }
 
 export default function OrderConfirmationPage() {
@@ -52,7 +52,7 @@ export default function OrderConfirmationPage() {
             <h3 style={{ marginTop: 0 }}>Summary</h3>
             {order.lineItems.map((li) => (
               <div key={li.skuId} style={{ fontSize: 14, marginBottom: 8 }}>
-                {li.skuId.slice(0, 8)}… × {li.quantity} — ${(Number(li.unitPrice) * li.quantity).toFixed(2)}
+                <span style={{ fontWeight: 600 }}>{li.skuName || li.skuCode || li.skuId.slice(0, 8)}</span> × {li.quantity} — ${(Number(li.unitPrice) * li.quantity).toFixed(2)}
               </div>
             ))}
             <p style={{ fontWeight: 700 }}>Total ${Number(order.totalAmount).toFixed(2)}</p>

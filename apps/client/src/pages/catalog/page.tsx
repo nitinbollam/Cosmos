@@ -20,7 +20,32 @@ type Sku = {
 
 type SkuList = { items: Sku[]; total: number; page: number; pageSize: number; hasMore: boolean }
 
-type Warehouse = { id: string; name: string; code?: string }
+type Warehouse = {
+  id: string
+  name: string
+  code?: string
+  isDefault?: boolean
+  totalAvailable?: number
+  inStockSkuCount?: number
+}
+
+function pickBestWarehouse(list: Warehouse[]): string {
+  if (list.length === 0) return ''
+  // 1. Default warehouse if it has stock
+  const defWithStock = list.find((w) => w.isDefault && (w.totalAvailable ?? 0) > 0)
+  if (defWithStock) return defWithStock.id
+  // 2. Warehouse with highest available stock
+  const stocked = [...list].filter((w) => (w.totalAvailable ?? 0) > 0)
+  if (stocked.length > 0) {
+    stocked.sort((a, b) => (b.totalAvailable ?? 0) - (a.totalAvailable ?? 0))
+    return stocked[0]!.id
+  }
+  // 3. Warehouse marked isDefault
+  const def = list.find((w) => w.isDefault)
+  if (def) return def.id
+  // 4. First warehouse
+  return list[0]?.id || ''
+}
 
 function toPrice(n: string | number): number {
   if (typeof n === 'number') return n
@@ -59,7 +84,7 @@ export default function CatalogPage() {
         const [cat, wh] = await Promise.all([api.get<string[]>('/skus/categories'), api.get<Warehouse[]>('/warehouses')])
         setCategories(cat)
         setWarehouses(wh)
-        setWarehouseId((prev) => prev || wh[0]?.id || '')
+        setWarehouseId((prev) => prev || pickBestWarehouse(wh))
       } catch {
         /* non-fatal */
       }
@@ -108,7 +133,7 @@ export default function CatalogPage() {
     return f
   }, [items, sort, priceMin, priceMax])
 
-  const defaultWh = warehouseId || warehouses[0]?.id || ''
+  const defaultWh = warehouseId || pickBestWarehouse(warehouses)
 
   function onAdd(sku: Sku) {
     if (!defaultWh) {
@@ -178,11 +203,14 @@ export default function CatalogPage() {
           }}
           style={{ marginBottom: 16 }}
         >
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name}
-            </option>
-          ))}
+          {warehouses.map((w) => {
+            const stockLabel = typeof w.totalAvailable === 'number' ? ` (${w.totalAvailable} in stock)` : ''
+            return (
+              <option key={w.id} value={w.id}>
+                {w.name}{stockLabel}
+              </option>
+            )
+          })}
         </select>
         <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <input type="checkbox" checked={inStockOnly} onChange={(e) => { setInStockOnly(e.target.checked); setPage(1) }} />

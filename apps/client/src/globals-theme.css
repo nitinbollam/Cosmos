@@ -183,6 +183,10 @@ h6 {
   background: var(--c-accent);
   box-shadow: 0 0 0 2px var(--c-surface-1);
 }
+body:has(.pos-page) .celestial-fab,
+.pos-page ~ .celestial-fab {
+  display: none !important;
+}
 .celestial-panel {
   position: fixed;
   right: 20px;

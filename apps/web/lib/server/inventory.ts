@@ -515,8 +515,31 @@ export async function importSkus(tenantId: string, rows: CreateSkuInput[]) {
   return { created, failed: errors.length, errors }
 }
 
-export function listWarehouses(tenantId: string) {
-  return inventoryDb.warehouse.findMany({ where: { tenantId } })
+export async function listWarehouses(tenantId: string) {
+  const warehouses = await inventoryDb.warehouse.findMany({
+    where: { tenantId },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+  })
+  const stockSummary = await inventoryDb.stockLevel.groupBy({
+    by: ['warehouseId'],
+    where: { tenantId, quantityAvailable: { gt: 0 } },
+    _sum: { quantityAvailable: true },
+    _count: { skuId: true },
+  })
+  const stockMap = new Map(
+    stockSummary.map((s) => [
+      s.warehouseId,
+      {
+        totalAvailable: s._sum.quantityAvailable ?? 0,
+        inStockSkuCount: s._count.skuId ?? 0,
+      },
+    ]),
+  )
+  return warehouses.map((w) => ({
+    ...w,
+    totalAvailable: stockMap.get(w.id)?.totalAvailable ?? 0,
+    inStockSkuCount: stockMap.get(w.id)?.inStockSkuCount ?? 0,
+  }))
 }
 
 export async function findWarehouseById(tenantId: string, id: string) {

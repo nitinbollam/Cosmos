@@ -187,7 +187,28 @@ export async function findOrderById(tenantId: string, id: string, opts?: { buyer
   if (opts?.buyerCustomerId && order.customerId !== opts.buyerCustomerId) {
     throw new ApiError(404, 'Order not found')
   }
-  return enrichOrderWithPaymentDetails(tenantId, order)
+
+  const skuIds = [...new Set(order.lineItems.map((li) => li.skuId))]
+  const { inventoryDb } = await import('./db')
+  const skus =
+    skuIds.length > 0
+      ? await inventoryDb.sKU.findMany({ where: { tenantId, id: { in: skuIds } } })
+      : []
+  const skuMap = new Map(skus.map((s) => [s.id, s]))
+
+  const enrichedOrder = {
+    ...order,
+    lineItems: order.lineItems.map((li) => {
+      const sku = skuMap.get(li.skuId)
+      return {
+        ...li,
+        skuCode: sku?.code ?? null,
+        skuName: sku?.name ?? null,
+      }
+    }),
+  }
+
+  return enrichOrderWithPaymentDetails(tenantId, enrichedOrder)
 }
 
 export async function confirmOrder(tenantId: string, id: string) {

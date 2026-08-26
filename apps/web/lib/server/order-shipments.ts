@@ -3,9 +3,41 @@ import { orderDb } from './db'
 import { ApiError } from './session'
 
 export async function listOrderShipments(tenantId: string, orderId: string) {
-  return orderDb.orderShipment.findMany({
+  const rows = await orderDb.orderShipment.findMany({
     where: { tenantId, orderId },
     orderBy: { shipmentNo: 'asc' },
+  })
+  const skuIds = [
+    ...new Set(
+      rows.flatMap((r) =>
+        Array.isArray(r.lineItems)
+          ? (r.lineItems as Array<{ skuId?: string }>).map((l) => l.skuId).filter(Boolean)
+          : [],
+      ),
+    ),
+  ] as string[]
+  const { inventoryDb } = await import('./db')
+  const skus =
+    skuIds.length > 0
+      ? await inventoryDb.sKU.findMany({ where: { tenantId, id: { in: skuIds } } })
+      : []
+  const skuMap = new Map(skus.map((s) => [s.id, s]))
+
+  return rows.map((r) => {
+    const rawItems = Array.isArray(r.lineItems)
+      ? (r.lineItems as Array<{ skuId: string; warehouseId: string; quantity: number }>)
+      : []
+    return {
+      ...r,
+      lineItems: rawItems.map((li) => {
+        const sku = skuMap.get(li.skuId)
+        return {
+          ...li,
+          skuCode: sku?.code ?? null,
+          skuName: sku?.name ?? null,
+        }
+      }),
+    }
   })
 }
 

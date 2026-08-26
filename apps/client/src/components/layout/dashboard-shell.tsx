@@ -90,7 +90,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="pleros-admin-content">{children}</main>
       </div>
-      {!pathname.startsWith('/admin/celestial') ? <CelestialChat surface="admin" variant="floating" /> : null}
+      {!pathname.startsWith('/admin/celestial') && !pathname.startsWith('/admin/pos') ? (
+        <CelestialChat surface="admin" variant="floating" />
+      ) : null}
     </div>
   )
 }
