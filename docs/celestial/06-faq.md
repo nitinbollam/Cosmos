@@ -1,187 +1,67 @@
-# Common Questions FAQ (LLM Knowledge Base)
+# Pleros FAQ & Troubleshooting Guide (LLM Knowledge Base)
 
-Frequently asked questions with direct answers. Celestial should use these for quick, accurate responses.
+Answers to frequently asked operational, setup, and troubleshooting questions across Pleros.
 
-**Keywords:** FAQ, common questions, help, how do I, what is, where is, troubleshooting
-
----
-
-## What is Pleros?
-
-Pleros is a wholesale ERP and distribution platform for SMB distributors. It includes inventory, orders, warehouse operations, purchasing, CRM, dispatch, finance (AR/AP/GL), a B2B buyer portal, mobile apps, and the Celestial AI assistant. Everything runs on http://localhost:4000 in local dev.
+**Keywords:** FAQ, troubleshooting, how to, questions, login, demo accounts, barcodes, scanner, wave picking, 3-way match, labels, proof of delivery
 
 ---
 
-## How do I log in?
+## 1. Demo Accounts & How to Log In
 
-| Role | URL | Email | Password |
-|------|-----|-------|----------|
-| Admin | `/admin/login` | `admin@pleros.local` | `admin1234` |
-| Buyer | `/login` | `buyer@acme-retail.com` | `buyer1234` |
-| Warehouse mobile | `/m/login` | `warehouse@pleros.local` | `warehouse1234` |
-| Driver mobile | `/m/login` | `driver@pleros.local` | `driver1234` |
-| Sales mobile | `/m/login` | `sales@pleros.local` | `sales1234` |
-
-Run `npm run seed` first if accounts don't exist.
-
----
-
-## How does POS work in Pleros?
-
-POS (Point of Sale) is **admin in-store checkout** at `/admin/pos` — not the B2B buyer shop.
-
-**Steps:**
-1. Open Admin → POS
-2. Select register and customer (walk-in customer exists in seed)
-3. Search/add SKUs to cart
-4. Pay with cash, card, or check
-5. Print receipt after checkout
-
-POS creates a real order and payment in the system. B2B buyers use `/catalog` → `/checkout` instead.
+| Role | Email | Password | Surface & URL |
+| :--- | :--- | :--- | :--- |
+| **Admin / Manager** | `admin@pleros.local` | `Admin123!` | `/admin/login` → `/admin` |
+| **Accountant / Finance** | `accountant@pleros.local` | `Accountant123!` | `/admin/login` → `/admin/finance` |
+| **Warehouse Floor** | `warehouse@pleros.local` | `Warehouse123!` | `/m/login` → `/m/warehouse` |
+| **Delivery Driver** | `driver@pleros.local` | `Driver123!` | `/m/login` → `/m/delivery` |
+| **Field Sales Rep** | `sales@pleros.local` | `Sales123!` | `/m/login` → `/m/sales` |
+| **B2B Buyer** | `buyer@example.com` | `Buyer123!` | `/login` → `/catalog` |
 
 ---
 
-## How does order fulfillment work?
+## 2. Common Operational Questions
 
-1. Buyer or POS creates order (**PENDING**)
-2. Admin **confirms** order → inventory allocated, pick tasks created
-3. Warehouse **picks** items (Fulfillment or `/m/warehouse`) using bin-directed pick lines
-4. Staff **packs** and **ships** — shipments with carrier tracking created
-5. **Invoice auto-issued** on ship; GL posts AR
-6. Driver **delivers** via dispatch/mobile; buyer sees tracking on order detail
-
----
-
-## What warehouses exist in the demo?
-
-After seeding, demo warehouses include:
-- **MAIN** — Main Warehouse (Dallas, TX) — default
-- **EAST** — East Coast DC — Newark, NJ
-
-View in Settings → Warehouses or ask Celestial "What warehouses do we have?"
+### Q: How do I create and execute a Pick Wave?
+1. Navigate to **Warehouse Operations** (`/admin/warehouse`) and click the **Pick Waves** tab.
+2. Select pending orders eligible for fulfillment and click **Create Wave**.
+3. Pleros consolidates line items and sequences a single-pass travel path sorted by aisle and bin codes (`A-01-01` → `A-01-02`).
+4. Warehouse staff open the wave on mobile (`/m/warehouse`), scan SKUs as they pick, and click **Complete Wave**.
 
 ---
 
-## How do returns (RMA) work?
-
-On admin order detail (`/admin/orders/:id`), use **Process return** modal:
-- Select lines and return quantities
-- System restocks inventory, creates credit memo, updates line `returnedQty`
-- Order may move to **RETURNED** status
-- GL credit memo posts if configured
+### Q: How does the Mobile Barcode Scanner connect?
+1. Open **Warehouse** (`/admin/warehouse`) or **Receiving** (`/m/warehouse/receiving`).
+2. Click **Connect Mobile Receiving Scanner**.
+3. A QR code is generated instantly. Scan the QR code with your phone or tablet camera to open the synced mobile receiving interface.
+4. The scanner uses native camera video streams to scan Code 128, QR codes, UPC-A, and EAN-13 barcodes in real time.
 
 ---
 
-## How does invoicing work?
-
-- Invoices are **auto-created when an order ships**
-- Appear in Finance → AR tab (admin) and `/invoices` (buyer)
-- Buyers can pay balance via record payment or Stripe card
-- PDF download: native PDF at `GET /invoices/:id/pdf` (print preview HTML at `/invoices/:id/html`)
-- GL: Dr AR / Cr Revenue on issue; Dr Cash / Cr AR on payment
+### Q: How do B2B Contract Prices work?
+1. In **CRM** (`/admin/crm`), select a customer account and navigate to **Contract Pricing**.
+2. Set custom negotiated prices or volume tier discounts for specific SKUs.
+3. When the customer logs into the **B2B Storefront** (`/catalog`), product cards automatically display their negotiated price with an emerald **Contract Tier** badge and strikethrough list prices.
 
 ---
 
-## How does contract pricing work?
-
-Admin sets custom SKU prices per customer in CRM customer detail. Logged-in buyers see contract prices in catalog and checkout. Server validates prices on checkout — buyers cannot override prices client-side.
-
----
-
-## How does wave picking work?
-
-1. Admin → Warehouse → Wave picking tab
-2. Create wave from pending pick tasks
-3. Start wave — system computes **pick path** sorted by bin location
-4. Pickers follow bin order on admin or mobile `/m/warehouse`
-5. Complete wave when all tasks done
+### Q: How does 3-Way Purchase Matching prevent billing errors?
+1. When receiving goods on the dock, staff scan the physical PO shipment to record received quantities.
+2. When the supplier sends their vendor bill, enter the invoice in **Purchasing** (`/admin/purchasing`) or **Finance** (`/admin/finance`).
+3. Pleros verifies:
+   - Billed quantity $\le$ Received quantity
+   - Billed unit price $\le$ Approved PO unit price
+4. If matched, the bill is authorized for payment. If discrepancies occur, an `EXCEPTION` badge blocks payment until reviewed.
 
 ---
 
-## How do I check low stock?
-
-- Admin dashboard shows low-stock alerts
-- Inventory module lists SKUs below reorder point
-- Ask Celestial: "What's low on stock?" (uses `list_low_stock` tool)
-- Create PO from alert: `/admin/purchasing?skuId=` pre-fills reorder qty
+### Q: How do I print thermal barcode labels for inventory?
+1. In **Inventory** (`/admin/inventory`), find the SKU and click **Print Label** (or visit `/skus/:id/label`).
+2. Select your label format size (`4x2`, `4x1`, `3x2`, or `2x1` inches).
+3. Pleros emits high-resolution SVG Code 128 barcodes and 2D QR codes formatted for direct printing to Zebra, Rollo, or standard thermal label printers.
 
 ---
 
-## How do quotes work for buyers?
-
-1. Buyer creates quote at `/quotes/new` from catalog
-2. Quote goes through approval: OPEN → PENDING_APPROVAL → APPROVED
-3. Admin may send counter-offers; buyer accepts on quote detail
-4. Submit approved quote → converts to order
-
----
-
-## How do I enable Celestial AI?
-
-1. Log in as admin
-2. Settings → Features → enable **celestial** flag
-3. Set `OPENROUTER_API_KEY` in `.env` for full LLM answers (optional — mock mode works with tools)
-4. Open `/admin/celestial` or click ✦ floating button
-
----
-
-## Why does Celestial show mock mode?
-
-Mock mode appears when no LLM API key is configured. Celestial still answers **data questions** via live tools and structured tables. For natural-language how-to answers, set `OPENROUTER_API_KEY` and `CELESTIAL_PROVIDER=openrouter` in `.env`, then restart dev server.
-
----
-
-## How do I run Pleros locally?
-
-```bash
-npm install
-cp .env.example .env
-npm run db:setup && npm run db:generate && npm run db:migrate && npm run seed
-npm run dev
-```
-
-Open http://localhost:4000. UI and API share port 4000.
-
----
-
-## What's the difference between Fulfillment and Warehouse?
-
-- **Fulfillment** (`/admin/fulfillment`) — operational queue for order pick/pack/dispatch tasks
-- **Warehouse** (`/admin/warehouse`) — broader WMS: receiving, cycle counts, wave picking, bin locations
-
-Both work with the same underlying WMS pick tasks; Warehouse adds inbound and accuracy workflows.
-
----
-
-## What's the difference between AR and AP?
-
-- **AR (Accounts Receivable)** — money customers owe you (sales invoices)
-- **AP (Accounts Payable)** — money you owe suppliers (vendor bills from PO receive)
-
-Both are in Finance module with separate tabs. GL auto-posts journal entries for issue, receive, and payment events.
-
----
-
-## How do mobile apps work offline?
-
-Mobile PWA uses a service worker (`sw.js`) that precaches the app shell and hashed assets, plus a localStorage action queue. Enqueued offline actions call `SyncManager.register('pleros-offline-queue')` and replay when connectivity returns. Install from `/m/login` (Add to Home Screen / Install app). `OfflineBanner` shows sync status on mobile pages.
-
----
-
-## Where is the audit log?
-
-Settings → Audit log tab. Filter by entity type. Celestial chat events appear as `celestial.chat`.
-
----
-
-## What feature tiers were added?
-
-Pleros development is organized in tiers (4–15). Key tiers:
-- **Tier 4:** Invoicing, returns, buyer quotes
-- **Tier 5:** GL auto-posting, AP vendor bills
-- **Tier 6:** Notifications, buyer invoices, contract pricing, reorder
-- **Tier 8:** COGS, wave picking, bins, POS registers, global search
-- **Tier 13:** Feature flags UI, POS checkout UI, bin-directed picking
-- **Tier 15:** Celestial AI assistant
-
-Full tier changelog is in `PLATFORM_FEATURES.md` → Recent additions.
+### Q: How do drivers record Proof of Delivery (POD)?
+1. The driver opens the **Delivery App** (`/m/delivery`) and selects their current stop.
+2. Upon delivering cartons to the customer, the driver taps **Capture POD Photo**.
+3. The app records the delivery timestamp, GPS confirmation, photo evidence, and recipient signature, instantly updating the order status to `DELIVERED`.

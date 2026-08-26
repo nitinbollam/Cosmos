@@ -181,23 +181,35 @@ function formatToolSection(result: ToolResult): string | null {
   }
 }
 
+function formatOrderCode(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) return `ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  return `ORD-${id.slice(-6).toUpperCase()}`
+}
+
+function formatQuoteCode(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_quote_')) return `Q-${id.replace('seed_quote_', '').toUpperCase()}`
+  return `Q-${id.slice(-6).toUpperCase()}`
+}
+
 function formatWarehouses(result: ToolResult): string {
   const rows = result.data as WarehouseRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
     return '**Warehouses:** No active warehouses found in Pleros.'
   }
   const tableRows = rows.map(
-    (w) => `| \`${w.code}\` | ${w.name} | ${w.address ?? w.city ?? '—'} | ${w.isDefault ? '**Yes**' : '—'} |`,
+    (w) => `| \`${w.code}\` | **${w.name}** | ${w.address ?? w.city ?? '—'} | ${w.isDefault ? '✓ Default' : '—'} |`,
   )
   const manageHref = result.links.find((l) => /warehouse|settings/i.test(l.href))?.href
   return [
     `**Warehouses** — ${rows.length} active:`,
     '',
-    '| Code | Name | Address | Default |',
-    '| --- | --- | --- | --- |',
+    '| Code | Warehouse Name | Location | Status |',
+    '| :--- | :--- | :--- | :--- |',
     ...tableRows,
     '',
-    manageHref ? `Manage in [warehouse settings](${manageHref}).` : '',
+    manageHref ? `*Manage warehouses and bin locations in [Warehouse Settings](${manageHref}).*` : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -206,38 +218,38 @@ function formatWarehouses(result: ToolResult): string {
 function formatOrders(result: ToolResult): string {
   const rows = result.data as OrderRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Orders:** No matching orders found in Pleros.'
+    return '**Orders:** No matching orders found in your workspace.'
   }
   const listPath = result.links[0]?.href?.replace(/\/[^/]+$/, '') ?? '/admin/orders'
   const tableRows = rows.map((o) => {
-    const shortId = o.id.length > 10 ? `…${o.id.slice(-8)}` : o.id
+    const code = formatOrderCode(o.id)
     const date = formatDate(o.createdAt)
-    return `| \`${shortId}\` | ${o.status} | $${o.total.toFixed(2)} | ${date} | ${o.lineCount ?? '—'} |`
+    return `| **#${code}** | \`${o.status}\` | $${o.total.toFixed(2)} | ${date} | ${o.lineCount ?? '—'} |`
   })
   return [
-    `**Orders** — ${rows.length} recent:`,
+    `### Orders (${rows.length} Found)`,
     '',
-    '| Order | Status | Total | Created | Lines |',
-    '| --- | --- | --- | --- | --- |',
+    '| Order # | Status | Total Amount | Date | Items |',
+    '| :--- | :--- | :--- | :--- | :--- |',
     ...tableRows,
     '',
-    `Open [Orders](${listPath}) for full detail.`,
+    `*View and fulfill orders in [Orders Dashboard](${listPath}).*`,
   ].join('\n')
 }
 
 function formatOrderDetail(result: ToolResult): string {
   const o = result.data as OrderRow & { amountPaid?: number; lines?: unknown[] }
   if (!o?.id) return '**Order:** Not found.'
-  const shortId = o.id.length > 10 ? `…${o.id.slice(-8)}` : o.id
+  const code = formatOrderCode(o.id)
   const detailHref = result.links[0]?.href ?? `/admin/orders/${o.id}`
   return [
-    `**Order \`${shortId}\`**`,
-    `- Status: **${o.status}**`,
-    `- Total: $${Number(o.total).toFixed(2)}`,
-    o.amountPaid != null ? `- Paid: $${Number(o.amountPaid).toFixed(2)}` : '',
-    `- Lines: ${Array.isArray(o.lines) ? o.lines.length : o.lineCount ?? '—'}`,
+    `### Order Details (#${code})`,
+    `- **Status:** \`${o.status}\``,
+    `- **Total:** $${Number(o.total).toFixed(2)}`,
+    o.amountPaid != null ? `- **Paid to Date:** $${Number(o.amountPaid).toFixed(2)}` : '',
+    `- **Total Line Items:** ${Array.isArray(o.lines) ? o.lines.length : o.lineCount ?? '—'}`,
     '',
-    `View [order detail](${detailHref}).`,
+    `*Open [Full Order Details](${detailHref}) to view saga timeline, tracking, and invoices.*`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -246,18 +258,20 @@ function formatOrderDetail(result: ToolResult): string {
 function formatInvoices(result: ToolResult): string {
   const rows = result.data as InvoiceRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Invoices:** No matching invoices found.'
+    return '**Invoices:** No open or historical invoices found.'
   }
   const tableRows = rows.map(
     (inv) =>
-      `| ${inv.invoiceNumber} | ${inv.status} | $${inv.total.toFixed(2)} | ${inv.balance != null ? `$${inv.balance.toFixed(2)}` : '—'} |`,
+      `| **${inv.invoiceNumber}** | \`${inv.status}\` | $${inv.total.toFixed(2)} | ${inv.balance != null ? `$${inv.balance.toFixed(2)}` : '—'} |`,
   )
   return [
-    `**Invoices** — ${rows.length} recent:`,
+    `### Invoices (${rows.length} Found)`,
     '',
-    '| Invoice | Status | Total | Balance |',
-    '| --- | --- | --- | --- |',
+    '| Invoice # | Status | Total Amount | Remaining Balance |',
+    '| :--- | :--- | :--- | :--- |',
     ...tableRows,
+    '',
+    '*Review aging buckets and record payments in [Finance & Invoices](/admin/finance).*',
   ].join('\n')
 }
 
@@ -267,55 +281,55 @@ function formatQuotes(result: ToolResult): string {
     return '**Quotes:** No open quotes found.'
   }
   const tableRows = rows.map((q) => {
-    const shortId = q.id.length > 10 ? `…${q.id.slice(-8)}` : q.id
-    return `| \`${shortId}\` | ${q.status} | ${q.lineCount ?? '—'} |`
+    const code = formatQuoteCode(q.id)
+    return `| **#${code}** | \`${q.status}\` | ${q.lineCount ?? '—'} items |`
   })
   return [
-    `**Quotes** — ${rows.length} recent:`,
+    `### Quotes (${rows.length} Active)`,
     '',
-    '| Quote | Status | Lines |',
-    '| --- | --- | --- |',
+    '| Quote # | Status | Line Items |',
+    '| :--- | :--- | :--- |',
     ...tableRows,
     '',
-    'Open [Quotes](/admin/quotes).',
+    '*Manage and approve customer quotes in [Quotes Approval](/admin/quotes).*',
   ].join('\n')
 }
 
 function formatLowStock(result: ToolResult): string {
   const rows = result.data as SkuRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Low stock:** No SKUs at or below reorder point.'
+    return '**Low stock:** No SKUs are currently at or below their reorder threshold.'
   }
   const tableRows = rows.map(
-    (s) => `| \`${s.code}\` | ${s.name} | ${s.available ?? 0} | ${s.reorderPoint ?? '—'} |`,
+    (s) => `| \`${s.code}\` | **${s.name}** | **${s.available ?? 0}** | ${s.reorderPoint ?? '—'} |`,
   )
   return [
-    `**Low stock SKUs** — ${rows.length}:`,
+    `### Low Stock Alerts (${rows.length} Items)`,
     '',
-    '| SKU | Name | Available | Reorder pt |',
-    '| --- | --- | --- | --- |',
+    '| SKU Code | Item Name | Available Stock | Reorder Point |',
+    '| :--- | :--- | :--- | :--- |',
     ...tableRows,
     '',
-    'Review in [Inventory](/admin/inventory).',
+    '*Create purchase orders or adjust inventory in [Inventory & SKUs](/admin/inventory).*',
   ].join('\n')
 }
 
 function formatCatalog(result: ToolResult): string {
   const rows = result.data as SkuRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Catalog:** No in-stock SKUs matched your search.'
+    return '**Catalog:** No matching items found in the product catalog.'
   }
   const tableRows = rows.map(
-    (s) => `| \`${s.code}\` | ${s.name} | ${s.available ?? '—'} | ${s.price != null ? `$${s.price.toFixed(2)}` : '—'} |`,
+    (s) => `| \`${s.code}\` | **${s.name}** | ${s.available ?? '—'} units | ${s.price != null ? `$${s.price.toFixed(2)}` : '—'} |`,
   )
   return [
-    `**Catalog matches** — ${rows.length}:`,
+    `### Product Catalog (${rows.length} Matches)`,
     '',
-    '| SKU | Name | Available | Price |',
-    '| --- | --- | --- | --- |',
+    '| SKU Code | Product Name | Available Stock | Wholesale Price |',
+    '| :--- | :--- | :--- | :--- |',
     ...tableRows,
     '',
-    'Browse [Catalog](/catalog).',
+    '*Browse full catalog and add items in [B2B Storefront](/catalog).*',
   ].join('\n')
 }
 

@@ -1,178 +1,96 @@
-# Buyer Portal and Mobile Apps (LLM Knowledge Base)
+# B2B Storefront & Mobile Field Apps Guide (LLM Knowledge Base)
 
-Guides for the B2B storefront, buyer account features, and mobile field apps.
+Comprehensive reference for the buyer-facing B2B portal and mobile Progressive Web Apps (PWAs).
 
-**Keywords:** buyer, B2B, shop, storefront, catalog, cart, checkout, mobile, PWA, warehouse app, delivery app, sales app
-
----
-
-## B2B shop overview
-
-**Keywords:** B2B portal, buyer portal, shop, self-service ordering
-
-The B2B shop is the buyer-facing storefront. Logged-in buyers browse catalog, add to cart, checkout, view orders/invoices/quotes, and manage their account.
-
-**Login:** `/login` — buyer roles `STAFF`, `VIEWER` tied to a CRM customer record.
-
-**Demo buyer:** `buyer@acme-retail.com` / `buyer1234` (Acme Retail customer).
-
-**Scoping:** All orders, invoices, and quotes are filtered to the buyer's `customerId` via `buyer-context.ts`.
+**Keywords:** B2B portal, shop, catalog, cart, checkout, orders, invoices, quotes, mobile app, PWA, warehouse app, delivery app, sales app, proof of delivery, barcode scanning
 
 ---
 
-## Catalog — how it works
+## 1. B2B Buyer Storefront
 
-**Route:** `/catalog`
+The B2B Storefront gives wholesale customers a 24/7 self-service buying and account portal.
 
-**Keywords:** catalog, products, search, filter, contract price, add to cart
-
-- Search and filter SKUs
-- Shows **contract pricing** for logged-in buyers (from CRM `CustomerPrice`)
-- **Volume pricing** tier breaks applied at checkout
-- Add items to cart (Zustand store: `cart.store.ts`)
-
-**Celestial tool:** `search_catalog` returns in-stock SKUs with prices for the buyer.
-
----
-
-## Cart and checkout — how it works
-
-**Routes:** `/cart`, `/checkout`
-
-**Keywords:** cart, checkout, shipping, payment, NET_TERMS, Stripe, saved card
-
-**Checkout steps:**
-1. Review cart lines with contract/list prices (validated server-side)
-2. Shipping address and method
-3. Payment — **NET_TERMS**, **CARD** (Stripe authorize/capture), or saved payment methods
-4. Place order → status **PENDING** until admin confirms
-
-**Saved cards:** Checkout can pick saved card or save new card to account (Tier 10).
-
-**Tax:** Computed from state jurisdiction rates at checkout.
-
----
-
-## Buyer orders — how it works
-
-**Routes:** `/orders`, `/orders/:id`
-
-**Keywords:** my orders, order history, reorder, tracking, shipment
-
-- List order history with status and totals
-- Order detail: line items, payments, invoice chip, **tracking timeline**
-- **Shipments** with carrier links and split packages
-- **Delivery route ETA** when dispatch assigned
-- **Reorder** button — batch add prior lines to cart (`GET /orders/:id/reorder-lines` with current contract prices)
-
-**Celestial tools:** `get_my_orders`, `get_order_detail` (buyer-scoped).
+### Key Pages & Capabilities:
+- **Product Catalog (`/catalog`)**:
+  - Stock-Aware Catalog: Displays live on-hand quantities for the selected fulfillment warehouse.
+  - Category Gradients & Visual Cards: High-resolution visual tags for beverages, vapes, snacks, accessories, and displays.
+  - Contract Pricing: Logged-in buyers automatically see their negotiated contract tier with list price comparisons.
+  - Quantity Steppers: Interactive `[-] [ X ] [+]` steppers for fast wholesale carton and case orders.
+- **Wholesale Cart (`/cart`)**:
+  - Review line items, SKU codes, unit costs, and source warehouse locations.
+  - Steppers and 1-click line removal.
+  - Sticky order summary with subtotal, tax note, and freight estimate.
+- **Checkout & Net Terms (`/checkout`)**:
+  - Payment Options: Charge to Net Terms credit balance (Net 15/30/60) or pay instantly via credit card (Stripe).
+  - Credit Limit Verification: Prevents order placement if exposure exceeds tenant-approved credit limit.
+  - Shipping Address: Select saved company delivery addresses or enter new ship-to destinations.
+- **Buyer Orders (`/orders`, `/orders/:id`)**:
+  - View historical and active orders with real-time fulfillment status (`PENDING` → `PROCESSING` → `SHIPPED` → `DELIVERED`).
+  - 1-Click Reorder: Re-add all lines from a previous order at current contract prices.
+- **Invoices & Statements (`/invoices`, `/invoices/:id`)**:
+  - View issued invoices, payment due dates, and remaining balances.
+  - Download official PDF invoice documents.
+  - Make partial or full invoice payments online.
+- **Quotes & Price Requests (`/quotes`, `/quotes/new`)**:
+  - Build custom quotes for bulk volume pricing and submit for distributor approval.
+  - Track quote approval status and convert approved quotes into orders.
+- **Buyer Notifications (`/notifications`)**:
+  - View order status updates, invoice issuances, and shipment tracking notifications scoped strictly to the buyer's account.
 
 ---
 
-## Buyer invoices — how it works
+## 2. Mobile Warehouse PWA (`/m/warehouse`)
 
-**Routes:** `/invoices`, `/invoices/:id`
+Designed for warehouse floor staff using phones, tablets, or rugged barcode scanner terminals.
 
-**Keywords:** invoice, balance due, pay invoice, overdue, PDF
-
-- List AR invoices with status, total, balance
-- Pay balance: record payment or **Stripe card pay** (`POST /invoices/:id/pay/stripe`)
-- Download **invoice PDF** (`GET /invoices/:id/pdf` — native PDF)
-
-**Celestial tool:** `list_my_invoices` (buyer-scoped).
-
----
-
-## Buyer quotes — how it works
-
-**Routes:** `/quotes`, `/quotes/new`, `/quotes/:id`
-
-**Keywords:** quote, request quote, counter-offer, submit quote
-
-- Create quote from catalog lines
-- Track status through approval workflow
-- Accept admin **counter-offers**
-- Submit approved quote to order
-
-**Celestial tool:** `list_my_quotes`.
+### Core Tabs:
+- **Pick Tasks**:
+  - Live queue of assigned picking tasks sorted by order priority and warehouse zone.
+  - Directed picking instructions displaying target bin location (`A-02-04`), SKU code, name, and quantity.
+  - `Pick All` or line-by-line barcode confirmation.
+- **Wave Picking**:
+  - Consolidated multi-order picking waves with single-pass bin travel routes to minimize walking time.
+- **Bin Locations**:
+  - Interactive lookup of bin inventory balances and location tags.
+- **Mobile Receiving Scanner (`/m/warehouse/receiving`)**:
+  - Built-in camera and hardware barcode scanner supporting Code 128, QR codes, UPC-A, and EAN-13.
+  - 1-Tap scanning modal with instant SVG QR code pairing.
+- **Directed Putaway**:
+  - Guides received goods from dock staging areas to designated storage rack bins.
+- **Cycle Counts**:
+  - On-floor count entry and instant variance calculation.
 
 ---
 
-## Buyer account — how it works
+## 3. Mobile Delivery PWA (`/m/delivery`)
 
-**Route:** `/account`
+Equips delivery drivers with an all-in-one route management and proof-of-delivery (POD) tool.
 
-**Keywords:** account, credit limit, payment terms, address, notification preferences, order templates, saved cards
-
-**Account page features:**
-- Credit limit and payment terms display
-- Shipping/billing address edit (`PATCH /customers/me`)
-- **Order templates** — save cart as template, reorder with contract prices
-- **Saved payment methods** — list/add/remove/default cards
-- **Notification preferences** — email/SMS toggles for order/invoice alerts
-
----
-
-## Buyer notifications inbox
-
-**Route:** `/notifications`
-
-**Keywords:** notifications, inbox, order alert, invoice alert
-
-Shop notification inbox filtered by signed-in buyer email. Shows order shipped, invoice issued, payment received messages (seed includes demo rows).
+### Core Capabilities:
+- **Daily Route Manifest**:
+  - View assigned orders sequenced by nearest-neighbor optimization.
+  - Order numbers, customer company names, delivery addresses, and package item counts.
+- **Turn Navigation & Map Links**:
+  - 1-Tap shortcut to launch native GPS navigation (Apple Maps / Google Maps).
+- **Proof of Delivery (POD) Capture**:
+  - Capture digital photo evidence of delivered cartons at customer receiving doors.
+  - Recipient signature capture and delivery notes.
+  - Instant status update: transitions order status to `DELIVERED` and notifies the buyer.
+- **Exception Logging**:
+  - Record failed delivery attempts (e.g. store closed, refused shipment) with reason notes.
 
 ---
 
-## Mobile warehouse app — how it works
+## 4. Mobile Sales PWA (`/m/sales`)
 
-**Route:** `/m/warehouse`
+Enables outside sales representatives to manage accounts and close deals in the field.
 
-**Keywords:** mobile warehouse, pick, receiving, wave, bin, PWA
-
-**Login:** `warehouse@pleros.local` / `warehouse1234`
-
-**Features:**
-- Pick task list with **bin-directed** pick lines (`binCode` from stock levels)
-- Receiving sessions for inbound PO goods
-- **Wave picking** tab — start/complete waves, bin-sorted pick path
-- Offline queue (`offline-queue.ts`, service worker `sw.js`) with sync banner
-
-**Install:** PWA manifest; start URL `/m/warehouse`.
-
----
-
-## Mobile delivery app — how it works
-
-**Route:** `/m/delivery`
-
-**Keywords:** mobile delivery, driver, route, stop, POD, proof of delivery
-
-**Login:** `driver@pleros.local` / `driver1234`
-
-**Features:**
-- View assigned delivery routes and stops
-- Reorder stops, mark failed, capture **proof of delivery (POD)**
-- Links to admin dispatch module
-
----
-
-## Mobile sales app — how it works
-
-**Route:** `/m/sales`
-
-**Keywords:** mobile sales, leads, CRM activities, field sales
-
-**Login:** `sales@pleros.local` / `sales1234`
-
-**Features:**
-- View/manage leads and customers
-- Log sales activities in the field
-- Syncs with admin CRM module
-
----
-
-## Hub and navigation
-
-**Route:** `/` — links to Admin console, B2B Shop, and Mobile apps.
-
-**Shop header** (`shop-header.tsx`): Catalog, Orders, Invoices, Quotes, cart badge, sign-in/out. Mobile hamburger nav on small screens.
+### Core Capabilities:
+- **Customer Lookup**:
+  - Instant search of customer accounts, contact details, payment terms, and open balances.
+- **Lead Pipeline**:
+  - Create new leads, update pipeline stages, and convert leads into active B2B customers.
+- **Visit Activity Logging**:
+  - Log field visits, phone calls, and meeting notes attached directly to the CRM customer timeline.
+- **Field Quote Generation**:
+  - Build and submit custom price quotes on-site with wholesale buyers.

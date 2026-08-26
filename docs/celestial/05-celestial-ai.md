@@ -1,157 +1,47 @@
-# Celestial AI Assistant (LLM Knowledge Base)
+# Celestial AI Assistant Reference (LLM Knowledge Base)
 
-Complete reference for the Celestial AI copilot — how it works, what it can answer, and configuration.
+Comprehensive architecture and usage guide for **Celestial** — the embedded AI copilot in Pleros.
 
-**Keywords:** Celestial, AI, assistant, chat, copilot, LLM, OpenRouter, RAG, tools, streaming
-
----
-
-## What is Celestial?
-
-Celestial is Pleros's built-in **AI assistant** (Tier 15). It answers questions about how Pleros works and queries **live tenant data** (orders, warehouses, invoices, catalog, etc.).
-
-**Surfaces:**
-- **Admin full page:** `/admin/celestial`
-- **Floating ✦ panel** on admin and shop layouts (shared chat history via Zustand store `pleros-celestial-v1`)
-- **Buyer portal:** same floating panel on shop pages (buyer-scoped data only)
-
-**Feature flag:** Requires `celestial` enabled in Settings → Features.
+**Keywords:** Celestial, AI, copilot, assistant, LLM, RAG, tool calling, intent detection, search, data lookups, chat, prompt engineering
 
 ---
 
-## How Celestial answers questions
+## 1. What is Celestial?
 
-Celestial uses a **hybrid architecture:**
-
-1. **Intent detection** — classifies the question as data lookup vs how-to vs general
-2. **Live data tools** — runs SQL-backed queries for orders, invoices, warehouses, catalog, etc.
-3. **Documentation RAG** — retrieves relevant chunks from `docs/celestial/*.md` and `PLATFORM_FEATURES.md`
-4. **LLM synthesis** — OpenRouter/Groq/Gemini/Ollama generates a Markdown answer using docs + tool JSON
-5. **Direct compose** — for data questions with results, returns formatted Markdown tables without LLM (faster, more accurate)
-6. **Fallback** — if LLM fails or returns empty, Celestial uses doc excerpts or a helpful default (never silent)
-
-**Rule:** Celestial must always produce an answer — it does not leave questions unanswered.
+**Celestial** is the AI assistant built directly into Pleros. It combines two core superpowers:
+1. **Live Tenant Data Queries**: Executes secure backend tools to look up real-time orders, stock levels, warehouses, invoices, and customer records.
+2. **Platform Knowledge Base (RAG)**: Retrieves indexed documentation to explain platform workflows, features, setup, and troubleshooting in plain, friendly language.
 
 ---
 
-## Live data tools
+## 2. Where to Access Celestial
 
-| Tool | Who | Triggers (examples) | Returns |
-|------|-----|---------------------|---------|
-| `get_my_orders` | Admin + buyer | "my orders", "pending orders", "any orders pending?" | Order list with status, total, dates |
-| `get_order_detail` | Admin + buyer | order ID in message | Line items, payment, status |
-| `list_my_invoices` | Admin + buyer | "invoices", "balance due", "what do I owe" | Invoice numbers, balances |
-| `search_catalog` | Admin + buyer | "catalog", "SKU", "products", "stock" | In-stock SKUs with prices |
-| `list_my_quotes` | Admin + buyer | "quotes", "counter-offer" | Open quotes |
-| `list_warehouses` | Admin + buyer | "warehouses", "locations", "distribution centers" | Warehouse codes, names, addresses |
-| `global_search` | Admin only | "find customer Acme", explicit search | Orders, customers, SKUs, quotes |
-| `list_low_stock` | Admin only | "low stock", "reorder point" | SKUs below reorder point |
-
-**Buyer scoping:** Buyers only see their CRM customer's orders/invoices/quotes. Admins see all tenant data.
-
-**How-to questions** (e.g. "How does POS work?") skip data tools and use documentation + LLM.
+- **Admin Full Page (`/admin/celestial`)**: Dedicated workspace with full conversation history, suggested prompt chips, and deep links.
+- **Floating Copilot Widget**: Available in the bottom-right corner of all back-office admin and B2B shop pages.
+- **Contextual Page Awareness**: Automatically passes the active UI page, order ID, or quote ID into Celestial context.
 
 ---
 
-## API endpoints
+## 3. Celestial Tool Capabilities
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/celestial/chat` | JSON chat (or SSE if `Accept: text/event-stream` or `X-Celestial-Stream: 1`) |
-| POST | `/api/v1/celestial/chat/stream` | Dedicated SSE streaming endpoint |
-| GET | `/api/v1/celestial/status` | Provider, model, mock mode status |
+When a user asks a question requiring factual live data, Celestial automatically detects intent and executes targeted backend tools:
 
-**Request body:** `{ message, conversationId?, surface?, context?: { page?, orderId?, quoteId? } }`
-
-**Response:** `{ conversationId, reply, links, toolsUsed, provider, model }`
-
-**Streaming events:** `delta` (text chunks), `done` (metadata), `error`.
-
----
-
-## LLM provider configuration
-
-Set in root `.env` (synced to `apps/web/.env.local` on `npm run dev`):
-
-| Variable | Purpose |
-|----------|---------|
-| `OPENROUTER_API_KEY` | OpenRouter API key (recommended) |
-| `CELESTIAL_PROVIDER=openrouter` | Force OpenRouter provider |
-| `CELESTIAL_MODEL=openrouter/auto` | Model selection |
-| `GROQ_API_KEY` | Groq provider |
-| `GEMINI_API_KEY` | Google Gemini provider |
-| `CELESTIAL_PROVIDER=ollama` | Local Ollama |
-| (none) | **Mock mode** — tool-backed structured answers without external LLM |
-
-**Status check:** `GET /celestial/status` shows active provider and whether running in mock/demo mode.
+| Tool Name | Trigger Keywords | What it Returns |
+| :--- | :--- | :--- |
+| `list_warehouses` | "what warehouses do we have", "locations", "DC sites" | Active warehouse codes, names, addresses, and default status |
+| `get_my_orders` | "show orders", "pending shipments", "recent orders" | Order numbers, statuses, total amounts, line counts, and dates |
+| `get_order_detail` | "details for order #ORD-123", specific order ID | Line items, customer, payment status, and tracking link |
+| `list_my_invoices` | "unpaid invoices", "bills due", "what do I owe" | Invoice numbers, balances due, totals, and due dates |
+| `list_my_quotes` | "open quotes", "quote requests", "pricing negotiations" | Quote numbers, statuses, and line item counts |
+| `list_low_stock` | "low stock", "what needs reordering", "out of stock SKUs" | SKUs at or below reorder threshold with current available stock |
+| `search_catalog` | "search for energy drinks", "price of SKU-100" | Matching SKUs, available quantities, and wholesale prices |
+| `global_search` | "lookup customer Acme", general search terms | Unified search across orders, customers, SKUs, and quotes |
 
 ---
 
-## Documentation sources (RAG)
+## 4. Persona & Tone Guidelines
 
-Celestial indexes markdown from:
-- `docs/celestial/*.md` — LLM-optimized knowledge base (this folder)
-- `PLATFORM_FEATURES.md` — full platform feature reference and tier changelog
-
-Retrieval uses keyword + acronym scoring (POS, WMS, AR, AP, ERP, MSA, etc.) with fallback chunks when query match is weak.
-
----
-
-## Example questions Celestial can answer
-
-**Live data (admin):**
-- "What warehouses do we have?"
-- "Any orders pending?"
-- "Show low stock items"
-- "Find customer Acme"
-
-**Live data (buyer):**
-- "Where is my order?"
-- "Show my open invoices"
-- "Search catalog for energy drinks"
-
-**How-to / documentation:**
-- "How does POS work in Pleros?"
-- "Explain the order fulfillment workflow"
-- "What is wave picking?"
-- "How do I process a return?"
-- "What is MSA compliance?"
-- "How does contract pricing work?"
-
-**General:**
-- "What modules does Pleros have?"
-- "What are the demo login credentials?"
-- "How do I run Pleros locally?"
-
----
-
-## Conversation persistence
-
-- Conversations stored in analytics DB: `CelestialConversation`, `CelestialMessage`
-- Client store persists messages in localStorage (`pleros-celestial-v1`) across routes
-- Audit log records `celestial.chat` events
-
----
-
-## UI features
-
-- **Markdown rendering** — headings, lists, tables, code blocks with syntax highlighting
-- **Streaming** — token-by-token SSE display
-- **Contextual links** — tool results include deep links to orders, invoices, catalog
-- **Page context** — optional `context.page` hint passed from current admin/shop route
-
----
-
-## Implementation files
-
-| Area | Path |
-|------|------|
-| Orchestrator | `apps/web/lib/server/celestial/orchestrator.ts` |
-| Intent | `apps/web/lib/server/celestial/intent.ts` |
-| Tools | `apps/web/lib/server/celestial/tools.ts` |
-| LLM | `apps/web/lib/server/celestial/llm.ts` |
-| RAG retrieval | `apps/web/lib/server/celestial/retrieval.ts` |
-| Direct compose | `apps/web/lib/server/celestial/compose.ts` |
-| Prompts | `apps/web/lib/server/celestial/prompts.ts` |
-| Admin UI | `apps/client/src/pages/admin/celestial/`, `components/celestial/` |
-| Store | `apps/client/src/stores/celestial-store.ts` |
+- **Audience**: Business users — wholesale buyers, warehouse operators, drivers, sales reps, and accountants.
+- **Tone**: Clear, professional, concise, and helpful.
+- **Plain Language Default**: Avoid technical developer jargon (e.g. database column names, internal route regex, stack versions) unless the user specifically asks for technical architecture.
+- **Markdown & Tables**: Formats lists of live records into clean Markdown tables with bold labels and direct clickable deep links.

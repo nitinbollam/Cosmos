@@ -1,298 +1,146 @@
 # Admin Module Guides (LLM Knowledge Base)
 
-Detailed how-to guides for each Pleros admin module. Use these to answer "how does X work" and "where do I find Y" questions.
+Comprehensive reference and how-to guides for all Pleros ERP admin modules. Indexed by Celestial to answer questions about platform features, data locations, workflows, and permissions.
 
-**Keywords:** admin, ERP, module guide, how to, dashboard, inventory, orders, warehouse, finance, settings
-
----
-
-## Dashboard — how it works
-
-**Route:** `/admin`
-
-The admin dashboard shows operational KPIs for the tenant: revenue and order metrics, a cashflow forecast chart, low-stock alerts, recent orders, and compliance badge status.
-
-**Data sources:** `GET /api/v1/analytics/kpis`, KPI snapshots, inventory alerts.
-
-**When to use:** Start of day overview; click through to Inventory (low stock), Orders, or Finance from alerts and widgets.
+**Keywords:** admin, ERP, module guide, how to, dashboard, inventory, orders, warehouse, fulfillment, wave picking, purchasing, landed cost, finance, GL, dispatch, POS, CRM, compliance, settings
 
 ---
 
-## Inventory — how it works
-
-**Route:** `/admin/inventory`, SKU detail at `/admin/inventory/:skuId`
-
-**Keywords:** inventory, SKU, stock, catalog, reorder point, adjustment, transfer, barcode label
-
-Inventory manages the product catalog (SKUs) and stock levels per warehouse.
-
-**Key capabilities:**
-- View/search SKUs with stock by warehouse
-- Adjust stock (corrections, damage, etc.)
-- Transfer stock between warehouses
-- Spreadsheet import for bulk SKU updates
-- Low-stock alerts when quantity falls below reorder point
-- Print barcode labels (`GET /skus/:id/label?qty=&size=&symbols=` — printable HTML with Code128 + QR; sizes `4x2`|`4x1`|`3x2`|`2x1`)
-
-**Stock model:** Each SKU has `StockLevel` rows per warehouse, optional `binCode` on location, and a `StockLedgerEntry` audit trail.
-
-**Related:** Purchasing creates POs to replenish; Fulfillment allocates stock on order confirm; WMS pick tasks decrement on pick.
+## 1. Dashboard — Operational Overview
+- **Route:** `/admin`
+- **Purpose:** Executive and operational headquarters showing high-level KPIs, 14-day cashflow forecasts, active low-stock alerts, recent sales orders, and tenant health status.
+- **Key Cards:**
+  - Revenue Today & Month-to-Date
+  - Open Orders & Fulfillment Status
+  - Low Stock Alerts (direct links to reorder)
+  - Cash Flow Forecast Chart
+  - Recent Order Activity feed
 
 ---
 
-## Orders — how it works
-
-**Route:** `/admin/orders`, detail at `/admin/orders/:id`
-
-**Keywords:** orders, sales order, confirm, cancel, fulfill, return, RMA, shipment, tracking, split shipment
-
-**Admin order workflow:**
-1. Order appears as **PENDING** (from B2B checkout, POS, or manual creation)
-2. **Confirm** — validates credit, allocates inventory, starts fulfillment
-3. Warehouse **picks and packs** via Fulfillment/WMS
-4. **Ship** — creates shipments with carrier + tracking; may auto-issue **invoice**
-5. **Deliver** — dispatch/mobile marks delivered
-6. **Return (RMA)** — Process return modal: restock, credit memo, line `returnedQty`
-
-**Order detail shows:** line items, saga timeline, payments, invoice link, shipments (carrier, tracking, split qty), return actions.
-
-**API:** `orders.ts`, `order-orchestration.ts`, `order-saga.ts`. Returns: `POST /orders/:id/returns`.
+## 2. Inventory & Multi-Warehouse Stock
+- **Route:** `/admin/inventory` (SKU detail at `/admin/inventory/:skuId`)
+- **Key Capabilities:**
+  - Multi-Warehouse Stock Matrix: View on-hand, reserved, and available quantities by warehouse.
+  - Stock Adjustments: Record cycle count variances, damage, or audit corrections with reason codes.
+  - Inter-Warehouse Transfers: Initiate and track transfers between warehouses.
+  - Demand Replenishment (EWMA): Calculate suggested reorder quantities using 70-day Exponentially Weighted Moving Average demand and supplier lead times.
+  - Bulk Spreadsheet Import: Import SKUs, barcodes, categories, and opening balances via CSV/Excel.
+  - Barcode & QR Label Printing: Generate thermal printable labels (`4x2`, `4x1`, `3x2`, `2x1`) with Code 128 and QR codes.
 
 ---
 
-## Fulfillment — how it works
-
-**Route:** `/admin/fulfillment`
-
-**Keywords:** fulfillment, pick, pack, dispatch, picker, pick task, pack task
-
-Fulfillment is the operational queue for warehouse staff to execute pick and pack tasks generated from confirmed orders.
-
-**Actions:** Assign picker, pick-all, mark packed, dispatch to carrier.
-
-**Links to WMS:** Pick lines include SKU, qty, warehouse, and **bin code** for directed picking.
-
-**Mobile:** Warehouse PWA (`/m/warehouse`) shows the same tasks for floor workers.
+## 3. Orders & Order-to-Cash Pipeline
+- **Route:** `/admin/orders` (Order detail at `/admin/orders/:id`)
+- **Key Capabilities:**
+  - Order Management: View orders filtered by status (`PENDING`, `CONFIRMED`, `PROCESSING`, `PACKED`, `SHIPPED`, `DELIVERED`, `CANCELLED`) and channel (`B2B_PORTAL`, `POS`, `SALES_REP`, `API`).
+  - Order Saga Timeline: Visual audit trail of credit check, inventory allocation, pick wave assignment, and shipment.
+  - Confirm / Cancel: Approve pending orders or cancel with inventory compensation.
+  - Returns & RMAs: Create RMA return authorizations, restock returned units, and auto-issue credit memos.
+  - Split Shipments: Dispatch partial quantities across multiple tracking numbers and warehouses.
 
 ---
 
-## Warehouse (WMS) — how it works
-
-**Route:** `/admin/warehouse`
-
-**Keywords:** warehouse, WMS, receiving, cycle count, wave picking, bin location, pick path
-
-The Warehouse module covers inbound and accuracy operations beyond order fulfillment.
-
-**Tabs/capabilities:**
-- **Pick tasks** — open WMS pick lines
-- **Receiving sessions** — receive PO goods into stock
-- **Cycle counts** — count bins/SKUs, post adjustments
-- **Wave picking** — create/start/complete waves from pending tasks; optimized **pick path** sorted by bin code
-- **Bin locations** — define bins per warehouse (e.g. A-01-01); used on pick lines and mobile
-
-**API modules:** `wms-*.ts`, `wave-picking.ts`, `pick-bin-resolver.ts`.
-
-**Mobile waves:** `/m/warehouse` → Waves tab → wave detail with start/complete.
+## 4. Fulfillment & Pick/Pack Tasks
+- **Route:** `/admin/fulfillment`
+- **Key Capabilities:**
+  - Task Queue: View active fulfillment pick tasks grouped by order and priority.
+  - Picker Assignment: Assign floor staff to specific pick lines or batch tasks.
+  - Fast Actions: `Pick All`, `Mark Short` (if bin quantity is missing), `Pack Carton`, and `Dispatch Carrier`.
+  - Syncs in real time with the Warehouse PWA (`/m/warehouse`).
 
 ---
 
-## Warehouses (locations) — how it works
-
-**Route:** `/admin/settings` → Warehouses tab
-
-**Keywords:** warehouse, warehouses, distribution center, DC, location, MAIN, EAST, default warehouse
-
-Warehouses are physical stocking locations. Each tenant can have multiple warehouses with code, name, address, and a default flag.
-
-**Demo seed warehouses:**
-- **MAIN** — Main Warehouse, Dallas TX (default)
-- **EAST** — East Coast DC, Newark NJ
-
-Stock levels, transfers, and pick tasks are warehouse-scoped. Celestial can list live warehouses via the `list_warehouses` tool.
+## 5. Warehouse Operations & WMS
+- **Route:** `/admin/warehouse`
+- **Key Tabs:**
+  - **Pick Tasks**: Live queue of pick lines with bin location codes (`A-01-01`).
+  - **Wave Picking**: Group multiple orders into consolidated picking waves with optimized bin travel paths.
+  - **Bin Locations**: Define aisle, rack, shelf, and bin mapping for directed putaway and picking.
+  - **Receiving Sessions**: Dock receiving scanner with live camera barcode/QR scanner (`/m/warehouse/receiving`).
+  - **Putaway Tasks**: Direct received goods to designated storage bins.
+  - **Cycle Counts**: Blind count sessions, variance calculation, and automatic GL inventory adjustments.
 
 ---
 
-## Purchasing — how it works
-
-**Route:** `/admin/purchasing`
-
-**Keywords:** purchasing, PO, purchase order, supplier, receive, vendor, AP bill
-
-**Workflow:**
-1. Create PO for a supplier with line items (SKUs + qty)
-2. **Receive goods** — increments inventory, creates/updates **vendor bill (AP)**
-3. GL auto-posts: Dr Inventory / Cr AP on receive
-4. Pay bill in Finance → AP tab
-
-**Low-stock prefill:** `/admin/purchasing?skuId=` opens PO drawer with reorder qty from alerts.
+## 6. Purchasing & Procure-to-Pay
+- **Route:** `/admin/purchasing` (PO detail at `/admin/purchasing/:id`)
+- **Key Capabilities:**
+  - Supplier Management: Maintain vendor records, lead times, payment terms, and contacts.
+  - Purchase Orders: Create, approve, and track purchase orders.
+  - Dock Receiving: Receive purchase order lines directly into warehouse inventory.
+  - Landed Cost Allocation: Distribute inbound freight, customs, and duty charges across received units to compute true landed COGS.
+  - 3-Way Match: Automatically verify PO unit prices, received quantities, and vendor AP bills before approving payment.
 
 ---
 
-## CRM — how it works
-
-**Route:** `/admin/crm`, customer detail at `/admin/crm/customers/:id`
-
-**Keywords:** CRM, customer, lead, activity, contract pricing, volume pricing, credit limit
-
-**Capabilities:**
-- Customer records linked to B2B portal users by email
-- Leads and sales activities (also on mobile sales app)
-- **Contract pricing** — per-SKU custom prices for a buyer (`CustomerPrice`)
-- **Volume pricing** — quantity tier breaks (`VolumePriceBreak`)
-- Lead conversion to customer
-- Import customers/leads from spreadsheet
-
-**Buyer scoping:** Portal orders/invoices/quotes filter by the buyer's `customerId`.
+## 7. Compliance & Regulatory Controls
+- **Route:** `/admin/compliance`
+- **Key Capabilities:**
+  - MSA Reports: Master Settlement Agreement and tobacco/regulated product compliance reporting.
+  - Age Verification Policies: Enforce mandatory minimum age attestations on POS and B2B channels.
+  - Regulated License Validation: Verify wholesale customer reseller and distributor licenses.
+  - Batch & Lot Recall: Instant traceability across received supplier lots, warehouse storage, and customer shipments.
 
 ---
 
-## Quotes — how it works
-
-**Routes:** Admin `/admin/quotes`, Buyer `/quotes`, `/quotes/new`, `/quotes/:id`
-
-**Keywords:** quote, B2B quote, counter-offer, approval, submit to order
-
-**Quote statuses:** OPEN → PENDING_APPROVAL → APPROVED → SUBMITTED (converted to order).
-
-**Buyer:** Creates quote from catalog lines; can receive **counter-offers** from admin.
-
-**Admin:** Approves/rejects; counter-offer modal on quote detail.
+## 8. CRM & Customer Pricing
+- **Route:** `/admin/crm`
+- **Key Capabilities:**
+  - Customer Accounts: Manage B2B accounts, credit limits, payment terms (Net 15/30/60), and contacts.
+  - Contract Price Books: Set per-customer custom pricing and tiered volume discounts on specific SKUs.
+  - Lead Pipeline: Track sales prospects from outreach to customer conversion.
+  - Activity Log: Record sales visits, calls, and email correspondence.
 
 ---
 
-## Dispatch — how it works
-
-**Route:** `/admin/dispatch`
-
-**Keywords:** dispatch, delivery, route, driver, stop, POD, proof of delivery, ETA
-
-**Capabilities:**
-- Build delivery routes with ordered stops
-- Assign driver; view map
-- Driver mobile app marks failed or completes **POD**
-- Buyer order detail shows delivery route ETA and tracking
-
-**API:** `dispatch.ts`. Notifications on ship/delivery when SendGrid/Twilio configured.
+## 9. Quotes & Price Negotiations
+- **Route:** `/admin/quotes` (Quote detail at `/admin/quotes/:id`)
+- **Key Capabilities:**
+  - Buyer Quote Ingestion: Review price requests and counter-offers submitted from the B2B Storefront.
+  - Margin & Cost Analysis: View SKU unit cost and calculated profit margins during price negotiations.
+  - Approval & Conversion: Approve quotes to lock in prices and convert into confirmed sales orders.
 
 ---
 
-## Compliance — how it works
-
-**Route:** `/admin/compliance`
-
-**Keywords:** compliance, MSA, manufacturer sales audit, tax, batch, regulated
-
-**MSA (Manufacturer Sales Audit):**
-- Generate reports from sales data
-- Store files locally (`.data/msa/`) or upload via S3/webhook env
-- EDI submit to manufacturer endpoint
-- Cron automation: `POST /msa/cron`
-
-**Tax:** State jurisdiction rates in `compliance-tax.ts`; applied at order checkout.
+## 10. Fleet Dispatch & Route Logistics
+- **Route:** `/admin/dispatch`
+- **Key Capabilities:**
+  - Delivery Manifests: Assign shipped orders to fleet vehicles and delivery drivers.
+  - Route Stop Optimization: Nearest-neighbor sequencing using customer GPS coordinates and Haversine distance calculations.
+  - Live Tracking: Real-time driver status, stop completions, and failed delivery exception notes.
+  - Digital Proof of Delivery (POD): View driver photo uploads and recipient signatures.
 
 ---
 
-## Finance — how it works
-
-**Route:** `/admin/finance`
-
-**Keywords:** finance, AR, AP, invoice, bill, payment, trial balance, GL, bank reconciliation, cashflow
-
-**Tabs:**
-- **AR (Accounts Receivable)** — paginated invoices (`page`/`pageSize`), AR summary KPIs (`GET /invoices/ar-summary`), Export CSV, overdue filters, record payment
-- **AP (Accounts Payable)** — vendor bills from PO receive, 3-way match status, pay bill
-- **Trial balance** — GL accounts from ledger (+ Export CSV)
-- **Cashflow chart** — forecast via analytics engine
-- **Bank reconciliation** — bank accounts, statement lines, reconcile
-
-**GL auto-posting (`operations-gl.ts`, `invoice-gl.ts`):**
-- Invoice issue: Dr AR / Cr Revenue
-- Payment received: Dr Cash / Cr AR
-- PO receive: Dr Inventory / Cr AP
-- AP payment: Dr AP / Cr Cash
-- Ship COGS: Dr COGS / Cr Inventory
-
-**Invoices:** Auto-issued on ship; PDF via `GET /invoices/:id/pdf` (native PDF).
+## 11. Finance & General Ledger
+- **Route:** `/admin/finance`
+- **Key Capabilities:**
+  - Accounts Receivable (AR): Invoices, payments received, credit memos, and 0–90+ day aging buckets.
+  - Accounts Payable (AP): Vendor bills, 3-way matching, and scheduled bill payments.
+  - Double-Entry General Ledger: Real-time automated journal postings for revenue, COGS, inventory asset, and cash.
+  - Bank Reconciliation: Reconcile bank statements against recorded receipts and disbursements.
+  - Trial Balance & Financial Reports: Generate Trial Balance, Balance Sheet, and P&L statements with monthly/quarterly filters.
 
 ---
 
-## Reports — how it works
-
-**Route:** `/admin/reports`
-
-**Keywords:** reports, report builder, CSV export, saved reports, AR aging, orders export, inventory export
-
-Build ad-hoc operational reports, save filter presets, and download CSV.
-
-**Report types:**
-- **Orders** — status, channel, date range, search
-- **Inventory** — SKU stock (on hand / reserved / available), warehouse, low-stock filter
-- **AR aging** — open invoice balances in 0–30 / 31–60 / 61–90 / 91–120 / 120+ buckets
-
-**API:** `GET /report-builder/types`, `POST /report-builder/run`, `GET/POST/PATCH/DELETE /report-builder/saved`, `POST /report-builder/saved/:id/run`.
-
-**Related:** Finance shows live AR aging widgets; Reports is the exportable / savable version.
+## 12. Point of Sale (POS)
+- **Route:** `/admin/pos`
+- **Key Capabilities:**
+  - Counter Checkout: Fast register interface for walk-in wholesale customers.
+  - Rapid Barcode Lookup: Scan or search SKUs with live price and stock verification.
+  - Compliance Attestation: Embedded prompt for age verification when cart contains restricted items.
+  - Flexible Tenders: Process cash, card (Stripe terminal), or charge to customer Net Terms accounts.
+  - Receipt Printing: Digital and thermal printable transaction receipts.
 
 ---
 
-## POS (Point of Sale) — how it works
-
-**Route:** `/admin/pos`
-
-**Keywords:** POS, point of sale, register, checkout, walk-in, cash, card, check, receipt
-
-POS is an **admin in-store checkout** for walk-in or counter sales (not the B2B buyer portal).
-
-**How to use POS in Pleros:**
-1. Go to **Admin → POS** (`/admin/pos`)
-2. Select a **register** (seed includes a default register)
-3. Select or create a **customer** (seed includes walk-in customer)
-4. Add **SKUs** to cart by search/code
-5. Choose payment: **cash**, **card**, or **check**
-6. Complete checkout — creates an order + payment
-7. **Print receipt** — `GET /pos/orders/:id/receipt` (HTML receipt)
-
-**API:** `POST /api/v1/pos/orders`, `pos.ts`, `pos-receipt.ts`.
-
-**Difference from B2B shop:** POS is staff-operated at admin; B2B shop is buyer self-service at `/catalog` → `/checkout`.
-
----
-
-## Settings — how it works
-
-**Route:** `/admin/settings`
-
-**Keywords:** settings, company, team, invite, warehouse, webhook, Stripe, MSA, feature flags, audit log, integrations
-
-**Tabs:**
-- Company profile and onboarding
-- Team invites and user management
-- **Warehouses** — add/edit warehouse locations
-- Webhooks — subscription CRUD and test
-- Stripe / MSA / billing plan configuration
-- **Feature flags** — plan defaults + tenant overrides (`celestial`, etc.)
-- **Audit log** — filterable event viewer
-- **Integrations** — SendGrid/Twilio/webhook notification provider status
-
----
-
-## Notifications (admin)
-
-**Route:** `/admin/notifications`
-
-**Keywords:** notifications, SendGrid, Twilio, email, SMS, alert
-
-Inbox for notification requests. Providers: SendGrid (email), Twilio (SMS) when env vars set; console/webhook fallback otherwise.
-
-**Triggers:** order created/shipped, invoice issued, payment received, low stock.
-
----
-
-## Celestial AI (admin)
-
-**Route:** `/admin/celestial` (full page) + floating ✦ panel on all admin pages
-
-**Keywords:** Celestial, AI, assistant, chat, copilot
-
-See `05-celestial-ai.md` for full Celestial documentation.
+## 13. Settings & Platform Administration
+- **Route:** `/admin/settings`
+- **Key Capabilities:**
+  - Company Profile: Tenant details, currency, default warehouse, and tax policy settings.
+  - Team & RBAC: Manage staff users and granular module permissions.
+  - Warehouses: Add, configure, and manage physical storage sites.
+  - Stripe Connect: Configure payouts and merchant payment processing.
+  - Webhooks & API Keys: Configure outbound webhooks and secure developer API tokens.
+  - Audit Log: Immutable security log of all tenant actions, logins, and data modifications.
