@@ -61,9 +61,18 @@ export async function updateTenantFromStripeAccount(
   })
 }
 
+import { isStripeConfigured } from './stripe'
+
 /** Require Connect account with charges enabled before collecting card/ACH payments. */
 export async function requireStripeConnectContext(tenantId: string): Promise<StripeConnectContext> {
   const org = await getTenantStripeConnectState(tenantId)
+  if (org.stripeConnectedAccountId && org.stripeChargesEnabled) {
+    return { connectedAccountId: org.stripeConnectedAccountId, tenantId }
+  }
+  // When standard Stripe is configured (STRIPE_SECRET_KEY set) and no Connect account exists, allow direct charge
+  if (isStripeConfigured() && !org.stripeConnectedAccountId) {
+    return { connectedAccountId: '', tenantId }
+  }
   if (!org.stripeConnectedAccountId) {
     throw new ApiError(
       402,
