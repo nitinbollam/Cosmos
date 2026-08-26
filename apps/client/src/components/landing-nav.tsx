@@ -1,14 +1,18 @@
 import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
-import { isSignedIn, signOut } from '@/lib/auth-session'
+import { getSessionUser, isSignedIn, signOut, type SessionPayload } from '@/lib/auth-session'
 import { STOREFRONT_AUTH_EVENT } from '@/lib/auth-events'
 
 export function LandingNav() {
-  const [signedIn, setSignedIn] = useState(false)
+  const [user, setUser] = useState<SessionPayload | null>(null)
 
   const refresh = useCallback(() => {
-    setSignedIn(isSignedIn())
+    if (isSignedIn()) {
+      setUser(getSessionUser())
+    } else {
+      setUser(null)
+    }
   }, [])
 
   useEffect(() => {
@@ -25,31 +29,53 @@ export function LandingNav() {
     }
   }, [refresh])
 
+  const role = user?.role?.toUpperCase() ?? ''
+  const isBuyer = role === 'BUYER' || role === 'B2B_BUYER' || role === 'CUSTOMER'
+  const isDriver = role === 'DRIVER'
+  const isWarehouse = role === 'WAREHOUSE_STAFF'
+  const targetDashboard = isBuyer
+    ? '/catalog'
+    : isDriver
+      ? '/m/delivery'
+      : isWarehouse
+        ? '/m/warehouse'
+        : '/admin'
+
   return (
     <nav className="pleros-landing-nav" aria-label="Primary">
       <a href="#features" className="pleros-landing-nav-link">
         Features
       </a>
+      <a href="#solutions" className="pleros-landing-nav-link">
+        Solutions
+      </a>
       <a href="#workspaces" className="pleros-landing-nav-link">
         Workspaces
       </a>
       <ThemeSwitcher compact />
-      {signedIn ? (
-        <button
-          type="button"
-          className="pleros-landing-nav-link"
-          onClick={() => void signOut()}
-        >
-          Sign out
-        </button>
+      {user ? (
+        <>
+          <Link to={targetDashboard} className="pleros-landing-nav-cta">
+            {isBuyer ? 'Go to Shop →' : 'Open Dashboard →'}
+          </Link>
+          <button
+            type="button"
+            className="pleros-landing-nav-link !text-xs opacity-75 hover:opacity-100"
+            onClick={() => void signOut()}
+          >
+            Sign out
+          </button>
+        </>
       ) : (
-        <Link to="/login" className="pleros-landing-nav-link">
-          Sign in
-        </Link>
+        <>
+          <Link to="/login" className="pleros-landing-nav-link">
+            Sign in
+          </Link>
+          <Link to="/signup" className="pleros-landing-nav-cta">
+            Get started
+          </Link>
+        </>
       )}
-      <Link to="/signup" className="pleros-landing-nav-cta">
-        Get started
-      </Link>
     </nav>
   )
 }
