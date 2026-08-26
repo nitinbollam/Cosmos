@@ -446,19 +446,36 @@ select.pleros-input option {
   background: var(--c-surface);
 }
 
-.pleros-admin-header-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-weight: 600;
-  color: var(--c-text-2);
+.pleros-admin-header-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1;
 }
 
-.pleros-admin-header-title {
-  font-size: 1.25rem;
-  font-weight: 700;
+.pleros-admin-crumb-root {
+  color: var(--c-text-3);
+  text-decoration: none;
+  font-weight: 500;
   letter-spacing: 0.02em;
+  transition: color 0.15s;
+}
+
+.pleros-admin-crumb-root:hover {
   color: var(--c-heading);
+}
+
+.pleros-admin-crumb-sep {
+  color: var(--c-border);
+  font-size: 12px;
+  user-select: none;
+}
+
+.pleros-admin-crumb-current {
+  color: var(--c-heading);
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .pleros-icon-btn {

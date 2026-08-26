@@ -175,7 +175,20 @@ export async function listOrders(
     }),
     orderDb.order.count({ where }),
   ])
-  return { items, total, page, pageSize, hasMore: page * pageSize < total }
+  const customerIds = [...new Set(items.map((i) => i.customerId).filter(Boolean))]
+  const { crmDb } = await import('./db')
+  const customers =
+    customerIds.length > 0
+      ? await crmDb.customer.findMany({ where: { tenantId, id: { in: customerIds } } })
+      : []
+  const custMap = new Map(customers.map((c) => [c.id, c.name]))
+
+  const enrichedItems = items.map((o) => ({
+    ...o,
+    customerName: custMap.get(o.customerId) ?? null,
+  }))
+
+  return { items: enrichedItems, total, page, pageSize, hasMore: page * pageSize < total }
 }
 
 export async function findOrderById(tenantId: string, id: string, opts?: { buyerCustomerId?: string }) {

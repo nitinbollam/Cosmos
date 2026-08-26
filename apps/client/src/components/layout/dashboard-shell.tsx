@@ -65,10 +65,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <Link to="/admin" className="pleros-admin-header-logo" title="Pleros">
               <PlerosLogo variant="mark" size="sm" />
             </Link>
-            <div className="pleros-admin-header-titles">
-              <p className="pleros-admin-header-label">Pleros Admin</p>
-              <h1 className="pleros-admin-header-title">{titleFromPath(pathname)}</h1>
-            </div>
+            <nav className="pleros-admin-header-breadcrumbs" aria-label="Breadcrumbs">
+              <Link to="/admin" className="pleros-admin-crumb-root">
+                Pleros Admin
+              </Link>
+              <span className="pleros-admin-crumb-sep">/</span>
+              <span className="pleros-admin-crumb-current">{titleFromPath(pathname)}</span>
+            </nav>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <GlobalSearch />

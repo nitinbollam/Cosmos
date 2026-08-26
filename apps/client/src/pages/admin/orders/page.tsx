@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/pleros/empty-state'
 type OrderRow = {
   id: string
   customerId: string
+  customerName?: string | null
   channel: string
   status: string
   totalAmount: string | number
@@ -39,7 +40,16 @@ const STATUS_TABS = [
 
 const CHANNELS = ['ALL', 'B2B_PORTAL', 'POS', 'SALES_REP', 'API'] as const
 
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `ORD-${id.slice(-8).toUpperCase()}`
+}
+
 function customerLabel(o: OrderRow): string {
+  if (o.customerName) return o.customerName
   const addr = o.shippingAddress
   if (addr && typeof addr === 'object' && addr !== null) {
     const a = addr as Record<string, unknown>
@@ -197,8 +207,8 @@ export default function OrdersPage() {
                 {rows.map((o) => (
                   <tr key={o.id}>
                     <td className="font-mono text-sm">
-                      <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="text-pleros-accent hover:underline">
-                        #{o.id.slice(-10)}
+                      <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="text-pleros-accent hover:underline font-semibold">
+                        #{formatOrderNumber(o.id)}
                       </Link>
                     </td>
                     <td className="max-w-[200px] truncate text-sm">{customerLabel(o)}</td>
