@@ -214,7 +214,26 @@ export default function DashboardPage() {
             title="Your distribution command center"
             subtitle="Revenue, orders, inventory, and compliance in one calm workspace."
           >
-            <BentoAvatarStack labels={['Ops', 'Sales', 'WH', 'Fin']} />
+            <div className="mt-4 pt-3 border-t border-pleros-border/60">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-pleros-muted mb-2">Quick Navigation</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Link to="/admin/orders" className="text-xs px-2.5 py-1 rounded-lg bg-pleros-surface-2 hover:bg-pleros-surface text-pleros-text border border-pleros-border font-medium transition-colors">
+                  📦 Orders
+                </Link>
+                <Link to="/admin/warehouse" className="text-xs px-2.5 py-1 rounded-lg bg-pleros-surface-2 hover:bg-pleros-surface text-pleros-text border border-pleros-border font-medium transition-colors">
+                  🏢 Warehouse
+                </Link>
+                <Link to="/admin/dispatch" className="text-xs px-2.5 py-1 rounded-lg bg-pleros-surface-2 hover:bg-pleros-surface text-pleros-text border border-pleros-border font-medium transition-colors">
+                  🚚 Dispatch
+                </Link>
+                <Link to="/admin/pos" className="text-xs px-2.5 py-1 rounded-lg bg-pleros-surface-2 hover:bg-pleros-surface text-pleros-text border border-pleros-border font-medium transition-colors">
+                  🛒 POS
+                </Link>
+                <Link to="/admin/finance" className="text-xs px-2.5 py-1 rounded-lg bg-pleros-surface-2 hover:bg-pleros-surface text-pleros-text border border-pleros-border font-medium transition-colors">
+                  💰 Finance
+                </Link>
+              </div>
+            </div>
           </BentoHeroCard>
         </div>
 
