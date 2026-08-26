@@ -830,15 +830,27 @@ html:has(.pleros-landing) {
 
 /* Aurora landing overrides */
 [data-theme='aurora'] .pleros-landing {
-  background: linear-gradient(165deg, var(--palette-mauve) 0%, #e8d8f4 38%, var(--palette-powder-petal) 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 55%, #f8fafc 100%);
 }
 
 [data-theme='aurora'] .pleros-landing-orb--1 {
-  background: var(--palette-soft-periwinkle);
-  opacity: 0.35;
+  background: var(--c-primary);
+  opacity: 0.12;
 }
 
 [data-theme='aurora'] .pleros-landing-orb--2 {
-  background: var(--palette-wisteria);
-  opacity: 0.28;
+  background: var(--c-accent);
+  opacity: 0.1;
+}
+
+[data-theme='aurora'] {
+  scrollbar-color: rgba(15, 23, 42, 0.2) transparent;
+}
+
+[data-theme='aurora'] ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+}
+
+[data-theme='aurora'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.32);
 }
