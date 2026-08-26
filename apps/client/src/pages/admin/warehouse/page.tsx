@@ -996,7 +996,10 @@ export default function WarehousePage() {
 
       {tab === 'receiving' && (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Link to="/m/warehouse/receiving" className="btn-secondary">
+              Open Mobile Scanner
+            </Link>
             <button type="button" className="btn-primary" onClick={() => setRecvDrawer(true)}>
               New session
             </button>
