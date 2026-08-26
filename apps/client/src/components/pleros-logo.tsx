@@ -9,10 +9,10 @@ type PlerosLogoProps = {
 
 const heights = { sm: 32, md: 38, lg: 56 } as const
 
-const MARK = '#5B8DEF'
-const MARK_SOFT = '#6B9FD4'
-const INK = '#FAFAFA'
-const MUTED = '#A1A1AA'
+const MARK = 'var(--c-primary, #5B8DEF)'
+const MARK_SOFT = 'var(--c-accent, #6B9FD4)'
+const INK = 'var(--c-heading, currentColor)'
+const MUTED = 'var(--c-text-3, #A1A1AA)'
 
 /** Orbital mark — 52×52 artboard with safe padding */
 function PlerosMarkGraphic() {
