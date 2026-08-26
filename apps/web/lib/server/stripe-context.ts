@@ -7,7 +7,7 @@ export type StripeConnectContext = {
 }
 
 export function stripeAccountOpts(ctx: StripeConnectContext): Stripe.RequestOptions {
-  return { stripeAccount: ctx.connectedAccountId }
+  return ctx.connectedAccountId ? { stripeAccount: ctx.connectedAccountId } : {}
 }
 
 /**
