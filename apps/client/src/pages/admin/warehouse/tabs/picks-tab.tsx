@@ -127,6 +127,12 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
               {(tasksQ.data ?? []).map((t) => {
                 const { picked, total } = pickProgress(t)
                 const pct = total > 0 ? Math.round((picked / total) * 100) : 0
+                const taskCode = t.id.startsWith('seed_tsk_')
+                  ? `TSK-${t.id.replace('seed_tsk_', '').toUpperCase()}`
+                  : `TSK-${t.id.slice(-6).toUpperCase()}`
+                const orderCode = t.orderId.startsWith('seed_ord_')
+                  ? `ORD-${t.orderId.replace('seed_ord_', '').toUpperCase()}`
+                  : `ORD-${t.orderId.slice(-6).toUpperCase()}`
                 return (
                   <tr
                     key={t.id}
@@ -134,9 +140,11 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
                     style={{ borderLeft: `4px solid ${priorityBorder(t.priority)}` }}
                     onClick={() => setDetailTask(t)}
                   >
-                    <td className="font-mono text-sm">#{t.id.slice(-8)}</td>
+                    <td className="font-mono text-sm font-semibold" style={{ color: 'var(--c-primary)' }}>
+                      #{taskCode}
+                    </td>
                     <td className="font-mono text-sm" style={{ color: 'var(--c-text-2)' }}>
-                      …{t.orderId.slice(-10)}
+                      #{orderCode}
                     </td>
                     <td>
                       <StatusBadge status={t.status} />

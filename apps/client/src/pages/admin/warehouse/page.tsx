@@ -64,7 +64,7 @@ export default function WarehousePage() {
   const users = usersQ.data?.items ?? []
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-pleros-white font-display">
           Warehouse Operations
