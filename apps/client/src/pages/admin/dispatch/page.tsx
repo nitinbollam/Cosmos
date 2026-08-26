@@ -57,10 +57,26 @@ function userLabel(u: UserRow) {
   return n || u.email
 }
 
+function formatRouteCode(id: string): string {
+  if (!id) return 'RTE-001'
+  if (id.startsWith('seed_route_')) return `RTE-${id.replace('seed_route_', '').toUpperCase()}`
+  return `RTE-${id.slice(-6).toUpperCase()}`
+}
+
+function formatRouteTitle(r: DeliveryRoute): string {
+  if (r.name && r.name.trim() && !r.name.toLowerCase().startsWith('delivery ·')) {
+    return r.name.trim()
+  }
+  return `Delivery Route #${formatRouteCode(r.id)}`
+}
+
 function formatAddress(addr: unknown): string {
   if (addr && typeof addr === 'object' && !Array.isArray(addr)) {
     const o = addr as Record<string, unknown>
-    if (typeof o.line1 === 'string' && o.line1.trim()) return o.line1
+    if (typeof o.line1 === 'string' && o.line1.trim()) {
+      const parts = [o.line1, o.city, o.state, o.postalCode].filter((x) => typeof x === 'string' && (x as string).trim())
+      return parts.join(', ')
+    }
     if (typeof o.formatted === 'string') return o.formatted
   }
   try {
@@ -132,9 +148,7 @@ function routeMapEmbedUrl(route: DeliveryRoute): string | null {
 
 export default function DispatchPage() {
   return (
-    <Suspense
-      fallback={<div className="p-6 text-pleros-muted text-sm">Loading dispatch…</div>}
-    >
+    <Suspense fallback={<div className="p-8 text-pleros-muted text-sm flex items-center gap-2"><span>🚚</span> Loading fleet dispatch…</div>}>
       <DispatchDashboard />
     </Suspense>
   )
@@ -234,7 +248,7 @@ function DispatchDashboard() {
     onSuccess: (_data, routeId) => {
       void qc.invalidateQueries({ queryKey: ['dispatch-route', routeId] })
       void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
-      setOptimizeMessage('Route stops optimized using nearest-neighbor spatial algorithm!')
+      setOptimizeMessage('Route stops sequenced with Nearest-Neighbor spatial algorithm!')
       setTimeout(() => setOptimizeMessage(null), 4000)
     },
   })
@@ -259,41 +273,58 @@ function DispatchDashboard() {
 
   const mapEmbedUrl = useMemo(() => (selected ? routeMapEmbedUrl(selected) : null), [selected])
 
-  const locationStale = useMemo(() => {
-    if (!selected?.lastKnownAt) return true
-    const t = new Date(selected.lastKnownAt).getTime()
-    return Number.isNaN(t) || Date.now() - t > 120_000
-  }, [selected?.lastKnownAt])
+  const deliveredCount = useMemo(() => {
+    return selected?.stops?.filter((s) => s.status === 'DELIVERED').length ?? 0
+  }, [selected?.stops])
+
+  const totalStops = selected?.stops?.length ?? 0
+  const progressPercent = totalStops > 0 ? Math.round((deliveredCount / totalStops) * 100) : 0
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col md:flex-row">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col md:flex-row bg-pleros-bg">
+      {/* Left Sidebar: Routes Manifest */}
       <aside className="w-full shrink-0 border-pleros-border bg-pleros-surface md:w-80 md:border-r flex flex-col max-h-[45vh] md:max-h-none md:h-[calc(100vh-4rem)]">
         <div className="p-4 border-b border-pleros-border space-y-3">
-          <h1 className="text-lg font-bold text-pleros-white">Dispatch</h1>
-          <label className="block text-xs text-pleros-muted">Route date</label>
-          <input
-            type="date"
-            className="w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
-            value={selectedDate}
-            onChange={(e) => {
-              setSelectedDate(e.target.value)
-              setSelectedRouteId(null)
-              setRouteInUrl(null)
-            }}
-          />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🚚</span>
+              <h2 className="text-base font-bold text-pleros-white">Fleet Routes</h2>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-pleros-surface-2 text-pleros-muted border border-pleros-border">
+              {routes.data?.length ?? 0} active
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1.5">
+              Manifest Date
+            </label>
+            <input
+              type="date"
+              className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-xs font-medium text-pleros-text focus:outline-none focus:border-pleros-primary transition-colors"
+              value={selectedDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value)
+                setSelectedRouteId(null)
+                setRouteInUrl(null)
+              }}
+            />
+          </div>
+
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="w-full h-9 rounded-md bg-pleros-primary text-white text-sm"
+            className="w-full h-9 rounded-lg bg-pleros-primary hover:bg-pleros-primary/90 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-[0.98]"
           >
-            Create route
+            <span>+</span> Create New Route
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-2">
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {routes.isLoading ? (
-            <p className="text-pleros-muted text-sm p-2">Loading routes…</p>
+            <div className="p-4 text-center text-pleros-muted text-xs">Loading routes…</div>
           ) : routes.error ? (
-            <p className="text-red-400 text-sm p-2">Could not load routes.</p>
+            <div className="p-4 text-center text-red-400 text-xs">Could not load routes.</div>
           ) : (routes.data?.length ?? 0) === 0 ? (
             <EmptyState
               icon="🚗"
@@ -303,96 +334,151 @@ function DispatchDashboard() {
                 <button
                   type="button"
                   onClick={() => setCreateOpen(true)}
-                  className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
+                  className="h-8 px-3 rounded-md bg-pleros-primary text-white text-xs font-medium"
                 >
                   Create route
                 </button>
               }
             />
           ) : (
-            <ul className="space-y-1">
-              {(routes.data ?? []).map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedRouteId(r.id)
-                      setRouteInUrl(r.id)
-                    }}
-                    className={`w-full text-left rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                      selectedRouteId === r.id
-                        ? 'bg-pleros-primary/20 border border-pleros-primary/40 text-pleros-white'
-                        : 'border border-transparent text-pleros-text hover:bg-pleros-surface-2'
-                    }`}
-                  >
-                    <div className="font-medium truncate">{r.name?.trim() || 'Route'}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <StatusBadge status={r.status} />
-                      <span className="text-pleros-muted text-xs">{r.stops?.length ?? 0} stops</span>
-                    </div>
-                  </button>
-                </li>
-              ))}
+            <ul className="space-y-2">
+              {(routes.data ?? []).map((r) => {
+                const isSelected = selectedRouteId === r.id
+                const rDriver = users.data?.items?.find((u) => u.id === r.driverId)
+                const dName = rDriver ? userLabel(rDriver) : 'Unassigned'
+                const completedStops = r.stops?.filter((s) => s.status === 'DELIVERED').length ?? 0
+
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRouteId(r.id)
+                        setRouteInUrl(r.id)
+                      }}
+                      className={`w-full text-left rounded-xl p-3 text-xs transition-all border ${
+                        isSelected
+                          ? 'bg-pleros-primary/10 border-pleros-primary shadow-sm text-pleros-white'
+                          : 'bg-pleros-surface-2/40 border-pleros-border/60 text-pleros-text hover:bg-pleros-surface-2 hover:border-pleros-border'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-semibold text-pleros-white truncate text-sm">
+                          {formatRouteTitle(r)}
+                        </div>
+                        <StatusBadge status={r.status} />
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between text-[11px] text-pleros-muted">
+                        <span className="flex items-center gap-1">
+                          <span>📍</span> {r.stops?.length ?? 0} stops ({completedStops} delivered)
+                        </span>
+                        <span className={`flex items-center gap-1 font-medium ${r.driverId ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          <span>👤</span> {dName}
+                        </span>
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
       </aside>
 
+      {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 min-h-[55vh] md:min-h-[calc(100vh-4rem)]">
         {!selectedRouteId || routeDetail.isLoading ? (
-          <div className="p-6 text-pleros-muted text-sm">Select a route…</div>
+          <div className="p-8 text-center text-pleros-muted text-sm flex flex-col items-center justify-center flex-1">
+            <span className="text-3xl mb-2">🗺️</span>
+            <p>Select a route from the sidebar or create a new one.</p>
+          </div>
         ) : routeDetail.error || !selected ? (
-          <div className="p-6 text-red-400 text-sm">Route not found.</div>
+          <div className="p-8 text-center text-red-400 text-sm flex flex-col items-center justify-center flex-1">
+            <span className="text-3xl mb-2">⚠️</span>
+            <p>Route details could not be loaded.</p>
+          </div>
         ) : (
           <>
-            <div className="p-4 border-b border-pleros-border flex flex-wrap items-start justify-between gap-3">
+            {/* Action Bar Header */}
+            <div className="p-4 md:px-6 border-b border-pleros-border bg-pleros-surface/60 backdrop-blur flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-semibold text-pleros-white truncate">
-                    {selected.name?.trim() || 'Route'}
-                  </h2>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h1 className="text-lg md:text-xl font-bold text-pleros-white tracking-tight">
+                    {formatRouteTitle(selected)}
+                  </h1>
                   <StatusBadge status={selected.status} />
+                  <span className="text-xs font-mono px-2 py-0.5 rounded bg-pleros-surface-2 text-pleros-muted border border-pleros-border">
+                    #{formatRouteCode(selected.id)}
+                  </span>
                 </div>
-                <p className="font-mono text-xs text-pleros-muted mt-0.5 truncate">{selected.id}</p>
-                {driverLabel && (
-                  <p className="text-xs text-pleros-muted mt-1">
-                    Driver: <span className="text-pleros-text">{driverLabel}</span>
-                  </p>
-                )}
+
+                <div className="flex items-center gap-3 mt-1 text-xs text-pleros-muted">
+                  <span>
+                    Scheduled: <strong className="text-pleros-text">{selectedDate}</strong>
+                  </span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <span>👤</span>
+                    Driver:{' '}
+                    {driverLabel ? (
+                      <strong className="text-emerald-400">{driverLabel}</strong>
+                    ) : (
+                      <span className="text-amber-400 font-medium">Unassigned</span>
+                    )}
+                  </span>
+                </div>
               </div>
+
               <div className="flex flex-wrap items-center gap-2">
+                {/* Optimize Button */}
                 <button
                   type="button"
-                  disabled={optimizeRoute.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'}
+                  disabled={
+                    optimizeRoute.isPending ||
+                    selected.status === 'COMPLETED' ||
+                    selected.status === 'CANCELLED' ||
+                    selected.stops.length <= 1
+                  }
                   onClick={() => optimizeRoute.mutate(selected.id)}
-                  className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow disabled:opacity-40"
-                  title="Sort stops using Nearest-Neighbor spatial algorithm"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-40"
+                  title="Sequence stops using Nearest-Neighbor spatial algorithm"
                 >
                   <span>⚡</span> {optimizeRoute.isPending ? 'Optimizing…' : 'Optimize Route (Nearest-Neighbor)'}
                 </button>
-                <div className="flex rounded border border-pleros-border overflow-hidden text-xs">
+
+                {/* View Switcher */}
+                <div className="flex rounded-lg border border-pleros-border bg-pleros-surface-2 p-0.5 text-xs font-medium">
                   <button
                     type="button"
-                    className={`px-2.5 py-1.5 ${viewMode === 'split' ? 'bg-pleros-primary text-white font-medium' : 'text-pleros-muted hover:text-pleros-white'}`}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      viewMode === 'split' ? 'bg-pleros-primary text-white shadow-sm' : 'text-pleros-muted hover:text-pleros-white'
+                    }`}
                     onClick={() => setViewMode('split')}
                   >
                     Split
                   </button>
                   <button
                     type="button"
-                    className={`px-2.5 py-1.5 ${viewMode === 'map' ? 'bg-pleros-primary text-white font-medium' : 'text-pleros-muted hover:text-pleros-white'}`}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      viewMode === 'map' ? 'bg-pleros-primary text-white shadow-sm' : 'text-pleros-muted hover:text-pleros-white'
+                    }`}
                     onClick={() => setViewMode('map')}
                   >
                     Map
                   </button>
                   <button
                     type="button"
-                    className={`px-2.5 py-1.5 ${viewMode === 'list' ? 'bg-pleros-primary text-white font-medium' : 'text-pleros-muted hover:text-pleros-white'}`}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      viewMode === 'list' ? 'bg-pleros-primary text-white shadow-sm' : 'text-pleros-muted hover:text-pleros-white'
+                    }`}
                     onClick={() => setViewMode('list')}
                   >
                     List
                   </button>
                 </div>
+
+                {/* Driver Assignment Select */}
                 <AssignDriverSelect
                   disabled={
                     assign.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'
@@ -403,103 +489,135 @@ function DispatchDashboard() {
               </div>
             </div>
 
+            {/* Optimize Notification Banner */}
             {optimizeMessage && (
-              <div className="p-2.5 px-4 bg-emerald-500/10 border-b border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2">
+              <div className="py-2 px-6 bg-emerald-500/10 border-b border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2">
                 <span>✅</span> {optimizeMessage}
               </div>
             )}
 
+            {/* Map / Visual Telemetry View */}
             {(viewMode === 'split' || viewMode === 'map') && (
-              <div className="border-b border-pleros-border bg-pleros-surface-2/40 shrink-0">
+              <div className="border-b border-pleros-border bg-pleros-surface-2/20 shrink-0">
                 {mapEmbedUrl ? (
                   <div className="relative">
                     <iframe
                       title="Route map"
                       src={mapEmbedUrl}
-                      className={`w-full ${viewMode === 'map' ? 'h-[380px] md:h-[480px]' : 'h-[200px] md:h-[260px]'} border-0 block`}
+                      className={`w-full ${viewMode === 'map' ? 'h-[400px] md:h-[500px]' : 'h-[220px] md:h-[260px]'} border-0 block`}
                       loading="lazy"
                       referrerPolicy="no-referrer-when-downgrade"
                     />
-                    <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px] text-white/90 bg-black/50 flex justify-between items-center">
-                      <span>
-                        ©{' '}
-                        <a
-                          href="https://www.openstreetmap.org/copyright"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline"
-                        >
-                          OpenStreetMap
-                        </a>{' '}
-                        contributors
+                    <div className="absolute bottom-0 left-0 right-0 px-3 py-1.5 text-[11px] text-white bg-black/70 backdrop-blur flex justify-between items-center">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Map data © OpenStreetMap contributors</span>
                       </span>
-                      <span className="font-mono text-emerald-400">
-                        {selected.stops.length} Stops Sequence Active
+                      <span className="font-semibold text-emerald-400">
+                        {selected.stops.length} Stop Geolocation Sequence
                       </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="h-[140px] md:h-[180px] flex flex-col items-center justify-center px-4 text-center text-pleros-muted text-sm">
-                    <p>No driver GPS yet for this route.</p>
-                    <p className="text-xs mt-1 max-w-md">
-                      When an assigned driver uses the delivery PWA (`/m/delivery`), positions appear here (refreshed every 15s while
-                      the route is active).
-                    </p>
-                    <iframe
-                      title="OpenStreetMap embed"
-                      className="mt-3 w-full max-w-xl h-24 border-0 rounded opacity-90"
-                      loading="lazy"
-                      src="https://www.openstreetmap.org/export/embed.html?bbox=-125%2C24%2C-66%2C50&layer=mapnik"
-                      referrerPolicy="no-referrer-when-downgrade"
-                    />
-                    <p className="text-[10px] mt-1">
-                      <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-pleros-primary underline">
-                        © OpenStreetMap
-                      </a>
-                    </p>
+                  <div className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-4 bg-gradient-to-r from-pleros-surface via-pleros-surface-2/60 to-pleros-surface">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-pleros-primary/10 border border-pleros-primary/30 flex items-center justify-center text-xl shrink-0">
+                        📡
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-pleros-white">Live Route Telemetry</h3>
+                          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                            GPS Standby
+                          </span>
+                        </div>
+                        <p className="text-xs text-pleros-muted mt-1 max-w-xl">
+                          When the driver opens the <strong>Delivery App (`/m/delivery`)</strong>, real-time GPS telemetry and turn progress will stream directly to this dashboard.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Progress Summary Card */}
+                    <div className="w-full md:w-64 rounded-xl bg-pleros-surface p-3.5 border border-pleros-border shadow-sm shrink-0">
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="text-pleros-muted font-medium">Route Progress</span>
+                        <span className="font-semibold text-pleros-white">{progressPercent}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-pleros-surface-2 overflow-hidden border border-pleros-border/60">
+                        <div
+                          className="h-full bg-gradient-to-r from-pleros-primary to-emerald-500 transition-all duration-500"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 text-[11px] text-pleros-muted flex justify-between">
+                        <span>{deliveredCount} Delivered</span>
+                        <span>{totalStops - deliveredCount} Remaining</span>
+                      </div>
+                    </div>
                   </div>
-                )}
-                {mapEmbedUrl && selected.lastKnownAt && (
-                  <p className={`text-xs px-3 py-1 ${locationStale ? 'text-amber-400' : 'text-pleros-muted'}`}>
-                    Last position: {new Date(selected.lastKnownAt).toLocaleString()}
-                    {locationStale ? ' · may be stale' : ''}
-                  </p>
                 )}
               </div>
             )}
 
+            {/* Stops Sequence Section */}
             {(viewMode === 'split' || viewMode === 'list') && (
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-pleros-white">Stops ({selected.stops.length})</h3>
-                  <span className="text-xs text-pleros-muted">Drag to reorder manually · ⚡ Nearest-Neighbor for spatial optimization</span>
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-pleros-white flex items-center gap-2">
+                      <span>📍 Delivery Stops</span>
+                      <span className="text-xs font-normal text-pleros-muted">({selected.stops.length} Total)</span>
+                    </h3>
+                    <p className="text-xs text-pleros-muted mt-0.5">
+                      Drag cards by the <code className="text-[11px] font-bold">⋮⋮</code> handle to adjust delivery sequence manually.
+                    </p>
+                  </div>
+
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                    ⚡ Spatial Sequence Active
+                  </span>
                 </div>
-              {reorderStops.error && (
-                <p className="text-red-400 text-xs mb-2">{errMsg(reorderStops.error)}</p>
-              )}
-              {assign.error && <p className="text-red-400 text-xs mb-2">{errMsg(assign.error)}</p>}
-              <StopsSortableSection
-                route={selected}
-                disabled={
-                  reorderStops.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'
-                }
-                onReorder={(stopIds) => reorderStops.mutate({ routeId: selected.id, stopIds })}
-                onPod={(s) => setPodForStop(s)}
-                onFailed={(s) => {
-                  const reason = window.prompt('Failure reason (optional)') ?? undefined
-                  markFailed.mutate({ routeId: selected.id, stopId: s.id, reason: reason || undefined })
-                }}
-                failPending={markFailed.isPending}
-              />
-              {markFailed.error && (
-                <p className="text-red-400 text-xs mt-2">{errMsg(markFailed.error)}</p>
-              )}
+
+                {reorderStops.error && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                    {errMsg(reorderStops.error)}
+                  </div>
+                )}
+                {assign.error && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                    {errMsg(assign.error)}
+                  </div>
+                )}
+
+                <StopsSortableSection
+                  route={selected}
+                  disabled={
+                    reorderStops.isPending ||
+                    selected.status === 'COMPLETED' ||
+                    selected.status === 'CANCELLED'
+                  }
+                  onReorder={(stopIds) => reorderStops.mutate({ routeId: selected.id, stopIds })}
+                  onPod={(s) => setPodForStop(s)}
+                  onFailed={(s) => {
+                    const reason = window.prompt('Failure reason (e.g. business closed, customer absent)') ?? undefined
+                    markFailed.mutate({ routeId: selected.id, stopId: s.id, reason: reason || undefined })
+                  }}
+                  failPending={markFailed.isPending}
+                />
+
+                {markFailed.error && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                    {errMsg(markFailed.error)}
+                  </div>
+                )}
               </div>
             )}
           </>
         )}
       </main>
 
+      {/* Drawers and Modals */}
       {createOpen && (
         <CreateRouteDrawer
           scheduledDate={selectedDate}
@@ -534,9 +652,9 @@ function AssignDriverSelect(props: {
 }) {
   const [v, setV] = useState('')
   return (
-    <div className="flex items-center gap-1 max-w-[240px]">
+    <div className="flex items-center gap-1.5">
       <select
-        className="flex-1 min-w-0 rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+        className="rounded-lg bg-pleros-surface-2 border border-pleros-border px-2.5 py-1.5 text-xs text-pleros-text focus:outline-none focus:border-pleros-primary transition-colors"
         value={v}
         disabled={props.disabled}
         onChange={(e) => setV(e.target.value)}
@@ -551,7 +669,7 @@ function AssignDriverSelect(props: {
       <button
         type="button"
         disabled={props.disabled || !v}
-        className="shrink-0 px-2 py-1.5 rounded border border-pleros-border text-xs text-pleros-text disabled:opacity-40"
+        className="px-3 py-1.5 rounded-lg bg-pleros-surface-2 hover:bg-pleros-surface border border-pleros-border text-xs font-semibold text-pleros-white disabled:opacity-40 transition-colors"
         onClick={() => {
           props.onAssign(v)
           setV('')
@@ -578,46 +696,81 @@ function SortableStopRow(props: {
     transform: CSS.Transform.toString(transform),
     transition,
   }
+
+  const isDelivered = props.stop.status === 'DELIVERED'
+  const isFailed = props.stop.status === 'FAILED'
+
   return (
     <li
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border border-pleros-border bg-pleros-surface px-3 py-2 flex flex-wrap gap-2 items-start ${
-        isDragging ? 'opacity-70 shadow-lg z-10' : ''
+      className={`rounded-xl border transition-all p-3.5 flex flex-wrap gap-3 items-center justify-between ${
+        isDragging
+          ? 'opacity-80 shadow-2xl z-20 bg-pleros-surface-2 border-pleros-primary'
+          : isDelivered
+          ? 'bg-emerald-500/5 border-emerald-500/20'
+          : isFailed
+          ? 'bg-red-500/5 border-red-500/20'
+          : 'bg-pleros-surface border-pleros-border hover:border-pleros-border/80'
       }`}
     >
-      <button
-        type="button"
-        className="cursor-grab active:cursor-grabbing text-pleros-muted touch-none px-1"
-        disabled={props.disabled}
-        {...attributes}
-        {...listeners}
-        aria-label="Drag to reorder"
-      >
-        ⋮⋮
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-pleros-muted">Stop {props.stop.sequence}</div>
-        <div className="text-sm text-pleros-text truncate" title={formatAddress(props.stop.address)}>
-          {formatAddress(props.stop.address)}
-        </div>
-        <div className="mt-1">
-          <StatusBadge status={props.stop.status} />
-        </div>
-      </div>
-      <div className="flex flex-col gap-1 shrink-0">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* Drag Handle */}
         <button
           type="button"
-          disabled={props.stop.status === 'DELIVERED'}
-          className="text-xs px-2 py-1 rounded bg-pleros-primary text-white disabled:opacity-40"
+          className="cursor-grab active:cursor-grabbing text-pleros-muted hover:text-pleros-white touch-none p-1 rounded hover:bg-pleros-surface-2 transition-colors"
+          disabled={props.disabled}
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+        >
+          <span className="font-mono text-base font-bold">⋮⋮</span>
+        </button>
+
+        {/* Sequence Badge */}
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border ${
+            isDelivered
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+              : isFailed
+              ? 'bg-red-500/20 text-red-400 border-red-500/40'
+              : 'bg-pleros-surface-2 text-pleros-white border-pleros-border'
+          }`}
+        >
+          {props.stop.sequence}
+        </div>
+
+        {/* Address and Details */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-pleros-white">Stop #{props.stop.sequence}</span>
+            <StatusBadge status={props.stop.status} />
+          </div>
+          <div className="text-sm font-medium text-pleros-text mt-0.5 truncate flex items-center gap-1.5" title={formatAddress(props.stop.address)}>
+            <span>📍</span>
+            <span>{formatAddress(props.stop.address)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          disabled={isDelivered}
+          className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
+            isDelivered
+              ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
+              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm'
+          }`}
           onClick={props.onPod}
         >
-          POD
+          {isDelivered ? '✓ Delivered (POD)' : 'Capture POD'}
         </button>
         <button
           type="button"
-          disabled={props.stop.status === 'FAILED' || props.failPending}
-          className="text-xs px-2 py-1 rounded border border-pleros-border text-pleros-muted disabled:opacity-40"
+          disabled={isFailed || props.failPending}
+          className="text-xs px-2.5 py-1.5 rounded-lg border border-pleros-border text-pleros-muted hover:text-red-400 hover:border-red-400/40 transition-colors disabled:opacity-30"
           onClick={props.onFailed}
         >
           Failed
@@ -653,13 +806,17 @@ function StopsSortableSection(props: {
   }
 
   if (stops.length === 0) {
-    return <p className="text-pleros-muted text-sm">No stops on this route.</p>
+    return (
+      <div className="p-8 text-center text-pleros-muted text-sm rounded-xl border border-dashed border-pleros-border bg-pleros-surface/30">
+        No delivery stops assigned to this route.
+      </div>
+    )
   }
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-        <ul className="space-y-2">
+        <ul className="space-y-2.5">
           {stops.map((s) => (
             <SortableStopRow
               key={s.id}
@@ -712,42 +869,75 @@ function PodModal(props: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <button type="button" className="absolute inset-0 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-xl sm:rounded-xl bg-pleros-surface border border-pleros-border p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-pleros-white">Proof of delivery</h2>
-        <p className="text-xs text-pleros-muted mt-1">
-          Stop {props.stop.sequence} · {formatAddress(props.stop.address)}
-        </p>
-        <label className="block mt-4 text-xs text-pleros-muted">Recipient name</label>
-        <input
-          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
-          value={recipient}
-          onChange={(e) => setRecipient(e.target.value)}
-          placeholder="Who signed"
-        />
-        <label className="block mt-3 text-xs text-pleros-muted">Notes</label>
-        <textarea
-          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text min-h-[72px]"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Condition, location, etc."
-        />
-        <label className="block mt-3 text-xs text-pleros-muted">Signature (text / ref)</label>
-        <input
-          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
-          value={signature}
-          onChange={(e) => setSignature(e.target.value)}
-          placeholder="Signature label or image URL"
-        />
-        <label className="mt-3 flex items-start gap-2 text-sm text-pleros-text cursor-pointer">
-          <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
-          <span>Recipient age confirmed (required for age-restricted orders)</span>
-        </label>
-        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
-        <div className="mt-6 flex gap-2">
+      <button type="button" className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close" onClick={props.onClose} />
+      <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-pleros-surface border border-pleros-border p-6 shadow-2xl space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-pleros-white">Proof of Delivery (POD)</h2>
           <button
             type="button"
-            className="flex-1 h-10 rounded-md border border-pleros-border text-pleros-text text-sm"
+            onClick={props.onClose}
+            className="text-pleros-muted hover:text-pleros-white text-lg leading-none"
+          >
+            ✕
+          </button>
+        </div>
+
+        <p className="text-xs text-pleros-muted">
+          Stop #{props.stop.sequence} · {formatAddress(props.stop.address)}
+        </p>
+
+        <div>
+          <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
+            Recipient Name
+          </label>
+          <input
+            className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text focus:outline-none focus:border-pleros-primary"
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value)}
+            placeholder="e.g. Alex Smith"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
+            Delivery Notes
+          </label>
+          <textarea
+            className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text min-h-[72px] focus:outline-none focus:border-pleros-primary"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Condition, dock location, gate code, etc."
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
+            Signature / Reference
+          </label>
+          <input
+            className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text focus:outline-none focus:border-pleros-primary"
+            value={signature}
+            onChange={(e) => setSignature(e.target.value)}
+            placeholder="Signed in person or reference ID"
+          />
+        </div>
+
+        <label className="flex items-start gap-2.5 text-xs text-pleros-text cursor-pointer p-3 rounded-lg bg-pleros-surface-2 border border-pleros-border">
+          <input
+            type="checkbox"
+            className="mt-0.5 accent-pleros-primary"
+            checked={ageConfirmed}
+            onChange={(e) => setAgeConfirmed(e.target.checked)}
+          />
+          <span>Recipient age verified (required for regulated products)</span>
+        </label>
+
+        {error && <p className="text-red-400 text-xs">{error}</p>}
+
+        <div className="flex gap-2.5 pt-2">
+          <button
+            type="button"
+            className="flex-1 h-10 rounded-lg border border-pleros-border text-pleros-text hover:bg-pleros-surface-2 text-sm font-semibold transition-colors"
             onClick={props.onClose}
             disabled={busy}
           >
@@ -756,10 +946,10 @@ function PodModal(props: {
           <button
             type="button"
             disabled={busy}
-            className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
+            className="flex-1 h-10 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-sm transition-colors disabled:opacity-40"
             onClick={() => void submit()}
           >
-            {busy ? 'Saving…' : 'Mark delivered'}
+            {busy ? 'Recording POD…' : '✓ Mark Delivered'}
           </button>
         </div>
       </div>
@@ -772,7 +962,7 @@ function CreateRouteDrawer(props: {
   onClose: () => void
   onCreated: () => void
 }) {
-  const [mode, setMode] = useState<'manual' | 'orders'>('orders')
+  const [mode, setMode] = useState<'orders' | 'manual'>('orders')
   const [name, setName] = useState('')
   const [stopLines, setStopLines] = useState([{ address: '' }])
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
@@ -797,7 +987,7 @@ function CreateRouteDrawer(props: {
   function formatShippedAddress(addr: unknown, notes: string | null): string {
     if (addr && typeof addr === 'object' && !Array.isArray(addr)) {
       const o = addr as Record<string, unknown>
-      const parts = [o.line1, o.city, o.state, o.postalCode].filter((x) => typeof x === 'string' && x.trim())
+      const parts = [o.line1, o.city, o.state, o.postalCode].filter((x) => typeof x === 'string' && (x as string).trim())
       if (parts.length) return parts.join(', ')
     }
     return notes?.slice(0, 80) || 'Address on file'
@@ -848,99 +1038,143 @@ function CreateRouteDrawer(props: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
-      <div className="w-full max-w-lg bg-pleros-surface border-l border-pleros-border p-6 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-pleros-white">New delivery route</h2>
-        <p className="text-xs text-pleros-muted mt-1">
-          Scheduled for sidebar date ({props.scheduledDate}). Stops are ordered; drag after save on the main view.
-        </p>
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            className={`flex-1 h-9 rounded-md text-sm ${mode === 'orders' ? 'bg-pleros-primary text-white' : 'border border-pleros-border text-pleros-text'}`}
-            onClick={() => setMode('orders')}
-          >
-            From shipped orders
-          </button>
-          <button
-            type="button"
-            className={`flex-1 h-9 rounded-md text-sm ${mode === 'manual' ? 'bg-pleros-primary text-white' : 'border border-pleros-border text-pleros-text'}`}
-            onClick={() => setMode('manual')}
-          >
-            Manual stops
-          </button>
-        </div>
-        <label className="block mt-4 text-xs text-pleros-muted">Name (optional)</label>
-        <input
-          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Monday downtown"
-        />
-        {mode === 'orders' ? (
-          <>
-            <p className="text-xs text-pleros-muted mt-4">Shipped orders ready for delivery</p>
-            {shippedOrders.isLoading ? (
-              <p className="text-pleros-muted text-sm mt-2">Loading orders…</p>
-            ) : (shippedOrders.data?.length ?? 0) === 0 ? (
-              <p className="text-pleros-muted text-sm mt-2">No shipped orders available.</p>
-            ) : (
-              <ul className="mt-2 space-y-2 max-h-64 overflow-y-auto">
-                {(shippedOrders.data ?? []).map((o) => (
-                  <li key={o.id}>
-                    <label className="flex items-start gap-2 rounded-md border border-pleros-border px-3 py-2 text-sm cursor-pointer hover:bg-pleros-surface-2">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={selectedOrderIds.includes(o.id)}
-                        onChange={() => toggleOrder(o.id)}
-                      />
-                      <span className="min-w-0">
-                        <span className="font-mono text-xs text-pleros-muted block truncate">{o.id}</span>
-                        <span className="text-pleros-text block truncate">
-                          {formatShippedAddress(o.shippingAddress, o.notes)}
-                        </span>
-                        <span className="text-pleros-muted text-xs">${Number(o.totalAmount).toFixed(2)}</span>
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-pleros-muted mt-4">Stops</p>
-            {stopLines.map((ln, idx) => (
-              <div key={idx} className="mt-2 flex gap-2">
-                <span className="w-6 text-pleros-muted text-sm pt-2">{idx + 1}.</span>
-                <input
-                  className="flex-1 rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
-                  placeholder="Address line"
-                  value={ln.address}
-                  onChange={(e) => {
-                    const next = [...stopLines]
-                    next[idx] = { address: e.target.value }
-                    setStopLines(next)
-                  }}
-                />
-              </div>
-            ))}
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button type="button" className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close" onClick={props.onClose} />
+      <div className="relative w-full max-w-lg bg-pleros-surface border-l border-pleros-border p-6 overflow-y-auto shadow-2xl flex flex-col justify-between">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-pleros-white">New Delivery Route</h2>
             <button
               type="button"
-              className="mt-2 text-xs text-pleros-primary"
-              onClick={() => setStopLines((s) => [...s, { address: '' }])}
+              onClick={props.onClose}
+              className="text-pleros-muted hover:text-pleros-white text-lg leading-none"
             >
-              + Add stop
+              ✕
             </button>
-          </>
-        )}
-        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
-        <div className="mt-6 flex gap-2">
+          </div>
+
+          <p className="text-xs text-pleros-muted">
+            Scheduled for manifest date <strong>{props.scheduledDate}</strong>.
+          </p>
+
+          <div className="flex gap-2 rounded-lg bg-pleros-surface-2 p-1 border border-pleros-border">
+            <button
+              type="button"
+              className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                mode === 'orders' ? 'bg-pleros-primary text-white shadow-sm' : 'text-pleros-muted hover:text-pleros-white'
+              }`}
+              onClick={() => setMode('orders')}
+            >
+              From Shipped Orders
+            </button>
+            <button
+              type="button"
+              className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                mode === 'manual' ? 'bg-pleros-primary text-white shadow-sm' : 'text-pleros-muted hover:text-pleros-white'
+              }`}
+              onClick={() => setMode('manual')}
+            >
+              Manual Custom Stops
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
+              Route Name (Optional)
+            </label>
+            <input
+              className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text focus:outline-none focus:border-pleros-primary"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Metro North Route A"
+            />
+          </div>
+
+          {mode === 'orders' ? (
+            <div>
+              <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1.5">
+                Shipped Orders Ready for Dispatch
+              </label>
+              {shippedOrders.isLoading ? (
+                <p className="text-pleros-muted text-xs p-4 text-center">Loading shipped orders…</p>
+              ) : (shippedOrders.data?.length ?? 0) === 0 ? (
+                <div className="p-6 text-center text-pleros-muted text-xs rounded-xl border border-dashed border-pleros-border bg-pleros-surface-2/30">
+                  No orders currently in SHIPPED status ready for route manifest.
+                </div>
+              ) : (
+                <ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {(shippedOrders.data ?? []).map((o) => {
+                    const isChecked = selectedOrderIds.includes(o.id)
+                    const code = o.id.startsWith('seed_ord_') ? `ORD-${o.id.replace('seed_ord_', '').toUpperCase()}` : `ORD-${o.id.slice(-6).toUpperCase()}`
+
+                    return (
+                      <li key={o.id}>
+                        <label
+                          className={`flex items-start gap-3 rounded-xl border p-3 text-xs cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'bg-pleros-primary/10 border-pleros-primary text-pleros-white'
+                              : 'bg-pleros-surface-2/40 border-pleros-border hover:bg-pleros-surface-2'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 accent-pleros-primary"
+                            checked={isChecked}
+                            onChange={() => toggleOrder(o.id)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-pleros-white">#{code}</span>
+                              <span className="font-semibold text-emerald-400">${Number(o.totalAmount).toFixed(2)}</span>
+                            </div>
+                            <p className="text-pleros-text text-xs mt-0.5 truncate">
+                              📍 {formatShippedAddress(o.shippingAddress, o.notes)}
+                            </p>
+                          </div>
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider">
+                Custom Stop Addresses
+              </label>
+              {stopLines.map((ln, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <span className="w-6 text-pleros-muted text-xs font-mono">{idx + 1}.</span>
+                  <input
+                    className="flex-1 rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-xs text-pleros-text focus:outline-none focus:border-pleros-primary"
+                    placeholder="Enter street address, city, state"
+                    value={ln.address}
+                    onChange={(e) => {
+                      const next = [...stopLines]
+                      next[idx] = { address: e.target.value }
+                      setStopLines(next)
+                    }}
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                className="text-xs font-semibold text-pleros-primary hover:underline pt-1"
+                onClick={() => setStopLines((s) => [...s, { address: '' }])}
+              >
+                + Add Another Stop
+              </button>
+            </div>
+          )}
+
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+        </div>
+
+        <div className="flex gap-2.5 pt-6 border-t border-pleros-border mt-6">
           <button
             type="button"
-            className="flex-1 h-10 rounded-md border border-pleros-border text-pleros-text text-sm"
+            className="flex-1 h-10 rounded-lg border border-pleros-border text-pleros-text hover:bg-pleros-surface-2 text-sm font-semibold transition-colors"
             onClick={props.onClose}
             disabled={busy}
           >
@@ -949,10 +1183,10 @@ function CreateRouteDrawer(props: {
           <button
             type="button"
             disabled={busy}
-            className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
+            className="flex-1 h-10 rounded-lg bg-pleros-primary hover:bg-pleros-primary/90 text-white text-sm font-semibold shadow-sm transition-colors disabled:opacity-40"
             onClick={() => void submit()}
           >
-            {busy ? 'Creating…' : 'Create route'}
+            {busy ? 'Creating Route…' : 'Create Route'}
           </button>
         </div>
       </div>
