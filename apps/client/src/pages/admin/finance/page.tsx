@@ -606,27 +606,35 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoiceRows.map((inv) => (
-                    <tr key={inv.id}>
-                      <td className="font-mono text-xs">{inv.invoiceNumber}</td>
-                      <td className="font-mono text-xs">{inv.orderId.slice(0, 12)}…</td>
-                      <td>{inv.customerId.slice(0, 12)}…</td>
-                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(inv.issuedAt).toLocaleDateString()}</td>
-                      <td className="font-mono">{money(Number(inv.totalAmount))}</td>
-                      <td className="font-mono">{money(Number(inv.amountPaid ?? 0))}</td>
-                      <td className="font-mono">{money(inv.balance)}</td>
-                      <td><StatusBadge status={inv.displayStatus} /></td>
-                      <td className="space-x-2">
-                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && inv.order?.status !== 'FAILED' && (
-                          <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
-                            setPayOrder(inv)
-                            setPayAmount(String(inv.balance.toFixed(2)))
-                          }}>Record payment</button>
-                        )}
-                        <Link to={adminPath(`/orders/${inv.orderId}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {invoiceRows.map((inv) => {
+                    const orderCode = inv.orderId.startsWith('seed_ord_')
+                      ? `ORD-${inv.orderId.replace('seed_ord_', '').toUpperCase()}`
+                      : `ORD-${inv.orderId.slice(-6).toUpperCase()}`
+                    const customerCode = inv.customerId.startsWith('cust_')
+                      ? `Customer #${inv.customerId.slice(-6).toUpperCase()}`
+                      : inv.customerId
+                    return (
+                      <tr key={inv.id}>
+                        <td className="font-mono text-xs font-semibold text-pleros-white">{inv.invoiceNumber}</td>
+                        <td className="font-mono text-xs text-pleros-primary">#{orderCode}</td>
+                        <td className="text-sm">{customerCode}</td>
+                        <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(inv.issuedAt).toLocaleDateString()}</td>
+                        <td className="font-mono font-medium">{money(Number(inv.totalAmount))}</td>
+                        <td className="font-mono">{money(Number(inv.amountPaid ?? 0))}</td>
+                        <td className="font-mono font-bold text-pleros-white">{money(inv.balance)}</td>
+                        <td><StatusBadge status={inv.displayStatus} /></td>
+                        <td className="space-x-2">
+                          {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && inv.order?.status !== 'FAILED' && (
+                            <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
+                              setPayOrder(inv)
+                              setPayAmount(String(inv.balance.toFixed(2)))
+                            }}>Record payment</button>
+                          )}
+                          <Link to={adminPath(`/orders/${inv.orderId}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}

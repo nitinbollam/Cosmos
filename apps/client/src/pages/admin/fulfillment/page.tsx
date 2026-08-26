@@ -157,37 +157,55 @@ export default function FulfillmentTasksPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((t) => (
-                  <tr key={t.id} className="border-b border-pleros-border/60 hover:bg-pleros-surface-2/40">
-                    <td className="py-2 pr-4">
-                      <Link
-                        to={adminPath(`/fulfillment/${encodeURIComponent(t.id)}`)}
-                        className="font-mono text-xs text-pleros-primary hover:underline"
-                      >
-                        {t.id.slice(0, 10)}…
-                      </Link>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <Link
-                        to={adminPath(`/orders/${encodeURIComponent(t.orderId)}`)}
-                        className="font-mono text-xs text-pleros-muted hover:text-pleros-primary"
-                      >
-                        {t.orderId.slice(0, 12)}…
-                      </Link>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <StatusBadge status={t.status} />
-                    </td>
-                    <td className="py-2 pr-4 text-pleros-muted text-xs">{t.warehouseCode}</td>
-                    <td className="py-2 pr-4 font-mono text-[11px] text-pleros-muted">
-                      {t.assignedUserId ? `${t.assignedUserId.slice(0, 8)}…` : '—'}
-                    </td>
-                    <td className="py-2 pr-4 text-pleros-muted text-xs">{t.pickItems?.length ?? '—'}</td>
-                    <td className="py-2 text-pleros-muted text-xs whitespace-nowrap">
-                      {t.createdAt ? new Date(t.createdAt).toLocaleString() : '—'}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((t) => {
+                  const taskCode = `TSK-${t.id.slice(-6).toUpperCase()}`
+                  const orderCode = t.orderId.startsWith('seed_ord_')
+                    ? `ORD-${t.orderId.replace('seed_ord_', '').toUpperCase()}`
+                    : `ORD-${t.orderId.slice(-6).toUpperCase()}`
+                  return (
+                    <tr key={t.id} className="border-b border-pleros-border/60 hover:bg-pleros-surface-2/40">
+                      <td className="py-2.5 pr-4">
+                        <Link
+                          to={adminPath(`/fulfillment/${encodeURIComponent(t.id)}`)}
+                          className="font-mono text-xs font-semibold text-pleros-primary hover:underline"
+                        >
+                          #{taskCode}
+                        </Link>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <Link
+                          to={adminPath(`/orders/${encodeURIComponent(t.orderId)}`)}
+                          className="font-mono text-xs text-pleros-muted hover:text-pleros-primary"
+                        >
+                          #{orderCode}
+                        </Link>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <StatusBadge status={t.status} />
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <span className="text-xs px-2 py-0.5 rounded bg-pleros-surface-2 text-pleros-text border border-pleros-border font-medium">
+                          {t.warehouseCode}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-xs text-pleros-muted">
+                        {t.assignedUserId ? (
+                          <span className="text-emerald-400 font-medium flex items-center gap-1">
+                            <span>👤</span> Assigned
+                          </span>
+                        ) : (
+                          <span className="text-amber-400 font-medium flex items-center gap-1">
+                            <span>👤</span> Unassigned
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-4 text-xs font-semibold text-pleros-white">{t.pickItems?.length ?? '—'} lines</td>
+                      <td className="py-2.5 text-pleros-muted text-xs whitespace-nowrap">
+                        {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -331,7 +331,9 @@ export default function OrderDetailPage() {
         <>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-pleros-white font-display font-mono tracking-tight">#{data.id.slice(-12)}</h1>
+              <h1 className="text-3xl font-bold text-pleros-white font-display font-mono tracking-tight">
+                #{data.id.startsWith('seed_ord_') ? `ORD-${data.id.replace('seed_ord_', '').toUpperCase()}` : `ORD-${data.id.slice(-6).toUpperCase()}`}
+              </h1>
               <div className="flex flex-wrap gap-3 mt-3 items-center">
                 <StatusBadge status={data.status} />
                 <span

@@ -232,9 +232,11 @@ export default function PosPage() {
 
       {lastOrderId ? (
         <div className="pleros-card border border-emerald-500/30">
-          <p className="text-emerald-400 font-medium">Sale complete</p>
+          <p className="text-emerald-400 font-semibold flex items-center gap-1.5">
+            <span>✅</span> Sale Complete
+          </p>
           <p className="text-sm text-pleros-text-2 mt-1">
-            Order <span className="font-mono">{lastOrderId.slice(-10)}</span>
+            Order <span className="font-mono font-semibold text-pleros-white">#{lastOrderId.startsWith('seed_ord_') ? `ORD-${lastOrderId.replace('seed_ord_', '').toUpperCase()}` : `ORD-${lastOrderId.slice(-6).toUpperCase()}`}</span>
             {lastOrderTotal != null ? ` · ${money(lastOrderTotal)}` : ''}
           </p>
           <div className="flex flex-wrap gap-3 mt-3">

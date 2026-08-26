@@ -33,8 +33,11 @@ function templateSummary(row: NotificationRow) {
   switch (row.templateKey) {
     case 'order.created':
       return `Order placed for $${String(p.total ?? '—')}.`
-    case 'order.shipped':
-      return `Order ${String(p.orderId ?? '').slice(-8)} is on its way.`
+    case 'order.shipped': {
+      const oid = String(p.orderId ?? '')
+      const code = oid.startsWith('seed_ord_') ? `ORD-${oid.replace('seed_ord_', '').toUpperCase()}` : `ORD-${oid.slice(-6).toUpperCase()}`
+      return `Order #${code} is on its way.`
+    }
     case 'invoice.issued':
       return `Invoice ${String(p.invoiceNumber ?? '—')} for $${String(p.total ?? '—')}${p.dueAt ? ` · due ${String(p.dueAt)}` : ''}.`
     case 'payment.received':

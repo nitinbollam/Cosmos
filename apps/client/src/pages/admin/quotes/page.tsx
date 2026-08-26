@@ -146,8 +146,10 @@ export default function AdminQuotesPage() {
             <tbody>
               {rows.map((q) => (
                 <tr key={q.id}>
-                  <td className="font-mono text-xs">{q.id.slice(0, 12)}…</td>
-                  <td>{q.customerRef.slice(0, 16)}…</td>
+                  <td className="font-mono text-xs font-semibold text-pleros-white">
+                    #{q.id.startsWith('seed_quote_') ? `Q-${q.id.replace('seed_quote_', '').toUpperCase()}` : `Q-${q.id.slice(-6).toUpperCase()}`}
+                  </td>
+                  <td className="text-sm font-medium">{q.customerRef.startsWith('cust_') ? `Customer #${q.customerRef.slice(-6).toUpperCase()}` : q.customerRef}</td>
                   <td className="font-mono">${quoteTotal(q).toFixed(2)}</td>
                   <td>
                     <StatusBadge status={q.status} />
