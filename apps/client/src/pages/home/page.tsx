@@ -212,7 +212,10 @@ export default function HomePage() {
           </div>
 
           <h1 className="pleros-landing-headline">
-            Everything your distribution business needs — office, warehouse, shop, and field.
+            Everything your distribution business needs —{' '}
+            <span className="bg-gradient-to-r from-sky-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
+              office, warehouse, shop, and field.
+            </span>
           </h1>
 
           <p className="pleros-landing-lede">
