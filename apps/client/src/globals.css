@@ -830,17 +830,17 @@ html:has(.pleros-landing) {
 
 /* Aurora landing overrides */
 [data-theme='aurora'] .pleros-landing {
-  background: linear-gradient(180deg, #faf7fd 0%, #f4ecfb 55%, #faf7fd 100%);
+  background: linear-gradient(180deg, #f3e8fa 0%, #ecd6fa 55%, #f3e8fa 100%);
 }
 
 [data-theme='aurora'] .pleros-landing-orb--1 {
-  background: #c084fc;
-  opacity: 0.18;
+  background: #a855f7;
+  opacity: 0.22;
 }
 
 [data-theme='aurora'] .pleros-landing-orb--2 {
-  background: #f472b6;
-  opacity: 0.14;
+  background: #f72585;
+  opacity: 0.18;
 }
 
 [data-theme='aurora'] {

@@ -85,64 +85,64 @@ h6 {
   --pleros-text: var(--c-text);
 }
 
-/* Aurora — light purple & hot pink minimal enterprise theme */
+/* Aurora — strong light purple & hot pink enterprise theme */
 [data-theme='aurora'] {
   color-scheme: light;
 
-  --palette-powder-petal: #faf7fd;
-  --palette-mauve: #f3ecfa;
-  --palette-wisteria: #e9ddf7;
-  --palette-soft-periwinkle: #f472b6;
+  --palette-powder-petal: #f3e8fa;
+  --palette-mauve: #ebd9fa;
+  --palette-wisteria: #dfc4f7;
+  --palette-soft-periwinkle: #f72585;
   --palette-medium-slate-blue: #9333ea;
 
-  /* Airy soft lilac backdrop */
-  --c-bg: #faf7fd;
+  /* Strong, visible light purple backdrop */
+  --c-bg: #f3e8fa;
   --c-bg-elevated: #ffffff;
   
-  /* Crisp elevated white surfaces with frosted lilac borders */
+  /* Crisp elevated white surfaces with strong lavender-purple borders */
   --c-surface: #ffffff;
-  --c-surface-muted: #faf7fd;
-  --c-surface-blush: #fdf4ff;
+  --c-surface-muted: #f0e2fa;
+  --c-surface-blush: #fae8ff;
   --c-surface-1: #ffffff;
-  --c-surface-2: #f4ecfb;
-  --c-surface-3: #ebdcf6;
+  --c-surface-2: #ebd9fa;
+  --c-surface-3: #debeea;
 
-  /* Deep plum / amethyst enterprise typography */
-  --c-ink: #1f1430;
-  --c-heading: #1f1430;
-  --c-text: #342a45;
-  --c-text-2: #5c4e72;
-  --c-text-3: #7c6d94;
+  /* Deep plum / black-purple enterprise typography */
+  --c-ink: #1a0a2a;
+  --c-heading: #1a0a2a;
+  --c-text: #2d1845;
+  --c-text-2: #553578;
+  --c-text-3: #77529e;
   --c-on-dark: #ffffff;
   --c-on-primary: #ffffff;
 
-  /* Frosted lilac & pink subtle borders */
-  --c-border: rgba(147, 51, 234, 0.12);
-  --c-border-card: rgba(147, 51, 234, 0.12);
+  /* Defined lavender-purple borders */
+  --c-border: rgba(147, 51, 234, 0.2);
+  --c-border-card: rgba(147, 51, 234, 0.22);
 
-  /* Primary: Refined Purple */
+  /* Primary: Strong Royal Violet / Purple */
   --c-primary: #9333ea;
   --c-primary-hover: #7e22ce;
   --c-primary-fg: #ffffff;
-  --c-primary-dim: rgba(147, 51, 234, 0.08);
+  --c-primary-dim: rgba(147, 51, 234, 0.16);
 
-  /* Accent: Hot Pink / Fuchsia */
-  --c-accent: #ec4899;
-  --c-accent-soft: #fdf2f8;
-  --c-accent-dim: rgba(236, 72, 153, 0.1);
+  /* Accent: Strong Vibrant Hot Pink / Fuchsia */
+  --c-accent: #f72585;
+  --c-accent-soft: #fce7f3;
+  --c-accent-dim: rgba(247, 37, 133, 0.16);
 
   /* Semantic status tokens */
   --c-success: #059669;
-  --c-success-soft: #ecfdf5;
+  --c-success-soft: #d1fae5;
   --c-warning: #d97706;
-  --c-warning-soft: #fffbeb;
+  --c-warning-soft: #fef3c7;
   --c-danger: #e11d48;
-  --c-danger-soft: #fff1f2;
+  --c-danger-soft: #ffe4e6;
 
-  --c-white: #1f1430;
-  --c-chart-grid: rgba(147, 51, 234, 0.06);
+  --c-white: #1a0a2a;
+  --c-chart-grid: rgba(147, 51, 234, 0.12);
   --c-chart-line: #9333ea;
-  --shadow-card: 0 1px 3px rgba(31, 20, 48, 0.04), 0 1px 2px rgba(236, 72, 153, 0.03);
+  --shadow-card: 0 2px 8px rgba(31, 20, 48, 0.06), 0 1px 3px rgba(247, 37, 133, 0.04);
 
   --pleros-bg: var(--c-bg);
   --pleros-surface: var(--c-surface);

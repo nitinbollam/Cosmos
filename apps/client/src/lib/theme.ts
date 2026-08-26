@@ -5,7 +5,7 @@ export const THEME_CHANGE_EVENT = 'pleros-theme-change'
 
 const THEME_COLORS: Record<PlerosTheme, string> = {
   obsidian: '#09090B',
-  aurora: '#FAF7FD',
+  aurora: '#F3E8FA',
 }
 
 export function isPlerosTheme(value: string | null | undefined): value is PlerosTheme {

@@ -85,31 +85,35 @@ export default function FulfillmentTasksPage() {
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
-        {STATUS_FILTERS.map((f) => (
-          <button
-            key={f.label}
-            type="button"
-            onClick={() => setStatusFilter(f.value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium border ${
-              statusFilter === f.value
-                ? 'border-pleros-primary bg-pleros-primary/20 text-pleros-white'
-                : 'border-pleros-border text-pleros-muted'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+        {STATUS_FILTERS.map((f) => {
+          const active = statusFilter === f.value
+          return (
+            <button
+              key={f.label}
+              type="button"
+              onClick={() => setStatusFilter(f.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+              style={{
+                background: active ? 'var(--c-primary-dim)' : 'var(--c-surface-2)',
+                color: active ? 'var(--c-primary)' : 'var(--c-text-2)',
+                border: `1px solid ${active ? 'var(--c-primary)' : 'var(--c-border-card)'}`,
+              }}
+            >
+              {f.label}
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs text-pleros-muted mb-1">Warehouse</label>
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1">Warehouse</label>
           <select
-            className="rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text min-w-[180px]"
+            className="pleros-input min-w-[180px]"
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
           >
-            <option value="">All</option>
+            <option value="">All warehouses</option>
             {(warehouses.data ?? []).map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name} ({w.code})
@@ -118,9 +122,9 @@ export default function FulfillmentTasksPage() {
           </select>
         </div>
         <div className="flex-1 min-w-[200px] max-w-md">
-          <label className="block text-xs text-pleros-muted mb-1">Order ID</label>
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1">Order ID</label>
           <input
-            className="w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text font-mono"
+            className="pleros-input font-mono"
             placeholder="Filter by order id…"
             value={orderSearch}
             onChange={(e) => setOrderSearch(e.target.value)}
