@@ -1478,12 +1478,14 @@ async function routeMsa(method: string, seg: string[], req: Request): Promise<Re
 
 async function routeTax(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
-  assertNotBuyer(session)
-  assertPermission(session, method === 'GET' ? 'compliance.read' : 'compliance.write')
 
   if (seg.length === 2 && seg[1] === 'settings' && method === 'GET') {
     return Response.json(await getTenantTaxSettings(session.tenantId))
   }
+
+  assertNotBuyer(session)
+  assertPermission(session, method === 'GET' ? 'compliance.read' : 'compliance.write')
+
   if (seg.length === 2 && seg[1] === 'settings' && method === 'PATCH') {
     assertPermission(session, 'compliance.write')
     const body = (await req.json()) as { salesTaxRate?: number }
