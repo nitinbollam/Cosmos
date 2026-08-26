@@ -8,33 +8,66 @@ import * as wavePicking from '../wave-picking'
 import { ApiError, requirePermission, assertPermission } from './common'
 
 export async function routeFulfillment(method: string, seg: string[], req: Request): Promise<Response> {
-  const session = await requirePermission(req, 'wms.write')
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'wms.read' : 'wms.write')
+  const url = new URL(req.url)
 
-  if (seg[1] === 'tasks' && seg.length === 2 && method === 'POST') {
-    const body = (await req.json()) as wmsFulfillment.CreateFulfillmentTaskInput
-    return Response.json(await wmsFulfillment.createFulfillmentTask(session.tenantId, body), { status: 201 })
-  }
-  if (seg[1] === 'tasks' && seg.length === 3 && method === 'DELETE') {
-    const body = (await req.json()) as { correlationId?: string }
-    return Response.json(
-      await wmsFulfillment.cancelFulfillmentByOrder(
-        session.tenantId,
-        seg[2],
-        body.correlationId ?? 'cancel',
-      ),
-    )
-  }
-  if (seg[1] === 'tasks' && seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
-    const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
-    await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch((err) =>
-      console.error(`[orders] pack side-effects failed for order ${result.orderId}:`, err),
-    )
-    return Response.json(result)
-  }
-  if (seg[1] === 'tasks' && seg.length === 4 && seg[3] === 'dispatch' && method === 'POST') {
-    // Single orchestrated dispatch: serials → inventory commit → backorder shorts →
-    // WMS status → order/invoice/COGS. Fails atomically enough to retry (task stays PACKED).
-    return Response.json(await orderOrchestration.dispatchFulfillmentTask(session.tenantId, seg[2]))
+  if (seg[1] === 'tasks') {
+    if (seg.length === 2 && method === 'GET') {
+      return Response.json(
+        await wmsFulfillment.listFulfillmentTasks(
+          session.tenantId,
+          url.searchParams.get('status') ?? undefined,
+          url.searchParams.get('warehouseId') ?? undefined,
+          url.searchParams.get('orderId') ?? undefined,
+        ),
+      )
+    }
+    if (seg.length === 3 && method === 'GET') {
+      return Response.json(await wmsFulfillment.getFulfillmentTask(session.tenantId, seg[2]))
+    }
+    if (seg.length === 4 && seg[3] === 'assign' && method === 'PATCH') {
+      const body = (await req.json()) as { userId?: string | null }
+      return Response.json(
+        await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], body.userId ?? null),
+      )
+    }
+    if (seg.length === 2 && method === 'POST') {
+      const body = (await req.json()) as wmsFulfillment.CreateFulfillmentTaskInput
+      return Response.json(await wmsFulfillment.createFulfillmentTask(session.tenantId, body), { status: 201 })
+    }
+    if (seg.length === 3 && method === 'DELETE') {
+      const body = (await req.json()) as { correlationId?: string }
+      return Response.json(
+        await wmsFulfillment.cancelFulfillmentByOrder(
+          session.tenantId,
+          seg[2],
+          body.correlationId ?? 'cancel',
+        ),
+      )
+    }
+    if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
+      return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2]))
+    }
+    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'pick' && method === 'POST') {
+      const body = (await req.json()) as Parameters<typeof wmsFulfillment.confirmPickLine>[3]
+      return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], body))
+    }
+    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'short' && method === 'POST') {
+      return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], { pickedQty: 0, markShort: true }))
+    }
+    if (seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
+      const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
+      await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch((err) =>
+        console.error(`[orders] pack side-effects failed for order ${result.orderId}:`, err),
+      )
+      return Response.json(result)
+    }
+    if (seg.length === 4 && seg[3] === 'dispatch' && method === 'POST') {
+      // Single orchestrated dispatch: serials → inventory commit → backorder shorts →
+      // WMS status → order/invoice/COGS. Fails atomically enough to retry (task stays PACKED).
+      return Response.json(await orderOrchestration.dispatchFulfillmentTask(session.tenantId, seg[2]))
+    }
   }
   throw new ApiError(404, 'Fulfillment route not found')
 }
