@@ -411,9 +411,11 @@ select.pleros-input option {
 
 /* Admin shell */
 .pleros-admin-shell {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   background: var(--c-bg);
+  overflow: hidden;
 }
 
 .pleros-admin-main {
@@ -421,12 +423,16 @@ select.pleros-input option {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .pleros-admin-content {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--c-bg);
+  -webkit-overflow-scrolling: touch;
 }
 
 .pleros-admin-content:has(.celestial-page) {
@@ -437,7 +443,7 @@ select.pleros-input option {
 
 .pleros-admin-header {
   height: 80px;
-  shrink: 0;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -505,12 +511,14 @@ select.pleros-input option {
 .pleros-sidebar {
   --sidebar-width: 240px;
   width: var(--sidebar-width);
-  shrink: 0;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--c-surface);
   border-right: var(--border-width) solid var(--c-border);
   box-shadow: 2px 0 12px rgba(0, 0, 0, 0.35);
+  height: 100%;
+  overflow: hidden;
 }
 
 .pleros-sidebar--collapsed {

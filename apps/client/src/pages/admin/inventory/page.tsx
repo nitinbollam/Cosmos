@@ -554,20 +554,20 @@ export default function InventoryPage() {
                 {(ledgerQ.data ?? []).map((e) => (
                   <tr key={e.id}>
                     <td className="text-pleros-text-3 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString()}</td>
-                    <td className="font-mono text-xs">{whMap.get(e.warehouseId) ?? e.warehouseId.slice(-8)}</td>
+                    <td className="font-mono text-xs">{whMap.get(e.warehouseId) ?? 'Warehouse'}</td>
                     <td className="font-mono text-xs">{e.locationId ?? '—'}</td>
                     <td className="font-mono text-xs">{e.batchId || '—'}</td>
-                    <td className="font-mono text-xs">{e.eventType}</td>
-                    <td className="font-mono" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
+                    <td className="font-mono text-xs font-medium">{e.eventType}</td>
+                    <td className="font-mono font-semibold" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
                       {e.quantityDelta >= 0 ? '+' : ''}
                       {e.quantityDelta}
                     </td>
                     <td className="font-mono">{e.quantityAfter}</td>
-                    <td className="font-mono text-xs">{Number(e.unitCost ?? 0).toFixed(4)}</td>
-                    <td className="font-mono text-xs max-w-[120px] truncate" title={`${e.referenceType ?? ''} ${e.referenceId ?? ''}`}>
-                      {e.referenceType ?? '—'} {e.referenceId ? e.referenceId.slice(0, 8) : ''}
+                    <td className="font-mono text-xs">${Number(e.unitCost ?? 0).toFixed(2)}</td>
+                    <td className="font-mono text-xs max-w-[140px] truncate" title={`${e.referenceType ?? ''} ${e.referenceId ?? ''}`}>
+                      {e.referenceType ?? '—'} {e.referenceId ? `#${e.referenceId.slice(-6).toUpperCase()}` : ''}
                     </td>
-                    <td className="font-mono text-xs">{e.performedBy.slice(-8)}</td>
+                    <td className="text-xs text-pleros-text-2">{e.performedBy.startsWith('usr_') ? `User #${e.performedBy.slice(-4).toUpperCase()}` : e.performedBy}</td>
                   </tr>
                 ))}
               </tbody>

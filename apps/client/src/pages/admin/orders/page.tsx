@@ -56,7 +56,11 @@ function customerLabel(o: OrderRow): string {
     if (typeof a.company === 'string' && a.company.trim()) return a.company
     if (typeof a.line1 === 'string' && a.line1.trim()) return a.line1
   }
-  return `Customer …${o.customerId.slice(-6)}`
+  if (o.customerId.startsWith('cust_')) {
+    const clean = o.customerId.replace('cust_', '').replace(/_/g, ' ')
+    return clean.charAt(0).toUpperCase() + clean.slice(1)
+  }
+  return `Customer #${o.customerId.slice(-6).toUpperCase()}`
 }
 
 function lineItemCount(o: OrderRow): number {
