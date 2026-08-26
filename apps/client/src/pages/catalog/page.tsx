@@ -235,7 +235,7 @@ export default function CatalogPage() {
   const end = meta ? Math.min(page * meta.pageSize, meta.total) : 0
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex flex-col md:flex-row bg-[var(--c-background)] text-[var(--c-text)]">
+    <div className="min-h-[calc(100vh-64px)] flex flex-col md:flex-row bg-[var(--c-bg)] text-[var(--c-text)]">
       {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 py-3 px-4 rounded-xl shadow-2xl border backdrop-blur-md bg-slate-900/90 text-white border-emerald-500/40 animate-in fade-in slide-in-from-bottom-3 duration-200">
@@ -251,13 +251,19 @@ export default function CatalogPage() {
       )}
 
       {/* Sidebar Filter Panel */}
-      <aside className="w-full md:w-64 lg:w-72 flex-shrink-0 border-b md:border-b-0 md:border-r border-[var(--c-border)] p-5 bg-[var(--c-surface)]">
-        <div className="flex items-center justify-between mb-5">
+      <aside className="w-full md:w-72 lg:w-80 flex-shrink-0 md:m-6 md:mr-0 p-5 rounded-2xl border border-[var(--c-border-card)] bg-[var(--c-surface)] shadow-sm space-y-6 self-start">
+        {/* Filter Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-[var(--c-border)]">
           <div className="flex items-center gap-2">
-            <span className="text-base">⚡</span>
-            <h2 className="text-sm font-bold tracking-wider uppercase text-pleros-white font-display">Filters</h2>
+            <span className="w-7 h-7 rounded-lg bg-[var(--c-primary-dim)] text-[var(--c-primary)] flex items-center justify-center text-sm font-bold shadow-inner">
+              ⚡
+            </span>
+            <div>
+              <h2 className="text-xs font-bold tracking-wider uppercase text-pleros-white font-display">Filters</h2>
+              <p className="text-[10px] text-[var(--c-text-3)] font-medium">Refine catalog products</p>
+            </div>
           </div>
-          {(category || inStockOnly || priceMin || priceMax || q) && (
+          {(category || inStockOnly || priceMin || priceMax || q) ? (
             <button
               type="button"
               onClick={() => {
@@ -268,17 +274,21 @@ export default function CatalogPage() {
                 setQ('')
                 setPage(1)
               }}
-              className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 hover:underline"
+              className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-[var(--c-surface-2)] text-[var(--c-accent)] hover:bg-[var(--c-accent-soft)] border border-[var(--c-border)] transition-all"
             >
               Reset all
             </button>
+          ) : (
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[var(--c-surface-2)] text-[var(--c-text-3)] border border-[var(--c-border)]">
+              All
+            </span>
           )}
         </div>
 
-        {/* Warehouse Selector */}
-        <div className="mb-5">
-          <label className="text-xs font-semibold text-[var(--c-text-3)] block mb-1.5 uppercase tracking-wider">
-            Fulfillment Warehouse
+        {/* Warehouse Selector Card */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-bold text-[var(--c-text-2)] flex items-center gap-1.5 uppercase tracking-wider">
+            <span>🏢</span> Fulfillment Hub
           </label>
           <select
             className="pleros-input w-full text-xs font-medium"
@@ -298,18 +308,33 @@ export default function CatalogPage() {
             })}
           </select>
           {currentWhObj?.totalAvailable != null && (
-            <p className="text-[11px] text-[var(--c-text-3)] mt-1 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span>{currentWhObj.totalAvailable.toLocaleString()} units available across {currentWhObj.inStockSkuCount ?? 0} SKUs</span>
-            </p>
+            <div className="p-2.5 rounded-xl bg-[var(--c-surface-2)] border border-[var(--c-border)] flex items-center gap-2 text-[11px] text-[var(--c-text-2)]">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+              <span><strong>{currentWhObj.totalAvailable.toLocaleString()}</strong> units available across {currentWhObj.inStockSkuCount ?? 0} SKUs</span>
+            </div>
           )}
         </div>
 
         {/* Categories */}
-        <div className="mb-5">
-          <label className="text-xs font-semibold text-[var(--c-text-3)] block mb-2 uppercase tracking-wider">
-            Category
-          </label>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-bold text-[var(--c-text-2)] flex items-center gap-1.5 uppercase tracking-wider">
+              <span>📂</span> Category
+            </label>
+            {category && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCategory('')
+                  setPage(1)
+                }}
+                className="text-[10px] font-semibold text-[var(--c-accent)] hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           <div className="flex flex-wrap md:flex-col gap-1.5">
             <button
               type="button"
@@ -317,16 +342,21 @@ export default function CatalogPage() {
                 setCategory('')
                 setPage(1)
               }}
-              className={`text-left text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+              className={`text-left text-xs px-3 py-2 rounded-xl font-semibold transition-all flex items-center justify-between ${
                 !category
-                  ? 'bg-sky-500/15 text-sky-400 font-semibold border border-sky-500/30'
-                  : 'text-[var(--c-text-2)] hover:bg-[var(--c-surface-2)] hover:text-[var(--c-heading)] border border-transparent'
+                  ? 'bg-[var(--c-primary)] text-white shadow-md border border-[var(--c-primary)]'
+                  : 'bg-[var(--c-surface-2)] text-[var(--c-text)] hover:border-[var(--c-primary)] border border-[var(--c-border)]'
               }`}
             >
-              All Categories
+              <span className="flex items-center gap-2">
+                <span>✨</span>
+                <span>All Categories</span>
+              </span>
+              {!category && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
             </button>
             {categories.map((c) => {
               const active = category === c
+              const theme = getCategoryTheme(c)
               return (
                 <button
                   key={c}
@@ -335,66 +365,149 @@ export default function CatalogPage() {
                     setCategory(c)
                     setPage(1)
                   }}
-                  className={`text-left text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  className={`text-left text-xs px-3 py-2 rounded-xl font-semibold transition-all flex items-center justify-between ${
                     active
-                      ? 'bg-sky-500/15 text-sky-400 font-semibold border border-sky-500/30'
-                      : 'text-[var(--c-text-2)] hover:bg-[var(--c-surface-2)] hover:text-[var(--c-heading)] border border-transparent'
+                      ? 'bg-[var(--c-primary)] text-white shadow-md border border-[var(--c-primary)]'
+                      : 'bg-[var(--c-surface-2)] text-[var(--c-text)] hover:border-[var(--c-primary)] border border-[var(--c-border)]'
                   }`}
                 >
-                  {c}
+                  <span className="flex items-center gap-2 truncate">
+                    <span>{theme.icon}</span>
+                    <span className="truncate">{c}</span>
+                  </span>
+                  {active && <span className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />}
                 </button>
               )
             })}
           </div>
         </div>
 
-        {/* Availability Toggle */}
-        <div className="mb-5 pt-3 border-t border-[var(--c-border)]">
-          <label className="text-xs font-semibold text-[var(--c-text-3)] block mb-2 uppercase tracking-wider">
-            Availability
+        {/* Availability Toggle Pill */}
+        <div className="space-y-2 pt-2 border-t border-[var(--c-border)]">
+          <label className="text-[11px] font-bold text-[var(--c-text-2)] flex items-center gap-1.5 uppercase tracking-wider">
+            <span>📦</span> Stock Availability
           </label>
-          <label className="flex items-center gap-2.5 text-xs text-[var(--c-text-2)] cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={inStockOnly}
-              onChange={(e) => {
-                setInStockOnly(e.target.checked)
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-[var(--c-surface-2)] border border-[var(--c-border)] gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setInStockOnly(false)
                 setPage(1)
               }}
-              className="rounded accent-sky-500 w-4 h-4 cursor-pointer"
-            />
-            <span>In stock only</span>
-          </label>
+              className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all text-center ${
+                !inStockOnly
+                  ? 'bg-[var(--c-surface)] text-[var(--c-heading)] shadow-sm border border-[var(--c-border-card)]'
+                  : 'text-[var(--c-text-3)] hover:text-[var(--c-text)]'
+              }`}
+            >
+              All Items
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setInStockOnly(true)
+                setPage(1)
+              }}
+              className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all text-center ${
+                inStockOnly
+                  ? 'bg-[var(--c-primary)] text-white shadow-sm border border-[var(--c-primary)]'
+                  : 'text-[var(--c-text-3)] hover:text-[var(--c-text)]'
+              }`}
+            >
+              ⚡ In Stock
+            </button>
+          </div>
         </div>
 
         {/* Price Range */}
-        <div className="mb-5 pt-3 border-t border-[var(--c-border)]">
-          <label className="text-xs font-semibold text-[var(--c-text-3)] block mb-2 uppercase tracking-wider">
-            Price Range ($)
-          </label>
+        <div className="space-y-2 pt-2 border-t border-[var(--c-border)]">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-bold text-[var(--c-text-2)] flex items-center gap-1.5 uppercase tracking-wider">
+              <span>💰</span> Price Range
+            </label>
+            {(priceMin || priceMax) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPriceMin('')
+                  setPriceMax('')
+                }}
+                className="text-[10px] font-semibold text-[var(--c-accent)] hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div className="relative">
-              <span className="absolute left-2.5 top-2 text-xs text-[var(--c-text-3)]">$</span>
+              <span className="absolute left-3 top-2.5 text-xs font-bold text-[var(--c-text-3)]">$</span>
               <input
                 type="number"
                 min={0}
                 placeholder="Min"
                 value={priceMin}
                 onChange={(e) => setPriceMin(e.target.value)}
-                className="pleros-input w-full !pl-6 text-xs"
+                className="pleros-input w-full !pl-7 text-xs font-medium"
               />
             </div>
             <div className="relative">
-              <span className="absolute left-2.5 top-2 text-xs text-[var(--c-text-3)]">$</span>
+              <span className="absolute left-3 top-2.5 text-xs font-bold text-[var(--c-text-3)]">$</span>
               <input
                 type="number"
                 min={0}
                 placeholder="Max"
                 value={priceMax}
                 onChange={(e) => setPriceMax(e.target.value)}
-                className="pleros-input w-full !pl-6 text-xs"
+                className="pleros-input w-full !pl-7 text-xs font-medium"
               />
             </div>
+          </div>
+
+          {/* Quick Price Presets */}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setPriceMin('0')
+                setPriceMax('25')
+              }}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                priceMin === '0' && priceMax === '25'
+                  ? 'bg-[var(--c-primary-dim)] text-[var(--c-primary)] border-[var(--c-primary)]'
+                  : 'bg-[var(--c-surface-2)] text-[var(--c-text-2)] border-[var(--c-border)] hover:text-[var(--c-text)]'
+              }`}
+            >
+              &lt; $25
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPriceMin('0')
+                setPriceMax('50')
+              }}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                priceMin === '0' && priceMax === '50'
+                  ? 'bg-[var(--c-primary-dim)] text-[var(--c-primary)] border-[var(--c-primary)]'
+                  : 'bg-[var(--c-surface-2)] text-[var(--c-text-2)] border-[var(--c-border)] hover:text-[var(--c-text)]'
+              }`}
+            >
+              &lt; $50
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPriceMin('50')
+                setPriceMax('')
+              }}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                priceMin === '50' && priceMax === ''
+                  ? 'bg-[var(--c-primary-dim)] text-[var(--c-primary)] border-[var(--c-primary)]'
+                  : 'bg-[var(--c-surface-2)] text-[var(--c-text-2)] border-[var(--c-border)] hover:text-[var(--c-text)]'
+              }`}
+            >
+              $50+
+            </button>
           </div>
         </div>
       </aside>
