@@ -13,16 +13,25 @@ function msaRootDir(): string {
   return root
 }
 
+function safeMsaPath(relativePath: string): string {
+  const root = path.resolve(msaRootDir())
+  const resolved = path.resolve(root, relativePath)
+  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+    throw new Error(`Path traversal detected: ${relativePath}`)
+  }
+  return resolved
+}
+
 /** Persist MULTICAT file locally under `.data/msa/`. */
 export async function persistMsaFile(relativePath: string, content: string): Promise<string> {
-  const full = path.join(msaRootDir(), relativePath)
+  const full = safeMsaPath(relativePath)
   mkdirSync(path.dirname(full), { recursive: true })
   await pipeline(Readable.from([content]), createWriteStream(full, { encoding: 'utf8' }))
   return full
 }
 
 export function readMsaFile(relativePath: string): string {
-  const full = path.join(msaRootDir(), relativePath)
+  const full = safeMsaPath(relativePath)
   if (!existsSync(full)) throw new Error(`MSA file not found: ${relativePath}`)
   return readFileSync(full, 'utf8')
 }

@@ -161,7 +161,7 @@ export async function requirePermission(req: Request, permission: string | strin
   return session
 }
 
-export function filterAuthorizedModules(session: SessionUser | null | undefined): ModuleId[] {
+export function filterAuthorizedModules(session: SessionUser | null | undefined): ModuleKey[] {
   if (!session) return []
   return AVAILABLE_MODULES.filter(
     (mod) =>

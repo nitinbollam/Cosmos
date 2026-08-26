@@ -142,10 +142,17 @@ export async function registerUser(input: {
 }
 
 export async function refreshUserTokens(userId: string, refreshToken: string): Promise<TokenPair> {
+  const refreshSecret = new TextEncoder().encode(jwtRefreshSecret())
+  try {
+    const { payload } = await jose.jwtVerify(refreshToken, refreshSecret)
+    if (payload.sub !== userId) throw new ApiError(401, 'Access denied')
+  } catch {
+    throw new ApiError(401, 'Access denied')
+  }
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user?.refreshTokenHash) throw new Error('Access denied')
+  if (!user?.refreshTokenHash) throw new ApiError(401, 'Access denied')
   const ok = await bcrypt.compare(refreshToken, user.refreshTokenHash)
-  if (!ok) throw new Error('Access denied')
+  if (!ok) throw new ApiError(401, 'Access denied')
   return signPair(user)
 }
 

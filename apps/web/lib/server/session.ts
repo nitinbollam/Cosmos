@@ -121,7 +121,6 @@ export function toJsonError(e: unknown): Response {
   if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') {
     return Response.json({ message: 'Conflict' }, { status: 409 })
   }
-  const msg = e instanceof Error ? e.message : 'Internal server error'
-  const status = msg.includes('not found') ? 404 : msg.includes('required') ? 400 : 500
-  return Response.json({ message: msg }, { status })
+  console.error('[API Uncaught Error]', e)
+  return Response.json({ message: 'Internal server error' }, { status: 500 })
 }

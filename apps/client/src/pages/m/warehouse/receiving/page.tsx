@@ -41,7 +41,7 @@ export default function ReceivingMobilePage() {
         purchaseOrderId: poId || undefined,
       })
       setSessionId(res.id)
-      setMsg(`Session ${res.id.slice(-8)} started`)
+      setMsg(`Session #${res.id.slice(-8).toUpperCase()} started`)
     } catch (e) {
       setMsg(axiosErr(e))
     }
@@ -139,7 +139,7 @@ export default function ReceivingMobilePage() {
         </Suspense>
         <div className="split-body">
           <p style={{ fontSize: 13, opacity: 0.8, margin: 0 }}>
-            Session {sessionId.slice(-8)} · {recent.length} scans
+            Session #{sessionId.slice(-8).toUpperCase()} · {recent.length} scans
           </p>
           {msg && <p style={{ marginTop: 8, fontSize: 13 }}>{msg}</p>}
           {recentList}
@@ -170,7 +170,9 @@ export default function ReceivingMobilePage() {
         </>
       ) : (
         <>
-          <p style={{ fontSize: 13, opacity: 0.8 }}>Session {sessionId}</p>
+          <p style={{ fontSize: 13, opacity: 0.8 }}>
+            Active Session: <strong style={{ fontFamily: 'var(--font-mono)' }}>#{sessionId.slice(-8).toUpperCase()}</strong>
+          </p>
           <button
             type="button"
             className="btn-primary"

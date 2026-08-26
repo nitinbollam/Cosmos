@@ -247,26 +247,18 @@ export default function CatalogPage() {
           {sorted.map((sku) => {
             const oos = (sku.quantityAvailable ?? 0) === 0
             return (
-              <div key={sku.id} className="pleros-card relative" style={{ padding: 16 }}>
-                {oos ? (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      background: 'rgba(6,6,15,0.75)',
-                      borderRadius: 14,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 700,
-                      color: 'var(--c-text-3)',
-                    }}
-                  >
-                    Out of stock
-                  </div>
-                ) : null}
+              <div
+                key={sku.id}
+                className="pleros-card relative"
+                style={{
+                  padding: 16,
+                  opacity: oos ? 0.75 : 1,
+                  transition: 'opacity 0.2s ease',
+                }}
+              >
                 <div
                   style={{
+                    position: 'relative',
                     height: 160,
                     background: 'var(--c-surface-2)',
                     borderRadius: 10,
@@ -277,8 +269,30 @@ export default function CatalogPage() {
                     fontSize: 11,
                     color: 'var(--c-text-3)',
                     marginBottom: 12,
+                    overflow: 'hidden',
                   }}
                 >
+                  {oos ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        background: 'rgba(15, 23, 42, 0.88)',
+                        border: '1px solid var(--c-danger-soft)',
+                        color: 'var(--c-danger)',
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        backdropFilter: 'blur(4px)',
+                      }}
+                    >
+                      Out of stock
+                    </div>
+                  ) : null}
                   {sku.code}
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--c-text-3)' }}>{sku.code}</div>
