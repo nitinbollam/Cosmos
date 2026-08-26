@@ -24,8 +24,10 @@ type CounterOffer = {
 
 type QuoteDetail = {
   id: string
+  quoteNumber?: string
   status: string
   customerRef: string
+  customerName?: string
   convertedOrderId?: string | null
   rejectionReason?: string | null
   notes?: string | null
@@ -139,12 +141,9 @@ export default function QuoteDetailPage() {
 
   return (
     <main className="pleros-shop-page-main">
-      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div>
         <Link to="/quotes" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
           ← All quotes
-        </Link>
-        <Link to="/login" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
-          Re-authenticate →
         </Link>
       </div>
       {err ? (
@@ -159,9 +158,11 @@ export default function QuoteDetailPage() {
       ) : null}
       {q ? (
         <div style={{ marginTop: 24 }}>
-          <h1 style={{ fontSize: 22, color: 'var(--c-heading)' }}>Quote · {q.id.slice(0, 12)}…</h1>
+          <h1 style={{ fontSize: 22, color: 'var(--c-heading)', margin: 0 }}>
+            {q.quoteNumber || `Quote #${q.id.slice(-8).toUpperCase()}`}
+          </h1>
           <p className="pleros-shop-muted" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <strong style={{ color: 'var(--c-text)' }}>{q.customerRef.slice(0, 16)}…</strong>
+            <strong style={{ color: 'var(--c-text)' }}>{q.customerName || q.customerRef}</strong>
             <StatusBadge status={q.status} />
             {q.createdAt ? ` · ${new Date(q.createdAt).toLocaleString()}` : ''}
           </p>

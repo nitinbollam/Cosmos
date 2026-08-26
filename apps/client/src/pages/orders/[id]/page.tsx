@@ -72,6 +72,14 @@ function trackingUrl(carrier: string | null | undefined, trackingNumber: string 
 
 const ADMIN_BASE = import.meta.env.VITE_WEB_ADMIN_ORIGIN?.replace(/\/$/, '') ?? ''
 
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `#ORD-${id.slice(-8).toUpperCase()}`
+}
+
 export default function StorefrontOrderDetailPage() {
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -204,7 +212,7 @@ export default function StorefrontOrderDetailPage() {
       {o ? (
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-            <h1 style={{ fontSize: 22, margin: 0, color: 'var(--c-heading)' }}>Order · {o.id.slice(0, 12)}…</h1>
+            <h1 style={{ fontSize: 22, margin: 0, color: 'var(--c-heading)' }}>Order {formatOrderNumber(o.id)}</h1>
             <div style={{ fontSize: 13 }}>
               <a
                 href={storefrontAdminHref(`/orders/${encodeURIComponent(o.id)}`)}

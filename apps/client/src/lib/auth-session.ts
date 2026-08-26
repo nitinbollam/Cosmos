@@ -10,6 +10,33 @@ export function getAccessToken(): string | null {
   return window.localStorage.getItem(ACCESS_KEY)
 }
 
+export type SessionPayload = {
+  sub?: string
+  email?: string
+  role?: string
+  tenantId?: string
+  permissions?: string[]
+}
+
+export function getSessionUser(): SessionPayload | null {
+  const token = getAccessToken()
+  if (!token) return null
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const base64 = parts[1]!.replace(/-/g, '+').replace(/_/g, '/')
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
+        .join(''),
+    )
+    return JSON.parse(json) as SessionPayload
+  } catch {
+    return null
+  }
+}
+
 export function isSignedIn(): boolean {
   return Boolean(getAccessToken())
 }

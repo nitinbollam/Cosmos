@@ -11,24 +11,28 @@ import * as pos from '../pos'
 import * as posReceipt from '../pos-receipt'
 import * as featureFlags from '../feature-flags'
 import * as celestial from '../celestial/orchestrator'
+import { isPortalBuyer } from '../buyer-context'
 import { ApiError, requireSession, requireRole, requirePermission, assertPermission, hasPermission, ADMIN_ROLES, assertNotBuyer } from './common'
 
 export async function routeNotifications(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
-  assertNotBuyer(session)
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
-    assertPermission(session, 'notifications.read')
+    const isBuyer = isPortalBuyer(session.role)
+    if (!isBuyer) {
+      assertPermission(session, 'notifications.read')
+    }
     const status = url.searchParams.get('status') ?? undefined
     const channel = url.searchParams.get('channel') ?? undefined
     const event = url.searchParams.get('event') ?? undefined
-    const recipient = url.searchParams.get('recipient') ?? undefined
+    const recipient = isBuyer ? session.email : (url.searchParams.get('recipient') ?? undefined)
     return Response.json(
       await notifications.list(session.tenantId, { status, channel, event, recipient }),
     )
   }
   if (seg.length === 3 && seg[1] === 'providers' && seg[2] === 'status' && method === 'GET') {
+    assertNotBuyer(session)
     await requirePermission(req, 'notifications.read')
     return Response.json(getNotificationProviderStatus())
   }
@@ -44,6 +48,7 @@ export async function routeNotifications(method: string, seg: string[], req: Req
     return Response.json(await notifications.retry(session.tenantId, body.id))
   }
   if (seg.length === 2 && seg[1] === 'send' && method === 'POST') {
+    assertNotBuyer(session)
     assertPermission(session, 'notifications.write')
     const key = req.headers.get('idempotency-key')?.trim() || undefined
     const body = (await req.json()) as notifications.SendNotificationInput

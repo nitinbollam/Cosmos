@@ -24,6 +24,14 @@ type OrderPage = {
   hasMore?: boolean
 }
 
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `#ORD-${id.slice(-8).toUpperCase()}`
+}
+
 export default function StorefrontOrdersPage() {
   const navigate = useNavigate()
   const addItems = useCartStore((s) => s.addItems)
@@ -141,7 +149,7 @@ export default function StorefrontOrdersPage() {
                   style={{ cursor: 'pointer' }}
                   onClick={() => navigate(`/orders/${encodeURIComponent(o.id)}`)}
                 >
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{o.id.slice(0, 14)}…</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600 }}>{formatOrderNumber(o.id)}</td>
                   <td style={{ color: 'var(--c-text-3)', fontSize: 13 }}>{new Date(o.createdAt).toLocaleString()}</td>
                   <td>
                     <StatusBadge status={o.status} />

@@ -7,6 +7,14 @@ import { axiosErr } from '@/lib/axios-error'
 type Line = { skuId: string; skuCode?: string | null; skuName?: string | null; quantity: number; unitPrice: string | number }
 type OrderDetail = { id: string; status: string; totalAmount: string | number; lineItems: Line[]; notes?: string | null }
 
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `#ORD-${id.slice(-8).toUpperCase()}`
+}
+
 export default function OrderConfirmationPage() {
   const params = useParams<{ id: string }>()
   const id = params?.id ?? ''
@@ -47,7 +55,9 @@ export default function OrderConfirmationPage() {
       {order ? (
         <>
           <p style={{ color: 'var(--c-text-2)', marginTop: 12 }}>Order number</p>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--c-accent)' }}>{order.id}</p>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--c-accent)' }}>
+            {formatOrderNumber(order.id)}
+          </p>
           <div className="pleros-card mt-6 text-left">
             <h3 style={{ marginTop: 0 }}>Summary</h3>
             {order.lineItems.map((li) => (

@@ -1,6 +1,22 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
+import { PlerosLogo } from '@/components/pleros-logo'
+
+const FIELD_CONFIG: Array<{
+  key: 'companyName' | 'slug' | 'email' | 'password' | 'firstName' | 'lastName'
+  label: string
+  placeholder: string
+  type: string
+  minLength?: number
+}> = [
+  { key: 'companyName', label: 'Company name', placeholder: 'e.g. Acme Distribution', type: 'text' },
+  { key: 'slug', label: 'Workspace URL slug', placeholder: 'e.g. acme-dist', type: 'text' },
+  { key: 'email', label: 'Work email', placeholder: 'you@company.com', type: 'email' },
+  { key: 'password', label: 'Password', placeholder: '10+ characters (letters & numbers)', type: 'password', minLength: 10 },
+  { key: 'firstName', label: 'First name', placeholder: 'Jane', type: 'text' },
+  { key: 'lastName', label: 'Last name', placeholder: 'Doe', type: 'text' },
+]
 
 export default function SignupPage() {
   const navigate = useNavigate()
@@ -61,10 +77,29 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="pleros-auth-page" style={{ display: 'block', paddingTop: 48 }}>
+    <main className="pleros-auth-page">
       <AuthThemeToolbar />
-      <div className="mx-auto max-w-md p-8">
-        <h1 className="text-2xl font-semibold mb-2">Start your Pleros workspace</h1>
+      <div className="pleros-card pleros-auth-card">
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
+            <PlerosLogo size="lg" />
+          </div>
+          <h1
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              fontSize: 26,
+              color: 'var(--c-heading)',
+              margin: '16px 0 0',
+            }}
+          >
+            Start your workspace
+          </h1>
+          <p style={{ color: 'var(--c-text-2)', fontSize: 14, marginTop: 8 }}>
+            Create a new distributor tenant on Pleros
+          </p>
+        </div>
+
         {verifyState ? (
           <div className="space-y-4">
             <p className="text-sm" style={{ color: 'var(--c-text-2)' }}>
@@ -84,50 +119,48 @@ export default function SignupPage() {
                 </a>
                 <Link
                   to={verifyState.verifyUrl.replace(/^https?:\/\/[^/]+/, '')}
-                  className="pleros-btn pleros-btn-primary w-full inline-block text-center"
+                  className="btn-primary w-full inline-block text-center"
                 >
                   Verify email now
                 </Link>
               </div>
             ) : (
-              <Link to="/verify-email" className="pleros-btn pleros-btn-primary w-full inline-block text-center">
+              <Link to="/verify-email" className="btn-primary w-full inline-block text-center">
                 Open verification page
               </Link>
             )}
-            <Link to="/admin/login" className="text-sm" style={{ color: 'var(--c-accent)' }}>
-              Go to sign in
-            </Link>
+            <div className="text-center pt-2">
+              <Link to="/admin/login" className="text-sm" style={{ color: 'var(--c-accent)' }}>
+                ← Go to sign in
+              </Link>
+            </div>
           </div>
         ) : (
           <>
-            <p className="text-sm mb-6" style={{ color: 'var(--c-text-3)' }}>
-              Create a new distributor tenant. Already have an account? <Link to="/login">Sign in</Link>
-            </p>
-            <form onSubmit={onSubmit} className="space-y-3">
-              {(['companyName', 'slug', 'email', 'password', 'firstName', 'lastName'] as const).map((key) => (
-                <input
-                  key={key}
-                  className="pleros-input w-full"
-                  placeholder={
-                    key === 'slug'
-                      ? 'company-slug'
-                      : key === 'password'
-                        ? 'password (10+ chars, letter + number)'
-                        : key.replace(/([A-Z])/g, ' $1')
-                  }
-                  type={key === 'password' ? 'password' : key === 'email' ? 'email' : 'text'}
-                  minLength={key === 'password' ? 10 : undefined}
-                  value={form[key]}
-                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                  required
-                />
+            <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {FIELD_CONFIG.map(({ key, label, placeholder, type, minLength }) => (
+                <div key={key}>
+                  <label className="text-xs block mb-1 font-medium" style={{ color: 'var(--c-text-3)' }}>
+                    {label}
+                  </label>
+                  <input
+                    className="pleros-input w-full"
+                    placeholder={placeholder}
+                    type={type}
+                    minLength={minLength}
+                    value={form[key]}
+                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                    required
+                  />
+                </div>
               ))}
-              <label className="flex items-start gap-2 text-sm" style={{ color: 'var(--c-text-2)' }}>
+
+              <label className="flex items-start gap-2 text-xs pt-1" style={{ color: 'var(--c-text-2)' }}>
                 <input
                   type="checkbox"
                   checked={agreed}
                   onChange={(e) => setAgreed(e.target.checked)}
-                  style={{ marginTop: 3 }}
+                  style={{ marginTop: 2 }}
                 />
                 <span>
                   I agree to the{' '}
@@ -140,14 +173,32 @@ export default function SignupPage() {
                   </Link>
                 </span>
               </label>
-              {error ? <p className="text-sm text-red-600">{error}</p> : null}
-              <button type="submit" className="pleros-btn pleros-btn-primary w-full" disabled={loading}>
-                {loading ? 'Creating…' : 'Create workspace'}
+
+              {error ? (
+                <p style={{ color: 'var(--c-danger)', fontSize: 13, margin: '4px 0 0' }}>{error}</p>
+              ) : null}
+
+              <button
+                type="submit"
+                className="btn-primary"
+                style={{ width: '100%', marginTop: 8 }}
+                disabled={loading}
+              >
+                {loading ? 'Creating workspace…' : 'Create workspace'}
               </button>
             </form>
+
+            <div className="text-center mt-6 pt-4 border-t" style={{ borderColor: 'var(--c-border)' }}>
+              <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>
+                Already have an account?{' '}
+                <Link to="/login" style={{ color: 'var(--c-accent)', fontWeight: 600 }}>
+                  Sign in
+                </Link>
+              </p>
+            </div>
           </>
         )}
       </div>
-    </div>
+    </main>
   )
 }
