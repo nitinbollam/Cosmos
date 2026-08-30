@@ -76,7 +76,120 @@ html:has(.pleros-landing) {
   min-height: 100dvh;
   overflow-x: hidden;
   font-family: var(--font-body);
-  background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg-elevated) 55%, var(--c-bg) 100%);
+  background-color: var(--c-bg);
+}
+
+.neo-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+[data-theme='aurora'] .neo-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(147, 51, 234, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(147, 51, 234, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.neo-box {
+  background: var(--c-surface);
+  border: 2px solid var(--neo-border-strong, #27272a);
+  box-shadow: var(--neo-shadow, 4px 4px 0px #000);
+  border-radius: 8px;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.neo-box-interactive {
+  background: var(--c-surface);
+  border: 2px solid var(--neo-border-strong, #27272a);
+  box-shadow: var(--neo-shadow, 4px 4px 0px #000);
+  border-radius: 8px;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease;
+}
+
+.neo-box-interactive:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: var(--neo-shadow-lg, 7px 7px 0px #000);
+}
+
+.neo-box-interactive:active {
+  transform: translate(1px, 1px);
+  box-shadow: var(--neo-shadow-sm, 2px 2px 0px #000);
+}
+
+.neo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  padding: 10px 18px;
+  border-radius: 6px;
+  border: 2px solid var(--neo-border-black, #000);
+  box-shadow: var(--neo-shadow, 4px 4px 0px #000);
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.neo-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px var(--neo-border-black, #000);
+}
+
+.neo-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px var(--neo-border-black, #000);
+}
+
+.neo-btn-primary {
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+}
+
+.neo-btn-primary:hover {
+  background: var(--c-primary-hover);
+}
+
+.neo-btn-secondary {
+  background: var(--c-surface-2);
+  color: var(--c-heading);
+  border-color: var(--neo-border-strong, #27272a);
+}
+
+.neo-btn-secondary:hover {
+  background: var(--c-surface-3);
+}
+
+.neo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1.5px solid currentColor;
+  box-shadow: 2px 2px 0px currentColor;
+}
+
+.neo-badge-solid {
+  background: var(--c-surface-2);
+  border: 1.5px solid var(--neo-border-strong, #27272a);
+  box-shadow: 2px 2px 0px #000;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--c-text);
 }
 
 .pleros-landing-ambient {
@@ -126,9 +239,9 @@ html:has(.pleros-landing) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 1120px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 28px 24px 0;
+  padding: 20px 24px;
 }
 
 .pleros-landing-logo {
@@ -137,18 +250,10 @@ html:has(.pleros-landing) {
   gap: 10px;
   font-family: var(--font-body);
   font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--c-heading);
   text-decoration: none;
-}
-
-.pleros-landing-logo-mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--c-primary), var(--c-accent));
-  box-shadow: 0 0 0 4px var(--c-primary-dim);
 }
 
 .pleros-landing-nav {
@@ -158,12 +263,13 @@ html:has(.pleros-landing) {
 }
 
 .pleros-landing-nav-link {
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--c-text-2);
   text-decoration: none;
-  padding: 8px 12px;
-  border-radius: 999px;
+  padding: 6px 12px;
+  border-radius: 6px;
   transition: color 0.15s ease, background 0.15s ease;
 }
 
@@ -173,44 +279,45 @@ html:has(.pleros-landing) {
 }
 
 .pleros-landing-nav-cta {
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
   color: var(--c-on-primary);
   text-decoration: none;
-  padding: 9px 18px;
-  border-radius: 999px;
+  padding: 8px 16px;
+  border-radius: 6px;
   background: var(--c-primary);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0px #000;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 .pleros-landing-nav-cta:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #000;
 }
 
 .pleros-landing-hero {
   display: grid;
   gap: 40px;
-  max-width: 1120px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 56px 24px 48px;
+  padding: 36px 24px 48px;
   align-items: start;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 960px) {
   .pleros-landing-hero {
-    grid-template-columns: 1.15fr 0.85fr;
+    grid-template-columns: 1.1fr 0.9fr;
     gap: 48px;
-    padding-top: 64px;
+    padding-top: 48px;
   }
 }
 
 .pleros-landing-eyebrow {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--c-text-3);
 }
@@ -218,19 +325,19 @@ html:has(.pleros-landing) {
 .pleros-landing-headline {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4.5vw, 3.25rem);
+  font-size: clamp(2rem, 4vw, 3.25rem);
   font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.025em;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
   color: var(--c-heading);
   max-width: 100%;
 }
 
 .pleros-landing-lede {
-  margin: 20px 0 0;
-  max-width: 52ch;
+  margin: 18px 0 0;
+  max-width: 56ch;
   font-size: 1rem;
-  line-height: 1.7;
+  line-height: 1.65;
   color: var(--c-text-2);
 }
 
@@ -238,7 +345,7 @@ html:has(.pleros-landing) {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 36px;
+  margin-top: 32px;
 }
 
 .pleros-landing-btn {

@@ -1,11 +1,13 @@
-import { useState, type CSSProperties } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { LandingNav } from '@/components/landing-nav'
 import { PlerosLogo } from '@/components/pleros-logo'
 import { getSessionUser, isSignedIn } from '@/lib/auth-session'
 
+type PortalId = 'admin' | 'b2b' | 'warehouse' | 'delivery' | 'pos' | 'celestial'
+
 type RolePortal = {
-  id: string
+  id: PortalId
   title: string
   subtitle: string
   badge: string
@@ -17,357 +19,610 @@ type RolePortal = {
   description: string
   highlights: string[]
   metrics: { label: string; val: string }[]
+  simulatedPreview: {
+    statusBadge: string
+    title: string
+    lines: { tag: string; label: string; value: string }[]
+    actions: { label: string; href: string; primary?: boolean }[]
+  }
 }
 
 const ROLE_PORTALS: RolePortal[] = [
   {
     id: 'admin',
     title: 'Back-Office ERP',
-    subtitle: 'Operations, Finance & Executive Hub',
-    badge: 'Full Platform Access',
+    subtitle: 'Executive, Finance & Multi-Warehouse Hub',
+    badge: 'Core Engine',
     icon: '🏢',
     href: '/admin',
     loginHref: '/admin/login',
-    demoRole: 'Admin / Manager',
+    demoRole: 'Admin / Ops Director',
     color: 'var(--c-primary)',
-    description: 'Complete centralized control of orders, multi-warehouse stock, purchase orders, general ledger, and global platform search.',
-    highlights: ['Multi-Warehouse Control', 'Automated GL Accounting', 'Celestial AI Copilot', 'Customer Price Books'],
-    metrics: [
-      { label: 'Modules', val: '12 Active' },
-      { label: 'Reconciliation', val: '3-Way Match' },
-      { label: 'Ledger', val: 'Real-Time' },
+    description:
+      'Centralized command for inventory balance across multi-facility hubs, automated double-entry GL ledger, purchase orders, customer price tiers, and platform audit trails.',
+    highlights: [
+      'Multi-Warehouse Inventory Balance',
+      'Real-Time Double-Entry GL Ledger',
+      '3-Way Purchase Order Matching',
+      'Automated Order Saga Orchestration',
     ],
+    metrics: [
+      { label: 'Active Modules', val: '12 Active' },
+      { label: 'Reconciliation', val: '3-Way Match' },
+      { label: 'Ledger Engine', val: 'Real-Time GL' },
+    ],
+    simulatedPreview: {
+      statusBadge: 'LEDGER POSTING · LIVE',
+      title: 'Global Operations Dashboard',
+      lines: [
+        { tag: 'SAGA #ORD-9024', label: 'Order Allocated', value: '$14,850.00 (Ready for Wave Pick)' },
+        { tag: 'GL RECONCILIATION', label: 'Journal Entry #7819', value: 'DR 1100 AR $14,850 / CR 4000 Sales' },
+        { tag: 'STOCK BALANCE', label: 'Dallas Central Hub', value: '4,280 Units Available across 32 Bins' },
+      ],
+      actions: [
+        { label: 'Open Admin Workspace →', href: '/admin', primary: true },
+        { label: 'View General Ledger', href: '/admin/finance/ledger' },
+      ],
+    },
   },
   {
     id: 'b2b',
-    title: 'B2B Buyer Shop',
-    subtitle: 'Self-Service Customer Storefront',
-    badge: 'Contract & Tier Pricing',
+    title: 'B2B Wholesale Shop',
+    subtitle: 'Self-Service Customer Portal & Contract Pricing',
+    badge: 'Tiered Pricing',
     icon: '🛍️',
     href: '/catalog',
     loginHref: '/login',
     demoRole: 'Wholesale Buyer',
     color: 'var(--c-accent)',
-    description: 'Customer portal with contract pricing, quick stock availability, order tracking, invoice history, and 1-click reordering.',
-    highlights: ['Stock-Aware Catalog', 'Instant Reorder Lines', 'Invoice Tracking', 'Custom Price Tiers'],
+    description:
+      'Customer ordering portal with stock-aware catalog, contract pricing books, instant net-terms or Stripe checkout, live shipment tracking, and 1-click reorder history.',
+    highlights: [
+      'Real-Time Stock Availability',
+      'Contract Tier Price Books',
+      'Net Terms & Stripe Card Tenders',
+      'Instant Quote & Reorder Lines',
+    ],
     metrics: [
       { label: 'Order Entry', val: 'Self-Service' },
       { label: 'Invoices', val: 'Auto-Issued' },
-      { label: 'Payment', val: 'Net Terms / Card' },
+      { label: 'Payment Mode', val: 'Net Terms / Card' },
     ],
+    simulatedPreview: {
+      statusBadge: 'PRICE TIER A · 20% CONTRACT DISCOUNT',
+      title: 'B2B Buyer Order Portal',
+      lines: [
+        { tag: 'SKU #IND-4091', label: 'Heavy Duty Flange Set', value: '$148.00 / case (Stock: 120 pkgs)' },
+        { tag: 'ORDER DRAFT', label: 'Purchase Order #PO-8821', value: '4 Lines · $3,480.00 (Net 30)' },
+        { tag: 'CREDIT LINE', label: 'ACME Distribution Corp', value: '$45,000 Available / $50,000 Limit' },
+      ],
+      actions: [
+        { label: 'Browse Catalog →', href: '/catalog', primary: true },
+        { label: 'View Invoices', href: '/invoices' },
+      ],
+    },
   },
   {
     id: 'warehouse',
     title: 'Warehouse & WMS',
-    subtitle: 'Floor Picking, Putaway & Receiving',
-    badge: 'Mobile-Optimized PWA',
+    subtitle: 'Directed Wave Picking & Barcode Receiving',
+    badge: 'Mobile PWA',
     icon: '📦',
     href: '/m/warehouse',
     loginHref: '/m/login',
-    demoRole: 'Warehouse Staff',
+    demoRole: 'Warehouse Operator',
     color: 'var(--c-success)',
-    description: 'Fast barcode scanning and task execution for pick tasks, pick waves, dock receiving, bin mapping, and cycle counts.',
-    highlights: ['Wave Picking Paths', 'Dock Receiving Scanner', 'Directed Putaway', 'Blind Cycle Counts'],
-    metrics: [
-      { label: 'Scans', val: 'QR & Code 128' },
-      { label: 'Routing', val: 'Optimized Path' },
-      { label: 'Sync', val: 'Offline Ready' },
+    description:
+      'High-speed mobile PWA for barcode scanning, directed wave picking paths, dock receiving, bin-to-bin transfers, and blind cycle counts with zero sync latency.',
+    highlights: [
+      'Optimized Wave Picking Routes',
+      'Code 128 & QR Barcode Scanner',
+      'Dock Receiving with Landed Freight',
+      'Blind Cycle Count Verification',
     ],
+    metrics: [
+      { label: 'Scanner Engine', val: 'Code 128 & QR' },
+      { label: 'Wave Routing', val: 'Path Optimized' },
+      { label: 'PWA Offline', val: 'Instant Sync' },
+    ],
+    simulatedPreview: {
+      statusBadge: 'WAVE #W-104 · ACTIVE PICKING',
+      title: 'Floor Scanner Terminal',
+      lines: [
+        { tag: 'BIN LOC: A-04-2B', label: 'Target Item: Hex Fasteners', value: 'Scan SKU: 789124001928 (Pick 12)' },
+        { tag: 'WAVE PROGRESS', label: 'Order #9024 (Carton 1/3)', value: '8 of 12 SKUs Verified · 66%' },
+        { tag: 'DOCK RECEIVING', label: 'PO #4410 Landed Duty', value: 'Pallet #PL-09 verified to Bay 3' },
+      ],
+      actions: [
+        { label: 'Launch WMS PWA →', href: '/m/warehouse', primary: true },
+        { label: 'Open Wave Manager', href: '/admin/warehouse/waves' },
+      ],
+    },
   },
   {
     id: 'delivery',
-    title: 'Route Delivery',
-    subtitle: 'Driver App & Proof of Delivery',
+    title: 'Route Delivery & Fleet',
+    subtitle: 'Haversine Route Sequence & Photo POD',
     badge: 'Field Dispatch',
     icon: '🚚',
     href: '/m/delivery',
     loginHref: '/m/login',
-    demoRole: 'Driver / Logistics',
+    demoRole: 'Fleet Driver',
     color: '#38bdf8',
-    description: 'Driver route manifest with stop sequence optimization, turn directions, failed delivery notes, and digital photo POD capture.',
-    highlights: ['Haversine Route Stops', 'Photo Proof of Delivery', 'Signature Capture', 'Live Status Sync'],
-    metrics: [
-      { label: 'Stops', val: 'Auto-Sequenced' },
-      { label: 'POD', val: 'Digital Photo' },
-      { label: 'Tracking', val: 'Real-Time' },
+    description:
+      'Mobile delivery driver workflow with nearest-neighbor stop sequence calculation, turn navigation, compliance verification, and digital photo signature proof of delivery.',
+    highlights: [
+      'Nearest-Neighbor Haversine Stops',
+      'Digital Photo Proof-of-Delivery',
+      'Customer ETA Live Notification',
+      'Failed Delivery Notes & Rescheduling',
     ],
+    metrics: [
+      { label: 'Stop Optimization', val: 'Auto-Sequenced' },
+      { label: 'POD Verification', val: 'Photo + Sign' },
+      { label: 'Status Sync', val: 'Live Telemetry' },
+    ],
+    simulatedPreview: {
+      statusBadge: 'MANIFEST #MN-402 · ROUTE IN PROGRESS',
+      title: 'Driver Route Terminal',
+      lines: [
+        { tag: 'NEXT STOP: 02/06', label: 'Apex Supply Co. (Dock 4)', value: 'ETA: 11:20 AM · 4 Cartons' },
+        { tag: 'POD CAPTURE', label: 'Required at Delivery', value: 'Digital Signature + Dock Photo' },
+        { tag: 'COMPLIANCE', label: 'Restricted Item Check', value: 'Age Attestation Confirmed ✓' },
+      ],
+      actions: [
+        { label: 'Launch Driver App →', href: '/m/delivery', primary: true },
+        { label: 'Fleet Dispatch Desk', href: '/admin/dispatch' },
+      ],
+    },
   },
   {
     id: 'pos',
-    title: 'Point of Sale',
-    subtitle: 'Counter Checkout & Retail Cashier',
-    badge: 'Fast Counter Sales',
+    title: 'Counter POS Register',
+    subtitle: 'Speedy Barcode Checkout & Compliance Attestation',
+    badge: 'Fast Counter',
     icon: '💳',
     href: '/admin/pos',
     loginHref: '/admin/login',
-    demoRole: 'Cashier / Store Rep',
+    demoRole: 'Store Cashier',
     color: 'var(--c-warning)',
-    description: 'Speedy counter sales with barcode lookup, instant tax calculation, compliance age checks, cash/card tenders, and receipts.',
-    highlights: ['Rapid Barcode Lookup', 'Age Verification Policy', 'Digital / Print Receipts', 'Split Tender'],
-    metrics: [
-      { label: 'Speed', val: '< 3s Checkout' },
-      { label: 'Tenders', val: 'Cash / Card' },
-      { label: 'Compliance', val: 'Attestation Built-In' },
+    description:
+      'Lightning-fast counter point of sale with rapid barcode lookup, instant multi-tier tax computation, age/DOB attestation for regulated SKUs, and split cash/card tenders.',
+    highlights: [
+      '< 3-Second Counter Transaction',
+      'Automated Age & License Check',
+      'Thermal Barcode & Digital Receipt',
+      'Split Tender & Credit Surcharges',
     ],
+    metrics: [
+      { label: 'Checkout Speed', val: '< 3s per Cart' },
+      { label: 'Payment Tenders', val: 'Cash / Stripe Card' },
+      { label: 'Compliance', val: 'Built-In Attestation' },
+    ],
+    simulatedPreview: {
+      statusBadge: 'REGISTER #01 · ACTIVE TENDER',
+      title: 'Point of Sale Terminal',
+      lines: [
+        { tag: 'SCANNED SKU', label: 'Industrial Solvent 5gal', value: '1x @ $89.50 (Tax: $7.38)' },
+        { tag: 'ATTESTATION', label: 'Age-Restricted Regulated Item', value: 'DOB / ID Verified (Cashier #08)' },
+        { tag: 'TENDER TOTAL', label: 'Balance Due', value: '$96.88 · Stripe Terminal Ready' },
+      ],
+      actions: [
+        { label: 'Launch POS Register →', href: '/admin/pos', primary: true },
+        { label: 'View Register Logs', href: '/admin/orders' },
+      ],
+    },
+  },
+  {
+    id: 'celestial',
+    title: 'Celestial AI Copilot',
+    subtitle: 'Natural Language Tenant ERP Intelligence',
+    badge: 'AI Intelligence',
+    icon: '✦',
+    href: '/admin/celestial',
+    loginHref: '/admin/login',
+    demoRole: 'ERP Analyst / Executive',
+    color: '#a855f7',
+    description:
+      'Embedded AI copilot answering complex queries about inventory depletion, overdue AR aging, supplier lead times, and warehouse wave bottlenecks in seconds.',
+    highlights: [
+      'Natural-Language SQL Telemetry',
+      'Overdue AR Aging Breakdown',
+      'Low Stock & Reorder Forecasting',
+      '1-Click Direct Action Navigation',
+    ],
+    metrics: [
+      { label: 'Response Time', val: '< 600ms' },
+      { label: 'Context Engine', val: 'Tenant Isolated' },
+      { label: 'Action Routing', val: 'Direct Deep Link' },
+    ],
+    simulatedPreview: {
+      statusBadge: 'QUERY PROCESSED · LIVE INSIGHT',
+      title: 'Celestial Intelligence Engine',
+      lines: [
+        { tag: 'PROMPT', label: 'Executive Inquiry', value: '"What SKUs in Dallas have < 5 days stock?"' },
+        { tag: 'AI RESULT', label: '3 Critical Items Detected', value: 'SKU #FL-902, SKU #HX-112, SKU #SL-408' },
+        { tag: 'SUGGESTED ACTION', label: 'Procure-to-Pay Quick Link', value: 'Generate PO to Apex Fasteners Inc' },
+      ],
+      actions: [
+        { label: 'Open Celestial AI →', href: '/admin/celestial', primary: true },
+        { label: 'View Inventory Alerts', href: '/admin/inventory' },
+      ],
+    },
   },
 ]
 
 const MODULES = [
   {
     id: 'orders',
-    title: 'Order-to-Cash & B2B',
+    code: 'MOD-01',
+    title: 'Order-to-Cash & B2B Saga',
     badge: 'Automated Saga',
-    desc: 'Self-service portal, contract price books, quotes, automated backorders, drop-ship fulfillment, and split shipments.',
-    items: ['Automated order saga', 'Customer credit limits', 'RMA & credit memos', 'Custom volume tiers'],
+    desc: 'Self-service portal, contract price books, instant quotes, automated backorders, drop-ship fulfillment, and split shipments without manual intervention.',
+    items: ['Automated order-to-cash saga', 'Customer credit limits & balances', 'RMA & credit memos workflow', 'Custom tiered contract pricing'],
   },
   {
     id: 'wms',
-    title: 'Inventory & Multi-Warehouse',
+    code: 'MOD-02',
+    title: 'Multi-Warehouse & WMS',
     badge: 'Real-Time Stock',
-    desc: 'Multi-facility inventory tracking, lot & batch expiration control, directed putaway, wave picking, and cycle counting.',
-    items: ['Demand replenishment (EWMA)', 'Stock-aware routing', 'Barcode & QR thermal labels', 'Blind cycle counts'],
+    desc: 'Multi-facility inventory tracking, lot & batch expiration control, directed putaway, optimized wave picking, and blind cycle counting.',
+    items: ['Demand replenishment (EWMA)', 'Stock-aware multi-facility routing', 'Thermal barcode & QR labels', 'Dock receiving landed freight'],
   },
   {
     id: 'finance',
+    code: 'MOD-03',
     title: 'Accounting & General Ledger',
     badge: 'Real-Time Posting',
-    desc: 'Double-entry GL, automated invoice generation on shipment, AP vendor bills, bank reconciliations, and AR aging buckets.',
-    items: ['Automated COGS posting', '3-way purchase matching', 'AR aging schedule (0–90+ d)', 'Trial balance & export'],
+    desc: 'Double-entry GL, automated invoice generation on shipment, AP vendor bills, bank reconciliations, and AR aging buckets (0–90+ days).',
+    items: ['Automated COGS journal posting', '3-way purchase order matching', 'AR aging schedule (0-90+ days)', 'Trial balance & tax export'],
   },
   {
     id: 'purchasing',
-    title: 'Procure-to-Pay',
+    code: 'MOD-04',
+    title: 'Procure-to-Pay Engine',
     badge: 'Landed Cost',
-    desc: 'Vendor management, purchase order generation, landed freight/duty allocation on dock receipt, and goods-to-stock flow.',
-    items: ['PO receiving workflow', 'Duty & freight unit cost', 'Vendor bill matching', 'Lead-time tracking'],
+    desc: 'Vendor lifecycle management, purchase order generation, landed freight/duty allocation on dock receipt, and goods-to-stock workflow.',
+    items: ['PO receiving workflow & inspection', 'Duty & freight landed unit cost', 'Vendor bill matching & terms', 'Supplier lead-time tracking'],
   },
   {
     id: 'dispatch',
+    code: 'MOD-05',
     title: 'Fleet Dispatch & Logistics',
     badge: 'Route Optimization',
     desc: 'Delivery manifest assignment, nearest-neighbor stop sequence calculation, mobile photo POD capture, and carrier tracking.',
-    items: ['Nearest-neighbor routing', 'Photo proof of delivery', 'Customer delivery ETA', 'Multi-carrier tracking'],
+    items: ['Nearest-neighbor route sequencer', 'Photo proof-of-delivery capture', 'Customer ETA & signature record', 'Multi-carrier tracking integration'],
   },
   {
     id: 'compliance',
+    code: 'MOD-06',
     title: 'Compliance & Partner EDI',
-    badge: 'Enterprise Integrations',
-    desc: 'Trading-partner EDI (850 / 810 / 856), compliance MSA reporting, Stripe Connect payments, and webhook subscriptions.',
-    items: ['EDI order & ASN ingest', 'Age-verification policies', 'Stripe Connect onboarding', 'Tenant audit logging'],
+    badge: 'Enterprise Standards',
+    desc: 'Trading-partner EDI (850 / 810 / 856), compliance MSA reporting, Stripe Connect payments, and webhook event streaming.',
+    items: ['EDI 850 / 810 / 856 automation', 'Regulated item age verification', 'Stripe Connect merchant onboarding', 'Tenant audit trail logging'],
   },
 ]
 
 const FLOW_STEPS = [
   {
     step: '01',
-    title: 'Sell Across Channels',
-    desc: 'B2B buyers order online, sales reps generate custom quotes, and cashiers handle walk-in counter sales on POS.',
-    badge: 'B2B · POS · CRM',
+    phase: 'INGESTION',
+    title: 'Omnichannel Order Capture',
+    desc: 'B2B buyers place self-service orders, sales reps generate customized quotes, and counter cashiers process instant POS sales.',
+    badge: 'B2B · POS · EDI 850',
+    meta: 'Credit Limit Checked · Inventory Reserved',
   },
   {
     step: '02',
-    title: 'Fulfill in Warehouse',
-    desc: 'Orders allocate across warehouses. Floor staff pick via optimized wave paths, scan barcodes, and pack cartons.',
-    badge: 'WMS · Wave · Barcodes',
+    phase: 'FULFILLMENT',
+    title: 'Warehouse Wave Picking',
+    desc: 'Orders allocate across warehouses. Floor operators execute optimized wave picking paths, scan Code 128 barcodes, and pack cartons.',
+    badge: 'WMS · Wave · Barcode',
+    meta: 'Bin A-12-04 · Zero Picker Backtracking',
   },
   {
     step: '03',
-    title: 'Deliver & Capture POD',
+    phase: 'LOGISTICS',
+    title: 'Haversine Route & Photo POD',
     desc: 'Dispatchers optimize route sequences. Drivers follow stop turns on mobile and capture photo signatures at delivery.',
     badge: 'Fleet · Logistics · POD',
+    meta: 'Haversine Sequence · GPS & Photo Recorded',
   },
   {
     step: '04',
-    title: 'Post to GL & Collect Cash',
-    desc: 'Invoices issue on dispatch. AR aging tracks net terms exposure and payments reconcile with general ledger entries.',
-    badge: 'Real-Time GL · Stripe',
+    phase: 'RECONCILIATION',
+    title: 'Real-Time GL & Cash Settlement',
+    desc: 'Invoices issue automatically upon dispatch. AR aging tracks credit exposure and Stripe payments reconcile directly with GL accounts.',
+    badge: 'Double-Entry GL · Stripe',
+    meta: 'DR 1100 AR / CR 4000 Sales Posted',
   },
 ]
 
 export default function HomePage() {
-  const [selectedPortal, setSelectedPortal] = useState<string>('admin')
+  const [selectedPortal, setSelectedPortal] = useState<PortalId>('admin')
+  const [activePipelineStep, setActivePipelineStep] = useState<number>(0)
+
   const user = isSignedIn() ? getSessionUser() : null
   const currentPortal = ROLE_PORTALS.find((p) => p.id === selectedPortal) ?? ROLE_PORTALS[0]!
 
   return (
-    <main className="pleros-landing">
-      <div className="pleros-landing-ambient" aria-hidden="true">
-        <span className="pleros-landing-orb pleros-landing-orb--1" />
-        <span className="pleros-landing-orb pleros-landing-orb--2" />
-      </div>
-
-      <header className="pleros-landing-header">
-        <Link to="/" className="pleros-landing-logo">
-          <PlerosLogo variant="full" size="sm" />
-        </Link>
-        <LandingNav />
+    <main className="pleros-landing neo-grid-bg min-h-screen">
+      {/* Main Header */}
+      <header className="border-b-2 border-black bg-[var(--c-bg)] px-4 py-3 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <Link to="/" className="flex items-center gap-2.5">
+            <PlerosLogo variant="full" size="md" />
+          </Link>
+          <LandingNav />
+        </div>
       </header>
 
       {/* Hero Section */}
-      <section className="pleros-landing-hero">
-        <div className="pleros-landing-hero-copy">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-6 border" style={{ borderColor: 'var(--c-border-card)', background: 'var(--c-surface-2)', color: 'var(--c-primary)' }}>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Modern Wholesale Distribution Platform</span>
-          </div>
-
-          <h1 className="pleros-landing-headline">
-            Everything your distribution business needs —{' '}
-            <span className="bg-gradient-to-r from-sky-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              office, warehouse, shop, and field.
-            </span>
-          </h1>
-
-          <p className="pleros-landing-lede">
-            Pleros unifies multi-warehouse inventory, order-to-cash, automated GL accounting, B2B self-service,
-            mobile warehouse scanners, fleet delivery, and Celestial AI into one lightning-fast platform.
-          </p>
-
-          <div className="pleros-landing-hero-actions">
-            {user ? (
-              <Link to="/admin" className="pleros-landing-btn pleros-landing-btn--primary">
-                Open Admin Workspace →
-              </Link>
-            ) : (
-              <Link to="/signup" className="pleros-landing-btn pleros-landing-btn--primary">
-                Create workspace free
-              </Link>
-            )}
-            <Link to="/catalog" className="pleros-landing-btn pleros-landing-btn--ghost">
-              Browse B2B Shop
-            </Link>
-            <Link to="/admin/pos" className="pleros-landing-btn pleros-landing-btn--ghost !text-xs">
-              Open POS
-            </Link>
-          </div>
-
-          <div className="mt-8 flex items-center gap-6 text-xs" style={{ color: 'var(--c-text-3)' }}>
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400">✓</span> No credit card required
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400">✓</span> Instant tenant sandbox
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400">✓</span> Multi-user RBAC
-            </div>
-          </div>
-        </div>
-
-        {/* Interactive Role & Portal Launchpad */}
-        <aside className="pleros-card p-5 rounded-2xl border" style={{ borderColor: 'var(--c-border-card)', background: 'var(--c-surface)' }}>
-          <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b" style={{ borderColor: 'var(--c-border)' }}>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-pleros-text-3">Role Launchpad</p>
-              <h2 className="text-base font-bold text-pleros-white">Explore by Workflow</h2>
-            </div>
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
-              Live Preview
-            </span>
-          </div>
-
-          {/* Role Tabs */}
-          <div className="grid grid-cols-5 gap-1 p-1 rounded-xl bg-black/20 border mb-4" style={{ borderColor: 'var(--c-border)' }}>
-            {ROLE_PORTALS.map((portal) => {
-              const active = portal.id === selectedPortal
-              return (
-                <button
-                  key={portal.id}
-                  type="button"
-                  onClick={() => setSelectedPortal(portal.id)}
-                  className={`py-2 px-1 text-center rounded-lg text-xs font-medium transition-all ${
-                    active ? 'bg-white/10 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  style={active ? { borderColor: portal.color } : {}}
-                >
-                  <div className="text-base mb-0.5">{portal.icon}</div>
-                  <div className="truncate text-[10px] sm:text-xs">{portal.title.split(' ')[0]}</div>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Portal Card Detail */}
-          <div className="rounded-xl p-4 border transition-all" style={{ background: 'var(--c-surface-2)', borderColor: 'var(--c-border)' }}>
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: currentPortal.color }}>
-                  {currentPortal.badge}
-                </span>
-                <h3 className="text-base font-bold text-pleros-white mt-0.5">{currentPortal.title}</h3>
-                <p className="text-xs text-pleros-text-3">{currentPortal.subtitle}</p>
-              </div>
-              <span className="text-2xl">{currentPortal.icon}</span>
+      <section className="max-w-7xl mx-auto px-4 py-12 md:py-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column: Hero Content */}
+          <div className="lg:col-span-6 space-y-6">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-[var(--c-surface-2)] border-2 border-black rounded shadow-[2px_2px_0px_#000] text-xs font-mono font-bold text-[var(--c-primary)]">
+              <span className="w-2 h-2 rounded-full bg-[var(--c-success)] animate-pulse" />
+              <span>ENTERPRISE DISTRIBUTION CORE v2.4</span>
             </div>
 
-            <p className="text-xs text-pleros-text-2 my-3 leading-relaxed">
-              {currentPortal.description}
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase tracking-tight text-[var(--c-heading)] leading-[1.08]">
+              Unified ERP Engine for{' '}
+              <span className="bg-[var(--c-primary)] text-[var(--c-on-primary)] px-2 py-0.5 inline-block border-2 border-black shadow-[3px_3px_0px_#000]">
+                Wholesale
+              </span>{' '}
+              &amp; Distribution.
+            </h1>
+
+            <p className="text-base sm:text-lg text-[var(--c-text-2)] leading-relaxed font-normal">
+              Pleros unifies multi-warehouse inventory, order-to-cash saga orchestration, double-entry GL accounting, B2B
+              buyer portals, mobile warehouse barcode scanning, route dispatch, and Celestial AI into a single lightning-fast platform.
             </p>
 
-            <div className="grid grid-cols-3 gap-2 my-3 pt-3 border-t text-center" style={{ borderColor: 'var(--c-border)' }}>
-              {currentPortal.metrics.map((m) => (
-                <div key={m.label} className="p-1.5 rounded-lg bg-black/20">
-                  <div className="text-xs font-bold text-pleros-white">{m.val}</div>
-                  <div className="text-[10px] text-pleros-text-3 mt-0.5">{m.label}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              {currentPortal.highlights.map((h) => (
-                <span key={h} className="text-[11px] px-2 py-0.5 rounded-md bg-white/5 text-slate-300 border border-white/5">
-                  • {h}
-                </span>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t" style={{ borderColor: 'var(--c-border)' }}>
+            {/* Tactile Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              {user ? (
+                <Link
+                  to="/admin"
+                  className="neo-btn neo-btn-primary text-sm font-mono uppercase tracking-wider"
+                >
+                  Open Workspace →
+                </Link>
+              ) : (
+                <Link
+                  to="/signup"
+                  className="neo-btn neo-btn-primary text-sm font-mono uppercase tracking-wider"
+                >
+                  Deploy Tenant Free →
+                </Link>
+              )}
               <Link
-                to={currentPortal.href}
-                className="btn-primary flex-1 text-center !py-2 !text-xs font-semibold"
+                to="/catalog"
+                className="neo-btn neo-btn-secondary text-sm font-mono uppercase tracking-wider"
               >
-                Launch {currentPortal.title} →
+                Browse B2B Shop
               </Link>
               <Link
-                to={currentPortal.loginHref}
-                className="btn-ghost !py-2 !px-3 !text-xs"
-                title="Sign in directly to this portal"
+                to="/admin/pos"
+                className="neo-btn text-xs font-mono uppercase tracking-wider bg-[var(--c-warning)] text-black border-2 border-black shadow-[3px_3px_0px_#000]"
               >
-                Sign in
+                Launch POS Register
               </Link>
+            </div>
+
+            {/* Trust Checklist */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-4 text-xs font-mono text-[var(--c-text-2)]">
+              <div className="flex items-center gap-2 p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border)]">
+                <span className="text-[var(--c-success)] font-bold">✓</span>
+                <span>Zero Sync Delay</span>
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border)]">
+                <span className="text-[var(--c-success)] font-bold">✓</span>
+                <span>Double-Entry GL</span>
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border)]">
+                <span className="text-[var(--c-success)] font-bold">✓</span>
+                <span>Multi-Warehouse WMS</span>
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border)]">
+                <span className="text-[var(--c-success)] font-bold">✓</span>
+                <span>Haversine Routes</span>
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border)]">
+                <span className="text-[var(--c-success)] font-bold">✓</span>
+                <span>EDI 850/810/856</span>
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border)]">
+                <span className="text-[var(--c-success)] font-bold">✓</span>
+                <span>Celestial AI Inside</span>
+              </div>
             </div>
           </div>
-        </aside>
+
+          {/* Right Column: Interactive Role Simulator */}
+          <div id="simulator" className="lg:col-span-6">
+            <div className="neo-box p-4 sm:p-5 bg-[var(--c-surface)]">
+              {/* Simulator Header */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-black">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-red-500 border border-black inline-block" />
+                  <span className="w-3 h-3 rounded-full bg-yellow-500 border border-black inline-block" />
+                  <span className="w-3 h-3 rounded-full bg-green-500 border border-black inline-block" />
+                  <span className="text-xs font-mono font-bold uppercase ml-2 text-[var(--c-heading)]">
+                    Interactive Role Sandbox
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--c-primary)] text-[var(--c-on-primary)] font-bold rounded border border-black shadow-[1px_1px_0px_#000]">
+                  Live Preview
+                </span>
+              </div>
+
+              {/* Role Navigation Tabs */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 p-1 bg-[var(--c-surface-2)] border-2 border-black rounded mb-4">
+                {ROLE_PORTALS.map((portal) => {
+                  const active = portal.id === selectedPortal
+                  return (
+                    <button
+                      key={portal.id}
+                      type="button"
+                      onClick={() => setSelectedPortal(portal.id)}
+                      className={`py-1.5 px-1 text-center rounded text-xs font-mono font-bold transition-all ${
+                        active
+                          ? 'bg-[var(--c-primary)] text-[var(--c-on-primary)] border-2 border-black shadow-[2px_2px_0px_#000]'
+                          : 'text-[var(--c-text-2)] hover:text-[var(--c-heading)] hover:bg-[var(--c-surface-3)]'
+                      }`}
+                    >
+                      <div className="text-base">{portal.icon}</div>
+                      <div className="text-[10px] truncate mt-0.5">{portal.title.split(' ')[0]}</div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Active Role Terminal Details */}
+              <div className="p-4 rounded border-2 border-black bg-[var(--c-surface-2)] shadow-[3px_3px_0px_#000]">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div>
+                    <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-black text-emerald-400 border border-emerald-500/40">
+                      {currentPortal.simulatedPreview.statusBadge}
+                    </span>
+                    <h3 className="text-lg font-black uppercase text-[var(--c-heading)] mt-1.5">
+                      {currentPortal.title}
+                    </h3>
+                    <p className="text-xs text-[var(--c-text-3)] font-mono">{currentPortal.subtitle}</p>
+                  </div>
+                  <span className="text-3xl p-2 bg-[var(--c-surface)] rounded border-2 border-black shadow-[2px_2px_0px_#000]">
+                    {currentPortal.icon}
+                  </span>
+                </div>
+
+                <p className="text-xs text-[var(--c-text-2)] leading-relaxed mb-3">
+                  {currentPortal.description}
+                </p>
+
+                {/* Simulated Telemetry Lines */}
+                <div className="space-y-1.5 p-3 rounded bg-[var(--c-bg)] border-2 border-black mb-4 font-mono text-xs">
+                  {currentPortal.simulatedPreview.lines.map((line) => (
+                    <div key={line.tag} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-1 border-b border-[var(--c-border)] last:border-0">
+                      <span className="text-[10px] font-bold text-[var(--c-primary)]">{line.tag}:</span>
+                      <span className="text-xs text-[var(--c-heading)] font-semibold truncate">{line.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Metrics Ticker */}
+                <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+                  {currentPortal.metrics.map((m) => (
+                    <div key={m.label} className="p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+                      <div className="text-xs font-mono font-black text-[var(--c-heading)]">{m.val}</div>
+                      <div className="text-[9px] font-mono text-[var(--c-text-3)] uppercase mt-0.5">{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Role Feature Highlights */}
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {currentPortal.highlights.map((h) => (
+                    <span
+                      key={h}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--c-surface)] text-[var(--c-text-2)] border border-[var(--c-border-strong)]"
+                    >
+                      • {h}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-2 border-t-2 border-black">
+                  <Link
+                    to={currentPortal.href}
+                    className="neo-btn neo-btn-primary flex-1 text-center !py-2 text-xs font-mono"
+                  >
+                    Launch {currentPortal.title} →
+                  </Link>
+                  <Link
+                    to={currentPortal.loginHref}
+                    className="neo-btn neo-btn-secondary !py-2 !px-3 text-xs font-mono"
+                  >
+                    Sign In
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* Bento Grid Feature Modules */}
-      <section id="features" className="pleros-landing-features">
-        <div className="pleros-landing-section-head text-center max-w-2xl mx-auto mb-12">
-          <span className="text-xs font-semibold uppercase tracking-wider text-sky-400">Core Capabilities</span>
-          <h2 className="pleros-landing-section-title mt-1">Built as One Unified ERP Engine</h2>
-          <p className="pleros-landing-section-sub">
-            No messy API glue or third-party sync delays. Order states, inventory levels, GL entries, and route stops update in real time.
+      {/* KPI / Performance Telemetry Bar */}
+      <section className="border-y-2 border-black bg-[var(--c-surface)] py-8">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded bg-[var(--c-surface-2)] border-2 border-black shadow-[3px_3px_0px_#000]">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-[var(--c-primary)]">&lt; 3.0s</div>
+              <div className="text-xs font-mono font-bold uppercase text-[var(--c-heading)] mt-1">POS Checkout Speed</div>
+              <div className="text-[11px] text-[var(--c-text-3)] mt-0.5">Barcode Scan to Stripe Card &amp; Print</div>
+            </div>
+
+            <div className="p-4 rounded bg-[var(--c-surface-2)] border-2 border-black shadow-[3px_3px_0px_#000]">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-[var(--c-success)]">100%</div>
+              <div className="text-xs font-mono font-bold uppercase text-[var(--c-heading)] mt-1">Real-Time GL Posting</div>
+              <div className="text-[11px] text-[var(--c-text-3)] mt-0.5">Automated COGS &amp; Invoice Debits/Credits</div>
+            </div>
+
+            <div className="p-4 rounded bg-[var(--c-surface-2)] border-2 border-black shadow-[3px_3px_0px_#000]">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-[var(--c-warning)]">3-Way</div>
+              <div className="text-xs font-mono font-bold uppercase text-[var(--c-heading)] mt-1">AP Purchase Matching</div>
+              <div className="text-[11px] text-[var(--c-text-3)] mt-0.5">PO vs. Dock Receipt vs. Vendor Bill</div>
+            </div>
+
+            <div className="p-4 rounded bg-[var(--c-surface-2)] border-2 border-black shadow-[3px_3px_0px_#000]">
+              <div className="text-2xl sm:text-3xl font-black font-mono text-[#38bdf8]">0.0ms</div>
+              <div className="text-xs font-mono font-bold uppercase text-[var(--c-heading)] mt-1">Cross-Surface Lag</div>
+              <div className="text-[11px] text-[var(--c-text-3)] mt-0.5">Single-Origin Architecture on :4000</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Core Architectural Modules Bento Grid */}
+      <section id="features" className="max-w-7xl mx-auto px-4 py-16">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10 pb-4 border-b-2 border-black">
+          <div>
+            <div className="text-xs font-mono font-bold uppercase tracking-widest text-[var(--c-primary)] mb-1">
+              // ARCHITECTURAL MATRIX
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black uppercase text-[var(--c-heading)]">
+              Modular ERP Engine Capabilities
+            </h2>
+          </div>
+          <p className="text-xs sm:text-sm font-mono text-[var(--c-text-3)] max-w-md">
+            All 6 modules operate on shared relational schemas with zero delayed batch syncs.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {MODULES.map((m) => (
             <article
               key={m.id}
-              className="pleros-card p-6 rounded-2xl border transition-all duration-200 hover:-translate-y-1 hover:border-slate-700"
-              style={{ background: 'var(--c-surface)', borderColor: 'var(--c-border-card)' }}
+              className="neo-box-interactive p-6 flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-lg font-bold text-pleros-white">{m.title}</h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                  {m.badge}
-                </span>
+              <div>
+                <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-black">
+                  <span className="text-xs font-mono font-black text-[var(--c-primary)]">{m.code}</span>
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 bg-[var(--c-surface-2)] text-[var(--c-heading)] border border-black rounded">
+                    {m.badge}
+                  </span>
+                </div>
+
+                <h3 className="text-lg font-bold uppercase text-[var(--c-heading)] mb-2">{m.title}</h3>
+                <p className="text-xs text-[var(--c-text-2)] leading-relaxed mb-4">{m.desc}</p>
               </div>
-              <p className="text-xs text-pleros-text-2 leading-relaxed mb-4">{m.desc}</p>
-              <ul className="space-y-2 border-t pt-3" style={{ borderColor: 'var(--c-border)' }}>
+
+              <ul className="space-y-1.5 pt-4 border-t border-[var(--c-border)] font-mono text-xs text-[var(--c-text-2)]">
                 {m.items.map((item) => (
-                  <li key={item} className="text-xs flex items-center gap-2 text-pleros-text-3">
-                    <span className="text-sky-400 text-sm">✓</span>
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="text-[var(--c-success)] font-bold">✓</span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -377,138 +632,313 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Celestial AI Banner */}
-      <section className="max-w-6xl mx-auto px-4 my-16">
-        <div
-          className="rounded-2xl p-8 sm:p-10 border relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8"
-          style={{
-            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)',
-            borderColor: 'rgba(56, 189, 248, 0.25)',
-          }}
-        >
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-sky-300 bg-sky-500/20 border border-sky-400/30 mb-3">
-              ✦ Embedded Intelligence
+      {/* Interactive Order-to-Cash Workflow Pipeline Visualizer */}
+      <section id="pipeline" className="border-t-2 border-black bg-[var(--c-surface)] py-16">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center max-w-2xl mx-auto mb-10">
+            <div className="text-xs font-mono font-bold uppercase tracking-widest text-[var(--c-primary)] mb-1">
+              // EVENT-DRIVEN SAGA
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white font-display">Meet Celestial AI Copilot</h2>
-            <p className="text-sm text-slate-300 mt-2 leading-relaxed">
-              Ask natural-language questions about inventory, pending shipments, aging invoices, and system workflows.
-              Celestial queries your live tenant data and answers instantly with actionable shortcuts.
+            <h2 className="text-2xl sm:text-3xl font-black uppercase text-[var(--c-heading)]">
+              Interactive Order-to-Cash Lifecycle
+            </h2>
+            <p className="text-xs sm:text-sm font-mono text-[var(--c-text-3)] mt-2">
+              Click each phase to inspect how transactions flow through the distribution engine.
             </p>
-            <div className="flex flex-wrap gap-2 mt-4">
-              <span className="text-xs px-2.5 py-1 rounded-full bg-black/40 text-slate-300 border border-white/10 font-mono">
-                &ldquo;What SKUs are low in Dallas?&rdquo;
-              </span>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-black/40 text-slate-300 border border-white/10 font-mono">
-                &ldquo;Show unpaid invoices &gt; 30 days&rdquo;
-              </span>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-black/40 text-slate-300 border border-white/10 font-mono">
-                &ldquo;How do I start wave picking?&rdquo;
-              </span>
-            </div>
           </div>
-          <Link
-            to="/admin/celestial"
-            className="btn-primary whitespace-nowrap !py-3 !px-6 text-sm font-semibold shadow-lg shadow-sky-500/20"
-          >
-            Launch Celestial AI →
-          </Link>
-        </div>
-      </section>
 
-      {/* Distribution Lifecycle Flow */}
-      <section id="solutions" className="max-w-6xl mx-auto px-4 my-16">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <span className="text-xs font-semibold uppercase tracking-wider text-sky-400">Order-to-Cash Lifecycle</span>
-          <h2 className="text-2xl sm:text-3xl font-bold text-pleros-white mt-1">From First Click to Collected Cash</h2>
-          <p className="text-sm text-pleros-text-3 mt-2">
-            Every step is connected. No spreadsheets, manual export syncs, or broken communication.
-          </p>
-        </div>
+          {/* Interactive Steps Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {FLOW_STEPS.map((step, idx) => {
+              const active = activePipelineStep === idx
+              return (
+                <button
+                  key={step.step}
+                  type="button"
+                  onClick={() => setActivePipelineStep(idx)}
+                  className={`p-5 rounded text-left transition-all ${
+                    active
+                      ? 'bg-[var(--c-primary)] text-[var(--c-on-primary)] border-2 border-black shadow-[4px_4px_0px_#000] translate-x-[-2px] translate-y-[-2px]'
+                      : 'bg-[var(--c-surface-2)] text-[var(--c-text)] border-2 border-black shadow-[2px_2px_0px_#000] hover:translate-x-[-1px] hover:translate-y-[-1px]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2 font-mono">
+                    <span className="text-2xl font-black">{step.step}</span>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-black ${
+                      active ? 'bg-black text-white' : 'bg-[var(--c-surface)] text-[var(--c-heading)]'
+                    }`}>
+                      {step.phase}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-bold uppercase tracking-wide mb-1">{step.title}</h3>
+                  <p className={`text-xs leading-relaxed ${active ? 'text-white/90' : 'text-[var(--c-text-2)]'}`}>
+                    {step.desc}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {FLOW_STEPS.map((s) => (
-            <div
-              key={s.step}
-              className="p-5 rounded-xl border relative"
-              style={{ background: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-2xl font-black font-mono text-sky-400/80">{s.step}</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-slate-300">
-                  {s.badge}
+          {/* Active Step Deep Inspector */}
+          <div className="p-6 rounded border-2 border-black bg-[var(--c-bg)] shadow-[4px_4px_0px_#000]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 mb-4 border-b-2 border-black">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-bold uppercase px-2.5 py-1 bg-[var(--c-primary)] text-[var(--c-on-primary)] border border-black rounded">
+                  Phase {FLOW_STEPS[activePipelineStep]!.step} Inspector
+                </span>
+                <span className="text-sm font-mono font-bold text-[var(--c-heading)]">
+                  {FLOW_STEPS[activePipelineStep]!.title}
                 </span>
               </div>
-              <h3 className="text-base font-bold text-pleros-white mb-2">{s.title}</h3>
-              <p className="text-xs text-pleros-text-2 leading-relaxed">{s.desc}</p>
+              <span className="text-xs font-mono text-[var(--c-success)] font-bold">
+                ● Telemetry Payload: {FLOW_STEPS[activePipelineStep]!.meta}
+              </span>
             </div>
-          ))}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+              <div className="p-3 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+                <div className="text-[10px] text-[var(--c-text-3)] uppercase font-bold mb-1">Trigger Event</div>
+                <div className="text-[var(--c-primary)] font-bold">EVENT: {FLOW_STEPS[activePipelineStep]!.badge}</div>
+              </div>
+              <div className="p-3 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+                <div className="text-[10px] text-[var(--c-text-3)] uppercase font-bold mb-1">State Transition</div>
+                <div className="text-[var(--c-heading)] font-semibold">{FLOW_STEPS[activePipelineStep]!.meta}</div>
+              </div>
+              <div className="p-3 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+                <div className="text-[10px] text-[var(--c-text-3)] uppercase font-bold mb-1">Ledger &amp; DB Impact</div>
+                <div className="text-[var(--c-success)] font-bold">Zero Re-keying / Instant Write</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Workspaces Section */}
-      <section id="workspaces" className="max-w-6xl mx-auto px-4 my-16">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <span className="text-xs font-semibold uppercase tracking-wider text-sky-400">Dedicated Surfaces</span>
-          <h2 className="text-2xl sm:text-3xl font-bold text-pleros-white mt-1">Workspaces for Every Role</h2>
-          <p className="text-sm text-pleros-text-3 mt-2">
-            Give each team member the exact interface and speed they need.
-          </p>
-        </div>
+      {/* Celestial AI Copilot Showcase */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="neo-box p-8 bg-[var(--c-surface)] relative overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-7 space-y-4">
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-mono font-bold">
+                ✦ EMBEDDED COPILOT INTELLIGENCE
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black uppercase text-[var(--c-heading)]">
+                Meet Celestial AI Copilot
+              </h2>
+              <p className="text-xs sm:text-sm text-[var(--c-text-2)] leading-relaxed">
+                Celestial queries your live tenant relational database to answer inventory depletion projections, calculate overdue AR aging exposures, and surface actionable deep links.
+              </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {ROLE_PORTALS.map((w) => (
-            <div
-              key={w.id}
-              className="p-6 rounded-2xl border flex flex-col justify-between"
-              style={{ background: 'var(--c-surface-2)', borderColor: 'var(--c-border-card)' }}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-3xl">{w.icon}</span>
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: w.color }}>
-                    {w.demoRole}
-                  </span>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <span className="text-xs font-mono px-2.5 py-1 rounded bg-[var(--c-surface-2)] text-[var(--c-text-2)] border border-[var(--c-border-strong)]">
+                  &ldquo;What SKUs are low in Dallas?&rdquo;
+                </span>
+                <span className="text-xs font-mono px-2.5 py-1 rounded bg-[var(--c-surface-2)] text-[var(--c-text-2)] border border-[var(--c-border-strong)]">
+                  &ldquo;Show unpaid invoices &gt; 30 days&rdquo;
+                </span>
+                <span className="text-xs font-mono px-2.5 py-1 rounded bg-[var(--c-surface-2)] text-[var(--c-text-2)] border border-[var(--c-border-strong)]">
+                  &ldquo;Generate pick wave for Zone A&rdquo;
+                </span>
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 flex flex-col gap-3">
+              <div className="p-4 rounded bg-[var(--c-bg)] border-2 border-black font-mono text-xs shadow-[3px_3px_0px_#000]">
+                <div className="flex items-center gap-2 pb-2 mb-2 border-b border-[var(--c-border)] text-purple-400 font-bold">
+                  <span>✦ Celestial Terminal</span>
+                  <span className="text-[10px] text-emerald-400 ml-auto">Connected</span>
                 </div>
-                <h3 className="text-lg font-bold text-pleros-white mb-1">{w.title}</h3>
-                <p className="text-xs text-pleros-text-3 mb-3">{w.subtitle}</p>
-                <p className="text-xs text-pleros-text-2 mb-4 leading-relaxed">{w.description}</p>
+                <div className="text-[var(--c-text-3)] text-[11px] mb-2">&gt; query: &quot;Show AR aging bucket &gt; 60 days&quot;</div>
+                <div className="text-[var(--c-heading)] text-xs font-semibold leading-relaxed">
+                  Found 2 accounts totaling $12,480.00:
+                  <br />• Apex Builders: $8,200.00 (Due 42d ago)
+                  <br />• Metro Hardware: $4,280.00 (Due 31d ago)
+                </div>
               </div>
 
-              <div className="pt-4 border-t flex items-center justify-between gap-2" style={{ borderColor: 'var(--c-border)' }}>
-                <Link to={w.href} className="text-xs font-semibold text-sky-400 hover:text-sky-300">
-                  Open workspace →
-                </Link>
-                <Link to={w.loginHref} className="text-xs text-slate-400 hover:text-slate-200">
-                  Sign in
-                </Link>
-              </div>
+              <Link
+                to="/admin/celestial"
+                className="neo-btn neo-btn-primary text-center font-mono uppercase tracking-wider text-xs"
+              >
+                Launch Celestial AI Copilot →
+              </Link>
             </div>
-          ))}
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t py-12 px-6 mt-20" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface)' }}>
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <PlerosLogo variant="mark" size="sm" />
+      {/* Role Workspaces & Direct Launch Matrix */}
+      <section id="workspaces" className="border-t-2 border-black bg-[var(--c-surface)] py-16">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <div className="text-xs font-mono font-bold uppercase tracking-widest text-[var(--c-primary)] mb-1">
+              // ROLE PORTALS
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black uppercase text-[var(--c-heading)]">
+              Workspaces Tailored to Each Role
+            </h2>
+            <p className="text-xs sm:text-sm font-mono text-[var(--c-text-3)] mt-2">
+              Every persona gets an interface tuned for their specific operations speed.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {ROLE_PORTALS.map((w) => (
+              <div
+                key={w.id}
+                className="neo-box-interactive p-6 flex flex-col justify-between bg-[var(--c-surface-2)]"
+              >
+                <div>
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-black">
+                    <span className="text-3xl">{w.icon}</span>
+                    <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[var(--c-surface)] text-[var(--c-heading)] border border-black">
+                      {w.demoRole}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold uppercase text-[var(--c-heading)] mb-1">{w.title}</h3>
+                  <p className="text-xs font-mono text-[var(--c-text-3)] mb-2">{w.subtitle}</p>
+                  <p className="text-xs text-[var(--c-text-2)] mb-4 leading-relaxed">{w.description}</p>
+                </div>
+
+                <div className="pt-4 border-t-2 border-black flex items-center justify-between gap-2">
+                  <Link
+                    to={w.href}
+                    className="text-xs font-mono font-bold text-[var(--c-primary)] hover:underline uppercase"
+                  >
+                    Launch Surface →
+                  </Link>
+                  <Link
+                    to={w.loginHref}
+                    className="text-xs font-mono text-[var(--c-text-3)] hover:text-[var(--c-heading)] hover:underline"
+                  >
+                    Direct Sign In
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Enterprise Security, SLA & Architecture */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="neo-box p-6 sm:p-8 bg-[var(--c-bg)]">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 mb-6 border-b-2 border-black">
             <div>
-              <p className="text-sm font-bold text-pleros-white">Pleros Platform</p>
-              <p className="text-xs text-pleros-text-3">Enterprise Distribution Engine for SMB Wholesalers</p>
+              <span className="text-xs font-mono font-bold uppercase text-[var(--c-primary)]">
+                // ENTERPRISE HARDENING
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black uppercase text-[var(--c-heading)] mt-0.5">
+                Engineered for High-Throughput Distribution
+              </h2>
+            </div>
+            <span className="text-xs font-mono font-bold px-3 py-1 bg-[var(--c-surface-2)] text-[var(--c-heading)] border-2 border-black rounded shadow-[2px_2px_0px_#000]">
+              SOC2 &amp; EDI Compliant Architecture
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
+            <div className="p-4 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+              <div className="font-bold text-[var(--c-heading)] mb-1">Tenant Isolation</div>
+              <p className="text-[var(--c-text-3)] leading-relaxed">
+                Strict multi-tenant cryptographic session verification with fine-grained RBAC matrix.
+              </p>
+            </div>
+            <div className="p-4 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+              <div className="font-bold text-[var(--c-heading)] mb-1">Dual Persistence</div>
+              <p className="text-[var(--c-text-3)] leading-relaxed">
+                Fast local development on SQLite and scalable production clustering on PostgreSQL.
+              </p>
+            </div>
+            <div className="p-4 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+              <div className="font-bold text-[var(--c-heading)] mb-1">EDI Integrations</div>
+              <p className="text-[var(--c-text-3)] leading-relaxed">
+                Automated 850 Purchase Order ingest, 856 ASN dispatch, and 810 invoice generation.
+              </p>
+            </div>
+            <div className="p-4 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
+              <div className="font-bold text-[var(--c-heading)] mb-1">Stripe Connect</div>
+              <p className="text-[var(--c-text-3)] leading-relaxed">
+                Automated merchant card processing, split payouts, credit surcharges, and instant reconciliation.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Neobrutalist Enterprise Footer */}
+      <footer className="border-t-2 border-black bg-[var(--c-surface)] py-12 px-4">
+        <div className="max-w-7xl mx-auto space-y-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b-2 border-black">
+            <div className="flex items-center gap-3">
+              <PlerosLogo variant="mark" size="md" />
+              <div>
+                <p className="text-base font-black uppercase text-[var(--c-heading)]">Pleros Distribution Platform</p>
+                <p className="text-xs font-mono text-[var(--c-text-3)]">Next-Generation ERP Engine for Modern Wholesalers</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to="/signup" className="neo-btn neo-btn-primary text-xs font-mono uppercase">
+                Create Workspace Free →
+              </Link>
+              <Link to="/admin" className="neo-btn neo-btn-secondary text-xs font-mono uppercase">
+                Admin Console
+              </Link>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-6 text-xs text-pleros-text-3">
-            <Link to="/admin" className="hover:text-pleros-white">Admin ERP</Link>
-            <Link to="/catalog" className="hover:text-pleros-white">B2B Shop</Link>
-            <Link to="/admin/pos" className="hover:text-pleros-white">POS</Link>
-            <Link to="/signup" className="hover:text-pleros-white">Sign up</Link>
-            <Link to="/terms" className="hover:text-pleros-white">Terms</Link>
-            <Link to="/privacy" className="hover:text-pleros-white">Privacy</Link>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-xs font-mono">
+            <div>
+              <div className="font-bold uppercase text-[var(--c-heading)] mb-3">// Core Surfaces</div>
+              <ul className="space-y-1.5 text-[var(--c-text-2)]">
+                <li><Link to="/admin" className="hover:text-[var(--c-primary)]">Admin Back-Office</Link></li>
+                <li><Link to="/catalog" className="hover:text-[var(--c-primary)]">B2B Wholesaler Shop</Link></li>
+                <li><Link to="/admin/pos" className="hover:text-[var(--c-primary)]">Counter Point of Sale</Link></li>
+                <li><Link to="/admin/celestial" className="hover:text-[var(--c-primary)]">Celestial AI Copilot</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <div className="font-bold uppercase text-[var(--c-heading)] mb-3">// Field &amp; Mobile</div>
+              <ul className="space-y-1.5 text-[var(--c-text-2)]">
+                <li><Link to="/m/warehouse" className="hover:text-[var(--c-primary)]">WMS Barcode PWA</Link></li>
+                <li><Link to="/m/delivery" className="hover:text-[var(--c-primary)]">Driver Route POD</Link></li>
+                <li><Link to="/m/sales" className="hover:text-[var(--c-primary)]">Field Rep Mobile</Link></li>
+                <li><Link to="/m/login" className="hover:text-[var(--c-primary)]">Mobile Quick Login</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <div className="font-bold uppercase text-[var(--c-heading)] mb-3">// Operations</div>
+              <ul className="space-y-1.5 text-[var(--c-text-2)]">
+                <li><Link to="/admin/inventory" className="hover:text-[var(--c-primary)]">Multi-Warehouse</Link></li>
+                <li><Link to="/admin/orders" className="hover:text-[var(--c-primary)]">Order-to-Cash</Link></li>
+                <li><Link to="/admin/purchasing" className="hover:text-[var(--c-primary)]">Procure-to-Pay</Link></li>
+                <li><Link to="/admin/finance/ledger" className="hover:text-[var(--c-primary)]">General Ledger</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <div className="font-bold uppercase text-[var(--c-heading)] mb-3">// Compliance</div>
+              <ul className="space-y-1.5 text-[var(--c-text-2)]">
+                <li><Link to="/admin/compliance/age-verification" className="hover:text-[var(--c-primary)]">Age Attestation</Link></li>
+                <li><Link to="/admin/compliance/audit-logs" className="hover:text-[var(--c-primary)]">Tenant Audit Logs</Link></li>
+                <li><Link to="/terms" className="hover:text-[var(--c-primary)]">Terms of Service</Link></li>
+                <li><Link to="/privacy" className="hover:text-[var(--c-primary)]">Privacy Policy</Link></li>
+              </ul>
+            </div>
           </div>
 
-          <p className="text-xs text-pleros-text-3">© {new Date().getFullYear()} Pleros Inc. All rights reserved.</p>
+          <div className="pt-6 border-t border-[var(--c-border)] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-[var(--c-text-3)]">
+            <p>© {new Date().getFullYear()} Pleros Inc. All rights reserved. Enterprise Neobrutalism Design System.</p>
+            <div className="flex items-center gap-4">
+              <span>Security</span>
+              <span>•</span>
+              <span>EDI Compliant</span>
+              <span>•</span>
+              <span>Double-Entry GL</span>
+            </div>
+          </div>
         </div>
       </footer>
     </main>

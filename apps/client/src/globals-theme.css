@@ -83,6 +83,16 @@ h6 {
   --pleros-white: var(--c-heading);
   --pleros-muted: var(--c-text-3);
   --pleros-text: var(--c-text);
+
+  /* Enterprise Neobrutalism tokens */
+  --neo-border: rgba(255, 255, 255, 0.16);
+  --neo-border-strong: #27272a;
+  --neo-border-black: #000000;
+  --neo-shadow: 4px 4px 0px #000000;
+  --neo-shadow-sm: 2px 2px 0px #000000;
+  --neo-shadow-lg: 6px 6px 0px #000000;
+  --neo-shadow-primary: 4px 4px 0px var(--c-primary);
+  --neo-shadow-accent: 4px 4px 0px var(--c-accent);
 }
 
 /* Aurora — strong light purple & hot pink enterprise theme */
@@ -156,6 +166,16 @@ h6 {
   --pleros-white: var(--c-heading);
   --pleros-muted: var(--c-text-3);
   --pleros-text: var(--c-text);
+
+  /* Enterprise Neobrutalism tokens for Aurora */
+  --neo-border: rgba(147, 51, 234, 0.35);
+  --neo-border-strong: #1a0a2a;
+  --neo-border-black: #1a0a2a;
+  --neo-shadow: 4px 4px 0px #1a0a2a;
+  --neo-shadow-sm: 2px 2px 0px #1a0a2a;
+  --neo-shadow-lg: 6px 6px 0px #1a0a2a;
+  --neo-shadow-primary: 4px 4px 0px #9333ea;
+  --neo-shadow-accent: 4px 4px 0px #f72585;
 }
 
 /* Celestial AI assistant */
