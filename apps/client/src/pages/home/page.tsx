@@ -364,7 +364,7 @@ export default function HomePage() {
           <div className="lg:col-span-6 space-y-6">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-[var(--c-surface-2)] border-2 border-black rounded shadow-[2px_2px_0px_#000] text-xs font-mono font-bold text-[var(--c-primary)]">
               <span className="w-2 h-2 rounded-full bg-[var(--c-success)] animate-pulse" />
-              <span>ENTERPRISE DISTRIBUTION CORE v2.4</span>
+              <span>ENTERPRISE DISTRIBUTION CORE</span>
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase tracking-tight text-[var(--c-heading)] leading-[1.08]">
@@ -442,117 +442,288 @@ export default function HomePage() {
 
           {/* Right Column: Interactive Role Simulator */}
           <div id="simulator" className="lg:col-span-6">
-            <div className="neo-box p-4 sm:p-5 bg-[var(--c-surface)]">
-              {/* Simulator Header */}
-              <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-black">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-red-500 border border-black inline-block" />
-                  <span className="w-3 h-3 rounded-full bg-yellow-500 border border-black inline-block" />
-                  <span className="w-3 h-3 rounded-full bg-green-500 border border-black inline-block" />
-                  <span className="text-xs font-mono font-bold uppercase ml-2 text-[var(--c-heading)]">
-                    Interactive Role Sandbox
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--c-primary)] text-[var(--c-on-primary)] font-bold rounded border border-black shadow-[1px_1px_0px_#000]">
-                  Live Preview
-                </span>
-              </div>
+            {/* Outer glow wrapper */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--c-primary) 0%, #7c3aed 50%, #0ea5e9 100%)',
+              padding: '2px',
+              borderRadius: '16px',
+              boxShadow: '0 0 40px rgba(99,102,241,0.35), 0 0 80px rgba(14,165,233,0.15)',
+            }}>
+              <div style={{
+                background: 'var(--c-surface)',
+                borderRadius: '14px',
+                overflow: 'hidden',
+              }}>
 
-              {/* Role Navigation Tabs */}
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 p-1 bg-[var(--c-surface-2)] border-2 border-black rounded mb-4">
-                {ROLE_PORTALS.map((portal) => {
-                  const active = portal.id === selectedPortal
-                  return (
-                    <button
-                      key={portal.id}
-                      type="button"
-                      onClick={() => setSelectedPortal(portal.id)}
-                      className={`py-1.5 px-1 text-center rounded text-xs font-mono font-bold transition-all ${
-                        active
-                          ? 'bg-[var(--c-primary)] text-[var(--c-on-primary)] border-2 border-black shadow-[2px_2px_0px_#000]'
-                          : 'text-[var(--c-text-2)] hover:text-[var(--c-heading)] hover:bg-[var(--c-surface-3)]'
-                      }`}
-                    >
-                      <div className="text-base">{portal.icon}</div>
-                      <div className="text-[10px] truncate mt-0.5">{portal.title.split(' ')[0]}</div>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Active Role Terminal Details */}
-              <div className="p-4 rounded border-2 border-black bg-[var(--c-surface-2)] shadow-[3px_3px_0px_#000]">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-black text-emerald-400 border border-emerald-500/40">
-                      {currentPortal.simulatedPreview.statusBadge}
+                {/* Terminal chrome bar */}
+                <div style={{
+                  background: 'linear-gradient(90deg, #0f0f0f 0%, #1a1a2e 100%)',
+                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57', display: 'inline-block', boxShadow: '0 0 6px #ff5f57' }} />
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e', display: 'inline-block', boxShadow: '0 0 6px #febc2e' }} />
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#28c840', display: 'inline-block', boxShadow: '0 0 6px #28c840' }} />
+                    <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)', marginLeft: '8px', textTransform: 'uppercase' }}>
+                      Interactive Role Sandbox
                     </span>
-                    <h3 className="text-lg font-black uppercase text-[var(--c-heading)] mt-1.5">
-                      {currentPortal.title}
-                    </h3>
-                    <p className="text-xs text-[var(--c-text-3)] font-mono">{currentPortal.subtitle}</p>
                   </div>
-                  <span className="text-3xl p-2 bg-[var(--c-surface)] rounded border-2 border-black shadow-[2px_2px_0px_#000]">
-                    {currentPortal.icon}
+                  {/* Live pulsing badge */}
+                  <span style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    fontSize: '10px', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.1em',
+                    padding: '3px 10px', borderRadius: '999px',
+                    background: 'linear-gradient(90deg, #10b981, #059669)',
+                    color: '#fff',
+                    boxShadow: '0 0 12px rgba(16,185,129,0.5)',
+                  }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+                    LIVE
                   </span>
                 </div>
 
-                <p className="text-xs text-[var(--c-text-2)] leading-relaxed mb-3">
-                  {currentPortal.description}
-                </p>
+                <div style={{ padding: '20px' }}>
+                  {/* Role pill tabs */}
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px',
+                    padding: '6px',
+                    background: 'rgba(0,0,0,0.3)',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    marginBottom: '20px',
+                  }}>
+                    {ROLE_PORTALS.map((portal) => {
+                      const active = portal.id === selectedPortal
+                      return (
+                        <button
+                          key={portal.id}
+                          type="button"
+                          onClick={() => setSelectedPortal(portal.id)}
+                          style={{
+                            padding: '8px 4px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            background: active
+                              ? 'linear-gradient(135deg, var(--c-primary), #7c3aed)'
+                              : 'transparent',
+                            boxShadow: active ? '0 4px 12px rgba(99,102,241,0.4)' : 'none',
+                            color: active ? '#fff' : 'rgba(255,255,255,0.45)',
+                            fontFamily: 'monospace',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            textAlign: 'center',
+                          }}
+                        >
+                          <div style={{ fontSize: '20px', lineHeight: 1, marginBottom: '4px' }}>{portal.icon}</div>
+                          <div style={{ textTransform: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {portal.title.split(' ')[0]}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
 
-                {/* Simulated Telemetry Lines */}
-                <div className="space-y-1.5 p-3 rounded bg-[var(--c-bg)] border-2 border-black mb-4 font-mono text-xs">
-                  {currentPortal.simulatedPreview.lines.map((line) => (
-                    <div key={line.tag} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-1 border-b border-[var(--c-border)] last:border-0">
-                      <span className="text-[10px] font-bold text-[var(--c-primary)]">{line.tag}:</span>
-                      <span className="text-xs text-[var(--c-heading)] font-semibold truncate">{line.value}</span>
+                  {/* Active portal card */}
+                  <div style={{
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(160deg, rgba(15,15,30,0.95) 0%, rgba(10,10,20,0.98) 100%)',
+                  }}>
+                    {/* Card gradient header bar */}
+                    <div style={{
+                      height: '4px',
+                      background: 'linear-gradient(90deg, var(--c-primary) 0%, #7c3aed 50%, #0ea5e9 100%)',
+                    }} />
+
+                    <div style={{ padding: '20px' }}>
+                      {/* Header row */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          {/* Status badge */}
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            fontSize: '10px', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.08em',
+                            padding: '3px 10px', borderRadius: '4px',
+                            background: 'rgba(16,185,129,0.15)',
+                            color: '#10b981',
+                            border: '1px solid rgba(16,185,129,0.3)',
+                          }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                            {currentPortal.simulatedPreview.statusBadge}
+                          </span>
+                          <h3 style={{
+                            fontSize: '22px', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase',
+                            color: '#fff', marginTop: '10px', marginBottom: '2px', lineHeight: 1.1,
+                          }}>
+                            {currentPortal.title}
+                          </h3>
+                          <p style={{ fontSize: '11px', fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+                            {currentPortal.subtitle}
+                          </p>
+                        </div>
+                        <span style={{
+                          fontSize: '32px', lineHeight: 1,
+                          padding: '10px',
+                          background: 'rgba(255,255,255,0.05)',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          flexShrink: 0,
+                        }}>
+                          {currentPortal.icon}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      <p style={{
+                        fontSize: '12px', lineHeight: 1.6, color: 'rgba(255,255,255,0.55)',
+                        marginBottom: '16px',
+                        paddingBottom: '16px',
+                        borderBottom: '1px solid rgba(255,255,255,0.07)',
+                      }}>
+                        {currentPortal.description}
+                      </p>
+
+                      {/* Live telemetry feed */}
+                      <div style={{
+                        borderRadius: '8px',
+                        background: 'rgba(0,0,0,0.5)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        overflow: 'hidden',
+                        marginBottom: '16px',
+                      }}>
+                        {/* Telemetry header */}
+                        <div style={{
+                          padding: '6px 12px',
+                          background: 'rgba(255,255,255,0.03)',
+                          borderBottom: '1px solid rgba(255,255,255,0.06)',
+                          display: 'flex', alignItems: 'center', gap: '6px',
+                          fontFamily: 'monospace', fontSize: '9px', fontWeight: 700,
+                          color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', textTransform: 'uppercase',
+                        }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 4px #10b981' }} />
+                          Live Telemetry Stream
+                        </div>
+                        {currentPortal.simulatedPreview.lines.map((line, i) => (
+                          <div key={line.tag} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '9px 12px',
+                            borderBottom: i < currentPortal.simulatedPreview.lines.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                          }}>
+                            <span style={{
+                              fontSize: '10px', fontFamily: 'monospace', fontWeight: 700,
+                              color: 'var(--c-primary)', letterSpacing: '0.06em', textTransform: 'uppercase',
+                              minWidth: '120px',
+                            }}>
+                              {line.tag}:
+                            </span>
+                            <span style={{
+                              fontSize: '11px', fontFamily: 'monospace', fontWeight: 600,
+                              color: '#e2e8f0', textAlign: 'right',
+                            }}>
+                              {line.value}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Metrics row */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
+                        {currentPortal.metrics.map((m, i) => (
+                          <div key={m.label} style={{
+                            padding: '10px 8px',
+                            borderRadius: '8px',
+                            textAlign: 'center',
+                            background: i === 0
+                              ? 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(99,102,241,0.05))'
+                              : i === 1
+                              ? 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(16,185,129,0.05))'
+                              : 'linear-gradient(135deg, rgba(14,165,233,0.2), rgba(14,165,233,0.05))',
+                            border: `1px solid ${i === 0 ? 'rgba(99,102,241,0.3)' : i === 1 ? 'rgba(16,185,129,0.3)' : 'rgba(14,165,233,0.3)'}`,
+                          }}>
+                            <div style={{
+                              fontSize: '14px', fontFamily: 'monospace', fontWeight: 900, color: '#fff',
+                              lineHeight: 1,
+                            }}>
+                              {m.val}
+                            </div>
+                            <div style={{
+                              fontSize: '9px', fontFamily: 'monospace', fontWeight: 700,
+                              color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase',
+                              letterSpacing: '0.08em', marginTop: '4px',
+                            }}>
+                              {m.label}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Highlights pills */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }}>
+                        {currentPortal.highlights.map((h) => (
+                          <span key={h} style={{
+                            fontSize: '10px', fontFamily: 'monospace', fontWeight: 600,
+                            padding: '4px 10px', borderRadius: '999px',
+                            background: 'rgba(255,255,255,0.06)',
+                            color: 'rgba(255,255,255,0.55)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                          }}>
+                            · {h}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* CTA buttons */}
+                      <div style={{ display: 'flex', gap: '10px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <Link
+                          to={currentPortal.href}
+                          style={{
+                            flex: 1,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '11px 16px',
+                            borderRadius: '8px',
+                            fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em',
+                            textDecoration: 'none',
+                            background: 'linear-gradient(135deg, var(--c-primary) 0%, #7c3aed 100%)',
+                            color: '#fff',
+                            boxShadow: '0 4px 16px rgba(99,102,241,0.45)',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          Launch {currentPortal.title} →
+                        </Link>
+                        <Link
+                          to={currentPortal.loginHref}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '11px 18px',
+                            borderRadius: '8px',
+                            fontFamily: 'monospace', fontSize: '12px', fontWeight: 700,
+                            textDecoration: 'none',
+                            background: 'rgba(255,255,255,0.07)',
+                            color: 'rgba(255,255,255,0.8)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          Sign In
+                        </Link>
+                      </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Metrics Ticker */}
-                <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                  {currentPortal.metrics.map((m) => (
-                    <div key={m.label} className="p-2 rounded bg-[var(--c-surface)] border border-[var(--c-border-strong)]">
-                      <div className="text-xs font-mono font-black text-[var(--c-heading)]">{m.val}</div>
-                      <div className="text-[9px] font-mono text-[var(--c-text-3)] uppercase mt-0.5">{m.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Role Feature Highlights */}
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {currentPortal.highlights.map((h) => (
-                    <span
-                      key={h}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--c-surface)] text-[var(--c-text-2)] border border-[var(--c-border-strong)]"
-                    >
-                      • {h}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 pt-2 border-t-2 border-black">
-                  <Link
-                    to={currentPortal.href}
-                    className="neo-btn neo-btn-primary flex-1 text-center !py-2 text-xs font-mono"
-                  >
-                    Launch {currentPortal.title} →
-                  </Link>
-                  <Link
-                    to={currentPortal.loginHref}
-                    className="neo-btn neo-btn-secondary !py-2 !px-3 text-xs font-mono"
-                  >
-                    Sign In
-                  </Link>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </section>
+
 
       {/* KPI / Performance Telemetry Bar */}
       <section className="border-y-2 border-black bg-[var(--c-surface)] py-8">
