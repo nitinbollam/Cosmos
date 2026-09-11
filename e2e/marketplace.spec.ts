@@ -38,4 +38,12 @@ test.describe('Marketplace', () => {
     await page.goto('/admin/marketplace')
     await expect(page.getByText('Office Pen Pack (100) — demo listing')).toBeVisible()
   })
+
+  test('seller analytics page loads', async ({ page }) => {
+    await loginAdmin(page)
+    await page.goto('/admin/marketplace/analytics')
+    await expect(page.getByRole('heading', { name: 'Seller analytics' })).toBeVisible()
+    await expect(page.getByText('Net revenue')).toBeVisible()
+    await expect(page.getByText('Live listings')).toBeVisible()
+  })
 })

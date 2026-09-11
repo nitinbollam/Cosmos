@@ -72,6 +72,9 @@ export default function MarketplaceBrowsePage() {
           <Link to="/admin/marketplace/alerts" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
             Alerts
           </Link>
+          <Link to="/admin/marketplace/analytics" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
+            Analytics
+          </Link>
         </div>
       </div>
 
