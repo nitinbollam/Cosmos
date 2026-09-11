@@ -46,7 +46,8 @@ COPY --from=builder /repo/apps/web ./apps/web
 COPY --from=builder /repo/packages ./packages
 COPY --from=builder /repo/docs ./docs
 COPY --from=builder /repo/PLATFORM_FEATURES.md ./PLATFORM_FEATURES.md
+COPY --from=builder /repo/scripts ./scripts
 USER pleros
 EXPOSE 4000
 ENV NODE_ENV=production PORT=4000 HOSTNAME=0.0.0.0 PLEROS_CLIENT_ORIGIN=http://localhost:4000
-CMD ["npx", "tsx", "apps/client/server/index.ts"]
+CMD ["node", "scripts/start-server.mjs"]

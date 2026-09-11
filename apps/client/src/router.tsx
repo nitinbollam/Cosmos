@@ -4,6 +4,7 @@ import { RootLayout } from '@/layouts/RootLayout'
 import { ShopLayout } from '@/layouts/ShopLayout'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { MobileLayout } from '@/layouts/MobileLayout'
+import { OpsLayout } from '@/layouts/OpsLayout'
 
 function AdminCustomersRedirect() {
   return <Navigate to="/admin/crm" replace />
@@ -110,6 +111,39 @@ const router = createBrowserRouter([
           { path: 'pos', element: page(() => import('@/pages/admin/pos/page')) },
           { path: 'celestial', element: page(() => import('@/pages/admin/celestial/page')) },
           { path: 'warehouse', element: page(() => import('@/pages/admin/warehouse/page')) },
+          { path: 'marketplace', element: page(() => import('@/pages/marketplace/page')) },
+          {
+            path: 'marketplace/create',
+            element: page(() => import('@/pages/marketplace/create/page')),
+          },
+          {
+            path: 'marketplace/orders',
+            element: page(() => import('@/pages/marketplace/orders/page')),
+          },
+          {
+            path: 'marketplace/my-listings',
+            element: page(() => import('@/pages/marketplace/my-listings/page')),
+          },
+          {
+            path: 'marketplace/payment-methods',
+            element: page(() => import('@/pages/marketplace/payment-methods/page')),
+          },
+          {
+            path: 'marketplace/alerts',
+            element: page(() => import('@/pages/marketplace/alerts/page')),
+          },
+          {
+            path: 'marketplace/:id',
+            element: page(() => import('@/pages/marketplace/[id]/page')),
+          },
+        ],
+      },
+      {
+        path: '/ops',
+        element: <OpsLayout />,
+        children: [
+          { index: true, element: page(() => import('@/pages/ops/marketplace/page')) },
+          { path: 'marketplace', element: page(() => import('@/pages/ops/marketplace/page')) },
         ],
       },
       {

@@ -16,3 +16,4 @@ CREATE DATABASE pleros_payment;
 CREATE DATABASE pleros_ledger;
 CREATE DATABASE pleros_analytics;
 CREATE DATABASE pleros_notification;
+CREATE DATABASE pleros_marketplace;

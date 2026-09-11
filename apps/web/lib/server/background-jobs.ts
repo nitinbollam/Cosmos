@@ -18,6 +18,15 @@ export function startBackgroundJobs(): void {
     } catch (err) {
       console.error('[jobs] reservation sweep failed:', err)
     }
+    try {
+      const { runMarketplaceJobs } = await import('./marketplace-jobs')
+      const mp = await runMarketplaceJobs()
+      if (mp.auctionsClosed > 0 || mp.escrowsReleased > 0) {
+        console.log(`[jobs] marketplace: closed ${mp.auctionsClosed} auction(s), released ${mp.escrowsReleased} escrow(s)`)
+      }
+    } catch (err) {
+      console.error('[jobs] marketplace sweep failed:', err)
+    }
   }
 
   void sweep()
