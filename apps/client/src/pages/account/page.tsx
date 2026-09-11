@@ -42,6 +42,171 @@ function money(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
+function LoyaltySection() {
+  const [points, setPoints] = useState<number | null>(null)
+  const [redeemPts, setRedeemPts] = useState('500')
+  const [discountCode, setDiscountCode] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    void api.get<{ pointsBalance: number }>('/loyalty/me').then((a) => setPoints(a.pointsBalance)).catch(() => setPoints(0))
+  }, [])
+
+  async function redeem() {
+    setErr(null)
+    try {
+      const res = await api.post<{ discountCode: string }>('/loyalty/me/redeem', { points: Number(redeemPts) })
+      setDiscountCode(res.discountCode)
+      setPoints((p) => (p != null ? p - Number(redeemPts) : p))
+    } catch (e: unknown) {
+      setErr(axiosErr(e))
+    }
+  }
+
+  return (
+    <div className="pleros-card" style={{ marginTop: 16 }}>
+      <h2 style={{ marginTop: 0, fontSize: 16 }}>Loyalty rewards</h2>
+      <p style={{ color: 'var(--c-text-3)', fontSize: 14 }}>Balance: {points ?? '…'} points</p>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <input className="pleros-input" type="number" min={1} value={redeemPts} onChange={(e) => setRedeemPts(e.target.value)} />
+        <button type="button" className="btn-primary" onClick={() => void redeem()}>
+          Redeem
+        </button>
+      </div>
+      {discountCode ? <p style={{ color: 'var(--c-success)', fontSize: 13, marginTop: 8 }}>Use code {discountCode} at checkout</p> : null}
+      {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p> : null}
+    </div>
+  )
+}
+
+type SubscriptionRow = {
+  id: string
+  status: string
+  interval: string
+  nextOrderDate: string
+  lines: Array<{ skuId: string; quantity: number }>
+}
+
+function SubscriptionsSection({
+  cartItems,
+  savedCards,
+}: {
+  cartItems: Array<{ skuId: string; warehouseId: string; quantity: number; skuName: string }>
+  savedCards: SavedCard[]
+}) {
+  const [rows, setRows] = useState<SubscriptionRow[]>([])
+  const [interval, setInterval] = useState<'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'>('MONTHLY')
+  const [savedPaymentMethodId, setSavedPaymentMethodId] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    void api.get<SubscriptionRow[]>('/subscriptions').then(setRows).catch(() => setRows([]))
+  }, [])
+
+  useEffect(() => {
+    const def = savedCards.find((c) => c.isDefault) ?? savedCards[0]
+    if (def) setSavedPaymentMethodId(def.id)
+  }, [savedCards])
+
+  async function pause(id: string) {
+    await api.post(`/subscriptions/${encodeURIComponent(id)}/pause`, {})
+    setRows(await api.get('/subscriptions'))
+  }
+
+  async function cancel(id: string) {
+    await api.post(`/subscriptions/${encodeURIComponent(id)}/cancel`, {})
+    setRows(await api.get('/subscriptions'))
+  }
+
+  async function createFromCart() {
+    if (!cartItems.length) {
+      setErr('Add items to your cart first.')
+      return
+    }
+    if (!savedPaymentMethodId) {
+      setErr('Save a payment method before subscribing.')
+      return
+    }
+    setCreating(true)
+    setErr(null)
+    try {
+      await api.post('/subscriptions', {
+        savedPaymentMethodId,
+        interval,
+        lines: cartItems.map((i) => ({
+          skuId: i.skuId,
+          warehouseId: i.warehouseId,
+          quantity: i.quantity,
+        })),
+      })
+      setRows(await api.get('/subscriptions'))
+    } catch (e: unknown) {
+      setErr(axiosErr(e))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="pleros-card" style={{ marginTop: 16 }}>
+      <h2 style={{ marginTop: 0, fontSize: 16 }}>Subscribe & save</h2>
+      {rows.length ? (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {rows.map((s) => (
+            <li key={s.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--c-border)' }}>
+              <span style={{ fontSize: 14 }}>
+                {s.status} · {s.interval} · next {new Date(s.nextOrderDate).toLocaleDateString()}
+              </span>
+              {s.status === 'ACTIVE' ? (
+                <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
+                  <button type="button" className="btn-ghost" onClick={() => void pause(s.id)}>
+                    Pause
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => void cancel(s.id)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p style={{ color: 'var(--c-text-3)', fontSize: 14, marginTop: 0 }}>No active subscriptions.</p>
+      )}
+      {cartItems.length && savedCards.length ? (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--c-border)' }}>
+          <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 0 }}>
+            Subscribe to {cartItems.length} cart item{cartItems.length === 1 ? '' : 's'} on a recurring schedule.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+            <select className="pleros-input" value={interval} onChange={(e) => setInterval(e.target.value as typeof interval)}>
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Every 2 weeks</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+            <select
+              className="pleros-input"
+              value={savedPaymentMethodId}
+              onChange={(e) => setSavedPaymentMethodId(e.target.value)}
+            >
+              {savedCards.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.brand ?? 'Card'} •••• {c.last4 ?? '????'}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn-primary" disabled={creating} onClick={() => void createFromCart()}>
+              {creating ? 'Creating…' : 'Subscribe from cart'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13, marginTop: 8 }}>{err}</p> : null}
+    </div>
+  )
+}
+
 export default function AccountPage() {
   const navigate = useNavigate()
   const addItems = useCartStore((s) => s.addItems)
@@ -445,7 +610,12 @@ export default function AccountPage() {
             )}
           </div>
 
+          <LoyaltySection />
+          <SubscriptionsSection cartItems={cartItems} savedCards={cards} />
+
           <p style={{ fontSize: 13 }}>
+            <Link to="/gift-cards/purchase" className="pleros-shop-link-accent">Purchase a gift card →</Link>
+            {' · '}
             <Link to="/invoices" className="pleros-shop-link-accent">View open invoices →</Link>
           </p>
         </div>

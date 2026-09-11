@@ -22,6 +22,10 @@ export const AVAILABLE_MODULES = [
   'marketplace',
   'approvals',
   'discounts',
+  'gift-cards',
+  'loyalty',
+  'subscriptions',
+  'campaigns',
 ] as const
 
 export type ModuleKey = (typeof AVAILABLE_MODULES)[number]
@@ -47,6 +51,10 @@ export const MODULE_METADATA: Record<ModuleKey, { label: string; permissions: st
   marketplace: { label: 'Marketplace', permissions: ['marketplace.read', 'marketplace.write'] },
   approvals: { label: 'Approvals', permissions: ['approvals.read', 'approvals.write'] },
   discounts: { label: 'Discounts & Coupons', permissions: ['discounts.read', 'discounts.write'] },
+  'gift-cards': { label: 'Gift Cards', permissions: ['gift-cards.read', 'gift-cards.write'] },
+  loyalty: { label: 'Loyalty & Rewards', permissions: ['loyalty.read', 'loyalty.write'] },
+  subscriptions: { label: 'Subscriptions', permissions: ['subscriptions.read', 'subscriptions.write'] },
+  campaigns: { label: 'Marketing Campaigns', permissions: ['campaigns.read', 'campaigns.write'] },
 }
 
 /** Standard role default permission matrices. */
@@ -70,6 +78,10 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'marketplace.*',
     'approvals.*',
     'discounts.*',
+    'gift-cards.*',
+    'loyalty.*',
+    'subscriptions.*',
+    'campaigns.*',
     'settings.read',
     'audit.read',
     'users.read',

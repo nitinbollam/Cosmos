@@ -157,17 +157,26 @@ export function CompanyTab() {
 
 function WorkflowSettingsCard() {
   const qc = useQueryClient()
-  const wfQ = useQuery<{ poApprovalThreshold: number; discountApprovalThresholdPct: number }>({
+  const wfQ = useQuery<{
+    poApprovalThreshold: number
+    discountApprovalThresholdPct: number
+    loyaltyPointsPerDollar: number
+    loyaltyPointsToDollarRate: number
+  }>({
     queryKey: ['workflow-settings'],
     queryFn: () => api.get('/tenants/me/workflow-settings'),
   })
   const [poThreshold, setPoThreshold] = useState('')
   const [discountPct, setDiscountPct] = useState('')
+  const [pointsPerDollar, setPointsPerDollar] = useState('')
+  const [pointsToDollar, setPointsToDollar] = useState('')
 
   useEffect(() => {
     if (wfQ.data) {
       setPoThreshold(String(wfQ.data.poApprovalThreshold))
       setDiscountPct(String(wfQ.data.discountApprovalThresholdPct))
+      setPointsPerDollar(String(wfQ.data.loyaltyPointsPerDollar))
+      setPointsToDollar(String(wfQ.data.loyaltyPointsToDollarRate))
     }
   }, [wfQ.data])
 
@@ -176,6 +185,8 @@ function WorkflowSettingsCard() {
       api.patch('/tenants/me/workflow-settings', {
         poApprovalThreshold: Number(poThreshold),
         discountApprovalThresholdPct: Number(discountPct),
+        loyaltyPointsPerDollar: Number(pointsPerDollar),
+        loyaltyPointsToDollarRate: Number(pointsToDollar),
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['workflow-settings'] }),
   })
@@ -183,12 +194,17 @@ function WorkflowSettingsCard() {
   const poValid = Number.isFinite(Number(poThreshold)) && Number(poThreshold) >= 0
   const discValid =
     Number.isFinite(Number(discountPct)) && Number(discountPct) >= 0 && Number(discountPct) <= 100
+  const loyaltyValid =
+    Number.isFinite(Number(pointsPerDollar)) &&
+    Number(pointsPerDollar) >= 0 &&
+    Number.isFinite(Number(pointsToDollar)) &&
+    Number(pointsToDollar) > 0
 
   return (
     <div className="pleros-card">
-      <h2 className="text-pleros-white font-semibold font-display mb-1">Approval workflows</h2>
+      <h2 className="text-pleros-white font-semibold font-display mb-1">Workflows & loyalty</h2>
       <p className="text-pleros-text-3 text-sm mb-4">
-        POs above the dollar threshold and discounts above the percent threshold require manager approval.
+        Approval thresholds and loyalty earn/redeem rates for customer engagement.
       </p>
       {wfQ.isLoading ? (
         <div className="skeleton h-10 w-48" />
@@ -197,7 +213,7 @@ function WorkflowSettingsCard() {
           className="grid gap-4 sm:grid-cols-2 max-w-xl"
           onSubmit={(e) => {
             e.preventDefault()
-            if (poValid && discValid) saveMut.mutate()
+            if (poValid && discValid && loyaltyValid) saveMut.mutate()
           }}
         >
           <div>
@@ -223,9 +239,35 @@ function WorkflowSettingsCard() {
               onChange={(e) => setDiscountPct(e.target.value)}
             />
           </div>
+          <div>
+            <label className="text-xs text-pleros-text-3">Loyalty points per $1 spent</label>
+            <input
+              className="pleros-input mt-1 w-full"
+              type="number"
+              min="0"
+              step="0.1"
+              value={pointsPerDollar}
+              onChange={(e) => setPointsPerDollar(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-pleros-text-3">Point value ($ per point)</label>
+            <input
+              className="pleros-input mt-1 w-full"
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={pointsToDollar}
+              onChange={(e) => setPointsToDollar(e.target.value)}
+            />
+          </div>
           <div className="sm:col-span-2">
-            <button type="submit" className="btn-primary" disabled={!poValid || !discValid || saveMut.isPending}>
-              {saveMut.isPending ? 'Saving…' : 'Save workflow settings'}
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={!poValid || !discValid || !loyaltyValid || saveMut.isPending}
+            >
+              {saveMut.isPending ? 'Saving…' : 'Save settings'}
             </button>
           </div>
         </form>

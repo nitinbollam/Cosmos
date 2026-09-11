@@ -123,6 +123,74 @@ export async function notifyPaymentReceived(
     .catch(() => undefined)
 }
 
+export async function notifyGiftCardIssued(
+  tenantId: string,
+  giftCardId: string,
+  code: string,
+  amount: number,
+  customerId?: string,
+) {
+  if (!customerId) return
+  const contact = await customerContact(tenantId, customerId)
+  if (!contact.email) return
+  void notifications
+    .send(
+      tenantId,
+      {
+        channel: NotificationChannel.EMAIL,
+        recipient: contact.email,
+        templateKey: 'gift_card.issued',
+        payload: { giftCardId, code, amount: amount.toFixed(2), customerName: contact.name },
+      },
+      `gift-card-issued:${giftCardId}`,
+    )
+    .catch(() => undefined)
+}
+
+export async function notifySubscriptionOrderCreated(
+  tenantId: string,
+  subscriptionId: string,
+  orderId: string,
+  customerId: string,
+) {
+  const contact = await customerContact(tenantId, customerId)
+  if (!contact.email) return
+  void notifications
+    .send(
+      tenantId,
+      {
+        channel: NotificationChannel.EMAIL,
+        recipient: contact.email,
+        templateKey: 'subscription.order_created',
+        payload: { subscriptionId, orderId, customerName: contact.name },
+      },
+      `subscription-order:${subscriptionId}:${orderId}`,
+    )
+    .catch(() => undefined)
+}
+
+export async function notifySubscriptionPaymentFailed(
+  tenantId: string,
+  subscriptionId: string,
+  customerId: string,
+  reason: string,
+) {
+  const contact = await customerContact(tenantId, customerId)
+  if (!contact.email) return
+  void notifications
+    .send(
+      tenantId,
+      {
+        channel: NotificationChannel.EMAIL,
+        recipient: contact.email,
+        templateKey: 'subscription.payment_failed',
+        payload: { subscriptionId, reason, customerName: contact.name },
+      },
+      `subscription-failed:${subscriptionId}`,
+    )
+    .catch(() => undefined)
+}
+
 export async function notifyLowStock(
   tenantId: string,
   skuId: string,

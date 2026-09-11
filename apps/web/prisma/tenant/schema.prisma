@@ -222,6 +222,159 @@ enum PosTenderMethod {
   CARD
   CHECK
   OTHER
+  GIFT_CARD
+}
+
+enum GiftCardTxnType {
+  ISSUE
+  REDEEM
+  REFUND
+  ADJUSTMENT
+}
+
+model GiftCard {
+  id                 String                @id @default(cuid())
+  tenantId           String
+  code               String
+  initialBalance     Decimal
+  currentBalance     Decimal
+  issuedToCustomerId String?
+  expiresAt          DateTime?
+  isActive           Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  transactions       GiftCardTransaction[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model GiftCardTransaction {
+  id             String          @id @default(cuid())
+  giftCardId     String
+  type           GiftCardTxnType
+  amount         Decimal
+  orderRef       String?
+  journalEntryId String?
+  createdAt      DateTime        @default(now())
+  giftCard       GiftCard        @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])
+}
+
+enum LoyaltyTxnType {
+  EARN
+  REDEEM
+  EXPIRE
+  ADJUSTMENT
+}
+
+model LoyaltyAccount {
+  id            String               @id @default(cuid())
+  tenantId      String
+  customerId    String
+  pointsBalance Int                  @default(0)
+  transactions  LoyaltyTransaction[]
+
+  @@unique([tenantId, customerId])
+}
+
+model LoyaltyTransaction {
+  id        String         @id @default(cuid())
+  accountId String
+  type      LoyaltyTxnType
+  points    Int
+  orderRef  String?
+  reason    String?
+  createdAt DateTime       @default(now())
+  account   LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([accountId, orderRef])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum SubscriptionInterval {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM_DAYS
+}
+
+model Subscription {
+  id                   String               @id @default(cuid())
+  tenantId             String
+  customerId           String
+  savedPaymentMethodId String
+  interval             SubscriptionInterval
+  intervalDays         Int?
+  nextOrderDate        DateTime
+  status               SubscriptionStatus   @default(ACTIVE)
+  lastFailureReason    String?
+  createdAt            DateTime             @default(now())
+  lines                SubscriptionLine[]
+
+  @@index([tenantId, status, nextOrderDate])
+  @@index([tenantId, customerId])
+}
+
+model SubscriptionLine {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  skuId          String
+  warehouseId    String
+  quantity       Int
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+}
+
+model CustomerSegment {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  filterCriteria Json
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  tenantId    String
+  name        String
+  segmentId   String
+  subject     String
+  body        String
+  scheduledAt DateTime?
+  status      CampaignStatus @default(DRAFT)
+  sentCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+
+  @@index([tenantId, status])
+}
+
+model CustomerSuppression {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String?
+  email      String?
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, email])
 }
 
 model PosTender {
