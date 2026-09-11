@@ -59,6 +59,8 @@ model PurchaseOrder {
   otherLandedAmount Decimal               @default(0)
   landedCostNotes   String?
   amountPaid        Decimal               @default(0)
+  currency          String                @default("USD")
+  fxRateToBase      Decimal               @default(1.0)
   createdAt         DateTime              @default(now())
   updatedAt  DateTime              @updatedAt
   supplier   Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
@@ -95,6 +97,8 @@ model VendorBill {
   taxAmount       Decimal          @default(0)
   totalAmount     Decimal
   amountPaid      Decimal          @default(0)
+  currency        String           @default("USD")
+  fxRateToBase    Decimal          @default(1.0)
   issuedAt        DateTime         @default(now())
   dueAt           DateTime?
   journalEntryId  String?

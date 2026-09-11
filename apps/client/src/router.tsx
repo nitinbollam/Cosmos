@@ -62,6 +62,7 @@ const router = createBrowserRouter([
           { path: '/invoices', element: page(() => import('@/pages/invoices/page')) },
           { path: '/invoices/:id', element: page(() => import('@/pages/invoices/[id]/page')) },
           { path: '/account', element: page(() => import('@/pages/account/page')) },
+          { path: '/account/expenses', element: page(() => import('@/pages/account/expenses/page')) },
           { path: '/notifications', element: page(() => import('@/pages/notifications/page')) },
           { path: '/marketplace', element: marketplaceShopPage(() => import('@/pages/marketplace/page')) },
           {
@@ -105,6 +106,7 @@ const router = createBrowserRouter([
           { path: 'gift-cards', element: page(() => import('@/pages/admin/gift-cards/page')) },
           { path: 'campaigns', element: page(() => import('@/pages/admin/campaigns/page')) },
           { path: 'subscriptions', element: page(() => import('@/pages/admin/subscriptions/page')) },
+          { path: 'budgets', element: page(() => import('@/pages/admin/budgets/page')) },
           {
             path: 'finance/journals/:id',
             element: page(() => import('@/pages/admin/finance/journals/[id]/page')),

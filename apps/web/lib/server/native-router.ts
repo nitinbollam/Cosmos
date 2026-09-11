@@ -41,6 +41,9 @@ import { routeGiftCards } from './routes/gift-cards'
 import { routeLoyalty } from './routes/loyalty'
 import { routeSubscriptions, routeSubscriptionJobs } from './routes/subscriptions'
 import { routeCampaigns, routeUnsubscribe } from './routes/campaigns'
+import { routeExpenseReports } from './routes/expense-reports'
+import { routeBudgets } from './routes/budgets'
+import { routeSystemJobs } from './routes/system-jobs'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -103,6 +106,9 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'loyalty') return await routeLoyalty(m, seg, req)
     if (seg[0] === 'subscriptions') return await routeSubscriptions(m, seg, req)
     if (seg[0] === 'campaigns') return await routeCampaigns(m, seg, req)
+    if (seg[0] === 'expense-reports') return await routeExpenseReports(m, seg, req)
+    if (seg[0] === 'budgets') return await routeBudgets(m, seg, req)
+    if (seg[0] === 'system-jobs') return await routeSystemJobs(m, seg, req)
     if (seg[0] === 'pos') return await routePos(m, seg, req)
     if (seg[0] === 'features') return await routeFeatures(m, seg, req)
     if (seg[0] === 'volume-prices') return await routeVolumePrices(m, seg, req)

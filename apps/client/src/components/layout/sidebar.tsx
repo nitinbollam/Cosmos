@@ -27,6 +27,7 @@ const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin/dispatch', label: 'Dispatch', icon: 'dispatch', permission: 'dispatch.read' },
   { href: '/admin/finance', label: 'Finance', icon: 'finance', permission: 'finance.read' },
   { href: '/admin/approvals', label: 'Approvals', icon: 'orders', permission: 'approvals.read' },
+  { href: '/admin/budgets', label: 'Budgets', icon: 'finance', permission: 'budgets.read' },
   { href: '/admin/discounts', label: 'Discounts', icon: 'finance', permission: 'discounts.read' },
   { href: '/admin/gift-cards', label: 'Gift cards', icon: 'finance', permission: 'gift-cards.read' },
   { href: '/admin/campaigns', label: 'Campaigns', icon: 'notifications', permission: 'campaigns.read' },

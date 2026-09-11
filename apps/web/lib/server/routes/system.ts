@@ -187,6 +187,14 @@ export async function routeInternal(method: string, seg: string[], req: Request)
 }
 
 export async function routeWebhooks(method: string, seg: string[], req: Request): Promise<Response> {
+  if (seg[1] === 'plaid' && method === 'POST') {
+    const raw = Buffer.from(await req.arrayBuffer())
+    const { verifyPlaidWebhook, handlePlaidWebhook } = await import('../plaid')
+    await verifyPlaidWebhook(req, raw)
+    const payload = JSON.parse(raw.toString('utf8')) as Parameters<typeof handlePlaidWebhook>[0]
+    await handlePlaidWebhook(payload)
+    return Response.json({ received: true })
+  }
   if (seg[1] === 'stripe' && seg[2] === 'connect' && method === 'POST') {
     const sig = req.headers.get('stripe-signature') ?? ''
     const raw = Buffer.from(await req.arrayBuffer())

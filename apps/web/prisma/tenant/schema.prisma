@@ -115,6 +115,7 @@ enum ApprovalType {
   PURCHASE_ORDER
   DISCOUNT
   CREDIT_LIMIT_OVERRIDE
+  EXPENSE_REPORT
 }
 
 enum ApprovalStatus {

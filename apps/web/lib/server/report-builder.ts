@@ -5,6 +5,7 @@ import * as invoices from './invoices'
 import * as apBills from './ap-bills'
 import * as inv from './inventory'
 import * as crm from './crm'
+import { toBaseAmount } from './fx-util'
 
 export const REPORT_TYPES = ['ORDERS', 'INVENTORY', 'AR_AGING', 'AP_AGING'] as const
 export type ReportType = (typeof REPORT_TYPES)[number]
@@ -295,7 +296,8 @@ async function runArAgingReport(tenantId: string, filters: ReportFilters): Promi
     })
     for (const invRow of res.items) {
       if (invRow.order?.status === 'CANCELLED') continue
-      const balance = Number(invRow.balance)
+      const fx = Number((invRow as { fxRateToBase?: unknown }).fxRateToBase ?? 1)
+      const balance = toBaseAmount(Number(invRow.balance), fx)
       if (openOnly && balance <= 0.01) continue
       const days = Math.max(0, Math.floor((now - new Date(invRow.issuedAt).getTime()) / 86_400_000))
       const bucket = agingBucket(days)
@@ -308,8 +310,8 @@ async function runArAgingReport(tenantId: string, filters: ReportFilters): Promi
         customerId: invRow.customerId,
         customerName: null,
         issuedAt: new Date(invRow.issuedAt).toISOString().slice(0, 10),
-        totalAmount: Number(invRow.totalAmount),
-        amountPaid: Number(invRow.amountPaid),
+        totalAmount: toBaseAmount(Number(invRow.totalAmount), fx),
+        amountPaid: toBaseAmount(Number(invRow.amountPaid), fx),
         balance,
         daysOutstanding: days,
         bucket,
@@ -352,7 +354,8 @@ async function runApAgingReport(tenantId: string, filters: ReportFilters): Promi
   for (const bill of bills) {
     if (bill.status === 'VOID') continue
     if (filters.vendorId && bill.supplier.id !== filters.vendorId) continue
-    const balance = Number(bill.balance)
+    const fx = Number((bill as { fxRateToBase?: unknown }).fxRateToBase ?? 1)
+    const balance = toBaseAmount(Number(bill.balance), fx)
     if (openOnly && balance <= 0.01) continue
     const days = Math.max(0, Math.floor((now - new Date(bill.issuedAt).getTime()) / 86_400_000))
     const bucket = agingBucket(days)
@@ -365,8 +368,8 @@ async function runApAgingReport(tenantId: string, filters: ReportFilters): Promi
       vendorId: bill.supplier.id,
       vendorName: bill.supplier.name,
       issuedAt: new Date(bill.issuedAt).toISOString().slice(0, 10),
-      totalAmount: Number(bill.totalAmount),
-      amountPaid: Number(bill.amountPaid),
+      totalAmount: toBaseAmount(Number(bill.totalAmount), fx),
+      amountPaid: toBaseAmount(Number(bill.amountPaid), fx),
       balance,
       daysOutstanding: days,
       bucket,

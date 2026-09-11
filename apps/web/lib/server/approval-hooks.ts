@@ -33,6 +33,14 @@ export async function onApprovalDecided(tenantId: string, request: ApprovalReque
     const { resumeOrderAfterCreditApproval } = await import('./orders')
     await resumeOrderAfterCreditApproval(tenantId, request.subjectId)
   }
+  if (request.type === ApprovalType.EXPENSE_REPORT) {
+    const { decideExpenseReport } = await import('./expense-reports')
+    await decideExpenseReport(tenantId, request.subjectId, {
+      approve: request.status === ApprovalStatus.APPROVED,
+      decidedBy: request.decidedBy ?? 'system',
+      rejectReason: request.rejectReason ?? undefined,
+    })
+  }
 }
 
 function appendRejectNote(existing: string | null | undefined, reason: string | null | undefined): string {
