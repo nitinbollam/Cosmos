@@ -107,6 +107,7 @@ model OrderSaga {
 
 enum OrderStatus {
   PENDING
+  AWAITING_APPROVAL
   CONFIRMED
   BACKORDERED
   PROCESSING

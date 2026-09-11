@@ -10,6 +10,7 @@ datasource db {
 
 enum PurchaseOrderStatus {
   DRAFT
+  PENDING_APPROVAL
   SUBMITTED
   PARTIALLY_RECEIVED
   CLOSED

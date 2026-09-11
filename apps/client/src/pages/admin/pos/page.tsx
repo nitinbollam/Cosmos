@@ -64,6 +64,15 @@ export default function PosPage() {
   const [ageMethod, setAgeMethod] = useState<AgeAttestationMethod>('ID_CHECK')
   const [dob, setDob] = useState('')
   const [ageNotes, setAgeNotes] = useState('')
+  const [openingFloat, setOpeningFloat] = useState('100')
+  const [closingCount, setClosingCount] = useState('')
+  const [discountCode, setDiscountCode] = useState('')
+  const [discountAmount, setDiscountAmount] = useState(0)
+  const [discountPending, setDiscountPending] = useState(false)
+  const [discountMsg, setDiscountMsg] = useState<string | null>(null)
+  const [splitTender, setSplitTender] = useState(false)
+  const [secondMethod, setSecondMethod] = useState<'CASH' | 'CARD' | 'CHECK'>('CARD')
+  const [secondAmount, setSecondAmount] = useState('')
 
   const policyQ = useQuery({
     queryKey: ['age-verification-policy'],
@@ -88,6 +97,21 @@ export default function PosPage() {
     w.document.close()
     w.onload = () => w.print()
   }
+
+  const shiftQ = useQuery({
+    queryKey: ['pos-shift'],
+    queryFn: () =>
+      api.get<{
+        shift: { id: string; registerId: string; clockInAt: string } | null
+        till: { id: string; openingFloat: string | number; openedAt: string } | null
+      }>('/pos/shift'),
+    refetchInterval: 30_000,
+  })
+
+  const taxQ = useQuery({
+    queryKey: ['pos-tax-settings'],
+    queryFn: () => api.get<{ salesTaxRate: number }>('/tax/settings'),
+  })
 
   const registersQ = useQuery({
     queryKey: ['pos-registers'],
@@ -118,6 +142,36 @@ export default function PosPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-registers'] }),
   })
 
+  const clockIn = useMutation({
+    mutationFn: (regId: string) => api.post('/pos/shift/clock-in', { registerId: regId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pos-shift'] }),
+  })
+
+  const clockOut = useMutation({
+    mutationFn: (force?: boolean) => api.post('/pos/shift/clock-out', { force }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pos-shift'] }),
+  })
+
+  const openTill = useMutation({
+    mutationFn: () =>
+      api.post('/pos/till', {
+        registerId: shiftQ.data?.shift?.registerId ?? registerId,
+        openingFloat: Number(openingFloat) || 0,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pos-shift'] }),
+  })
+
+  const closeTill = useMutation({
+    mutationFn: () =>
+      api.post(`/pos/till/${encodeURIComponent(shiftQ.data!.till!.id)}/close`, {
+        closingCount: Number(closingCount),
+      }),
+    onSuccess: () => {
+      setClosingCount('')
+      void qc.invalidateQueries({ queryKey: ['pos-shift'] })
+    },
+  })
+
   const selectedRegister = registersQ.data?.find((r) => r.id === registerId)
   const warehouseId =
     selectedRegister?.warehouseId ??
@@ -143,16 +197,62 @@ export default function PosPage() {
     ...cart.filter((l) => l.ageRestricted).map((l) => l.minimumAge ?? policyQ.data?.minimumAge ?? 21),
   )
 
+  const taxRate = taxQ.data?.salesTaxRate ?? 0
   const subtotal = cart.reduce((s, l) => s + l.quantity * l.unitPrice, 0)
-  const tax = +(subtotal * 0.0825).toFixed(2)
-  const total = +(subtotal + tax).toFixed(2)
+  const netSubtotal = Math.max(0, subtotal - discountAmount)
+  const tax = +(netSubtotal * taxRate).toFixed(2)
+  const total = +(netSubtotal + tax).toFixed(2)
+
+  const activeShift = shiftQ.data?.shift
+  const openTillSession = shiftQ.data?.till
+  const posReady = Boolean(activeShift && openTillSession)
+
+  async function validatePosDiscount() {
+    if (!discountCode.trim()) return
+    setDiscountMsg(null)
+    setDiscountPending(false)
+    setDiscountAmount(0)
+    try {
+      const res = await api.post<{
+        valid: boolean
+        reason?: string
+        amountOff?: number
+        pendingApproval?: boolean
+      }>('/discounts/validate', {
+        code: discountCode.trim(),
+        orderSubtotal: subtotal,
+        customerId: effectiveCustomerId,
+      })
+      if (!res.valid) {
+        setDiscountMsg(res.reason ?? 'Invalid discount')
+        return
+      }
+      if (res.pendingApproval) {
+        setDiscountPending(true)
+        setDiscountMsg('Discount pending manager approval — sale at full price or wait.')
+        return
+      }
+      setDiscountAmount(res.amountOff ?? 0)
+      setDiscountMsg(`−${money(res.amountOff ?? 0)} applied`)
+    } catch (e) {
+      setDiscountMsg(errMsg(e))
+    }
+  }
 
   const checkout = useMutation({
-    mutationFn: () =>
-      api.post<{ id: string; orderNumber?: string; totalAmount: number }>('/pos/orders', {
+    mutationFn: () => {
+      const tenders =
+        splitTender && secondAmount.trim()
+          ? [
+              { method: paymentMethod, amount: total - Number(secondAmount) },
+              { method: secondMethod, amount: Number(secondAmount) },
+            ]
+          : [{ method: paymentMethod, amount: total }]
+      return api.post<{ id: string; orderNumber?: string; totalAmount: number }>('/pos/orders', {
         registerId,
         customerId: effectiveCustomerId,
-        paymentMethod,
+        tenders,
+        ...(discountAmount > 0 && !discountPending ? { discountCode: discountCode.trim() } : {}),
         lineItems: cart.map((l) => ({
           skuId: l.skuId,
           warehouseId,
@@ -168,7 +268,8 @@ export default function PosPage() {
               },
             }
           : {}),
-      }),
+      })
+    },
     onSuccess: (order) => {
       setLastOrderId(order.id)
       setLastOrderTotal(order.totalAmount)
@@ -176,6 +277,10 @@ export default function PosPage() {
       setSubmitErr(null)
       setDob('')
       setAgeNotes('')
+      setDiscountCode('')
+      setDiscountAmount(0)
+      setDiscountPending(false)
+      setDiscountMsg(null)
     },
     onError: (e) => setSubmitErr(errMsg(e)),
   })
@@ -229,6 +334,90 @@ export default function PosPage() {
           Add register
         </button>
       </div>
+
+      {!activeShift ? (
+        <div className="pleros-card border border-amber-500/30 space-y-4">
+          <p className="text-pleros-white font-semibold">Clock in to start selling</p>
+          <p className="text-sm text-pleros-text-3">Select a register and clock in before opening the till.</p>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="min-w-[200px]">
+              <label className="text-xs text-pleros-text-3 block">Register</label>
+              <select className="pleros-input mt-1 w-full" value={registerId} onChange={(e) => setRegisterId(e.target.value)}>
+                <option value="">Select register…</option>
+                {registers.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!registerId || clockIn.isPending}
+              onClick={() => clockIn.mutate(registerId)}
+            >
+              {clockIn.isPending ? 'Clocking in…' : 'Clock in'}
+            </button>
+          </div>
+          {clockIn.error ? <p className="text-sm text-red-400">{errMsg(clockIn.error)}</p> : null}
+        </div>
+      ) : !openTillSession ? (
+        <div className="pleros-card border border-amber-500/30 space-y-4">
+          <p className="text-pleros-white font-semibold">Open till session</p>
+          <p className="text-sm text-pleros-text-3">
+            Clocked in since {new Date(activeShift.clockInAt).toLocaleTimeString()}. Count the starting cash drawer float.
+          </p>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="text-xs text-pleros-text-3 block">Opening float ($)</label>
+              <input
+                className="pleros-input mt-1 w-32"
+                type="number"
+                min={0}
+                step="0.01"
+                value={openingFloat}
+                onChange={(e) => setOpeningFloat(e.target.value)}
+              />
+            </div>
+            <button type="button" className="btn-primary" disabled={openTill.isPending} onClick={() => openTill.mutate()}>
+              {openTill.isPending ? 'Opening…' : 'Open till'}
+            </button>
+            <button type="button" className="btn-ghost" disabled={clockOut.isPending} onClick={() => clockOut.mutate(false)}>
+              Clock out
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="pleros-card flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="text-pleros-text-2">
+            Till open · float {money(Number(openTillSession.openingFloat))} · since{' '}
+            {new Date(openTillSession.openedAt).toLocaleTimeString()}
+          </span>
+          <div className="flex flex-wrap gap-2 items-end">
+            <input
+              className="pleros-input !w-28 !py-1.5"
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="Counted $"
+              value={closingCount}
+              onChange={(e) => setClosingCount(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn-ghost !text-xs"
+              disabled={!closingCount.trim() || closeTill.isPending}
+              onClick={() => closeTill.mutate()}
+            >
+              Close till
+            </button>
+            <button type="button" className="btn-ghost !text-xs" disabled={clockOut.isPending} onClick={() => clockOut.mutate(false)}>
+              Clock out
+            </button>
+          </div>
+        </div>
+      )}
 
       {lastOrderId ? (
         <div className="pleros-card border border-emerald-500/30">
@@ -369,13 +558,42 @@ export default function PosPage() {
               </ul>
             )}
 
+            <div className="space-y-2">
+              <label className="text-xs text-pleros-text-3 block">Discount code</label>
+              <div className="flex gap-2">
+                <input
+                  className="pleros-input flex-1"
+                  value={discountCode}
+                  onChange={(e) => {
+                    setDiscountCode(e.target.value)
+                    setDiscountAmount(0)
+                    setDiscountPending(false)
+                    setDiscountMsg(null)
+                  }}
+                  placeholder="Optional"
+                />
+                <button type="button" className="btn-ghost !text-xs shrink-0" onClick={() => void validatePosDiscount()}>
+                  Apply
+                </button>
+              </div>
+              {discountMsg ? (
+                <p className={`text-xs ${discountPending ? 'text-amber-400' : 'text-emerald-400'}`}>{discountMsg}</p>
+              ) : null}
+            </div>
+
             <div className="space-y-1.5 text-sm border-t pt-3" style={{ borderColor: 'var(--c-border)' }}>
               <div className="flex justify-between gap-4 text-pleros-text-2">
                 <span>Subtotal</span>
                 <span className="tabular-nums shrink-0">{money(subtotal)}</span>
               </div>
+              {discountAmount > 0 ? (
+                <div className="flex justify-between gap-4 text-emerald-400">
+                  <span>Discount</span>
+                  <span className="tabular-nums shrink-0">−{money(discountAmount)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-4 text-pleros-text-2">
-                <span>Tax (est.)</span>
+                <span>Tax ({(taxRate * 100).toFixed(2)}%)</span>
                 <span className="tabular-nums shrink-0">{money(tax)}</span>
               </div>
               <div className="flex justify-between gap-4 text-pleros-white font-semibold text-base pt-1">
@@ -396,6 +614,33 @@ export default function PosPage() {
                 <option value="CHECK">Check</option>
               </select>
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-pleros-text-2 cursor-pointer">
+              <input type="checkbox" checked={splitTender} onChange={(e) => setSplitTender(e.target.checked)} />
+              Split tender
+            </label>
+            {splitTender ? (
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  className="pleros-input"
+                  value={secondMethod}
+                  onChange={(e) => setSecondMethod(e.target.value as typeof secondMethod)}
+                >
+                  <option value="CARD">Card</option>
+                  <option value="CASH">Cash</option>
+                  <option value="CHECK">Check</option>
+                </select>
+                <input
+                  className="pleros-input"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="2nd amount"
+                  value={secondAmount}
+                  onChange={(e) => setSecondAmount(e.target.value)}
+                />
+              </div>
+            ) : null}
 
             {cartNeedsAge ? (
               <div
@@ -452,12 +697,16 @@ export default function PosPage() {
               type="button"
               className="btn-primary w-full"
               disabled={
+                !posReady ||
                 !registerId ||
                 !warehouseId ||
                 !effectiveCustomerId ||
                 cart.length === 0 ||
                 checkout.isPending ||
-                (cartNeedsAge && ageMethod === 'DOB_ENTRY' && !dob)
+                discountPending ||
+                (cartNeedsAge && ageMethod === 'DOB_ENTRY' && !dob) ||
+                (splitTender &&
+                  (!secondAmount.trim() || Number(secondAmount) <= 0 || Number(secondAmount) >= total))
               }
               onClick={() => checkout.mutate()}
             >

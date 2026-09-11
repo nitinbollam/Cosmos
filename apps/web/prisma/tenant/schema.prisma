@@ -111,6 +111,133 @@ model AuditEvent {
   @@index([tenantId, entityId])
 }
 
+enum ApprovalType {
+  PURCHASE_ORDER
+  DISCOUNT
+  CREDIT_LIMIT_OVERRIDE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ApprovalRequest {
+  id           String         @id @default(cuid())
+  tenantId     String
+  type         ApprovalType
+  subjectId    String
+  requestedBy  String
+  context      Json
+  status       ApprovalStatus @default(PENDING)
+  decidedBy    String?
+  decidedAt    DateTime?
+  rejectReason String?
+  createdAt    DateTime       @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([tenantId, subjectId])
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountScope {
+  ORDER
+  LINE_ITEM
+}
+
+model Discount {
+  id               String        @id @default(cuid())
+  tenantId         String
+  code             String?
+  type             DiscountType
+  scope            DiscountScope
+  amount           Decimal
+  minPurchase      Decimal?
+  startsAt         DateTime?
+  expiresAt        DateTime?
+  usageLimit       Int?
+  perCustomerLimit Int?
+  timesUsed        Int           @default(0)
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  redemptions      DiscountRedemption[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+}
+
+model DiscountRedemption {
+  id         String   @id @default(cuid())
+  discountId String
+  orderId    String?
+  customerId String?
+  amountOff  Decimal
+  redeemedAt DateTime @default(now())
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+
+  @@index([discountId])
+  @@index([orderId])
+  @@index([customerId])
+}
+
+model Shift {
+  id         String    @id @default(cuid())
+  tenantId   String
+  userId     String
+  registerId String
+  clockInAt  DateTime  @default(now())
+  clockOutAt DateTime?
+
+  @@index([tenantId, userId])
+  @@index([tenantId, registerId])
+}
+
+model TillSession {
+  id            String    @id @default(cuid())
+  tenantId      String
+  registerId    String
+  shiftId       String
+  openedBy      String
+  openingFloat  Decimal
+  openedAt      DateTime  @default(now())
+  closedBy      String?
+  closingCount  Decimal?
+  expectedTotal Decimal?
+  variance      Decimal?
+  closedAt      DateTime?
+  tenders       PosTender[]
+
+  @@index([tenantId, registerId])
+  @@index([tenantId, shiftId])
+}
+
+enum PosTenderMethod {
+  CASH
+  CARD
+  CHECK
+  OTHER
+}
+
+model PosTender {
+  id            String          @id @default(cuid())
+  tenantId      String
+  orderId       String
+  tillSessionId String?
+  method        PosTenderMethod
+  amount        Decimal
+  createdAt     DateTime        @default(now())
+  tillSession   TillSession?    @relation(fields: [tillSessionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, orderId])
+  @@index([tenantId, tillSessionId])
+}
+
 model PosRegister {
   id          String   @id @default(cuid())
   tenantId    String

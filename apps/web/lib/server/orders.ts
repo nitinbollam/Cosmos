@@ -3,7 +3,11 @@ import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import { computeSalesTax } from './compliance-tax'
 import { getTenantSalesTaxRate } from './tenant-tax'
-import { assertCreditAvailable, releaseCreditUsed } from './credit-limit'
+import { checkCreditLimitForOrder, releaseCreditUsed } from './credit-limit'
+import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
+import { ApprovalType } from '@/generated/prisma-tenant'
+import { OrderStatus } from '@/generated/prisma-order'
+import * as discounts from './discounts'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
 import { syncInvoiceFromOrder } from './invoices'
@@ -35,6 +39,7 @@ export type CreateOrderInput = {
   shippingAddress?: Record<string, unknown>
   /** Required for POS when tenant age verification is enabled and cart has restricted SKUs. */
   ageAttestation?: PosAgeAttestation | null
+  discountCode?: string
   lineItems: Array<{
     skuId: string
     warehouseId: string
@@ -51,7 +56,25 @@ export async function createOrder(
   dto: CreateOrderInput,
   opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string },
 ) {
-  const subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
+  let subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
+  let discountAmount = 0
+  let discountId: string | null = null
+
+  if (dto.discountCode?.trim()) {
+    const validated = await discounts.validateDiscount(tenantId, dto.discountCode, {
+      orderSubtotal: subtotal,
+      customerId: opts?.buyerCustomerId ?? dto.customerId,
+      requestedBy: opts?.userId,
+    })
+    if (!validated.valid) throw new ApiError(400, validated.reason)
+    if ('pendingApproval' in validated && validated.pendingApproval) {
+      throw new ApiError(400, 'Discount is pending manager approval — checkout at full price or wait for approval')
+    }
+    discountAmount = validated.amountOff
+    discountId = validated.discount!.id
+    subtotal = Math.max(0, subtotal - discountAmount)
+  }
+
   const taxRate = await getTenantSalesTaxRate(tenantId)
   const taxAmount = computeSalesTax(subtotal, taxRate)
   const totalAmount = subtotal + taxAmount
@@ -77,13 +100,15 @@ export async function createOrder(
     posAttestation: ageAttestation,
   })
 
-  await assertCreditAvailable(tenantId, customerId, totalAmount, dto.paymentMethod)
+  const creditCheck = await checkCreditLimitForOrder(tenantId, customerId, totalAmount, dto.paymentMethod)
+  const needsCreditApproval = !creditCheck.ok && creditCheck.requiresApproval
 
   const order = await orderDb.order.create({
     data: {
       tenantId,
       customerId,
       channel: channel as never,
+      status: needsCreditApproval ? OrderStatus.AWAITING_APPROVAL : undefined,
       paymentMethod: dto.paymentMethod as never,
       salesRepId: dto.salesRepId,
       priority: (dto.priority ?? 'NORMAL') as never,
@@ -105,6 +130,37 @@ export async function createOrder(
     },
     include: { lineItems: true },
   })
+
+  if (discountId && discountAmount > 0) {
+    await discounts.redeemDiscount(tenantId, discountId, {
+      orderId: order.id,
+      customerId,
+      amountOff: discountAmount,
+    })
+  }
+
+  if (needsCreditApproval) {
+    const existing = await findPendingApprovalForSubject(
+      tenantId,
+      ApprovalType.CREDIT_LIMIT_OVERRIDE,
+      order.id,
+    )
+    if (!existing) {
+      await createApprovalRequest(tenantId, {
+        type: ApprovalType.CREDIT_LIMIT_OVERRIDE,
+        subjectId: order.id,
+        requestedBy: opts?.userId ?? 'system',
+        context: {
+          customerId,
+          openBalance: creditCheck.openBalance,
+          newOrderTotal: creditCheck.orderTotal,
+          creditLimit: creditCheck.creditLimit,
+          projectedTotal: creditCheck.projectedTotal,
+        },
+      })
+    }
+    return order
+  }
 
   if (!defersFulfillmentUntilPayment(dto.paymentMethod)) {
     if (opts?.awaitPipeline) {
@@ -295,6 +351,32 @@ export async function recordOrderPayment(
 
 export async function cancelOrder(tenantId: string, id: string, reason: string) {
   return cancelOrderWithCompensation(tenantId, id, reason)
+}
+
+export async function resumeOrderAfterCreditApproval(tenantId: string, orderId: string) {
+  const order = await orderDb.order.findFirst({
+    where: { id: orderId, tenantId },
+    include: { lineItems: true },
+  })
+  if (!order) throw new ApiError(404, 'Order not found')
+  if (order.status !== OrderStatus.AWAITING_APPROVAL) return order
+
+  const correlationId = randomUUID()
+  await orderDb.order.update({
+    where: { id: orderId },
+    data: { status: OrderStatus.PENDING },
+  })
+
+  if (!defersFulfillmentUntilPayment(order.paymentMethod)) {
+    await runOrderFulfillmentPipeline(orderId, tenantId, correlationId)
+    void notifyTriggers.notifyOrderCreated(
+      tenantId,
+      orderId,
+      order.customerId,
+      Number(order.totalAmount),
+    ).catch(() => undefined)
+  }
+  return orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { lineItems: true } })
 }
 
 export async function getReorderLines(tenantId: string, orderId: string, opts?: { buyerCustomerId?: string }) {

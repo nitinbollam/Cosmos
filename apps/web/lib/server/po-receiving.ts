@@ -28,6 +28,9 @@ export function assertPoOpenForReceiving(status: PurchaseOrderStatus) {
   if (status === PurchaseOrderStatus.DRAFT) {
     throw new ApiError(400, 'Submit the PO before receiving')
   }
+  if (status === PurchaseOrderStatus.PENDING_APPROVAL) {
+    throw new ApiError(400, 'PO is awaiting manager approval')
+  }
 }
 
 export async function validateAndApplyPoLineReceipts(

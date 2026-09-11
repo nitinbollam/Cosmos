@@ -254,6 +254,46 @@ export async function routePos(method: string, seg: string[], req: Request): Pro
     const body = (await req.json()) as Parameters<typeof pos.createPosOrder>[1]
     return Response.json(await pos.createPosOrder(session.tenantId, body, session.userId), { status: 201 })
   }
+  if (seg.length === 3 && seg[1] === 'orders' && seg[2] === 'returns' && method === 'POST') {
+    const body = (await req.json()) as Parameters<typeof pos.createPosReturn>[1]
+    return Response.json(await pos.createPosReturn(session.tenantId, body, session.userId), { status: 201 })
+  }
+  if (seg.length === 2 && seg[1] === 'shift' && method === 'GET') {
+    const shift = await pos.getCurrentShift(session.tenantId, session.userId)
+    const till = shift ? await pos.getOpenTillSession(session.tenantId, session.userId) : null
+    return Response.json({ shift, till })
+  }
+  if (seg.length === 3 && seg[1] === 'shift' && seg[2] === 'clock-in' && method === 'POST') {
+    const body = (await req.json()) as { registerId?: string }
+    if (!body.registerId) throw new ApiError(400, 'registerId required')
+    return Response.json(await pos.clockIn(session.tenantId, session.userId, body.registerId), { status: 201 })
+  }
+  if (seg.length === 3 && seg[1] === 'shift' && seg[2] === 'clock-out' && method === 'POST') {
+    const body = (await req.json()) as { force?: boolean }
+    return Response.json(await pos.clockOut(session.tenantId, session.userId, { force: body.force }))
+  }
+  if (seg.length === 2 && seg[1] === 'till' && method === 'POST') {
+    const body = (await req.json()) as { registerId?: string; openingFloat?: number }
+    if (!body.registerId) throw new ApiError(400, 'registerId required')
+    return Response.json(
+      await pos.openTillSession(
+        session.tenantId,
+        session.userId,
+        body.registerId,
+        body.openingFloat ?? 0,
+      ),
+      { status: 201 },
+    )
+  }
+  if (seg.length === 4 && seg[1] === 'till' && seg[3] === 'close' && method === 'POST') {
+    const body = (await req.json()) as { closingCount?: number }
+    if (body.closingCount == null || body.closingCount < 0) {
+      throw new ApiError(400, 'closingCount required')
+    }
+    return Response.json(
+      await pos.closeTillSession(session.tenantId, session.userId, seg[2], body.closingCount),
+    )
+  }
   if (seg.length === 4 && seg[1] === 'orders' && seg[3] === 'receipt' && method === 'GET') {
     const html = await posReceipt.buildPosReceiptHtml(session.tenantId, seg[2])
     return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })

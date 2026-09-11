@@ -47,8 +47,15 @@ export default function CheckoutPage() {
   const { stripePromise, chargesEnabled, loading: stripeConfigLoading } = useStripeConnect(api.get.bind(api), 'checkout-stripe')
 
   const [taxRate, setTaxRate] = useState(0.07)
-  const taxAmount = useMemo(() => +(cartSubtotal * taxRate).toFixed(2), [cartSubtotal, taxRate])
-  const orderTotal = cartSubtotal + taxAmount
+  const [discountCode, setDiscountCode] = useState('')
+  const [discountAmount, setDiscountAmount] = useState(0)
+  const [discountPending, setDiscountPending] = useState(false)
+  const [discountMsg, setDiscountMsg] = useState<string | null>(null)
+  const [validatingDiscount, setValidatingDiscount] = useState(false)
+
+  const discountedSubtotal = Math.max(0, cartSubtotal - discountAmount)
+  const taxAmount = useMemo(() => +(discountedSubtotal * taxRate).toFixed(2), [discountedSubtotal, taxRate])
+  const orderTotal = discountedSubtotal + taxAmount
 
   const [step, setStep] = useState(1)
   const [customer, setCustomer] = useState<CustomerRow | null>(null)
@@ -119,6 +126,42 @@ export default function CheckoutPage() {
     }
   }, [payment, cardMode, selectedSavedId, savedCards])
 
+  async function validateDiscountCode() {
+    const cid = getB2bCustomerId()
+    if (!cid || !discountCode.trim()) return
+    setValidatingDiscount(true)
+    setDiscountMsg(null)
+    setDiscountPending(false)
+    setDiscountAmount(0)
+    try {
+      const res = await api.post<{
+        valid: boolean
+        reason?: string
+        amountOff?: number
+        pendingApproval?: boolean
+      }>('/discounts/validate', {
+        code: discountCode.trim(),
+        orderSubtotal: cartSubtotal,
+        customerId: cid,
+      })
+      if (!res.valid) {
+        setDiscountMsg(res.reason ?? 'Invalid discount')
+        return
+      }
+      if (res.pendingApproval) {
+        setDiscountPending(true)
+        setDiscountMsg('Discount pending manager approval — checkout at full price or wait for approval.')
+        return
+      }
+      setDiscountAmount(res.amountOff ?? 0)
+      setDiscountMsg(`Discount applied: −$${(res.amountOff ?? 0).toFixed(2)}`)
+    } catch (e: unknown) {
+      setDiscountMsg(axiosErr(e))
+    } finally {
+      setValidatingDiscount(false)
+    }
+  }
+
   async function placeOrder() {
     const cid = getB2bCustomerId()
     if (!cid) {
@@ -155,6 +198,7 @@ export default function CheckoutPage() {
             unitPrice: i.unitPrice,
           })),
           notes: `Ship to: ${company}, ${line1}${line2 ? `, ${line2}` : ''}, ${city}, ${state} ${zip}`,
+          ...(discountAmount > 0 && !discountPending ? { discountCode: discountCode.trim() } : {}),
           shippingAddress: {
             company,
             line1,
@@ -351,6 +395,40 @@ export default function CheckoutPage() {
               SKUs will be blocked until your distributor adds a license on your customer record.
             </p>
           ) : null}
+          <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--c-surface-2)' }}>
+            <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Discount code</label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                className="pleros-input"
+                value={discountCode}
+                onChange={(e) => {
+                  setDiscountCode(e.target.value)
+                  setDiscountAmount(0)
+                  setDiscountPending(false)
+                  setDiscountMsg(null)
+                }}
+                placeholder="Optional promo code"
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={validatingDiscount || !discountCode.trim()}
+                onClick={() => void validateDiscountCode()}
+              >
+                {validatingDiscount ? '…' : 'Apply'}
+              </button>
+            </div>
+            {discountMsg ? (
+              <p style={{ fontSize: 13, marginTop: 8, color: discountPending ? 'var(--c-warning)' : 'var(--c-text-2)' }}>
+                {discountMsg}
+              </p>
+            ) : null}
+          </div>
+          <p style={{ marginTop: 16 }}>
+            Subtotal ${cartSubtotal.toFixed(2)}
+            {discountAmount > 0 ? ` · Discount −$${discountAmount.toFixed(2)}` : ''}
+            {` · Tax $${taxAmount.toFixed(2)} · Total $${orderTotal.toFixed(2)}`}
+          </p>
           <p>
             Pay with: <strong>{payment.replace(/_/g, ' ')}</strong>
             {payment === 'CARD' && cardPaymentMethodId ? (
