@@ -2,6 +2,9 @@ import { Prisma, PurchaseOrderStatus } from '@/generated/prisma-purchasing'
 import { purchasingDb } from './db'
 import { ApiError } from './session'
 import * as poReceiving from './po-receiving'
+import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
+import { ApprovalType } from '@/generated/prisma-tenant'
+import { getTenantWorkflowSettings } from './tenant-workflow-settings'
 
 // NOTE: This module mirrors the legacy Nest purchasing-service behavior
 // for the subset used by the Next admin UI.
@@ -74,11 +77,65 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
   })
 }
 
-export async function submitPurchaseOrder(tenantId: string, id: string) {
+export function computePurchaseOrderTotal(po: {
+  lines: Array<{ qtyOrdered: number; unitCost: Prisma.Decimal | null }>
+  freightAmount: Prisma.Decimal | null
+  dutyAmount: Prisma.Decimal | null
+  otherLandedAmount: Prisma.Decimal | null
+}): number {
+  const linesTotal = po.lines.reduce(
+    (s, l) => s + l.qtyOrdered * (l.unitCost != null ? Number(l.unitCost) : 0),
+    0,
+  )
+  const landed =
+    (po.freightAmount != null ? Number(po.freightAmount) : 0) +
+    (po.dutyAmount != null ? Number(po.dutyAmount) : 0) +
+    (po.otherLandedAmount != null ? Number(po.otherLandedAmount) : 0)
+  return +(linesTotal + landed).toFixed(2)
+}
+
+export async function submitPurchaseOrder(tenantId: string, id: string, requestedBy?: string) {
   const po = await getPurchaseOrder(tenantId, id)
   if (po.status !== PurchaseOrderStatus.DRAFT) {
     throw new ApiError(400, 'Only DRAFT orders can be submitted')
   }
+
+  const total = computePurchaseOrderTotal(po)
+  const { poApprovalThreshold } = await getTenantWorkflowSettings(tenantId)
+
+  if (total > poApprovalThreshold + 0.001) {
+    const existing = await findPendingApprovalForSubject(tenantId, ApprovalType.PURCHASE_ORDER, id)
+    if (!existing) {
+      await createApprovalRequest(tenantId, {
+        type: ApprovalType.PURCHASE_ORDER,
+        subjectId: id,
+        requestedBy: requestedBy ?? 'system',
+        context: {
+          number: po.number,
+          total,
+          threshold: poApprovalThreshold,
+          supplierId: po.supplierId,
+          supplierName: po.supplier?.name ?? null,
+        },
+      })
+    }
+    return purchasingDb.purchaseOrder.update({
+      where: { id },
+      data: { status: PurchaseOrderStatus.PENDING_APPROVAL },
+      include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
+    })
+  }
+
+  return purchasingDb.purchaseOrder.update({
+    where: { id },
+    data: { status: PurchaseOrderStatus.SUBMITTED },
+    include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
+  })
+}
+
+export async function submitPurchaseOrderAfterApproval(tenantId: string, id: string) {
+  const po = await getPurchaseOrder(tenantId, id)
+  if (po.status !== PurchaseOrderStatus.PENDING_APPROVAL) return po
   return purchasingDb.purchaseOrder.update({
     where: { id },
     data: { status: PurchaseOrderStatus.SUBMITTED },

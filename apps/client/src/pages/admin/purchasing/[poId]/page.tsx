@@ -120,11 +120,16 @@ export default function PurchaseOrderDetailPage() {
     },
   })
 
+  const isPendingApproval = po.data?.status === 'PENDING_APPROVAL'
   const canSubmit = po.data?.status === 'DRAFT'
-  const canCancel = po.data?.status === 'DRAFT' || po.data?.status === 'SUBMITTED'
+  const canCancel =
+    po.data?.status === 'DRAFT' ||
+    po.data?.status === 'SUBMITTED' ||
+    po.data?.status === 'PENDING_APPROVAL'
   const canReceiveGoods =
     po.data &&
     po.data.status !== 'DRAFT' &&
+    po.data.status !== 'PENDING_APPROVAL' &&
     po.data.status !== 'CANCELLED' &&
     po.data.status !== 'CLOSED'
   const canStartWmsSession =
@@ -150,9 +155,19 @@ export default function PurchaseOrderDetailPage() {
             <div>
               <h1 className="text-2xl font-bold text-pleros-white">PO {po.data.number}</h1>
               <p className="text-pleros-muted text-sm mt-1">{po.data.supplier?.name}</p>
-              <div className="mt-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge status={po.data.status} />
+                {isPendingApproval ? (
+                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-amber-500/20 text-amber-300">
+                    Awaiting manager approval
+                  </span>
+                ) : null}
               </div>
+              {isPendingApproval ? (
+                <Link to="/admin/approvals" className="text-sm text-pleros-accent mt-2 inline-block">
+                  Review in Approvals inbox →
+                </Link>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {canSubmit && (

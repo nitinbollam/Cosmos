@@ -98,6 +98,8 @@ const router = createBrowserRouter([
             element: page(() => import('@/pages/admin/dispatch/[routeId]/page')),
           },
           { path: 'finance', element: page(() => import('@/pages/admin/finance/page')) },
+          { path: 'approvals', element: page(() => import('@/pages/admin/approvals/page')) },
+          { path: 'discounts', element: page(() => import('@/pages/admin/discounts/page')) },
           {
             path: 'finance/journals/:id',
             element: page(() => import('@/pages/admin/finance/journals/[id]/page')),

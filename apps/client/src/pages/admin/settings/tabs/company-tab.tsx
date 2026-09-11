@@ -119,6 +119,7 @@ export function CompanyTab() {
       </div>
 
       <TaxSettingsCard />
+      <WorkflowSettingsCard />
       <AgeVerificationCard />
 
       {tenant.data?.onboardingSteps && tenant.data.onboardingSteps.length > 0 && (
@@ -150,6 +151,87 @@ export function CompanyTab() {
           {patchStep.error && <p className="text-red-400 text-xs mt-2">{errMsg(patchStep.error)}</p>}
         </div>
       )}
+    </div>
+  )
+}
+
+function WorkflowSettingsCard() {
+  const qc = useQueryClient()
+  const wfQ = useQuery<{ poApprovalThreshold: number; discountApprovalThresholdPct: number }>({
+    queryKey: ['workflow-settings'],
+    queryFn: () => api.get('/tenants/me/workflow-settings'),
+  })
+  const [poThreshold, setPoThreshold] = useState('')
+  const [discountPct, setDiscountPct] = useState('')
+
+  useEffect(() => {
+    if (wfQ.data) {
+      setPoThreshold(String(wfQ.data.poApprovalThreshold))
+      setDiscountPct(String(wfQ.data.discountApprovalThresholdPct))
+    }
+  }, [wfQ.data])
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      api.patch('/tenants/me/workflow-settings', {
+        poApprovalThreshold: Number(poThreshold),
+        discountApprovalThresholdPct: Number(discountPct),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['workflow-settings'] }),
+  })
+
+  const poValid = Number.isFinite(Number(poThreshold)) && Number(poThreshold) >= 0
+  const discValid =
+    Number.isFinite(Number(discountPct)) && Number(discountPct) >= 0 && Number(discountPct) <= 100
+
+  return (
+    <div className="pleros-card">
+      <h2 className="text-pleros-white font-semibold font-display mb-1">Approval workflows</h2>
+      <p className="text-pleros-text-3 text-sm mb-4">
+        POs above the dollar threshold and discounts above the percent threshold require manager approval.
+      </p>
+      {wfQ.isLoading ? (
+        <div className="skeleton h-10 w-48" />
+      ) : (
+        <form
+          className="grid gap-4 sm:grid-cols-2 max-w-xl"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (poValid && discValid) saveMut.mutate()
+          }}
+        >
+          <div>
+            <label className="text-xs text-pleros-text-3">PO approval threshold ($)</label>
+            <input
+              className="pleros-input mt-1 w-full"
+              type="number"
+              min="0"
+              step="1"
+              value={poThreshold}
+              onChange={(e) => setPoThreshold(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-pleros-text-3">Discount approval threshold (%)</label>
+            <input
+              className="pleros-input mt-1 w-full"
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={discountPct}
+              onChange={(e) => setDiscountPct(e.target.value)}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <button type="submit" className="btn-primary" disabled={!poValid || !discValid || saveMut.isPending}>
+              {saveMut.isPending ? 'Saving…' : 'Save workflow settings'}
+            </button>
+          </div>
+        </form>
+      )}
+      {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
+      {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Workflow settings updated.</p>}
     </div>
   )
 }

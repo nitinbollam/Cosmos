@@ -66,6 +66,18 @@ export async function routeTenants(method: string, seg: string[], req: Request):
     const body = (await req.json()) as { completed?: boolean; payload?: Record<string, unknown> }
     return Response.json(await tenant.patchOnboardingStep(tenantId, seg[3], body))
   }
+  if (seg[1] === 'me' && seg[2] === 'workflow-settings' && seg.length === 3 && method === 'GET') {
+    const { getTenantWorkflowSettings } = await import('../tenant-workflow-settings')
+    return Response.json(await getTenantWorkflowSettings(tenantId))
+  }
+  if (seg[1] === 'me' && seg[2] === 'workflow-settings' && seg.length === 3 && method === 'PATCH') {
+    const { updateTenantWorkflowSettings } = await import('../tenant-workflow-settings')
+    const body = (await req.json()) as {
+      poApprovalThreshold?: number
+      discountApprovalThresholdPct?: number
+    }
+    return Response.json(await updateTenantWorkflowSettings(tenantId, body))
+  }
   throw new ApiError(404, 'Tenant route not found')
 }
 

@@ -35,6 +35,8 @@ import {
   routeFeatures,
   routeCelestial,
 } from './routes/system'
+import { routeApprovals } from './routes/approvals'
+import { routeDiscounts } from './routes/discounts'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -87,6 +89,8 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'pick-waves') return await routePickWaves(m, seg, req)
     if (seg[0] === 'bins') return await routeBins(m, seg, req)
     if (seg[0] === 'saved-payment-methods') return await routeSavedPaymentMethods(m, seg, req)
+    if (seg[0] === 'approvals') return await routeApprovals(m, seg, req)
+    if (seg[0] === 'discounts') return await routeDiscounts(m, seg, req)
     if (seg[0] === 'pos') return await routePos(m, seg, req)
     if (seg[0] === 'features') return await routeFeatures(m, seg, req)
     if (seg[0] === 'volume-prices') return await routeVolumePrices(m, seg, req)
