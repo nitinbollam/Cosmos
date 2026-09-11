@@ -21,6 +21,7 @@ export default function GiftCardsPage() {
   const [amount, setAmount] = useState('50')
   const [customerId, setCustomerId] = useState('')
   const [lookupCode, setLookupCode] = useState('')
+  const [newCode, setNewCode] = useState<string | null>(null)
 
   const listQ = useQuery<GiftCard[]>({
     queryKey: ['gift-cards'],
@@ -35,13 +36,15 @@ export default function GiftCardsPage() {
 
   const issue = useMutation({
     mutationFn: () =>
-      api.post('/gift-cards', {
+      api.post<{ code: string }>('/gift-cards', {
         amount: Number(amount),
         issuedToCustomerId: customerId.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['gift-cards'] })
+      setNewCode(res.code)
       setAmount('50')
+      setCustomerId('')
     },
   })
 
@@ -58,6 +61,7 @@ export default function GiftCardsPage() {
           className="mt-4 grid gap-4 sm:grid-cols-2 max-w-xl"
           onSubmit={(e) => {
             e.preventDefault()
+            setNewCode(null)
             issue.mutate()
           }}
         >
@@ -69,12 +73,35 @@ export default function GiftCardsPage() {
             <label className="text-xs text-pleros-text-3">Customer ID (optional)</label>
             <input className="pleros-input mt-1 w-full" value={customerId} onChange={(e) => setCustomerId(e.target.value)} placeholder="For email delivery" />
           </div>
+          {issue.isError ? (
+            <p className="sm:col-span-2 text-xs text-red-400">
+              {issue.error instanceof Error ? issue.error.message : 'Failed to issue gift card'}
+            </p>
+          ) : null}
           <div className="sm:col-span-2">
             <button type="submit" className="btn-primary" disabled={issue.isPending}>
               {issue.isPending ? 'Issuing…' : 'Issue card'}
             </button>
           </div>
         </form>
+
+        {newCode ? (
+          <div className="mt-4 p-4 rounded border border-emerald-500/30 bg-emerald-500/10 space-y-2">
+            <p className="text-xs text-emerald-400 font-semibold">✓ Gift card created</p>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-lg text-emerald-300 font-bold select-all bg-black/40 px-3 py-1.5 rounded border border-emerald-500/30">
+                {newCode}
+              </span>
+              <button
+                type="button"
+                className="btn-ghost !text-xs"
+                onClick={() => void navigator.clipboard.writeText(newCode)}
+              >
+                Copy code
+              </button>
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       <Card>

@@ -166,18 +166,28 @@ async function processOneSubscription(sub: Awaited<ReturnType<typeof listSubscri
     { awaitPipeline: true },
   )
 
-  const saved = await paymentDb.savedPaymentMethod.findFirst({
-    where: { id: sub.savedPaymentMethodId, tenantId: sub.tenantId, customerId: sub.customerId },
-  })
-  if (!saved) throw new ApiError(400, 'Saved payment method missing')
+  try {
+    const saved = await paymentDb.savedPaymentMethod.findFirst({
+      where: { id: sub.savedPaymentMethodId, tenantId: sub.tenantId, customerId: sub.customerId },
+    })
+    if (!saved) throw new ApiError(400, 'Saved payment method missing')
 
-  const correlationId = randomUUID()
-  await collectOrderCardPayment(sub.tenantId, order.id, {
-    paymentMethodId: saved.stripePaymentMethodId,
-    customerId: sub.customerId,
-    correlationId,
-    amount: Number(order.totalAmount),
-  })
+    const correlationId = randomUUID()
+    await collectOrderCardPayment(sub.tenantId, order.id, {
+      paymentMethodId: saved.stripePaymentMethodId,
+      customerId: sub.customerId,
+      correlationId,
+      amount: Number(order.totalAmount),
+    })
+  } catch (payErr) {
+    const { cancelOrderWithCompensation } = await import('./order-orchestration')
+    await cancelOrderWithCompensation(
+      sub.tenantId,
+      order.id,
+      `Subscription payment failed: ${payErr instanceof Error ? payErr.message : 'Declined'}`,
+    ).catch(() => undefined)
+    throw payErr
+  }
 
   await tenantDb.subscription.update({
     where: { id: sub.id },

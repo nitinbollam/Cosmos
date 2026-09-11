@@ -153,7 +153,7 @@ export async function sendCampaign(tenantId: string, campaignId: string) {
     }
 
     const token = createUnsubscribeToken(tenantId, customer.id)
-    const unsubscribeUrl = `${appOrigin()}/api/v1/unsubscribe?token=${encodeURIComponent(token)}`
+    const unsubscribeUrl = `${appOrigin()}/unsubscribe?token=${encodeURIComponent(token)}`
     const body = `${campaign.body}\n\n---\nUnsubscribe: ${unsubscribeUrl}`
 
     await notifications.send(
@@ -181,3 +181,28 @@ export async function sendCampaign(tenantId: string, campaignId: string) {
 
   return { sentCount, suppressedCount }
 }
+
+export async function processScheduledCampaigns(): Promise<{ processed: number; failed: number }> {
+  const due = await tenantDb.campaign.findMany({
+    where: {
+      status: CampaignStatus.SCHEDULED,
+      scheduledAt: { lte: new Date() },
+    },
+  })
+
+  let processed = 0
+  let failed = 0
+
+  for (const c of due) {
+    try {
+      await sendCampaign(c.tenantId, c.id)
+      processed += 1
+    } catch (err) {
+      failed += 1
+      console.error(`[campaigns] failed to send scheduled campaign ${c.id}:`, err)
+    }
+  }
+
+  return { processed, failed }
+}
+

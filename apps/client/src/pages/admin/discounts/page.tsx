@@ -4,6 +4,7 @@ import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { axiosErr } from '@/lib/axios-error'
 
 type Discount = {
   id: string
@@ -102,6 +103,9 @@ export default function DiscountsPage() {
             <label className="text-xs text-pleros-text-3">Total usage limit</label>
             <input className="pleros-input mt-1 w-full" type="number" min={1} value={usageLimit} onChange={(e) => setUsageLimit(e.target.value)} placeholder="Unlimited" />
           </div>
+          {create.isError ? (
+            <p className="sm:col-span-2 text-xs text-red-400 mt-1">{axiosErr(create.error)}</p>
+          ) : null}
           <div className="sm:col-span-2">
             <button type="submit" className="btn-primary" disabled={create.isPending || !code.trim()}>
               {create.isPending ? 'Creating…' : 'Create discount'}

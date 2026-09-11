@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-admin'
 import { axiosErr } from '@/lib/axios-error'
@@ -86,6 +86,10 @@ function useCountdown(endsAt: string | null | undefined, enabled: boolean) {
 export default function MarketplaceListingDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const isAdmin = location.pathname.startsWith('/admin')
+  const basePath = isAdmin ? '/admin/marketplace' : '/marketplace'
+
   const qc = useQueryClient()
   const [bidAmount, setBidAmount] = useState('')
 
@@ -111,7 +115,7 @@ export default function MarketplaceListingDetailPage() {
     mutationFn: () => api.post('/marketplace/orders', { listingId: id, quantity: 1 }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['marketplace', 'orders'] })
-      navigate('/admin/marketplace/orders')
+      navigate(`${basePath}/orders`)
     },
   })
 
@@ -127,8 +131,8 @@ export default function MarketplaceListingDetailPage() {
   })
 
   return (
-    <div>
-      <Link to="/admin/marketplace" className="text-sm text-pleros-accent">
+    <div className="p-6 max-w-4xl mx-auto">
+      <Link to={basePath} className="text-sm text-pleros-accent hover:underline">
         ← Marketplace
       </Link>
       {listingQ.isLoading && <p className="mt-4 text-sm text-pleros-text-3">Loading…</p>}
@@ -174,7 +178,7 @@ export default function MarketplaceListingDetailPage() {
                     <p className="text-sm text-green-400 font-medium">Auction sold</p>
                     <p className="text-sm text-pleros-text-3 mt-1">
                       Winners are auto-charged when possible. Check{' '}
-                      <Link to="/admin/marketplace/orders" className="text-pleros-accent">
+                      <Link to={`${basePath}/orders`} className="text-pleros-accent">
                         My orders
                       </Link>{' '}
                       to confirm payment.
@@ -185,7 +189,7 @@ export default function MarketplaceListingDetailPage() {
 
               {auction.status === 'LIVE' && (
                 <p className="text-sm mt-3">
-                  <Link to="/admin/marketplace/payment-methods" className="text-pleros-accent">
+                  <Link to={`${basePath}/payment-methods`} className="text-pleros-accent">
                     Add a payment method
                   </Link>{' '}
                   before bidding (required for auto-charge if you win).

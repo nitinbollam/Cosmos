@@ -13,8 +13,36 @@ export async function routeGiftCards(method: string, seg: string[], req: Request
     const session = await requireSession(req)
     if (!isPortalBuyer(session.role)) throw new ApiError(403, 'Customer login required')
     const customerId = await requirePortalCustomerId(session)
-    const body = (await req.json()) as { amount?: number }
+    const body = (await req.json()) as { amount?: number; savedPaymentMethodId?: string }
     if (body.amount == null || body.amount <= 0) throw new ApiError(400, 'amount required')
+    if (!body.savedPaymentMethodId?.trim()) {
+      throw new ApiError(400, 'Saved payment method required to purchase gift card')
+    }
+
+    const { paymentDb } = await import('../db')
+    const saved = await paymentDb.savedPaymentMethod.findFirst({
+      where: { id: body.savedPaymentMethodId.trim(), tenantId: session.tenantId, customerId },
+    })
+    if (!saved) throw new ApiError(400, 'Saved payment method not found')
+
+    const { requireStripeConnectContext } = await import('../tenant-stripe-connect')
+    const connectCtx = await requireStripeConnectContext(session.tenantId).catch(() => null)
+    if (connectCtx && saved.stripePaymentMethodId.startsWith('pm_') && !saved.stripePaymentMethodId.startsWith('pm_demo_')) {
+      const { resolveStripeCustomerId } = await import('../stripe-customer-sync')
+      const stripeCustomerId = await resolveStripeCustomerId(session.tenantId, customerId)
+      const { chargePaymentMethod } = await import('../stripe')
+      const chargeRes = await chargePaymentMethod(
+        connectCtx,
+        body.amount,
+        'usd',
+        stripeCustomerId,
+        saved.stripePaymentMethodId,
+      )
+      if (!chargeRes.success) {
+        throw new ApiError(400, chargeRes.error || 'Payment failed')
+      }
+    }
+
     const card = await giftCards.issueGiftCard(session.tenantId, {
       amount: body.amount,
       issuedToCustomerId: customerId,

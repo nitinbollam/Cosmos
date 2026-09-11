@@ -67,16 +67,19 @@ export async function routeCampaigns(method: string, seg: string[], req: Request
 }
 
 export async function routeUnsubscribe(method: string, seg: string[], req: Request): Promise<Response> {
-  if (seg.length === 1 && method === 'GET') {
+  if (seg.length === 1 && (method === 'GET' || method === 'POST')) {
     const token = new URL(req.url).searchParams.get('token') ?? ''
     const parsed = verifyUnsubscribeToken(token)
+    const isJson = req.headers.get('accept')?.includes('application/json')
     if (!parsed) {
+      if (isJson) return Response.json({ valid: false, error: 'Invalid or expired link' }, { status: 400 })
       return new Response('<html><body><h1>Invalid or expired link</h1></body></html>', {
         status: 400,
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       })
     }
     await suppressCustomer(parsed.tenantId, parsed.customerId)
+    if (isJson) return Response.json({ valid: true, message: 'You have been unsubscribed' })
     return new Response(
       '<html><body><h1>You have been unsubscribed</h1><p>You will no longer receive marketing emails from this distributor.</p></body></html>',
       { headers: { 'Content-Type': 'text/html; charset=utf-8' } },

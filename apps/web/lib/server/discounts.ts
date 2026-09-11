@@ -152,10 +152,11 @@ export async function validateDiscount(
   const amountOff = computeAmountOff(discount, context.orderSubtotal)
   if (amountOff <= 0) return { valid: false, reason: 'Discount does not apply to this order' }
 
+  const isLoyaltyReward = Boolean(discount.code?.startsWith('LOY-'))
   const { discountApprovalThresholdPct } = await getTenantWorkflowSettings(tenantId)
   const pct = effectivePercent(amountOff, context.orderSubtotal)
 
-  if (pct > discountApprovalThresholdPct + 0.001) {
+  if (!isLoyaltyReward && pct > discountApprovalThresholdPct + 0.001) {
     const approvedRows = await tenantDb.approvalRequest.findMany({
       where: {
         tenantId,

@@ -27,6 +27,24 @@ export function startBackgroundJobs(): void {
     } catch (err) {
       console.error('[jobs] marketplace sweep failed:', err)
     }
+    try {
+      const { processDueSubscriptions } = await import('./subscriptions')
+      const subRes = await processDueSubscriptions()
+      if (subRes.processed > 0 || subRes.failed > 0) {
+        console.log(`[jobs] subscriptions: processed ${subRes.processed}, failed ${subRes.failed}`)
+      }
+    } catch (err) {
+      console.error('[jobs] subscriptions sweep failed:', err)
+    }
+    try {
+      const { processScheduledCampaigns } = await import('./campaigns')
+      const campRes = await processScheduledCampaigns()
+      if (campRes.processed > 0 || campRes.failed > 0) {
+        console.log(`[jobs] campaigns: processed ${campRes.processed}, failed ${campRes.failed}`)
+      }
+    } catch (err) {
+      console.error('[jobs] campaigns sweep failed:', err)
+    }
   }
 
   void sweep()

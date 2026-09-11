@@ -230,6 +230,7 @@ export default function CheckoutPage() {
           })),
           notes: `Ship to: ${company}, ${line1}${line2 ? `, ${line2}` : ''}, ${city}, ${state} ${zip}`,
           ...(discountAmount > 0 && !discountPending ? { discountCode: discountCode.trim() } : {}),
+          ...(giftCardApplied > 0 && giftCardCode.trim() ? { giftCardCode: giftCardCode.trim() } : {}),
           shippingAddress: {
             company,
             line1,
@@ -241,13 +242,6 @@ export default function CheckoutPage() {
         },
         { 'Idempotency-Key': idempotencyKey.current },
       )
-
-      if (giftCardApplied > 0 && giftCardCode.trim()) {
-        await api.post(`/gift-cards/${encodeURIComponent(giftCardCode.trim())}/redeem`, {
-          amount: giftCardApplied,
-          orderRef: order.id,
-        })
-      }
 
       if (payment === 'CARD' && cardPaymentMethodId && amountDue > 0) {
         const authKey =

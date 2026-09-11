@@ -55,7 +55,8 @@ export default function PosPage() {
   const qc = useQueryClient()
   const [registerId, setRegisterId] = useState('')
   const [customerId, setCustomerId] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'CHECK'>('CASH')
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'CHECK' | 'GIFT_CARD'>('CASH')
+  const [posGiftCardCode, setPosGiftCardCode] = useState('')
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [lastOrderId, setLastOrderId] = useState<string | null>(null)
@@ -71,7 +72,7 @@ export default function PosPage() {
   const [discountPending, setDiscountPending] = useState(false)
   const [discountMsg, setDiscountMsg] = useState<string | null>(null)
   const [splitTender, setSplitTender] = useState(false)
-  const [secondMethod, setSecondMethod] = useState<'CASH' | 'CARD' | 'CHECK'>('CARD')
+  const [secondMethod, setSecondMethod] = useState<'CASH' | 'CARD' | 'CHECK' | 'GIFT_CARD'>('CARD')
   const [secondAmount, setSecondAmount] = useState('')
 
   const policyQ = useQuery({
@@ -241,13 +242,38 @@ export default function PosPage() {
 
   const checkout = useMutation({
     mutationFn: () => {
-      const tenders =
-        splitTender && secondAmount.trim()
-          ? [
-              { method: paymentMethod, amount: total - Number(secondAmount) },
-              { method: secondMethod, amount: Number(secondAmount) },
-            ]
-          : [{ method: paymentMethod, amount: total }]
+      let tenders: Array<{
+        method: 'CASH' | 'CARD' | 'CHECK' | 'GIFT_CARD'
+        amount: number
+        giftCardCode?: string
+      }>
+      if (splitTender && secondAmount.trim()) {
+        const secAmt = +Number(secondAmount).toFixed(2)
+        if (secAmt <= 0 || secAmt >= total) {
+          throw new Error(`Second tender must be between $0.01 and $${(total - 0.01).toFixed(2)}`)
+        }
+        const firstAmt = +Math.max(0, total - secAmt).toFixed(2)
+        tenders = [
+          {
+            method: paymentMethod,
+            amount: firstAmt,
+            giftCardCode: paymentMethod === 'GIFT_CARD' ? posGiftCardCode.trim() : undefined,
+          },
+          {
+            method: secondMethod,
+            amount: secAmt,
+            giftCardCode: secondMethod === 'GIFT_CARD' ? posGiftCardCode.trim() : undefined,
+          },
+        ]
+      } else {
+        tenders = [
+          {
+            method: paymentMethod,
+            amount: total,
+            giftCardCode: paymentMethod === 'GIFT_CARD' ? posGiftCardCode.trim() : undefined,
+          },
+        ]
+      }
       return api.post<{ id: string; orderNumber?: string; totalAmount: number }>('/pos/orders', {
         registerId,
         customerId: effectiveCustomerId,
@@ -281,13 +307,16 @@ export default function PosPage() {
       setDiscountAmount(0)
       setDiscountPending(false)
       setDiscountMsg(null)
+      setPosGiftCardCode('')
     },
     onError: (e) => setSubmitErr(errMsg(e)),
   })
 
   function addToCart(sku: Sku) {
     const unitPrice = toPrice(sku.price)
-    const ageRestricted = Boolean(sku.ageRestricted || sku.isTobacco)
+    const ageRestricted = Boolean(
+      sku.ageRestricted || sku.isTobacco || (sku as { isAlcohol?: boolean }).isAlcohol,
+    )
     setCart((prev) => {
       const existing = prev.find((l) => l.skuId === sku.id)
       if (existing) {
@@ -607,13 +636,27 @@ export default function PosPage() {
               <select
                 className="pleros-input mt-1 w-full"
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'CARD' | 'CHECK')}
+                onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
               >
                 <option value="CASH">Cash</option>
                 <option value="CARD">Card</option>
                 <option value="CHECK">Check</option>
+                <option value="GIFT_CARD">Gift card</option>
               </select>
             </div>
+
+            {paymentMethod === 'GIFT_CARD' || (splitTender && secondMethod === 'GIFT_CARD') ? (
+              <div>
+                <label className="text-xs text-pleros-text-3 block">Gift card code</label>
+                <input
+                  className="pleros-input mt-1 w-full uppercase font-mono"
+                  placeholder="Enter gift card code"
+                  value={posGiftCardCode}
+                  onChange={(e) => setPosGiftCardCode(e.target.value.toUpperCase())}
+                  required
+                />
+              </div>
+            ) : null}
 
             <label className="flex items-center gap-2 text-sm text-pleros-text-2 cursor-pointer">
               <input type="checkbox" checked={splitTender} onChange={(e) => setSplitTender(e.target.checked)} />
@@ -629,6 +672,7 @@ export default function PosPage() {
                   <option value="CARD">Card</option>
                   <option value="CASH">Cash</option>
                   <option value="CHECK">Check</option>
+                  <option value="GIFT_CARD">Gift card</option>
                 </select>
                 <input
                   className="pleros-input"

@@ -72,10 +72,10 @@ const PERIODS = [
   { days: 365, label: '1 year' },
 ] as const
 
-const CHART_GRID = 'rgba(255, 255, 255, 0.06)'
-const CHART_AXIS = '#71717a'
-const CHART_NET = '#6b9fd4'
-const CHART_GROSS = '#5b8def'
+const CHART_GRID = 'var(--c-border, rgba(255, 255, 255, 0.06))'
+const CHART_AXIS = 'var(--c-text-3, #71717a)'
+const CHART_NET = 'var(--c-accent, #6b9fd4)'
+const CHART_GROSS = 'var(--c-primary, #5b8def)'
 
 function money(cents: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
@@ -200,7 +200,14 @@ export default function MarketplaceAnalyticsPage() {
                       <XAxis dataKey="date" tick={{ fill: CHART_AXIS, fontSize: 11 }} />
                       <YAxis tick={{ fill: CHART_AXIS, fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
                       <Tooltip
-                        contentStyle={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}
+                        contentStyle={{
+                          background: 'var(--c-surface-2)',
+                          border: '1px solid var(--c-border)',
+                          borderRadius: 8,
+                          color: 'var(--c-heading)',
+                        }}
+                        labelStyle={{ color: 'var(--c-text-2)' }}
+                        itemStyle={{ color: 'var(--c-heading)' }}
                         formatter={(value: number, name: string) => [
                           `$${value.toFixed(2)}`,
                           name === 'net' ? 'Net' : 'Gross',
@@ -282,7 +289,14 @@ export default function MarketplaceAnalyticsPage() {
                       <XAxis type="number" tick={{ fill: CHART_AXIS, fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
                       <YAxis type="category" dataKey="name" width={110} tick={{ fill: CHART_AXIS, fontSize: 11 }} />
                       <Tooltip
-                        contentStyle={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}
+                        contentStyle={{
+                          background: 'var(--c-surface-2)',
+                          border: '1px solid var(--c-border)',
+                          borderRadius: 8,
+                          color: 'var(--c-heading)',
+                        }}
+                        labelStyle={{ color: 'var(--c-text-2)' }}
+                        itemStyle={{ color: 'var(--c-heading)' }}
                         formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']}
                       />
                       <Bar dataKey="revenue" fill={CHART_NET} radius={[0, 4, 4, 0]} />

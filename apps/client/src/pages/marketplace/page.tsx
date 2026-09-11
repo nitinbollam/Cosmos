@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
@@ -29,6 +29,10 @@ function formatEndsAt(endsAt: string | null | undefined): string | null {
 }
 
 export default function MarketplaceBrowsePage() {
+  const location = useLocation()
+  const isAdmin = location.pathname.startsWith('/admin')
+  const basePath = isAdmin ? '/admin/marketplace' : '/marketplace'
+
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [applied, setApplied] = useState({ search: '', category: '' })
@@ -50,31 +54,39 @@ export default function MarketplaceBrowsePage() {
   })
 
   return (
-    <div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-pleros-white font-display text-2xl">Marketplace</h1>
           <p className="text-sm text-pleros-text-3 mt-1">Browse inventory from other Pleros distributors</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/admin/marketplace/create" className="btn-primary text-sm">
-            List inventory
-          </Link>
-          <Link to="/admin/marketplace/my-listings" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
-            My listings
-          </Link>
-          <Link to="/admin/marketplace/orders" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
+          {isAdmin && (
+            <>
+              <Link to="/admin/marketplace/create" className="btn-primary text-sm">
+                List inventory
+              </Link>
+              <Link to="/admin/marketplace/my-listings" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
+                My listings
+              </Link>
+            </>
+          )}
+          <Link to={`${basePath}/orders`} className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
             My orders
           </Link>
-          <Link to="/admin/marketplace/payment-methods" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
+          <Link to={`${basePath}/payment-methods`} className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
             Payment methods
           </Link>
-          <Link to="/admin/marketplace/alerts" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
-            Alerts
-          </Link>
-          <Link to="/admin/marketplace/analytics" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
-            Analytics
-          </Link>
+          {isAdmin && (
+            <>
+              <Link to="/admin/marketplace/alerts" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
+                Alerts
+              </Link>
+              <Link to="/admin/marketplace/analytics" className="neo-btn-secondary text-sm inline-block px-3 py-2 rounded">
+                Analytics
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -121,7 +133,7 @@ export default function MarketplaceBrowsePage() {
               className="border rounded-lg p-4"
               style={{ borderColor: 'var(--c-border-card)', background: 'var(--c-surface)' }}
             >
-              <Link to={`/admin/marketplace/${l.id}`} className="block hover:opacity-90">
+              <Link to={`${basePath}/${l.id}`} className="block hover:opacity-90">
                 {thumb && (
                   <img src={thumb} alt="" className="w-full h-32 object-cover rounded mb-3 bg-black/20" />
                 )}

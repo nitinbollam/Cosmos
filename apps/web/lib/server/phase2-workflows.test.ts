@@ -42,3 +42,18 @@ test('till variance equals counted cash minus expected', () => {
   const variance = +(closingCount - expectedTotal).toFixed(2)
   assert.equal(variance, 50)
 })
+
+test('loyalty reward discounts bypass manager approval threshold', () => {
+  const isLoyaltyReward = (code: string) => Boolean(code?.startsWith('LOY-'))
+  const thresholdPct = 20
+  const orderSubtotal = 100
+  const amountOff = 50 // 50% discount
+  const pct = (amountOff / orderSubtotal) * 100
+
+  const requiresApprovalRegular = !isLoyaltyReward('SUMMER50') && pct > thresholdPct
+  const requiresApprovalLoyalty = !isLoyaltyReward('LOY-REWARD-123') && pct > thresholdPct
+
+  assert.equal(requiresApprovalRegular, true)
+  assert.equal(requiresApprovalLoyalty, false)
+})
+

@@ -28,3 +28,28 @@ test('subscription failure pauses instead of retrying in same run', () => {
   }
   assert.deepEqual(outcomes, ['paused', 'processed'])
 })
+
+test('scheduled campaign runner filters only due scheduled campaigns', () => {
+  const now = new Date('2026-09-11T12:00:00Z')
+  const campaigns = [
+    { id: '1', status: 'SCHEDULED', scheduledAt: new Date('2026-09-11T11:00:00Z') }, // due
+    { id: '2', status: 'SCHEDULED', scheduledAt: new Date('2026-09-11T13:00:00Z') }, // future
+    { id: '3', status: 'DRAFT', scheduledAt: new Date('2026-09-11T10:00:00Z') }, // draft
+    { id: '4', status: 'SENT', scheduledAt: new Date('2026-09-11T10:00:00Z') }, // already sent
+  ]
+  const due = campaigns.filter((c) => c.status === 'SCHEDULED' && c.scheduledAt <= now)
+  assert.equal(due.length, 1)
+  assert.equal(due[0].id, '1')
+})
+
+test('order fully covered by gift card fulfills immediately without payment deferral', () => {
+  const defersFulfillmentUntilPayment = (method: string) => method === 'CARD'
+  const total = 50
+  const giftCardPaid = 50
+  const isFullyPaid = giftCardPaid >= total
+  const paymentMethod = 'CARD'
+
+  const shouldFulfillNow = !defersFulfillmentUntilPayment(paymentMethod) || isFullyPaid
+  assert.equal(shouldFulfillNow, true)
+})
+

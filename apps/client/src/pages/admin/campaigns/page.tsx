@@ -3,9 +3,10 @@ import { useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { axiosErr } from '@/lib/axios-error'
 
 type Segment = { id: string; name: string; filterCriteria: Record<string, unknown> }
-type Campaign = { id: string; name: string; subject: string; status: string; sentCount: number; segmentId: string }
+type Campaign = { id: string; name: string; subject: string; status: string; sentCount: number; segmentId: string; scheduledAt?: string | null }
 
 export default function CampaignsPage() {
   const qc = useQueryClient()
@@ -15,6 +16,7 @@ export default function CampaignsPage() {
   const [segmentId, setSegmentId] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const [scheduledAt, setScheduledAt] = useState('')
   const [previewId, setPreviewId] = useState('')
 
   const segmentsQ = useQuery<Segment[]>({
@@ -55,12 +57,14 @@ export default function CampaignsPage() {
         segmentId,
         subject: subject.trim(),
         body,
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['campaigns'] })
       setCampName('')
       setSubject('')
       setBody('')
+      setScheduledAt('')
     },
   })
 
@@ -87,6 +91,9 @@ export default function CampaignsPage() {
         >
           <input className="pleros-input" placeholder="Segment name" value={segName} onChange={(e) => setSegName(e.target.value)} required />
           <input className="pleros-input" type="number" placeholder="Min days since last order" value={minDays} onChange={(e) => setMinDays(e.target.value)} />
+          {createSegment.isError ? (
+            <p className="sm:col-span-2 text-xs text-red-400">{axiosErr(createSegment.error)}</p>
+          ) : null}
           <button type="submit" className="btn-primary sm:col-span-2" disabled={createSegment.isPending}>
             Save segment
           </button>
@@ -125,20 +132,40 @@ export default function CampaignsPage() {
           </select>
           <input className="pleros-input w-full" placeholder="Email subject" value={subject} onChange={(e) => setSubject(e.target.value)} required />
           <textarea className="pleros-input w-full min-h-[120px]" placeholder="Email body" value={body} onChange={(e) => setBody(e.target.value)} required />
+          <div>
+            <label className="text-xs text-pleros-text-3 block mb-1">Schedule send date & time (optional)</label>
+            <input
+              className="pleros-input w-full text-sm"
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+            />
+          </div>
+          {createCampaign.isError ? (
+            <p className="text-xs text-red-400">{axiosErr(createCampaign.error)}</p>
+          ) : null}
           <button type="submit" className="btn-primary" disabled={createCampaign.isPending}>
-            Create draft
+            {scheduledAt ? 'Schedule campaign' : 'Create draft'}
           </button>
         </form>
       </Card>
 
       <Card>
         <CardTitle>Campaigns</CardTitle>
+        {send.isError ? (
+          <p className="text-xs text-red-400 mt-2">{axiosErr(send.error)}</p>
+        ) : null}
         <div className="mt-4 space-y-3">
           {(campaignsQ.data ?? []).map((c) => (
             <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-pleros-border/60 pb-3">
               <div>
                 <p className="text-pleros-white font-medium">{c.name}</p>
                 <p className="text-xs text-pleros-muted">{c.subject}</p>
+                {c.scheduledAt ? (
+                  <p className="text-[11px] text-pleros-accent mt-0.5">
+                    Scheduled for: {new Date(c.scheduledAt).toLocaleString()}
+                  </p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge status={c.status} />

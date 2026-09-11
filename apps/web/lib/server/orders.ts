@@ -40,6 +40,7 @@ export type CreateOrderInput = {
   /** Required for POS when tenant age verification is enabled and cart has restricted SKUs. */
   ageAttestation?: PosAgeAttestation | null
   discountCode?: string
+  giftCardCode?: string
   lineItems: Array<{
     skuId: string
     warehouseId: string
@@ -100,7 +101,17 @@ export async function createOrder(
     posAttestation: ageAttestation,
   })
 
-  const creditCheck = await checkCreditLimitForOrder(tenantId, customerId, totalAmount, dto.paymentMethod)
+  let expectedGiftCardAmount = 0
+  if (dto.giftCardCode?.trim()) {
+    const { checkGiftCardBalance } = await import('./gift-cards')
+    const balanceCheck = await checkGiftCardBalance(tenantId, dto.giftCardCode.trim())
+    if (balanceCheck.valid && (balanceCheck.balance ?? 0) > 0) {
+      expectedGiftCardAmount = Math.min(totalAmount, balanceCheck.balance ?? 0)
+    }
+  }
+  const remainingAmountToFinance = Math.max(0, +(totalAmount - expectedGiftCardAmount).toFixed(2))
+
+  const creditCheck = await checkCreditLimitForOrder(tenantId, customerId, remainingAmountToFinance, dto.paymentMethod)
   const needsCreditApproval = !creditCheck.ok && creditCheck.requiresApproval
 
   const order = await orderDb.order.create({
@@ -139,6 +150,20 @@ export async function createOrder(
     })
   }
 
+  let giftCardRedeemed = 0
+  if (dto.giftCardCode?.trim()) {
+    const { redeemGiftCard } = await import('./gift-cards')
+    const redeemRes = await redeemGiftCard(tenantId, dto.giftCardCode.trim(), {
+      amount: totalAmount,
+      orderRef: order.id,
+    })
+    giftCardRedeemed = redeemRes.amountApplied
+    if (giftCardRedeemed > 0) {
+      const { applyCapturedPayment } = await import('./order-payment-sync')
+      await applyCapturedPayment(tenantId, order.id, giftCardRedeemed)
+    }
+  }
+
   if (needsCreditApproval) {
     const existing = await findPendingApprovalForSubject(
       tenantId,
@@ -162,7 +187,14 @@ export async function createOrder(
     return order
   }
 
-  if (!defersFulfillmentUntilPayment(dto.paymentMethod)) {
+  const isFullyPaid = giftCardRedeemed >= totalAmount - 0.005
+  if (isFullyPaid) {
+    const { syncInvoiceFromOrder } = await import('./invoices')
+    await syncInvoiceFromOrder(tenantId, order.id).catch(() => undefined)
+  }
+
+  const shouldFulfillNow = !defersFulfillmentUntilPayment(dto.paymentMethod) || isFullyPaid
+  if (shouldFulfillNow) {
     if (opts?.awaitPipeline) {
       await runOrderFulfillmentPipeline(order.id, tenantId, correlationId)
     } else {

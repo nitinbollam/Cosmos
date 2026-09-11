@@ -42,6 +42,7 @@ const router = createBrowserRouter([
       { path: '/verify-email', element: page(() => import('@/pages/verify-email/page')) },
       { path: '/terms', element: page(() => import('@/pages/legal/terms/page')) },
       { path: '/privacy', element: page(() => import('@/pages/legal/privacy/page')) },
+      { path: '/unsubscribe', element: page(() => import('@/pages/unsubscribe/page')) },
       {
         element: <ShopLayout />,
         children: [
