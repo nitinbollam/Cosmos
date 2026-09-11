@@ -147,6 +147,10 @@ const router = createBrowserRouter([
             element: page(() => import('@/pages/marketplace/alerts/page')),
           },
           {
+            path: 'marketplace/analytics',
+            element: page(() => import('@/pages/marketplace/analytics/page')),
+          },
+          {
             path: 'marketplace/:id',
             element: page(() => import('@/pages/marketplace/[id]/page')),
           },

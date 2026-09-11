@@ -83,7 +83,8 @@ export async function routeMarketplace(method: string, seg: string[], req: Reque
 
   if (seg[1] === 'analytics' && seg[2] === 'seller' && method === 'GET') {
     await requireMarketplaceEnabled(session.tenantId)
-    return Response.json(await getSellerAnalytics(session.tenantId))
+    const days = Number(url.searchParams.get('days') ?? '30')
+    return Response.json(await getSellerAnalytics(session.tenantId, days))
   }
 
   if (seg[1] === 'categories' && method === 'GET') {
