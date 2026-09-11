@@ -56,3 +56,32 @@ export async function enrichPickItemsWithBins<
     binCode: binCodes.get(pairKey(item.skuId, item.warehouseId)),
   }))
 }
+
+/** Maps skuId to its code/name so pick-line UIs can show a real product label instead of the raw id. */
+export async function resolveSkuLabels(
+  tenantId: string,
+  skuIds: string[],
+): Promise<Map<string, { code: string; name: string }>> {
+  const uniqueIds = [...new Set(skuIds)]
+  if (uniqueIds.length === 0) return new Map()
+  const skus = await inventoryDb.sKU.findMany({
+    where: { tenantId, id: { in: uniqueIds } },
+    select: { id: true, code: true, name: true },
+  })
+  return new Map(skus.map((s) => [s.id, { code: s.code, name: s.name }]))
+}
+
+export async function enrichPickItemsWithSkuLabels<T extends { skuId: string }>(
+  tenantId: string,
+  items: T[],
+): Promise<Array<T & { skuCode?: string; skuName?: string }>> {
+  if (items.length === 0) return []
+  const labels = await resolveSkuLabels(
+    tenantId,
+    items.map((i) => i.skuId),
+  )
+  return items.map((item) => {
+    const label = labels.get(item.skuId)
+    return { ...item, skuCode: label?.code, skuName: label?.name }
+  })
+}

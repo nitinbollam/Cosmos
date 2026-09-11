@@ -347,7 +347,7 @@ export default function OrderDetailPage() {
                   Confirm & fulfill
                 </button>
               )}
-              {(data.status === 'PENDING' || data.status === 'CONFIRMED') && (
+              {!['CANCELLED', 'DELIVERED'].includes(data.status) && (
                 <button
                   type="button"
                   className="btn-ghost !text-sm"
