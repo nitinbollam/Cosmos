@@ -13,24 +13,27 @@ test('isReportType accepts known types', () => {
   assert.equal(isReportType('ORDERS'), true)
   assert.equal(isReportType('INVENTORY'), true)
   assert.equal(isReportType('AR_AGING'), true)
+  assert.equal(isReportType('AP_AGING'), true)
   assert.equal(isReportType('MSA'), false)
 })
 
-test('reportCatalog covers orders, inventory, AR aging', () => {
+test('reportCatalog covers orders, inventory, AR aging, AP aging', () => {
   const types = reportCatalog().map((c) => c.type)
-  assert.deepEqual(types, ['ORDERS', 'INVENTORY', 'AR_AGING'])
+  assert.deepEqual(types, ['ORDERS', 'INVENTORY', 'AR_AGING', 'AP_AGING'])
 })
 
 test('normalizeFilters trims strings and coerces booleans', () => {
   const f = normalizeFilters({
     status: ' PENDING ',
     from: '2026-01-01',
+    vendorId: ' vendor-1 ',
     inStockOnly: 'true',
     openOnly: 'false',
     junk: 1,
   })
   assert.equal(f.status, 'PENDING')
   assert.equal(f.fromIso, '2026-01-01')
+  assert.equal(f.vendorId, 'vendor-1')
   assert.equal(f.inStockOnly, true)
   assert.equal(f.openOnly, false)
 })

@@ -16,6 +16,7 @@ import {
   routeBankAccounts,
   routeFixedAssets,
   routeTax,
+  routeFinancialStatements,
 } from './routes/finance'
 import { routeMsa, routeCompliance } from './routes/compliance'
 import { routeMarketplace } from './routes/marketplace'
@@ -71,6 +72,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'notifications') return await routeNotifications(m, seg, req)
     if (seg[0] === 'journal-entries') return await routeJournalEntries(m, seg, req)
     if (seg[0] === 'chart-accounts') return await routeChartAccounts(m, seg, req)
+    if (seg[0] === 'financial-statements') return await routeFinancialStatements(m, seg, req)
     if (seg[0] === 'reports') return await routeReports(m, seg, req)
     if (seg[0] === 'report-builder') return await routeReportBuilder(m, seg, req)
     if (seg[0] === 'kpi') return await routeKpi(m, seg, req)
