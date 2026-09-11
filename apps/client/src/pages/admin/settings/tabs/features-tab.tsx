@@ -11,6 +11,7 @@ type TenantFeatures = {
   splitShipments?: boolean
   advancedTax?: boolean
   celestial?: boolean
+  marketplace?: boolean
 }
 
 type FeaturesDetail = {
@@ -28,6 +29,11 @@ const FEATURE_META: Array<{ key: keyof TenantFeatures; label: string; blurb: str
   { key: 'splitShipments', label: 'Split shipments', blurb: 'Multiple packages per order with tracking' },
   { key: 'advancedTax', label: 'Advanced tax', blurb: 'Extended sales tax engine' },
   { key: 'celestial', label: 'Celestial AI', blurb: 'In-app AI assistant for buyers and admin staff' },
+  {
+    key: 'marketplace',
+    label: 'Marketplace',
+    blurb: 'On by default for Growth/Enterprise; opt-in override for Starter tenants',
+  },
 ]
 
 function buildFeatureOverrides(defaults: TenantFeatures, toggles: TenantFeatures): TenantFeatures {

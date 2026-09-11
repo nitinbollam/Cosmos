@@ -64,6 +64,8 @@ model SKU {
   unitOfMeasure     String   @default("EACH")
   weightGrams       Decimal?
   isTobacco         Boolean  @default(false)
+  /** Explicit alcohol flag — clearer than inferring from ageRestricted alone. */
+  isAlcohol         Boolean  @default(false)
   isRegulated       Boolean  @default(false)
   /** Age-gated product (alcohol, tobacco, etc.). Tobacco SKUs should also set this. */
   ageRestricted     Boolean  @default(false)

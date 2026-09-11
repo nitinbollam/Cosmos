@@ -9,7 +9,7 @@ type NavItem = {
   href: string
   label: string
   icon: SidebarIconName
-  feature?: 'celestial'
+  feature?: 'celestial' | 'marketplace'
   permission?: string
 }
 
@@ -20,6 +20,7 @@ const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin/fulfillment', label: 'Fulfillment', icon: 'fulfillment', permission: 'wms.read' },
   { href: '/admin/warehouse', label: 'Warehouse', icon: 'warehouse', permission: 'wms.read' },
   { href: '/admin/purchasing', label: 'Purchasing', icon: 'purchasing', permission: 'purchasing.read' },
+  { href: '/admin/marketplace', label: 'Marketplace', icon: 'inventory', permission: 'marketplace.read', feature: 'marketplace' },
   { href: '/admin/compliance', label: 'Compliance', icon: 'compliance', permission: 'compliance.read' },
   { href: '/admin/crm', label: 'CRM', icon: 'crm', permission: 'crm.read' },
   { href: '/admin/quotes', label: 'Quotes', icon: 'orders', permission: 'quotes.read' },
@@ -67,11 +68,12 @@ export function Sidebar({
 
   const { data: features } = useQuery({
     queryKey: ['tenant-features'],
-    queryFn: () => api.get<{ effective?: { celestial?: boolean } }>('/features'),
+    queryFn: () => api.get<{ effective?: { celestial?: boolean; marketplace?: boolean } }>('/features'),
   })
 
   const navItems = BASE_SIDEBAR_NAV.filter((item) => {
     if (item.feature === 'celestial' && features?.effective?.celestial === false) return false
+    if (item.feature === 'marketplace' && features?.effective?.marketplace !== true) return false
     if (!hasClientPermission(me?.permissions, me?.role, item.permission)) return false
     return true
   })

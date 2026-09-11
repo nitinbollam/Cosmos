@@ -19,6 +19,7 @@ export const AVAILABLE_MODULES = [
   'audit',
   'edi',
   'celestial',
+  'marketplace',
 ] as const
 
 export type ModuleKey = (typeof AVAILABLE_MODULES)[number]
@@ -41,6 +42,7 @@ export const MODULE_METADATA: Record<ModuleKey, { label: string; permissions: st
   audit: { label: 'Audit Log', permissions: ['audit.read'] },
   edi: { label: 'EDI Integration', permissions: ['edi.read', 'edi.write'] },
   celestial: { label: 'Celestial AI', permissions: ['celestial.chat'] },
+  marketplace: { label: 'Marketplace', permissions: ['marketplace.read', 'marketplace.write'] },
 }
 
 /** Standard role default permission matrices. */
@@ -61,6 +63,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'pos.*',
     'notifications.*',
     'celestial.chat',
+    'marketplace.*',
     'settings.read',
     'audit.read',
     'users.read',
@@ -99,6 +102,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'reports.read',
     'notifications.read',
     'celestial.chat',
+    'marketplace.read',
+    'marketplace.write',
   ],
   STAFF: [
     'portal.catalog',

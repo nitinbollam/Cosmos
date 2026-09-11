@@ -1,0 +1,222 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-marketplace"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("MARKETPLACE_DATABASE_URL")
+}
+
+enum MarketplaceListingType {
+  FIXED
+  AUCTION
+}
+
+enum MarketplaceListingStatus {
+  PENDING_REVIEW
+  LIVE
+  SOLD
+  REMOVED
+  ENDED
+}
+
+enum MarketplaceOrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_HELD
+  IN_FULFILLMENT
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum MarketplacePaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  ESCROW_HELD
+  RELEASED
+  REFUNDED
+  FAILED
+}
+
+enum MarketplaceDisputeStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+}
+
+enum MarketplaceShipmentStatus {
+  PENDING
+  BOOKED
+  DISPATCHED
+}
+
+model MarketplaceProfile {
+  id                     String   @id @default(cuid())
+  tenantId               String   @unique
+  handle                 String   @unique
+  ratingAvg              Float    @default(0)
+  ratingCount            Int      @default(0)
+  completedOrderCount    Int      @default(0)
+  strikeCount            Int      @default(0)
+  listingSuspended       Boolean  @default(false)
+  suspensionReason       String?
+  avgResponseTimeHours   Float    @default(0)
+  stripePlatformCustomerId String?
+  optedInAt              DateTime @default(now())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  paymentMethods         MarketplaceBuyerPaymentMethod[]
+}
+
+model MarketplaceBuyerPaymentMethod {
+  id                    String             @id @default(cuid())
+  tenantId              String
+  profile               MarketplaceProfile @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  stripePaymentMethodId String
+  brand                 String?
+  last4                 String?
+  expMonth              Int?
+  expYear               Int?
+  isDefault             Boolean            @default(false)
+  createdAt             DateTime           @default(now())
+
+  @@unique([tenantId, stripePaymentMethodId])
+  @@index([tenantId])
+}
+
+model MarketplaceListing {
+  id                   String                   @id @default(cuid())
+  sellerTenantId       String
+  sourceSkuId          String
+  title                String
+  description          String?
+  listingType          MarketplaceListingType   @default(FIXED)
+  priceCents           Int
+  quantity             Int
+  category             String
+  subcategory          String?
+  photoUrlsJson        String                   @default("[]")
+  reservePriceCents    Int?
+  auctionDurationDays  Int?
+  endsAt               DateTime?
+  currentHighBidCents  Int?
+  highBidderTenantId   String?
+  status               MarketplaceListingStatus @default(PENDING_REVIEW)
+  reviewedByUserId     String?
+  reviewedAt           DateTime?
+  rejectionReason      String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  orders               MarketplaceOrder[]
+  bids                 MarketplaceBid[]
+
+  @@index([sellerTenantId, status])
+  @@index([status, createdAt])
+  @@index([listingType, status, endsAt])
+}
+
+model MarketplaceBid {
+  id             String             @id @default(cuid())
+  listingId      String
+  listing        MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  bidderTenantId String
+  amountCents    Int
+  createdAt      DateTime           @default(now())
+
+  @@index([listingId, amountCents])
+  @@index([listingId, createdAt])
+  @@index([bidderTenantId])
+}
+
+model MarketplaceOrder {
+  id                    String                   @id @default(cuid())
+  listingId             String
+  listing               MarketplaceListing       @relation(fields: [listingId], references: [id])
+  buyerTenantId         String
+  sellerTenantId        String
+  agreedPriceCents      Int
+  quantity              Int
+  orderStatus           MarketplaceOrderStatus   @default(PENDING_PAYMENT)
+  paymentStatus         MarketplacePaymentStatus @default(PENDING)
+  stripePaymentIntentId String?
+  kalafleetShipmentRef  String?
+  deliveryConfirmedAt   DateTime?
+  escrowReleaseAt       DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  rating                MarketplaceRating?
+  dispute               MarketplaceDispute?
+  messages              MarketplaceMessage[]
+  shipment              MarketplaceShipmentRequest?
+
+  @@index([buyerTenantId, orderStatus])
+  @@index([sellerTenantId, orderStatus])
+  @@index([listingId])
+  @@index([orderStatus, escrowReleaseAt])
+}
+
+model MarketplaceRating {
+  id            String           @id @default(cuid())
+  orderId       String           @unique
+  order         MarketplaceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  raterTenantId String
+  ratedTenantId String
+  stars         Int
+  comment       String?
+  createdAt     DateTime         @default(now())
+
+  @@index([ratedTenantId])
+}
+
+model MarketplaceDispute {
+  id               String                   @id @default(cuid())
+  orderId          String                   @unique
+  order            MarketplaceOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  openedByTenantId String
+  status           MarketplaceDisputeStatus @default(OPEN)
+  notes            String?
+  resolutionNotes  String?
+  refundIssued     Boolean                  @default(false)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+}
+
+model MarketplaceMessage {
+  id             String           @id @default(cuid())
+  orderId        String
+  order          MarketplaceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  senderTenantId String
+  body           String
+  createdAt      DateTime         @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model MarketplaceSavedSearch {
+  id          String   @id @default(cuid())
+  tenantId    String
+  query       String?
+  category    String?
+  notifyEmail Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model MarketplaceShipmentRequest {
+  id                  String                    @id @default(cuid())
+  orderId             String                    @unique
+  order               MarketplaceOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pickupAddressJson   String
+  deliveryAddressJson String
+  freightClass        String?
+  weightLbs           Int?
+  status              MarketplaceShipmentStatus @default(PENDING)
+  kalafleetRef        String?
+  bolNumber           String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+}

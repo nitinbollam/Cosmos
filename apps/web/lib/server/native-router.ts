@@ -18,6 +18,8 @@ import {
   routeTax,
 } from './routes/finance'
 import { routeMsa, routeCompliance } from './routes/compliance'
+import { routeMarketplace } from './routes/marketplace'
+import { routePlerosOps } from './routes/pleros-ops'
 import {
   routeNotifications,
   routeReports,
@@ -87,6 +89,8 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'features') return await routeFeatures(m, seg, req)
     if (seg[0] === 'volume-prices') return await routeVolumePrices(m, seg, req)
     if (seg[0] === 'celestial') return await routeCelestial(m, seg, req)
+    if (seg[0] === 'marketplace') return await routeMarketplace(m, seg, req)
+    if (seg[0] === 'pleros-ops') return await routePlerosOps(m, seg, req)
     return null
   } catch (e) {
     return toJsonError(e)

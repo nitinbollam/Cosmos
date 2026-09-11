@@ -47,6 +47,26 @@ const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subj
     subject: `You've been invited to join ${String(p.orgName ?? 'a team')} on Pleros`,
     body: `You've been invited to join ${String(p.orgName ?? 'a team')} as ${String(p.role ?? 'STAFF')}.\n\nAccept the invite within 7 days:\n\n${String(p.inviteUrl ?? '')}`,
   }),
+  'marketplace.auction.outbid': (p) => ({
+    subject: 'You were outbid on a marketplace auction',
+    body: `Another bidder placed $${String(p.newBid ?? '')} on "${String(p.listingTitle ?? 'a listing')}". Place a higher bid before the auction ends.`,
+  }),
+  'marketplace.auction.won': (p) => ({
+    subject: 'You won a marketplace auction',
+    body: `Congratulations — you won "${String(p.listingTitle ?? 'a listing')}" for $${String(p.amount ?? '')}. Complete payment in My orders if not already charged.`,
+  }),
+  'marketplace.payment.due': (p) => ({
+    subject: 'Marketplace payment required',
+    body: `Order …${String(p.orderId ?? '')} requires payment of $${String(p.amount ?? '')}. Open Marketplace → My orders to pay.`,
+  }),
+  'marketplace.search.match': (p) => ({
+    subject: 'New marketplace listing matches your saved search',
+    body: `"${String(p.listingTitle ?? 'A listing')}" in ${String(p.category ?? 'your category')} is now live.`,
+  }),
+  'marketplace.message.received': (p) => ({
+    subject: 'New marketplace order message',
+    body: `You have a new message on order …${String(p.orderId ?? '')}: ${String(p.preview ?? '')}`,
+  }),
 }
 
 function renderNotification(input: NotificationDeliveryInput): { subject: string; body: string } {
