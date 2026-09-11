@@ -18,6 +18,56 @@ import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { AdminStripeCardForm } from '@/components/admin-stripe-card-form'
 import { useStripeConnect } from '@/lib/stripe-connect'
+import { ChartOfAccountsTab } from '@/pages/admin/finance/tabs/chart-of-accounts-tab'
+import { GeneralLedgerTab } from '@/pages/admin/finance/tabs/general-ledger-tab'
+import { IncomeStatementTab } from '@/pages/admin/finance/tabs/income-statement-tab'
+import { BalanceSheetTab } from '@/pages/admin/finance/tabs/balance-sheet-tab'
+
+type FinanceTab =
+  | 'invoices'
+  | 'bills'
+  | 'trial'
+  | 'cashflow'
+  | 'bank'
+  | 'fixed-assets'
+  | 'chart-of-accounts'
+  | 'general-ledger'
+  | 'income-statement'
+  | 'balance-sheet'
+
+const FINANCE_TAB_LABELS: Record<FinanceTab, string> = {
+  invoices: 'Invoices (AR)',
+  bills: 'Bills (AP)',
+  bank: 'Bank recon',
+  trial: 'Trial balance',
+  cashflow: 'Cash flow',
+  'fixed-assets': 'Fixed Assets',
+  'chart-of-accounts': 'Chart of accounts',
+  'general-ledger': 'General ledger',
+  'income-statement': 'Income statement',
+  'balance-sheet': 'Balance sheet',
+}
+
+const FINANCE_TABS: FinanceTab[] = [
+  'invoices',
+  'bills',
+  'bank',
+  'trial',
+  'cashflow',
+  'fixed-assets',
+  'chart-of-accounts',
+  'general-ledger',
+  'income-statement',
+  'balance-sheet',
+]
+
+const TABS_WITHOUT_GLOBAL_DATE_FILTER: FinanceTab[] = [
+  'trial',
+  'chart-of-accounts',
+  'general-ledger',
+  'income-statement',
+  'balance-sheet',
+]
 
 const stripePublishable = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
 
@@ -184,7 +234,7 @@ function apStatus(po: PoRow): string {
 
 export default function FinancePage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow' | 'bank' | 'fixed-assets'>('invoices')
+  const [tab, setTab] = useState<FinanceTab>('invoices')
   const [invFilter, setInvFilter] = useState('ALL')
   const [apFilter, setApFilter] = useState('ALL')
   const [assetFilter, setAssetFilter] = useState('ALL')
@@ -470,29 +520,19 @@ export default function FinancePage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['invoices', 'bills', 'bank', 'trial', 'cashflow', 'fixed-assets'] as const).map((id) => (
+        {FINANCE_TABS.map((id) => (
           <button
             key={id}
             type="button"
             className={tab === id ? 'btn-primary' : 'btn-ghost'}
             onClick={() => setTab(id)}
           >
-            {id === 'invoices'
-              ? 'Invoices (AR)'
-              : id === 'bills'
-                ? 'Bills (AP)'
-                : id === 'bank'
-                  ? 'Bank recon'
-                  : id === 'trial'
-                    ? 'Trial balance'
-                    : id === 'cashflow'
-                      ? 'Cash flow'
-                      : 'Fixed Assets'}
+            {FINANCE_TAB_LABELS[id]}
           </button>
         ))}
       </div>
 
-      {tab !== 'trial' && (
+      {!TABS_WITHOUT_GLOBAL_DATE_FILTER.includes(tab) && (
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border border-pleros-border bg-pleros-surface-2/40 text-xs">
           <span className="font-semibold text-pleros-white">Date Range Filter:</span>
           <label className="flex items-center gap-1.5 text-pleros-muted">
@@ -1003,6 +1043,14 @@ export default function FinancePage() {
           </div>
         </div>
       )}
+
+      {tab === 'chart-of-accounts' && <ChartOfAccountsTab />}
+
+      {tab === 'general-ledger' && <GeneralLedgerTab />}
+
+      {tab === 'income-statement' && <IncomeStatementTab />}
+
+      {tab === 'balance-sheet' && <BalanceSheetTab />}
 
       {tab === 'fixed-assets' && (
         <div className="space-y-4">

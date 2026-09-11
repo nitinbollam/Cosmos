@@ -6,6 +6,8 @@ import * as stripeConnect from '../stripe-connect'
 import * as paymentIdempotency from '../payment-idempotency'
 import * as savedPaymentMethods from '../saved-payment-methods'
 import * as ledger from '../ledger'
+import * as financialStatements from '../financial-statements'
+import { buildIncomeStatementPdf } from '../financial-statement-document'
 import * as bankRecon from '../bank-recon'
 import * as fixedAssets from '../fixed-assets'
 import * as complianceTax from '../compliance-tax'
@@ -232,9 +234,18 @@ export async function routeSavedPaymentMethods(method: string, seg: string[], re
 export async function routeJournalEntries(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
   const session = await requirePermission(req, isRead ? 'finance.read' : 'finance.write')
+  const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
-    return Response.json(await ledger.listJournalEntries(session.tenantId))
+    const filters = {
+      fromIso: url.searchParams.get('fromIso') ?? undefined,
+      toIso: url.searchParams.get('toIso') ?? undefined,
+      accountId: url.searchParams.get('accountId') ?? undefined,
+      postedOnly: url.searchParams.has('postedOnly')
+        ? url.searchParams.get('postedOnly') === 'true'
+        : undefined,
+    }
+    return Response.json(await ledger.listJournalEntries(session.tenantId, filters))
   }
   if (seg.length === 2 && method === 'GET') {
     return Response.json(await ledger.getJournalEntry(session.tenantId, seg[1]))
@@ -370,4 +381,38 @@ export async function routeTax(method: string, seg: string[], req: Request): Pro
     return Response.json(await complianceTax.recordTax(session.tenantId, body))
   }
   throw new ApiError(404, 'Tax route not found')
+}
+
+export async function routeFinancialStatements(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requirePermission(req, 'finance.read')
+  const url = new URL(req.url)
+
+  if (seg.length === 2 && seg[1] === 'income-statement' && method === 'GET') {
+    const fromIso = url.searchParams.get('fromIso')
+    const toIso = url.searchParams.get('toIso')
+    if (!fromIso || !toIso) throw new ApiError(400, 'fromIso and toIso are required')
+    return Response.json(await financialStatements.getIncomeStatement(session.tenantId, fromIso, toIso))
+  }
+
+  if (seg.length === 3 && seg[1] === 'income-statement' && seg[2] === 'pdf' && method === 'GET') {
+    const fromIso = url.searchParams.get('fromIso')
+    const toIso = url.searchParams.get('toIso')
+    if (!fromIso || !toIso) throw new ApiError(400, 'fromIso and toIso are required')
+    const statement = await financialStatements.getIncomeStatement(session.tenantId, fromIso, toIso)
+    const pdf = await buildIncomeStatementPdf(session.tenantId, statement)
+    return new Response(pdf, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="income-statement-${fromIso}-to-${toIso}.pdf"`,
+      },
+    })
+  }
+
+  if (seg.length === 2 && seg[1] === 'balance-sheet' && method === 'GET') {
+    const asOfIso = url.searchParams.get('asOfIso')
+    if (!asOfIso) throw new ApiError(400, 'asOfIso is required')
+    return Response.json(await financialStatements.getBalanceSheet(session.tenantId, asOfIso))
+  }
+
+  throw new ApiError(404, 'Financial statement route not found')
 }

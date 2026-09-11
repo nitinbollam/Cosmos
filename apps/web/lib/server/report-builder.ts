@@ -2,10 +2,11 @@ import { analyticsDb } from './db'
 import { ApiError } from './session'
 import * as orders from './orders'
 import * as invoices from './invoices'
+import * as apBills from './ap-bills'
 import * as inv from './inventory'
 import * as crm from './crm'
 
-export const REPORT_TYPES = ['ORDERS', 'INVENTORY', 'AR_AGING'] as const
+export const REPORT_TYPES = ['ORDERS', 'INVENTORY', 'AR_AGING', 'AP_AGING'] as const
 export type ReportType = (typeof REPORT_TYPES)[number]
 
 export type ReportFilters = {
@@ -15,6 +16,7 @@ export type ReportFilters = {
   fromIso?: string
   toIso?: string
   customerId?: string
+  vendorId?: string
   category?: string
   warehouseId?: string
   inStockOnly?: boolean
@@ -74,6 +76,19 @@ const AR_AGING_COLUMNS: ReportColumn[] = [
   { key: 'displayStatus', label: 'Status' },
 ]
 
+const AP_AGING_COLUMNS: ReportColumn[] = [
+  { key: 'billNumber', label: 'Bill' },
+  { key: 'vendorId', label: 'Vendor ID' },
+  { key: 'vendorName', label: 'Vendor' },
+  { key: 'issuedAt', label: 'Issued' },
+  { key: 'totalAmount', label: 'Total' },
+  { key: 'amountPaid', label: 'Paid' },
+  { key: 'balance', label: 'Balance' },
+  { key: 'daysOutstanding', label: 'Days' },
+  { key: 'bucket', label: 'Bucket' },
+  { key: 'displayStatus', label: 'Status' },
+]
+
 export function isReportType(raw: unknown): raw is ReportType {
   return typeof raw === 'string' && (REPORT_TYPES as readonly string[]).includes(raw)
 }
@@ -101,6 +116,13 @@ export function reportCatalog() {
       columns: AR_AGING_COLUMNS,
       filters: ['customerId', 'openOnly'],
     },
+    {
+      type: 'AP_AGING' as const,
+      label: 'AP aging',
+      description: 'Open bill balances by days outstanding',
+      columns: AP_AGING_COLUMNS,
+      filters: ['vendorId', 'openOnly'],
+    },
   ]
 }
 
@@ -125,6 +147,7 @@ export function normalizeFilters(raw: unknown): ReportFilters {
     fromIso: str('fromIso') ?? str('from'),
     toIso: str('toIso') ?? str('to'),
     customerId: str('customerId'),
+    vendorId: str('vendorId'),
     category: str('category'),
     warehouseId: str('warehouseId'),
     inStockOnly: bool('inStockOnly'),
@@ -312,6 +335,55 @@ async function runArAgingReport(tenantId: string, filters: ReportFilters): Promi
   return { type: 'AR_AGING', columns: AR_AGING_COLUMNS, rows, summary, truncated }
 }
 
+async function runApAgingReport(tenantId: string, filters: ReportFilters): Promise<RunReportResult> {
+  const openOnly = filters.openOnly !== false
+  const rows: ReportRow[] = []
+  const summary: Record<string, number> = {
+    '0-30': 0,
+    '31-60': 0,
+    '61-90': 0,
+    '91-120': 0,
+    '120+': 0,
+    totalOpen: 0,
+  }
+  const now = Date.now()
+
+  const bills = await apBills.listVendorBills(tenantId)
+  for (const bill of bills) {
+    if (bill.status === 'VOID') continue
+    if (filters.vendorId && bill.supplier.id !== filters.vendorId) continue
+    const balance = Number(bill.balance)
+    if (openOnly && balance <= 0.01) continue
+    const days = Math.max(0, Math.floor((now - new Date(bill.issuedAt).getTime()) / 86_400_000))
+    const bucket = agingBucket(days)
+    if (balance > 0.01) {
+      summary[bucket] = (summary[bucket] ?? 0) + balance
+      summary.totalOpen += balance
+    }
+    rows.push({
+      billNumber: bill.billNumber,
+      vendorId: bill.supplier.id,
+      vendorName: bill.supplier.name,
+      issuedAt: new Date(bill.issuedAt).toISOString().slice(0, 10),
+      totalAmount: Number(bill.totalAmount),
+      amountPaid: Number(bill.amountPaid),
+      balance,
+      daysOutstanding: days,
+      bucket,
+      displayStatus: bill.displayStatus,
+    })
+    if (rows.length >= MAX_EXPORT_ROWS) break
+  }
+
+  return {
+    type: 'AP_AGING',
+    columns: AP_AGING_COLUMNS,
+    rows,
+    summary,
+    truncated: rows.length >= MAX_EXPORT_ROWS,
+  }
+}
+
 export async function runReport(
   tenantId: string,
   type: ReportType,
@@ -320,6 +392,7 @@ export async function runReport(
   const filters = normalizeFilters(filtersInput)
   if (type === 'ORDERS') return runOrdersReport(tenantId, filters)
   if (type === 'INVENTORY') return runInventoryReport(tenantId, filters)
+  if (type === 'AP_AGING') return runApAgingReport(tenantId, filters)
   return runArAgingReport(tenantId, filters)
 }
 

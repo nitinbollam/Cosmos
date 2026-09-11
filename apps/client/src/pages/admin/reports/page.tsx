@@ -4,7 +4,7 @@ import { api } from '@/lib/api-admin'
 import { buildCsv, downloadCsvText } from '@/lib/csv-download'
 import { EmptyState } from '@/components/pleros/empty-state'
 
-type ReportType = 'ORDERS' | 'INVENTORY' | 'AR_AGING'
+type ReportType = 'ORDERS' | 'INVENTORY' | 'AR_AGING' | 'AP_AGING'
 
 type CatalogItem = {
   type: ReportType
@@ -21,6 +21,7 @@ type ReportFilters = {
   fromIso?: string
   toIso?: string
   customerId?: string
+  vendorId?: string
   category?: string
   warehouseId?: string
   inStockOnly?: boolean
@@ -172,7 +173,7 @@ export default function ReportsPage() {
       <div>
         <h1 className="text-2xl font-bold text-pleros-white font-display">Reports</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
-          Build, save, and export orders, inventory, and AR aging as CSV.
+          Build, save, and export orders, inventory, AR aging, and AP aging as CSV.
         </p>
       </div>
 
@@ -194,6 +195,7 @@ export default function ReportsPage() {
                   { type: 'ORDERS' as const, label: 'Orders', description: '' },
                   { type: 'INVENTORY' as const, label: 'Inventory', description: '' },
                   { type: 'AR_AGING' as const, label: 'AR aging', description: '' },
+                  { type: 'AP_AGING' as const, label: 'AP aging', description: '' },
                 ]).map((c) => (
                   <button
                     key={c.type}
@@ -202,7 +204,7 @@ export default function ReportsPage() {
                     onClick={() => {
                       setType(c.type)
                       setPreview(null)
-                      setFilters(c.type === 'AR_AGING' ? { openOnly: true } : {})
+                      setFilters(c.type === 'AR_AGING' || c.type === 'AP_AGING' ? { openOnly: true } : {})
                     }}
                   >
                     {c.label}
@@ -342,6 +344,28 @@ export default function ReportsPage() {
                       placeholder="Optional"
                       value={filters.customerId ?? ''}
                       onChange={(e) => patchFilter('customerId', e.target.value || undefined)}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer self-end pb-2">
+                    <input
+                      type="checkbox"
+                      checked={filters.openOnly !== false}
+                      onChange={(e) => patchFilter('openOnly', e.target.checked)}
+                    />
+                    Open balances only
+                  </label>
+                </>
+              )}
+
+              {type === 'AP_AGING' && (
+                <>
+                  <label className="text-xs space-y-1" style={{ color: 'var(--c-text-3)' }}>
+                    Vendor ID
+                    <input
+                      className="pleros-input font-mono"
+                      placeholder="Optional"
+                      value={filters.vendorId ?? ''}
+                      onChange={(e) => patchFilter('vendorId', e.target.value || undefined)}
                     />
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer self-end pb-2">

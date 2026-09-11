@@ -19,9 +19,32 @@ function assertJournalBalanced(lines: { debit: Prisma.Decimal; credit: Prisma.De
   if (!deb.equals(cred)) throw new ApiError(400, 'Journal entry must balance (debits = credits)')
 }
 
-export function listJournalEntries(tenantId: string) {
+export type JournalEntryListFilters = {
+  fromIso?: string
+  toIso?: string
+  accountId?: string
+  postedOnly?: boolean
+}
+
+export function listJournalEntries(tenantId: string, filters?: JournalEntryListFilters) {
+  const where: Prisma.JournalEntryWhereInput = { tenantId }
+
+  if (filters?.postedOnly !== undefined) {
+    where.isPosted = filters.postedOnly
+  }
+
+  if (filters?.fromIso || filters?.toIso) {
+    where.postedAt = {}
+    if (filters.fromIso) where.postedAt.gte = new Date(filters.fromIso)
+    if (filters.toIso) where.postedAt.lte = new Date(`${filters.toIso}T23:59:59.999Z`)
+  }
+
+  if (filters?.accountId) {
+    where.lines = { some: { accountId: filters.accountId } }
+  }
+
   return ledgerDb.journalEntry.findMany({
-    where: { tenantId },
+    where,
     include: { lines: { include: { account: true } } },
     orderBy: { postedAt: 'desc' },
   })
