@@ -80,6 +80,18 @@ export async function routeTenants(method: string, seg: string[], req: Request):
     }
     return Response.json(await updateTenantEngagementSettings(tenantId, body))
   }
+  if (seg[1] === 'me' && seg[2] === 'finance-settings' && seg.length === 3 && method === 'GET') {
+    const { getTenantFinanceSettings } = await import('../tenant-finance-settings')
+    return Response.json(await getTenantFinanceSettings(tenantId))
+  }
+  if (seg[1] === 'me' && seg[2] === 'finance-settings' && seg.length === 3 && method === 'PATCH') {
+    const { updateTenantFinanceSettings } = await import('../tenant-finance-settings')
+    const body = (await req.json()) as {
+      baseCurrency?: string
+      expenseApprovalThreshold?: number
+    }
+    return Response.json(await updateTenantFinanceSettings(tenantId, body))
+  }
   throw new ApiError(404, 'Tenant route not found')
 }
 

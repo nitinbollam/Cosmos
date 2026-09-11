@@ -58,18 +58,91 @@ model JournalLine {
 }
 
 model BankAccount {
-  id             String              @id @default(cuid())
-  tenantId       String
-  name           String
-  accountNumber  String?
-  chartAccountId String?
-  currentBalance Decimal             @default(0)
-  isActive       Boolean             @default(true)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  statementLines BankStatementLine[]
+  id                        String              @id @default(cuid())
+  tenantId                  String
+  name                      String
+  accountNumber             String?
+  chartAccountId            String?
+  currentBalance            Decimal             @default(0)
+  plaidAccessTokenEncrypted String?
+  plaidItemId               String?
+  plaidSyncCursor           String?
+  isActive                  Boolean             @default(true)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  statementLines            BankStatementLine[]
 
   @@index([tenantId])
+}
+
+enum ExpenseReportStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PAID
+}
+
+model ExpenseReport {
+  id             String              @id @default(cuid())
+  tenantId       String
+  userId         String
+  status         ExpenseReportStatus @default(DRAFT)
+  totalAmount    Decimal             @default(0)
+  journalEntryId String?
+  submittedAt    DateTime?
+  decidedAt      DateTime?
+  rejectReason   String?
+  createdAt      DateTime            @default(now())
+  lines          ExpenseLine[]
+
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+}
+
+model ExpenseLine {
+  id              String        @id @default(cuid())
+  expenseReportId String
+  category        String
+  amount          Decimal
+  receiptUrl      String?
+  description     String
+  incurredAt      DateTime
+  expenseReport   ExpenseReport @relation(fields: [expenseReportId], references: [id], onDelete: Cascade)
+
+  @@index([expenseReportId])
+}
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Decimal
+  asOfDate     DateTime
+
+  @@unique([fromCurrency, toCurrency, asOfDate])
+}
+
+model Budget {
+  id         String       @id @default(cuid())
+  tenantId   String
+  name       String
+  fiscalYear Int
+  lines      BudgetLine[]
+
+  @@index([tenantId, fiscalYear])
+}
+
+model BudgetLine {
+  id             String  @id @default(cuid())
+  budgetId       String
+  accountId      String
+  month          Int
+  budgetedAmount Decimal
+  budget         Budget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, accountId, month])
 }
 
 model BankStatementLine {

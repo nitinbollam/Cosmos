@@ -6,6 +6,8 @@ import { deriveInvoiceStatus, formatCreditMemoNumber, formatInvoiceNumber, invoi
 import { postInvoiceJournal, postCreditMemoJournal } from './invoice-gl'
 import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
+import { resolveFxRateAtCreation } from './exchange-rates'
+import { toBaseAmount, normalizeCurrency } from './fx-util'
 
 function orderSubtotal(lineItems: Array<{ quantity: number; unitPrice: Prisma.Decimal }>): number {
   return lineItems.reduce((s, li) => s + li.quantity * Number(li.unitPrice), 0)
@@ -21,7 +23,7 @@ function invoiceDueDate(paymentTermsDays: number | null | undefined, issuedAt: D
 export async function issueInvoiceForOrder(
   tenantId: string,
   orderId: string,
-  amounts?: { subtotal: number; taxAmount: number; totalAmount: number },
+  amounts?: { subtotal: number; taxAmount: number; totalAmount: number; currency?: string },
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
@@ -47,6 +49,7 @@ export async function issueInvoiceForOrder(
   }
 
   const paidApplied = Math.min(Number(order.amountPaid ?? 0), totalAmount)
+  const fx = await resolveFxRateAtCreation(tenantId, normalizeCurrency(amounts?.currency))
   const invoice = await orderDb.invoice.create({
     data: {
       tenantId,
@@ -57,6 +60,8 @@ export async function issueInvoiceForOrder(
       taxAmount: new Prisma.Decimal(taxAmount),
       totalAmount: new Prisma.Decimal(totalAmount),
       amountPaid: new Prisma.Decimal(paidApplied),
+      currency: fx.currency,
+      fxRateToBase: new Prisma.Decimal(fx.fxRateToBase),
       issuedAt,
       dueAt,
       status: toStoredInvoiceStatus(
@@ -71,7 +76,8 @@ export async function issueInvoiceForOrder(
     },
   })
 
-  const journalEntryId = await postInvoiceJournal(tenantId, invoice.id, totalAmount).catch((err) => {
+  const baseTotal = toBaseAmount(totalAmount, fx.fxRateToBase)
+  const journalEntryId = await postInvoiceJournal(tenantId, invoice.id, baseTotal).catch((err) => {
     console.error(`[gl] invoice journal failed for invoice ${invoice.id}:`, err)
     return null
   })
@@ -237,6 +243,7 @@ export async function getArSummary(tenantId: string): Promise<ArSummary> {
       totalAmount: true,
       amountPaid: true,
       amountCredited: true,
+      fxRateToBase: true,
       issuedAt: true,
       order: { select: { status: true } },
     },
@@ -255,9 +262,10 @@ export async function getArSummary(tenantId: string): Promise<ArSummary> {
     const total = Number(inv.totalAmount)
     const paid = Number(inv.amountPaid)
     const credited = Number(inv.amountCredited)
-    const balance = invoiceBalance(total, paid, credited)
-    invoiced += total + credited
-    collected += paid
+    const fx = Number(inv.fxRateToBase ?? 1)
+    const balance = toBaseAmount(invoiceBalance(total, paid, credited), fx)
+    invoiced += toBaseAmount(total + credited, fx)
+    collected += toBaseAmount(paid, fx)
     outstanding += balance
     if (inv.order.status === 'FAILED') continue
     const days = (now - inv.issuedAt.getTime()) / 86_400_000

@@ -170,6 +170,8 @@ model Invoice {
   totalAmount    Decimal
   amountPaid     Decimal       @default(0)
   amountCredited Decimal       @default(0)
+  currency       String        @default("USD")
+  fxRateToBase   Decimal       @default(1.0)
   issuedAt       DateTime      @default(now())
   dueAt          DateTime?
   journalEntryId String?

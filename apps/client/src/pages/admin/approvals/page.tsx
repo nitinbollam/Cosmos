@@ -28,6 +28,10 @@ function contextSummary(type: string, ctx: Record<string, unknown>): string {
   if (type === 'CREDIT_LIMIT_OVERRIDE') {
     return `Customer · projected $${Number(ctx.projectedTotal ?? 0).toFixed(2)} / limit $${Number(ctx.creditLimit ?? 0).toFixed(2)}`
   }
+  if (type === 'EXPENSE_REPORT') {
+    const lines = Array.isArray(ctx.lines) ? ctx.lines : []
+    return `Expense report · $${Number(ctx.total ?? 0).toFixed(2)} · ${lines.length} line(s)`
+  }
   return JSON.stringify(ctx)
 }
 
@@ -86,6 +90,7 @@ export default function ApprovalsPage() {
           <option value="PURCHASE_ORDER">Purchase orders</option>
           <option value="DISCOUNT">Discounts</option>
           <option value="CREDIT_LIMIT_OVERRIDE">Credit limit</option>
+          <option value="EXPENSE_REPORT">Expense reports</option>
         </select>
         <select className="pleros-input !w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="PENDING">Pending</option>
@@ -143,6 +148,17 @@ export default function ApprovalsPage() {
                         >
                           View order →
                         </Link>
+                      ) : null}
+                      {row.type === 'EXPENSE_REPORT' && Array.isArray(row.context?.lines) ? (
+                        <ul className="text-xs text-pleros-muted mt-2 space-y-1 max-w-md">
+                          {(row.context.lines as Array<{ category?: string; amount?: number; description?: string }>).map(
+                            (line, i) => (
+                              <li key={i}>
+                                {line.category} · ${Number(line.amount ?? 0).toFixed(2)} · {line.description}
+                              </li>
+                            ),
+                          )}
+                        </ul>
                       ) : null}
                     </td>
                     <td className="py-3 pr-4">

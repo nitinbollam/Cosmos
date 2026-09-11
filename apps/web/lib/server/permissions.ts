@@ -26,6 +26,8 @@ export const AVAILABLE_MODULES = [
   'loyalty',
   'subscriptions',
   'campaigns',
+  'expense-reports',
+  'budgets',
 ] as const
 
 export type ModuleKey = (typeof AVAILABLE_MODULES)[number]
@@ -55,6 +57,8 @@ export const MODULE_METADATA: Record<ModuleKey, { label: string; permissions: st
   loyalty: { label: 'Loyalty & Rewards', permissions: ['loyalty.read', 'loyalty.write'] },
   subscriptions: { label: 'Subscriptions', permissions: ['subscriptions.read', 'subscriptions.write'] },
   campaigns: { label: 'Marketing Campaigns', permissions: ['campaigns.read', 'campaigns.write'] },
+  'expense-reports': { label: 'Expense Reports', permissions: ['expense-reports.read', 'expense-reports.write'] },
+  budgets: { label: 'Budgets', permissions: ['budgets.read', 'budgets.write'] },
 }
 
 /** Standard role default permission matrices. */
@@ -82,6 +86,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'loyalty.*',
     'subscriptions.*',
     'campaigns.*',
+    'expense-reports.*',
+    'budgets.*',
     'settings.read',
     'audit.read',
     'users.read',

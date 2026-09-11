@@ -222,6 +222,12 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
   const dueAt = new Date()
   dueAt.setDate(dueAt.getDate() + dueDays)
 
+  const fx = await (async () => {
+    const { resolveFxRateAtCreation } = await import('./exchange-rates')
+    const { normalizeCurrency } = await import('./fx-util')
+    return resolveFxRateAtCreation(tenantId, normalizeCurrency((po as { currency?: string }).currency))
+  })()
+
   const bill = await purchasingDb.vendorBill.create({
     data: {
       tenantId,
@@ -232,6 +238,8 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
       subtotal: new Prisma.Decimal(subtotal),
       taxAmount: new Prisma.Decimal(0),
       totalAmount: new Prisma.Decimal(totalAmount),
+      currency: fx.currency,
+      fxRateToBase: new Prisma.Decimal(fx.fxRateToBase),
       dueAt,
       notes: input.notes ?? `Bill for ${po.number}`,
       lines: {
@@ -247,7 +255,10 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
     include: { supplier: true, lines: true },
   })
 
-  const journalEntryId = await postPoReceiptJournal(tenantId, bill.id, totalAmount).catch(() => null)
+  const { toBaseAmount } = await import('./fx-util')
+  const journalEntryId = await postPoReceiptJournal(tenantId, bill.id, toBaseAmount(totalAmount, fx.fxRateToBase)).catch(
+    () => null,
+  )
   if (journalEntryId) {
     await purchasingDb.vendorBill.update({ where: { id: bill.id }, data: { journalEntryId } })
   }

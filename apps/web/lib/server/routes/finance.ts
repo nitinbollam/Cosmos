@@ -324,6 +324,21 @@ export async function routeBankAccounts(method: string, seg: string[], req: Requ
   if (seg.length === 3 && seg[2] === 'reconcile' && method === 'POST') {
     return Response.json(await bankRecon.reconcileStatementLine(session.tenantId, seg[1]))
   }
+  if (seg.length === 4 && seg[2] === 'plaid' && seg[3] === 'link-token' && method === 'POST') {
+    const { createLinkToken } = await import('../plaid')
+    return Response.json(await createLinkToken(session.tenantId, session.userId))
+  }
+  if (seg.length === 4 && seg[2] === 'plaid' && seg[3] === 'exchange' && method === 'POST') {
+    const body = (await req.json()) as { publicToken?: string }
+    if (!body.publicToken?.trim()) throw new ApiError(400, 'publicToken required')
+    const { exchangePublicToken } = await import('../plaid')
+    await exchangePublicToken(session.tenantId, seg[1]!, body.publicToken.trim())
+    return Response.json({ ok: true })
+  }
+  if (seg.length === 4 && seg[2] === 'plaid' && seg[3] === 'sync' && method === 'POST') {
+    const { syncPlaidTransactions } = await import('../plaid')
+    return Response.json(await syncPlaidTransactions(session.tenantId, seg[1]!))
+  }
   throw new ApiError(404, 'Bank account route not found')
 }
 

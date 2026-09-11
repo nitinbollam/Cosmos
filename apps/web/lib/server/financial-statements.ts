@@ -114,6 +114,46 @@ function toRows(rows: AccountAgg[], amountFn: (row: AccountAgg) => Prisma.Decima
     .filter((row) => Math.abs(row.amount) >= 0.005)
 }
 
+/** Sum net activity for one account in a calendar month (for budget vs actual). */
+export async function aggregatePostedLinesForMonth(
+  tenantId: string,
+  accountId: string,
+  fiscalYear: number,
+  month: number,
+): Promise<number> {
+  const fromIso = `${fiscalYear}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(Date.UTC(fiscalYear, month, 0)).getUTCDate()
+  const toIso = `${fiscalYear}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  const lines = await ledgerDb.journalLine.findMany({
+    where: {
+      accountId,
+      entry: {
+        tenantId,
+        isPosted: true,
+        postedAt: {
+          gte: new Date(fromIso),
+          lte: new Date(`${toIso}T23:59:59.999Z`),
+        },
+      },
+    },
+    include: { account: true },
+  })
+
+  let debit = new Prisma.Decimal(0)
+  let credit = new Prisma.Decimal(0)
+  for (const line of lines) {
+    debit = debit.plus(line.debit)
+    credit = credit.plus(line.credit)
+  }
+
+  const type = lines[0]?.account.type
+  if (type === AccountType.REVENUE) return dec(credit.minus(debit))
+  if (type === AccountType.EXPENSE) return dec(debit.minus(credit))
+  if (type === AccountType.ASSET) return dec(debit.minus(credit))
+  return dec(credit.minus(debit))
+}
+
 export async function getIncomeStatement(
   tenantId: string,
   fromIso: string,

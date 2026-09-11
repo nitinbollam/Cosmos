@@ -817,6 +817,8 @@ export default function FinancePage() {
             </div>
           </div>
 
+          <PlaidConnectPanel accounts={bankSummaryQ.data?.accounts ?? []} />
+
           <div className="flex gap-2 border-b border-pleros-border pb-2 text-xs">
             {(['summary', 'debits', 'credits', 'unreconciled'] as const).map((st) => (
               <button
@@ -1456,4 +1458,67 @@ function FinanceInvoiceStripePay({
   }
 
   return <AdminStripeCardForm submitLabel={`Charge ${money(amount)}`} onSubmit={(r) => pay(r.paymentMethodId)} />
+}
+
+function PlaidConnectPanel({ accounts }: { accounts: Array<{ id: string; name: string }> }) {
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function connectPlaid() {
+    if (!bankAccountId) {
+      setMsg('Select a bank account first.')
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    try {
+      const { linkToken } = await api.post<{ linkToken: string }>(
+        `/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/link-token`,
+        {},
+      )
+      const Plaid = (window as unknown as { Plaid?: { create: (opts: unknown) => { open: () => void } } }).Plaid
+      if (!Plaid) {
+        setMsg(`Plaid Link script not loaded. Link token ready for sandbox testing.`)
+        return
+      }
+      const handler = Plaid.create({
+        token: linkToken,
+        onSuccess: async (publicToken: string) => {
+          await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/exchange`, { publicToken })
+          await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/sync`, {})
+          setMsg('Plaid connected and transactions synced.')
+        },
+        onExit: (err: { display_message?: string } | null) => {
+          if (err?.display_message) setMsg(err.display_message)
+        },
+      })
+      handler.open()
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Plaid connection failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="pleros-card">
+      <div className="text-sm font-semibold text-pleros-white">Bank feeds (Plaid)</div>
+      <p className="text-xs text-pleros-muted mt-1">Connect a bank account for automatic transaction import. Manual CSV import remains available.</p>
+      <div className="flex flex-wrap gap-2 mt-3 items-center">
+        <select className="pleros-input !w-auto" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
+          <option value="">Select bank account</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn-primary" disabled={busy || !bankAccountId} onClick={() => void connectPlaid()}>
+          Connect with Plaid
+        </button>
+      </div>
+      {msg ? <p className="text-xs mt-2 text-pleros-muted">{msg}</p> : null}
+    </div>
+  )
 }

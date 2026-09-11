@@ -120,6 +120,7 @@ export function CompanyTab() {
 
       <TaxSettingsCard />
       <WorkflowSettingsCard />
+      <FinanceSettingsCard />
       <AgeVerificationCard />
 
       {tenant.data?.onboardingSteps && tenant.data.onboardingSteps.length > 0 && (
@@ -274,6 +275,96 @@ function WorkflowSettingsCard() {
       )}
       {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
       {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Workflow settings updated.</p>}
+    </div>
+  )
+}
+
+function FinanceSettingsCard() {
+  const qc = useQueryClient()
+  const finQ = useQuery<{ baseCurrency: string; expenseApprovalThreshold: number }>({
+    queryKey: ['finance-settings'],
+    queryFn: () => api.get('/tenants/me/finance-settings'),
+  })
+  const [baseCurrency, setBaseCurrency] = useState('USD')
+  const [expenseThreshold, setExpenseThreshold] = useState('')
+  const [confirmBase, setConfirmBase] = useState(false)
+
+  useEffect(() => {
+    if (finQ.data) {
+      setBaseCurrency(finQ.data.baseCurrency)
+      setExpenseThreshold(String(finQ.data.expenseApprovalThreshold))
+    }
+  }, [finQ.data])
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      api.patch('/tenants/me/finance-settings', {
+        baseCurrency: baseCurrency.trim().toUpperCase(),
+        expenseApprovalThreshold: Number(expenseThreshold),
+      }),
+    onSuccess: () => {
+      setConfirmBase(false)
+      void qc.invalidateQueries({ queryKey: ['finance-settings'] })
+    },
+  })
+
+  const expenseValid = Number.isFinite(Number(expenseThreshold)) && Number(expenseThreshold) >= 0
+
+  return (
+    <div className="pleros-card">
+      <h2 className="text-pleros-white font-semibold font-display mb-1">Finance settings</h2>
+      <p className="text-pleros-text-3 text-sm mb-4">
+        Base currency is write-once — changing it later does not retroactively convert existing transactions.
+      </p>
+      {finQ.isLoading ? (
+        <div className="skeleton h-10 w-48" />
+      ) : (
+        <form
+          className="grid gap-4 sm:grid-cols-2 max-w-xl"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!expenseValid) return
+            if (!confirmBase && finQ.data?.baseCurrency && baseCurrency !== finQ.data.baseCurrency) {
+              setConfirmBase(true)
+              return
+            }
+            saveMut.mutate()
+          }}
+        >
+          <div>
+            <label className="text-xs text-pleros-text-3">Base currency (ISO 4217)</label>
+            <input
+              className="pleros-input mt-1 w-full uppercase"
+              maxLength={3}
+              value={baseCurrency}
+              onChange={(e) => setBaseCurrency(e.target.value.toUpperCase())}
+              readOnly={!!finQ.data?.baseCurrency && finQ.data.baseCurrency !== 'USD' && baseCurrency === finQ.data.baseCurrency}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-pleros-text-3">Expense approval threshold ($)</label>
+            <input
+              className="pleros-input mt-1 w-full"
+              type="number"
+              min="0"
+              step="1"
+              value={expenseThreshold}
+              onChange={(e) => setExpenseThreshold(e.target.value)}
+            />
+          </div>
+          {confirmBase ? (
+            <p className="sm:col-span-2 text-amber-400 text-xs">
+              Confirm base currency change — this cannot be undone and will not convert historical data.
+            </p>
+          ) : null}
+          <div className="sm:col-span-2">
+            <button type="submit" className="btn-primary" disabled={!expenseValid || saveMut.isPending}>
+              {saveMut.isPending ? 'Saving…' : confirmBase ? 'Confirm and save' : 'Save finance settings'}
+            </button>
+          </div>
+        </form>
+      )}
+      {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
     </div>
   )
 }

@@ -616,6 +616,8 @@ export default function AccountPage() {
           <p style={{ fontSize: 13 }}>
             <Link to="/gift-cards/purchase" className="pleros-shop-link-accent">Purchase a gift card →</Link>
             {' · '}
+            <Link to="/account/expenses" className="pleros-shop-link-accent">Expense reports →</Link>
+            {' · '}
             <Link to="/invoices" className="pleros-shop-link-accent">View open invoices →</Link>
           </p>
         </div>
