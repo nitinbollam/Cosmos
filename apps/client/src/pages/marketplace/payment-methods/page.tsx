@@ -81,7 +81,7 @@ export default function MarketplacePaymentMethodsPage() {
       <p className="text-sm text-pleros-text-3 mt-1">Required before placing auction bids. Used for auto-charge when you win.</p>
 
       <ul className="mt-4 space-y-2">
-        {(pmQ.data ?? []).map((pm) => (
+        {(pmQ.data ?? []).map((pm: Pm) => (
           <li key={pm.id} className="text-sm flex justify-between items-center">
             <span>
               {(pm.brand ?? 'Card').toUpperCase()} •••• {pm.last4} {pm.isDefault && '(default)'}

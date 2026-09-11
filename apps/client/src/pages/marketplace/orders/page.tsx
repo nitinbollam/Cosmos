@@ -70,7 +70,7 @@ export default function MarketplaceOrdersPage() {
   })
 
   const renderTable = (rows: Order[] | undefined, empty: string, role: 'buyer' | 'seller') => {
-    if (!rows?.length) return <EmptyState title={empty} description="" />
+    if (!rows?.length) return <EmptyState icon="🛒" title={empty} description="" />
     return (
       <table className="w-full text-sm mt-2">
         <thead>
