@@ -5,6 +5,7 @@ import { ShopLayout } from '@/layouts/ShopLayout'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { MobileLayout } from '@/layouts/MobileLayout'
 import { OpsLayout } from '@/layouts/OpsLayout'
+import { RequireMarketplaceShop } from '@/components/auth/require-marketplace-shop'
 
 function AdminCustomersRedirect() {
   return <Navigate to="/admin/crm" replace />
@@ -22,6 +23,10 @@ function page(importFn: () => Promise<{ default: ComponentType }>) {
       <Lazy />
     </Suspense>
   )
+}
+
+function marketplaceShopPage(importFn: () => Promise<{ default: ComponentType }>) {
+  return <RequireMarketplaceShop>{page(importFn)}</RequireMarketplaceShop>
 }
 
 const router = createBrowserRouter([
@@ -56,6 +61,15 @@ const router = createBrowserRouter([
           { path: '/invoices/:id', element: page(() => import('@/pages/invoices/[id]/page')) },
           { path: '/account', element: page(() => import('@/pages/account/page')) },
           { path: '/notifications', element: page(() => import('@/pages/notifications/page')) },
+          { path: '/marketplace', element: marketplaceShopPage(() => import('@/pages/marketplace/page')) },
+          {
+            path: '/marketplace/orders',
+            element: marketplaceShopPage(() => import('@/pages/marketplace/orders/page')),
+          },
+          {
+            path: '/marketplace/:id',
+            element: marketplaceShopPage(() => import('@/pages/marketplace/[id]/page')),
+          },
         ],
       },
       {

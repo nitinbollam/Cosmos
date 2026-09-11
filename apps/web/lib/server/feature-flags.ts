@@ -12,7 +12,7 @@ export type TenantFeatures = {
 }
 
 const PLAN_DEFAULTS: Record<string, TenantFeatures> = {
-  STARTER: { quotes: true, contractPricing: false, pos: false, wavePicking: false, splitShipments: false, advancedTax: false, celestial: false, marketplace: false },
+  STARTER: { quotes: true, contractPricing: false, pos: false, wavePicking: false, splitShipments: false, advancedTax: false, celestial: false, marketplace: true },
   GROWTH: { quotes: true, contractPricing: true, pos: true, wavePicking: true, splitShipments: true, advancedTax: true, celestial: true, marketplace: true },
   ENTERPRISE: { quotes: true, contractPricing: true, pos: true, wavePicking: true, splitShipments: true, advancedTax: true, celestial: true, marketplace: true },
 }

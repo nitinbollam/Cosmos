@@ -63,17 +63,25 @@ export function Sidebar({
 
   const { data: me } = useQuery({
     queryKey: ['auth-me'],
-    queryFn: () => api.get<{ role?: string; permissions?: string[] }>('/auth/me'),
+    queryFn: () =>
+      api.get<{
+        role?: string
+        permissions?: string[]
+        navFeatures?: { celestial?: boolean; marketplace?: boolean }
+      }>('/auth/me'),
   })
 
   const { data: features } = useQuery({
     queryKey: ['tenant-features'],
     queryFn: () => api.get<{ effective?: { celestial?: boolean; marketplace?: boolean } }>('/features'),
+    retry: false,
   })
 
+  const navFeatures = features?.effective ?? me?.navFeatures
+
   const navItems = BASE_SIDEBAR_NAV.filter((item) => {
-    if (item.feature === 'celestial' && features?.effective?.celestial === false) return false
-    if (item.feature === 'marketplace' && features?.effective?.marketplace !== true) return false
+    if (item.feature === 'celestial' && navFeatures?.celestial === false) return false
+    if (item.feature === 'marketplace' && navFeatures?.marketplace !== true) return false
     if (!hasClientPermission(me?.permissions, me?.role, item.permission)) return false
     return true
   })

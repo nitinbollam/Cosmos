@@ -13,6 +13,9 @@ export type PublicMarketplaceOrder = {
   id: string
   listingId: string
   agreedPriceCents: number
+  merchandiseSubtotalCents: number
+  taxAmountCents: number
+  taxJurisdiction: string | null
   quantity: number
   orderStatus: string
   paymentStatus: string
@@ -33,6 +36,9 @@ export function toPublicOrder(order: {
   id: string
   listingId: string
   agreedPriceCents: number
+  merchandiseSubtotalCents?: number
+  taxAmountCents?: number
+  taxJurisdiction?: string | null
   quantity: number
   orderStatus: string
   paymentStatus: string
@@ -43,6 +49,9 @@ export function toPublicOrder(order: {
     id: order.id,
     listingId: order.listingId,
     agreedPriceCents: order.agreedPriceCents,
+    merchandiseSubtotalCents: order.merchandiseSubtotalCents ?? order.agreedPriceCents,
+    taxAmountCents: order.taxAmountCents ?? 0,
+    taxJurisdiction: order.taxJurisdiction ?? null,
     quantity: order.quantity,
     orderStatus: order.orderStatus,
     paymentStatus: order.paymentStatus,
@@ -70,13 +79,20 @@ export async function createMarketplaceOrder(
 
   await requireStripeConnectContext(listing.sellerTenantId)
 
+  const { buildMarketplaceOrderPricing } = await import('./marketplace-tax')
+  const pricing = await buildMarketplaceOrderPricing(buyerTenantId, listing.priceCents, quantity)
+
   const order = await marketplaceDb.$transaction(async (tx) => {
     const created = await tx.marketplaceOrder.create({
       data: {
         listingId: listing.id,
         buyerTenantId,
         sellerTenantId: listing.sellerTenantId,
-        agreedPriceCents: listing.priceCents * quantity,
+        agreedPriceCents: pricing.agreedPriceCents,
+        merchandiseSubtotalCents: pricing.merchandiseSubtotalCents,
+        taxAmountCents: pricing.taxAmountCents,
+        taxRate: pricing.taxRate,
+        taxJurisdiction: pricing.taxJurisdiction,
         quantity,
         orderStatus: 'PENDING_PAYMENT',
         paymentStatus: 'PENDING',
@@ -141,6 +157,12 @@ export async function confirmMarketplacePayment(
       orderStatus: 'PAYMENT_HELD',
     },
   })
+  try {
+    const { fulfillMarketplaceInventoryOnPayment } = await import('./marketplace-inventory')
+    await fulfillMarketplaceInventoryOnPayment(orderId)
+  } catch (err) {
+    console.error('[marketplace] inventory commit failed', orderId, err)
+  }
   try {
     const { createMarketplaceShipmentRequest } = await import('./marketplace-shipping')
     await createMarketplaceShipmentRequest(orderId)

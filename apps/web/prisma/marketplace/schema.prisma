@@ -108,6 +108,8 @@ model MarketplaceListing {
   reviewedByUserId     String?
   reviewedAt           DateTime?
   rejectionReason      String?
+  inventoryReservationId String?
+  sellerWarehouseId    String?
   createdAt            DateTime                 @default(now())
   updatedAt            DateTime                 @updatedAt
   orders               MarketplaceOrder[]
@@ -138,6 +140,10 @@ model MarketplaceOrder {
   buyerTenantId         String
   sellerTenantId        String
   agreedPriceCents      Int
+  merchandiseSubtotalCents Int                     @default(0)
+  taxAmountCents        Int                      @default(0)
+  taxRate               Float                    @default(0)
+  taxJurisdiction       String?
   quantity              Int
   orderStatus           MarketplaceOrderStatus   @default(PENDING_PAYMENT)
   paymentStatus         MarketplacePaymentStatus @default(PENDING)

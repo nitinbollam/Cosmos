@@ -31,10 +31,19 @@ export async function requirePortalCustomerId(session: SessionUser): Promise<str
 export async function getAuthProfile(session: SessionUser) {
   const customer = await crm.findCustomerByEmail(session.tenantId, session.email)
   const { permissionsForRole } = await import('./permissions')
+  const featureFlags = await import('./feature-flags')
+  const { tenantDb } = await import('./db')
   const permissions =
     Array.isArray(session.permissions) && session.permissions.length > 0
       ? session.permissions
       : permissionsForRole(session.role)
+  const [effective, org] = await Promise.all([
+    featureFlags.getTenantFeatures(session.tenantId),
+    tenantDb.tenantOrganization.findUnique({
+      where: { id: session.tenantId },
+      select: { onboardingPhase: true },
+    }),
+  ])
   return {
     userId: session.userId,
     email: session.email,
@@ -44,5 +53,10 @@ export async function getAuthProfile(session: SessionUser) {
     customerId: customer?.id ?? null,
     customerName: customer?.name ?? null,
     isPortalBuyer: isPortalBuyer(session.role),
+    onboardingPhase: org?.onboardingPhase ?? 'READY',
+    navFeatures: {
+      marketplace: effective.marketplace === true,
+      celestial: effective.celestial === true,
+    },
   }
 }

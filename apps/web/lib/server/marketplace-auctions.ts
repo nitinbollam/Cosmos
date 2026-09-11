@@ -199,6 +199,12 @@ async function tryAutoChargeWinner(
       },
     })
     try {
+      const { fulfillMarketplaceInventoryOnPayment } = await import('./marketplace-inventory')
+      await fulfillMarketplaceInventoryOnPayment(order.id)
+    } catch (err) {
+      console.error('[marketplace] auction inventory commit failed', order.id, err)
+    }
+    try {
       await createMarketplaceShipmentRequest(order.id)
     } catch {
       /* ops can book manually */
@@ -248,6 +254,9 @@ export async function finalizeAuction(listingId: string) {
   }
 
   for (const candidate of candidates) {
+    const { buildMarketplaceOrderPricing } = await import('./marketplace-tax')
+    const pricing = await buildMarketplaceOrderPricing(candidate.bidderTenantId, candidate.amountCents, 1)
+
     const order = await marketplaceDb.$transaction(async (tx) => {
       await tx.marketplaceListing.update({
         where: { id: listingId },
@@ -263,7 +272,11 @@ export async function finalizeAuction(listingId: string) {
           listingId,
           buyerTenantId: candidate.bidderTenantId,
           sellerTenantId: listing.sellerTenantId,
-          agreedPriceCents: candidate.amountCents,
+          agreedPriceCents: pricing.agreedPriceCents,
+          merchandiseSubtotalCents: pricing.merchandiseSubtotalCents,
+          taxAmountCents: pricing.taxAmountCents,
+          taxRate: pricing.taxRate,
+          taxJurisdiction: pricing.taxJurisdiction,
           quantity: 1,
           orderStatus: 'PENDING_PAYMENT',
           paymentStatus: 'PENDING',

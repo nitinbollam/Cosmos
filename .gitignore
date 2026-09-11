@@ -38,6 +38,12 @@ yarn-debug.log*
 coverage/
 .nyc_output/
 
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # IDE
 .vscode/
 .idea/
