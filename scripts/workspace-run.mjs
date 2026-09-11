@@ -29,6 +29,14 @@ const WORKSPACES = [
   '@pleros/web',
 ]
 
+/** Client typecheck resolves workspace packages via dist/*.d.ts — build libs first. */
+const BUILD_BEFORE_TYPECHECK = [
+  '@pleros/types',
+  '@pleros/analytics-engine',
+  '@pleros/ui',
+  '@pleros/web-gateway-client',
+]
+
 function run(workspace, script) {
   console.log(`\n[workspace] ${workspace} → npm run ${script}`)
   const r = spawnSync(npm, ['run', script, '-w', workspace], {
@@ -38,6 +46,12 @@ function run(workspace, script) {
     shell: isWin,
   })
   if (r.status !== 0) process.exit(r.status ?? 1)
+}
+
+if (task === 'typecheck') {
+  for (const ws of BUILD_BEFORE_TYPECHECK) {
+    run(ws, 'build')
+  }
 }
 
 for (const ws of WORKSPACES) {

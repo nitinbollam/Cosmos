@@ -27,7 +27,7 @@ export default function MarketplaceMyListingsPage() {
       <h1 className="text-2xl font-display text-pleros-white mt-2">My listings</h1>
       {listingsQ.isLoading && <p className="text-sm text-pleros-text-3 mt-4">Loading…</p>}
       {!listingsQ.isLoading && (listingsQ.data?.length ?? 0) === 0 && (
-        <EmptyState title="No listings yet" description="List inventory to sell on the marketplace." />
+        <EmptyState icon="📦" title="No listings yet" description="List inventory to sell on the marketplace." />
       )}
       <ul className="grid gap-3 mt-4">
         {(listingsQ.data ?? []).map((l) => (

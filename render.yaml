@@ -16,7 +16,7 @@
 # *logical* database on that instance (same host/user/password, only the
 # trailing db name differs) — see infra/sql/init-databases.sql. Because
 # fromDatabase only resolves the instance's single default database, the
-# 14 per-schema *_DATABASE_URL vars below stay `sync: false` and are set by
+# 15 per-schema *_DATABASE_URL vars below stay `sync: false` and are set by
 # hand in the Dashboard (Environment tab -> "Add from .env").
 #
 # Staging instance: pleros-staging-postgres
@@ -24,7 +24,7 @@
 #   Logical databases: pleros_auth, pleros_tenant, pleros_inventory,
 #   pleros_order, pleros_crm, pleros_storefront, pleros_purchasing,
 #   pleros_payment, pleros_wms, pleros_dispatch, pleros_compliance,
-#   pleros_ledger, pleros_notification, pleros_analytics.
+#   pleros_ledger, pleros_notification, pleros_analytics, pleros_marketplace.
 #
 # NOTE: the live pleros-staging web service (region ohio, branch staging,
 # plan free, Node runtime) was configured by hand in the Dashboard and
@@ -82,6 +82,9 @@ services:
         value: postgres
       - key: PLEROS_CLIENT_ORIGIN
         sync: false
+      # Vercel static client → Render API (suffix match for preview URLs)
+      - key: CORS_ALLOWED_ORIGIN_SUFFIX
+        sync: false # e.g. .nitinbollamedu-9684s-projects.vercel.app
       # Per-schema Postgres URLs (or point each at the same DB if consolidated)
       - key: AUTH_DATABASE_URL
         sync: false
@@ -160,6 +163,8 @@ services:
       - key: PLEROS_DB_PROVIDER
         value: postgres
       - key: PLEROS_CLIENT_ORIGIN
+        sync: false
+      - key: CORS_ALLOWED_ORIGIN_SUFFIX
         sync: false
       - key: AUTH_DATABASE_URL
         sync: false
