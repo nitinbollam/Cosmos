@@ -52,6 +52,15 @@ export function postgresDatabaseUrl(baseUrl, dbName) {
   }
 }
 
+function postgresBaseUrl() {
+  if (process.env.DATABASE_URL?.trim()) return process.env.DATABASE_URL.trim()
+  for (const schema of Object.keys(DB_BY_SCHEMA)) {
+    const url = process.env[envKeyForSchema(schema)]?.trim()
+    if (url?.startsWith('postgresql://') || url?.startsWith('postgres://')) return url
+  }
+  return 'postgresql://pleros:pleros@localhost:5432/postgres'
+}
+
 export function databaseUrlForSchema(schemaName, options = {}) {
   const dbName = DB_BY_SCHEMA[schemaName]
   if (!dbName) throw new Error(`Unknown schema: ${schemaName}`)
@@ -59,10 +68,7 @@ export function databaseUrlForSchema(schemaName, options = {}) {
   if (process.env[envKey]?.trim()) return process.env[envKey].trim()
 
   if (getDbProvider() === 'postgresql') {
-    const base =
-      process.env.DATABASE_URL?.trim() ||
-      'postgresql://pleros:pleros@localhost:5432/postgres'
-    return postgresDatabaseUrl(base, dbName)
+    return postgresDatabaseUrl(postgresBaseUrl(), dbName)
   }
 
   const dataDir = options.dataDir ?? process.env.PLEROS_DATA_DIR ?? '.data'

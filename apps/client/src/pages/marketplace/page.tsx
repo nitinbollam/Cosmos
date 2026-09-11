@@ -103,11 +103,11 @@ export default function MarketplaceBrowsePage() {
       {listingsQ.isError && <p className="text-red-400 text-sm">Could not load marketplace listings.</p>}
 
       {!listingsQ.isLoading && (listingsQ.data?.length ?? 0) === 0 && (
-        <EmptyState title="No live listings" description="Check back soon or list your own inventory." />
+        <EmptyState icon="🏪" title="No live listings" description="Check back soon or list your own inventory." />
       )}
 
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {(listingsQ.data ?? []).map((l) => {
+        {(listingsQ.data ?? []).map((l: Listing) => {
           const isAuction = l.listingType === 'AUCTION'
           const displayCents = isAuction && l.currentHighBidCents != null ? l.currentHighBidCents : l.priceCents
           const endsLabel = isAuction ? formatEndsAt(l.endsAt) : null

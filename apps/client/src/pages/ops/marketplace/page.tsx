@@ -98,7 +98,7 @@ export default function OpsMarketplacePage() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['pleros-ops'] }),
   })
 
-  const jobsMut = useMutation({
+  const jobsMut = useMutation<{ auctionsClosed: number; escrowsReleased: number }>({
     mutationFn: () =>
       api.post<{ auctionsClosed: number; escrowsReleased: number }>('/pleros-ops/marketplace/jobs/run', {}),
   })
@@ -167,7 +167,7 @@ export default function OpsMarketplacePage() {
           </div>
           {pendingQ.isLoading && <p className="text-sm text-pleros-text-3">Loading…</p>}
           {!pendingQ.isLoading && (pendingQ.data?.length ?? 0) === 0 && (
-            <EmptyState title="No pending listings" description="" />
+            <EmptyState icon="📦" title="No pending listings" description="" />
           )}
           <ul className="grid gap-3 mt-2">
             {(pendingQ.data ?? []).map((l) => (
@@ -220,7 +220,7 @@ export default function OpsMarketplacePage() {
       {tab !== 'review' && (
         <section className="mt-6 overflow-x-auto">
           {(ordersQ.data?.length ?? 0) === 0 && !ordersQ.isLoading && (
-            <EmptyState title="No orders in this queue" description="" />
+            <EmptyState icon="📋" title="No orders in this queue" description="" />
           )}
           <table className="w-full text-sm min-w-[720px]">
             <thead>
