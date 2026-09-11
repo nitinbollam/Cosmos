@@ -17,6 +17,9 @@ export async function routeExpenseReports(method: string, seg: string[], req: Re
   }
 
   if (seg.length >= 3 && seg[1] === 'receipts' && method === 'GET') {
+    if (seg[2] !== session.tenantId && session.role !== 'SUPER_ADMIN') {
+      throw new ApiError(403, 'Forbidden: cannot access receipts from another organization')
+    }
     const relative = seg.slice(2).join('/')
     const file = readExpenseReceipt(relative)
     if (!file) throw new ApiError(404, 'Receipt not found')
@@ -38,12 +41,11 @@ export async function routeExpenseReports(method: string, seg: string[], req: Re
 
   if (seg.length === 2 && method === 'GET') {
     const selfOnly = !hasPermission(session, 'expense-reports.read')
-    const report = await expenseReports.listExpenseReports(
+    const row = await expenseReports.getExpenseReport(
       session.tenantId,
+      seg[1],
       selfOnly ? session.userId : undefined,
     )
-    const row = report.find((r) => r.id === seg[1])
-    if (!row) throw new ApiError(404, 'Expense report not found')
     return Response.json(row)
   }
 

@@ -4,9 +4,10 @@ import { ApiError } from './session'
 export type TenantFinanceSettings = {
   baseCurrency: string
   expenseApprovalThreshold: number
+  isBaseCurrencyLocked: boolean
 }
 
-const DEFAULTS: TenantFinanceSettings = {
+const DEFAULTS: Omit<TenantFinanceSettings, 'isBaseCurrencyLocked'> = {
   baseCurrency: 'USD',
   expenseApprovalThreshold: 500,
 }
@@ -19,15 +20,13 @@ function parseSettings(raw: unknown): Record<string, unknown> {
 export async function getTenantFinanceSettings(tenantId: string): Promise<TenantFinanceSettings> {
   const org = await tenantDb.tenantOrganization.findUnique({ where: { id: tenantId } })
   const s = parseSettings(org?.settings)
-  const baseCurrency =
-    typeof s.baseCurrency === 'string' && /^[A-Z]{3}$/.test(s.baseCurrency)
-      ? s.baseCurrency
-      : DEFAULTS.baseCurrency
+  const isBaseCurrencyLocked = typeof s.baseCurrency === 'string' && /^[A-Z]{3}$/.test(s.baseCurrency)
+  const baseCurrency = isBaseCurrencyLocked ? (s.baseCurrency as string) : DEFAULTS.baseCurrency
   const expenseApprovalThreshold =
     typeof s.expenseApprovalThreshold === 'number' && s.expenseApprovalThreshold >= 0
       ? s.expenseApprovalThreshold
       : DEFAULTS.expenseApprovalThreshold
-  return { baseCurrency, expenseApprovalThreshold }
+  return { baseCurrency, expenseApprovalThreshold, isBaseCurrencyLocked }
 }
 
 export async function updateTenantFinanceSettings(

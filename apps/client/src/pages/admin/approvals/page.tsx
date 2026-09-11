@@ -151,10 +151,22 @@ export default function ApprovalsPage() {
                       ) : null}
                       {row.type === 'EXPENSE_REPORT' && Array.isArray(row.context?.lines) ? (
                         <ul className="text-xs text-pleros-muted mt-2 space-y-1 max-w-md">
-                          {(row.context.lines as Array<{ category?: string; amount?: number; description?: string }>).map(
+                          {(row.context.lines as Array<{ category?: string; amount?: number; description?: string; receiptUrl?: string | null }>).map(
                             (line, i) => (
-                              <li key={i}>
-                                {line.category} · ${Number(line.amount ?? 0).toFixed(2)} · {line.description}
+                              <li key={i} className="flex items-center justify-between gap-2">
+                                <span>
+                                  {line.category} · ${Number(line.amount ?? 0).toFixed(2)} · {line.description}
+                                </span>
+                                {line.receiptUrl ? (
+                                  <a
+                                    href={line.receiptUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-pleros-accent hover:underline flex-shrink-0"
+                                  >
+                                    Receipt ↗
+                                  </a>
+                                ) : null}
                               </li>
                             ),
                           )}

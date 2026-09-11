@@ -1460,6 +1460,26 @@ function FinanceInvoiceStripePay({
   return <AdminStripeCardForm submitLabel={`Charge ${money(amount)}`} onSubmit={(r) => pay(r.paymentMethodId)} />
 }
 
+function loadPlaidScript(): Promise<void> {
+  if (typeof window !== 'undefined' && (window as unknown as { Plaid?: unknown }).Plaid) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src*="cdn.plaid.com"]')
+    if (existing) {
+      existing.addEventListener('load', () => resolve())
+      existing.addEventListener('error', () => reject(new Error('Failed to load Plaid Link')))
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Plaid Link script from CDN'))
+    document.head.appendChild(script)
+  })
+}
+
 function PlaidConnectPanel({ accounts }: { accounts: Array<{ id: string; name: string }> }) {
   const [bankAccountId, setBankAccountId] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
@@ -1473,21 +1493,29 @@ function PlaidConnectPanel({ accounts }: { accounts: Array<{ id: string; name: s
     setBusy(true)
     setMsg(null)
     try {
+      await loadPlaidScript()
       const { linkToken } = await api.post<{ linkToken: string }>(
         `/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/link-token`,
         {},
       )
       const Plaid = (window as unknown as { Plaid?: { create: (opts: unknown) => { open: () => void } } }).Plaid
       if (!Plaid) {
-        setMsg(`Plaid Link script not loaded. Link token ready for sandbox testing.`)
+        setMsg('Plaid Link script could not be initialized.')
         return
       }
       const handler = Plaid.create({
         token: linkToken,
         onSuccess: async (publicToken: string) => {
-          await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/exchange`, { publicToken })
-          await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/sync`, {})
-          setMsg('Plaid connected and transactions synced.')
+          setBusy(true)
+          try {
+            await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/exchange`, { publicToken })
+            await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/sync`, {})
+            setMsg('Plaid connected and transactions synced.')
+          } catch (err: unknown) {
+            setMsg(err instanceof Error ? err.message : 'Exchange/sync failed')
+          } finally {
+            setBusy(false)
+          }
         },
         onExit: (err: { display_message?: string } | null) => {
           if (err?.display_message) setMsg(err.display_message)
@@ -1496,6 +1524,23 @@ function PlaidConnectPanel({ accounts }: { accounts: Array<{ id: string; name: s
       handler.open()
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Plaid connection failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function syncPlaid() {
+    if (!bankAccountId) {
+      setMsg('Select a bank account first.')
+      return
+    }
+    setBusy(true)
+    setMsg('Syncing transactions from Plaid…')
+    try {
+      await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/sync`, {})
+      setMsg('Transactions synced successfully.')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Sync failed. Verify account is connected to Plaid.')
     } finally {
       setBusy(false)
     }
@@ -1516,6 +1561,9 @@ function PlaidConnectPanel({ accounts }: { accounts: Array<{ id: string; name: s
         </select>
         <button type="button" className="btn-primary" disabled={busy || !bankAccountId} onClick={() => void connectPlaid()}>
           Connect with Plaid
+        </button>
+        <button type="button" className="btn-secondary" disabled={busy || !bankAccountId} onClick={() => void syncPlaid()}>
+          {busy ? 'Syncing…' : 'Sync transactions'}
         </button>
       </div>
       {msg ? <p className="text-xs mt-2 text-pleros-muted">{msg}</p> : null}

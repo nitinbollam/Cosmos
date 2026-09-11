@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
+import { axiosErr } from '@/lib/axios-error'
 
 type ChartAccount = { id: string; code: string; name: string }
 type BudgetLine = { accountId: string; month: number; budgetedAmount: string | number }
@@ -25,6 +26,7 @@ export default function BudgetsPage() {
   const [name, setName] = useState('')
   const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear())
   const [grid, setGrid] = useState<Record<string, Record<number, string>>>({})
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   const accountsQ = useQuery<ChartAccount[]>({
     queryKey: ['chart-accounts'],
@@ -37,6 +39,16 @@ export default function BudgetsPage() {
   })
 
   const selected = budgetsQ.data?.find((b) => b.id === budgetId) ?? budgetsQ.data?.[0]
+
+  useEffect(() => {
+    if (!selected) return
+    const initial: Record<string, Record<number, string>> = {}
+    for (const l of selected.lines ?? []) {
+      if (!initial[l.accountId]) initial[l.accountId] = {}
+      initial[l.accountId][l.month] = String(l.budgetedAmount)
+    }
+    setGrid(initial)
+  }, [selected?.id, selected?.lines])
 
   const vsActualQ = useQuery<{ rows: VsActualRow[] }>({
     queryKey: ['budget-vs-actual', selected?.id],
@@ -71,6 +83,8 @@ export default function BudgetsPage() {
       await api.post(`/budgets/${encodeURIComponent(selected.id)}/lines`, { lines })
     },
     onSuccess: () => {
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
       void qc.invalidateQueries({ queryKey: ['budgets'] })
       void qc.invalidateQueries({ queryKey: ['budget-vs-actual'] })
     },
@@ -107,9 +121,10 @@ export default function BudgetsPage() {
           <input className="pleros-input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
           <input className="pleros-input w-28" type="number" value={fiscalYear} onChange={(e) => setFiscalYear(Number(e.target.value))} />
           <button type="button" className="btn-primary" disabled={!name.trim() || createMut.isPending} onClick={() => createMut.mutate()}>
-            Create
+            {createMut.isPending ? 'Creating…' : 'Create'}
           </button>
         </div>
+        {createMut.error ? <p className="text-red-400 text-xs mt-2">{axiosErr(createMut.error)}</p> : null}
       </Card>
 
       {budgetsQ.data?.length ? (
@@ -159,9 +174,13 @@ export default function BudgetsPage() {
               </tbody>
             </table>
           </div>
-          <button type="button" className="btn-primary mt-4" disabled={saveMut.isPending || !selected} onClick={() => saveMut.mutate()}>
-            Save lines
-          </button>
+          <div className="flex items-center gap-3 mt-4">
+            <button type="button" className="btn-primary" disabled={saveMut.isPending || !selected} onClick={() => saveMut.mutate()}>
+              {saveMut.isPending ? 'Saving…' : 'Save lines'}
+            </button>
+            {saveSuccess ? <span className="text-emerald-400 text-xs">Lines saved successfully.</span> : null}
+            {saveMut.error ? <span className="text-red-400 text-xs">{axiosErr(saveMut.error)}</span> : null}
+          </div>
         </Card>
       ) : null}
 

@@ -281,13 +281,15 @@ function WorkflowSettingsCard() {
 
 function FinanceSettingsCard() {
   const qc = useQueryClient()
-  const finQ = useQuery<{ baseCurrency: string; expenseApprovalThreshold: number }>({
+  const finQ = useQuery<{ baseCurrency: string; expenseApprovalThreshold: number; isBaseCurrencyLocked: boolean }>({
     queryKey: ['finance-settings'],
     queryFn: () => api.get('/tenants/me/finance-settings'),
   })
   const [baseCurrency, setBaseCurrency] = useState('USD')
   const [expenseThreshold, setExpenseThreshold] = useState('')
   const [confirmBase, setConfirmBase] = useState(false)
+
+  const isLocked = Boolean(finQ.data?.isBaseCurrencyLocked)
 
   useEffect(() => {
     if (finQ.data) {
@@ -299,7 +301,7 @@ function FinanceSettingsCard() {
   const saveMut = useMutation({
     mutationFn: () =>
       api.patch('/tenants/me/finance-settings', {
-        baseCurrency: baseCurrency.trim().toUpperCase(),
+        ...(isLocked ? {} : { baseCurrency: baseCurrency.trim().toUpperCase() }),
         expenseApprovalThreshold: Number(expenseThreshold),
       }),
     onSuccess: () => {
@@ -324,7 +326,7 @@ function FinanceSettingsCard() {
           onSubmit={(e) => {
             e.preventDefault()
             if (!expenseValid) return
-            if (!confirmBase && finQ.data?.baseCurrency && baseCurrency !== finQ.data.baseCurrency) {
+            if (!isLocked && !confirmBase && baseCurrency !== (finQ.data?.baseCurrency ?? 'USD')) {
               setConfirmBase(true)
               return
             }
@@ -332,14 +334,25 @@ function FinanceSettingsCard() {
           }}
         >
           <div>
-            <label className="text-xs text-pleros-text-3">Base currency (ISO 4217)</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-pleros-text-3">Base currency (ISO 4217)</label>
+              {isLocked ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium border border-zinc-700">
+                  Locked
+                </span>
+              ) : null}
+            </div>
             <input
-              className="pleros-input mt-1 w-full uppercase"
+              className={`pleros-input mt-1 w-full uppercase ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
               maxLength={3}
               value={baseCurrency}
               onChange={(e) => setBaseCurrency(e.target.value.toUpperCase())}
-              readOnly={!!finQ.data?.baseCurrency && finQ.data.baseCurrency !== 'USD' && baseCurrency === finQ.data.baseCurrency}
+              readOnly={isLocked}
+              title={isLocked ? 'Base currency is locked and cannot be changed' : undefined}
             />
+            {isLocked ? (
+              <p className="text-[11px] text-pleros-text-3 mt-1">Base currency is permanent once configured.</p>
+            ) : null}
           </div>
           <div>
             <label className="text-xs text-pleros-text-3">Expense approval threshold ($)</label>
@@ -352,14 +365,14 @@ function FinanceSettingsCard() {
               onChange={(e) => setExpenseThreshold(e.target.value)}
             />
           </div>
-          {confirmBase ? (
+          {!isLocked && confirmBase ? (
             <p className="sm:col-span-2 text-amber-400 text-xs">
               Confirm base currency change — this cannot be undone and will not convert historical data.
             </p>
           ) : null}
           <div className="sm:col-span-2">
             <button type="submit" className="btn-primary" disabled={!expenseValid || saveMut.isPending}>
-              {saveMut.isPending ? 'Saving…' : confirmBase ? 'Confirm and save' : 'Save finance settings'}
+              {saveMut.isPending ? 'Saving…' : !isLocked && confirmBase ? 'Confirm and save' : 'Save finance settings'}
             </button>
           </div>
         </form>

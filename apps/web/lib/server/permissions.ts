@@ -103,6 +103,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'notifications.read',
     'celestial.chat',
     'audit.read',
+    'budgets.*',
+    'expense-reports.*',
   ],
   WAREHOUSE_STAFF: [
     'inventory.*',

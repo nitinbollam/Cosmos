@@ -1,9 +1,9 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { decodeProtectedHeader, jwtVerify, importJWK } from 'jose'
+import { Prisma } from '@/generated/prisma-ledger'
 import { ledgerDb } from './db'
 import { ApiError } from './session'
 import { encryptSecret, decryptSecret } from './crypto-util'
-import * as bankRecon from './bank-recon'
 
 function plaidBaseUrl(): string {
   const env = (process.env.PLAID_ENV ?? 'sandbox').trim().toLowerCase()
@@ -122,15 +122,59 @@ export async function syncPlaidTransactions(tenantId: string, bankAccountId: str
     cursor: acct.plaidSyncCursor ?? undefined,
   })
 
-  const lines = [...res.added, ...res.modified].map((tx) => ({
-    postedAt: tx.date,
-    description: tx.name,
-    amount: -tx.amount,
-    reference: tx.transaction_id,
-  }))
+  const incoming = [...res.added, ...res.modified]
+  const refIds = incoming.map((t) => t.transaction_id).filter(Boolean)
 
-  if (lines.length) {
-    await bankRecon.importStatementLines(tenantId, bankAccountId, lines)
+  if (refIds.length > 0) {
+    const existing = await ledgerDb.bankStatementLine.findMany({
+      where: {
+        tenantId,
+        bankAccountId,
+        reference: { in: refIds },
+      },
+    })
+    const existingMap = new Map(existing.map((e) => [e.reference, e]))
+
+    for (const tx of incoming) {
+      const existingLine = existingMap.get(tx.transaction_id)
+      if (existingLine) {
+        if (!existingLine.reconciled) {
+          await ledgerDb.bankStatementLine.update({
+            where: { id: existingLine.id },
+            data: {
+              postedAt: new Date(tx.date),
+              description: tx.name.trim(),
+              amount: new Prisma.Decimal(-tx.amount),
+            },
+          })
+        }
+      } else {
+        await ledgerDb.bankStatementLine.create({
+          data: {
+            tenantId,
+            bankAccountId,
+            postedAt: new Date(tx.date),
+            description: tx.name.trim(),
+            amount: new Prisma.Decimal(-tx.amount),
+            reference: tx.transaction_id,
+          },
+        })
+      }
+    }
+  }
+
+  if (res.removed?.length) {
+    const removedIds = res.removed.map((r) => r.transaction_id).filter(Boolean)
+    if (removedIds.length > 0) {
+      await ledgerDb.bankStatementLine.deleteMany({
+        where: {
+          tenantId,
+          bankAccountId,
+          reference: { in: removedIds },
+          reconciled: false,
+        },
+      })
+    }
   }
 
   await ledgerDb.bankAccount.update({

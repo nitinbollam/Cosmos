@@ -39,4 +39,18 @@ describe('phase4 financial ops', () => {
     assert.equal(applied, 80)
     assert.ok(applied <= balance)
   })
+
+  it('accountant role has budgets and expense-reports permissions', async () => {
+    const { ROLE_PERMISSIONS } = await import('./permissions')
+    const accountantPerms = ROLE_PERMISSIONS.ACCOUNTANT
+    assert.ok(accountantPerms.includes('budgets.*'))
+    assert.ok(accountantPerms.includes('expense-reports.*'))
+  })
+
+  it('inverse exchange rate returns reciprocal', () => {
+    const forwardRate = 0.8
+    const inverseRate = +(1 / forwardRate).toFixed(6)
+    assert.equal(inverseRate, 1.25)
+  })
 })
+

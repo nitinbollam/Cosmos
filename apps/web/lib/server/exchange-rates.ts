@@ -24,10 +24,24 @@ export async function getRate(fromCurrency: string, toCurrency: string, asOfDate
     },
     orderBy: { asOfDate: 'desc' },
   })
-  if (!row) {
-    throw new ApiError(400, `No exchange rate found for ${from} → ${to} on or before ${asOfDate}`)
+  if (row) {
+    return Number(row.rate)
   }
-  return Number(row.rate)
+
+  // Fallback: check inverse currency pair rate (to -> from)
+  const inverse = await ledgerDb.exchangeRate.findFirst({
+    where: {
+      fromCurrency: to,
+      toCurrency: from,
+      asOfDate: { lte: asOf },
+    },
+    orderBy: { asOfDate: 'desc' },
+  })
+  if (inverse && Number(inverse.rate) > 0) {
+    return +(1 / Number(inverse.rate)).toFixed(6)
+  }
+
+  throw new ApiError(400, `No exchange rate found for ${from} → ${to} on or before ${asOfDate}`)
 }
 
 async function collectCurrencyPairs(): Promise<Array<{ from: string; to: string }>> {

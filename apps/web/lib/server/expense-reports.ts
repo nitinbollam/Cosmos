@@ -35,6 +35,10 @@ async function getReport(tenantId: string, reportId: string, userId?: string) {
   return report
 }
 
+export async function getExpenseReport(tenantId: string, reportId: string, userId?: string) {
+  return getReport(tenantId, reportId, userId)
+}
+
 export async function createExpenseReport(tenantId: string, userId: string) {
   return ledgerDb.expenseReport.create({
     data: { tenantId, userId, status: ExpenseReportStatus.DRAFT },
@@ -98,6 +102,7 @@ export async function submitExpenseReport(tenantId: string, reportId: string, us
           amount: Number(l.amount),
           description: l.description,
           incurredAt: l.incurredAt.toISOString(),
+          receiptUrl: l.receiptUrl ?? null,
         })),
       },
     })
