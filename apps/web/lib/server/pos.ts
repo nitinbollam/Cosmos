@@ -129,7 +129,11 @@ export async function closeTillSession(
   })
 }
 
-type PosTenderInput = { method: 'CASH' | 'CARD' | 'CHECK' | 'OTHER'; amount: number }
+type PosTenderInput = {
+  method: 'CASH' | 'CARD' | 'CHECK' | 'OTHER' | 'GIFT_CARD'
+  amount: number
+  giftCardCode?: string
+}
 
 export async function createPosOrder(
   tenantId: string,
@@ -200,11 +204,30 @@ export async function createPosOrder(
   const totalAmount = Number(created.totalAmount)
   const taxAmount = Number(created.taxAmount ?? 0)
 
-  const resolvedTenders =
-    tenders.length === 1 && tenders[0].amount === 0
+  let resolvedTenders =
+    tenders.length === 1 && tenders[0].amount === 0 && tenders[0].method !== 'GIFT_CARD'
       ? [{ ...tenders[0], amount: totalAmount }]
-      : tenders
+      : [...tenders]
 
+  const giftCards = await import('./gift-cards')
+  let giftApplied = 0
+  const finalTenders: Array<{ method: PosTenderInput['method']; amount: number }> = []
+
+  for (const t of resolvedTenders) {
+    if (t.method === 'GIFT_CARD') {
+      if (!t.giftCardCode?.trim()) throw new ApiError(400, 'giftCardCode required for GIFT_CARD tender')
+      const redeem = await giftCards.redeemGiftCard(tenantId, t.giftCardCode, {
+        amount: t.amount > 0 ? t.amount : totalAmount - giftApplied,
+        orderRef: order.id,
+      })
+      giftApplied += redeem.amountApplied
+      finalTenders.push({ method: 'GIFT_CARD', amount: redeem.amountApplied })
+    } else {
+      finalTenders.push({ method: t.method, amount: t.amount })
+    }
+  }
+
+  resolvedTenders = finalTenders
   const resolvedTotal = resolvedTenders.reduce((s, t) => s + t.amount, 0)
   if (Math.abs(resolvedTotal - totalAmount) > 0.02) {
     const { cancelOrderWithCompensation } = await import('./order-orchestration')
@@ -222,7 +245,9 @@ export async function createPosOrder(
   }
 
   const cashOrCheck = resolvedTenders.some((t) => t.method === 'CASH' || t.method === 'CHECK')
-  if (cashOrCheck && !resolvedTenders.some((t) => t.method === 'CARD')) {
+  const giftOnly =
+    giftApplied >= totalAmount - 0.02 && !resolvedTenders.some((t) => t.method === 'CARD')
+  if ((cashOrCheck || giftOnly) && !resolvedTenders.some((t) => t.method === 'CARD')) {
     await orderDb.order.update({
       where: { id: order.id },
       data: { amountPaid: new OrderPrisma.Decimal(totalAmount), confirmedAt: new Date() },

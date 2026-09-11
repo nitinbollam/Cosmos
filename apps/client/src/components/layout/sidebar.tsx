@@ -28,6 +28,8 @@ const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin/finance', label: 'Finance', icon: 'finance', permission: 'finance.read' },
   { href: '/admin/approvals', label: 'Approvals', icon: 'orders', permission: 'approvals.read' },
   { href: '/admin/discounts', label: 'Discounts', icon: 'finance', permission: 'discounts.read' },
+  { href: '/admin/gift-cards', label: 'Gift cards', icon: 'finance', permission: 'gift-cards.read' },
+  { href: '/admin/campaigns', label: 'Campaigns', icon: 'notifications', permission: 'campaigns.read' },
   { href: '/admin/reports', label: 'Reports', icon: 'reports', permission: 'reports.read' },
   { href: '/admin/pos', label: 'POS', icon: 'orders', permission: 'pos.read' },
   { href: '/admin/notifications', label: 'Notifications', icon: 'notifications', permission: 'notifications.read' },

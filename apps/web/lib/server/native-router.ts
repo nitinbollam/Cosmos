@@ -37,6 +37,10 @@ import {
 } from './routes/system'
 import { routeApprovals } from './routes/approvals'
 import { routeDiscounts } from './routes/discounts'
+import { routeGiftCards } from './routes/gift-cards'
+import { routeLoyalty } from './routes/loyalty'
+import { routeSubscriptions, routeSubscriptionJobs } from './routes/subscriptions'
+import { routeCampaigns, routeUnsubscribe } from './routes/campaigns'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -79,7 +83,11 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'report-builder') return await routeReportBuilder(m, seg, req)
     if (seg[0] === 'kpi') return await routeKpi(m, seg, req)
     if (seg[0] === 'analytics') return await routeAnalytics(m, seg, req)
+    if (seg[0] === 'internal' && seg[1] === 'subscriptions') {
+      return await routeSubscriptionJobs(m, seg, req)
+    }
     if (seg[0] === 'internal') return await routeInternal(m, seg, req)
+    if (seg[0] === 'unsubscribe') return await routeUnsubscribe(m, seg, req)
     if (seg[0] === 'webhooks') return await routeWebhooks(m, seg, req)
     if (seg[0] === 'bank-accounts') return await routeBankAccounts(m, seg, req)
     if (seg[0] === 'fixed-assets') return await routeFixedAssets(m, seg, req)
@@ -91,6 +99,10 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'saved-payment-methods') return await routeSavedPaymentMethods(m, seg, req)
     if (seg[0] === 'approvals') return await routeApprovals(m, seg, req)
     if (seg[0] === 'discounts') return await routeDiscounts(m, seg, req)
+    if (seg[0] === 'gift-cards') return await routeGiftCards(m, seg, req)
+    if (seg[0] === 'loyalty') return await routeLoyalty(m, seg, req)
+    if (seg[0] === 'subscriptions') return await routeSubscriptions(m, seg, req)
+    if (seg[0] === 'campaigns') return await routeCampaigns(m, seg, req)
     if (seg[0] === 'pos') return await routePos(m, seg, req)
     if (seg[0] === 'features') return await routeFeatures(m, seg, req)
     if (seg[0] === 'volume-prices') return await routeVolumePrices(m, seg, req)

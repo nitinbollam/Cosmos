@@ -378,6 +378,10 @@ export async function onFulfillmentDispatched(
 
 export async function onDeliveryStopDelivered(tenantId: string, orderId: string) {
   await transitionOrderStatus(tenantId, orderId, 'DELIVERED')
+  const { earnPointsForDeliveredOrder } = await import('./loyalty')
+  void earnPointsForDeliveredOrder(tenantId, orderId).catch((err) =>
+    console.error(`[loyalty] earn points failed for order ${orderId}:`, err),
+  )
 }
 
 export async function syncOrderFromFulfillmentTask(tenantId: string, taskId: string) {

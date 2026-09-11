@@ -53,9 +53,17 @@ export default function CheckoutPage() {
   const [discountMsg, setDiscountMsg] = useState<string | null>(null)
   const [validatingDiscount, setValidatingDiscount] = useState(false)
 
+  const [giftCardCode, setGiftCardCode] = useState('')
+  const [giftCardBalance, setGiftCardBalance] = useState<number | null>(null)
+  const [giftCardMsg, setGiftCardMsg] = useState<string | null>(null)
+  const [checkingGiftCard, setCheckingGiftCard] = useState(false)
+
   const discountedSubtotal = Math.max(0, cartSubtotal - discountAmount)
   const taxAmount = useMemo(() => +(discountedSubtotal * taxRate).toFixed(2), [discountedSubtotal, taxRate])
   const orderTotal = discountedSubtotal + taxAmount
+  const giftCardApplied =
+    giftCardBalance != null && giftCardBalance > 0 ? Math.min(giftCardBalance, orderTotal) : 0
+  const amountDue = +(orderTotal - giftCardApplied).toFixed(2)
 
   const [step, setStep] = useState(1)
   const [customer, setCustomer] = useState<CustomerRow | null>(null)
@@ -126,6 +134,29 @@ export default function CheckoutPage() {
     }
   }, [payment, cardMode, selectedSavedId, savedCards])
 
+  async function checkGiftCard() {
+    const code = giftCardCode.trim()
+    if (!code) return
+    setCheckingGiftCard(true)
+    setGiftCardMsg(null)
+    setGiftCardBalance(null)
+    try {
+      const res = await api.get<{ valid: boolean; balance?: number; expired?: boolean }>(
+        `/gift-cards/${encodeURIComponent(code)}/balance`,
+      )
+      if (!res.valid) {
+        setGiftCardMsg(res.expired ? 'Gift card expired' : 'Invalid gift card code')
+        return
+      }
+      setGiftCardBalance(res.balance ?? 0)
+      setGiftCardMsg(`Balance: $${(res.balance ?? 0).toFixed(2)}`)
+    } catch (e: unknown) {
+      setGiftCardMsg(axiosErr(e))
+    } finally {
+      setCheckingGiftCard(false)
+    }
+  }
+
   async function validateDiscountCode() {
     const cid = getB2bCustomerId()
     if (!cid || !discountCode.trim()) return
@@ -168,7 +199,7 @@ export default function CheckoutPage() {
       navigate('/login')
       return
     }
-    if (payment === 'CARD') {
+    if (payment === 'CARD' && amountDue > 0) {
       if (!stripePublishable) {
         setErr('Set VITE_STRIPE_PUBLISHABLE_KEY for card checkout.')
         return
@@ -211,7 +242,14 @@ export default function CheckoutPage() {
         { 'Idempotency-Key': idempotencyKey.current },
       )
 
-      if (payment === 'CARD' && cardPaymentMethodId) {
+      if (giftCardApplied > 0 && giftCardCode.trim()) {
+        await api.post(`/gift-cards/${encodeURIComponent(giftCardCode.trim())}/redeem`, {
+          amount: giftCardApplied,
+          orderRef: order.id,
+        })
+      }
+
+      if (payment === 'CARD' && cardPaymentMethodId && amountDue > 0) {
         const authKey =
           typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
             ? crypto.randomUUID()
@@ -225,7 +263,7 @@ export default function CheckoutPage() {
           '/payments/authorize',
           {
             orderId: order.id,
-            amount: Number(order.totalAmount),
+            amount: amountDue,
             currency: 'usd',
             paymentMethod: 'CARD',
             customerId: cid,
@@ -424,13 +462,46 @@ export default function CheckoutPage() {
               </p>
             ) : null}
           </div>
+          <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--c-surface-2)' }}>
+            <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Gift card</label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                className="pleros-input"
+                value={giftCardCode}
+                onChange={(e) => {
+                  setGiftCardCode(e.target.value)
+                  setGiftCardBalance(null)
+                  setGiftCardMsg(null)
+                }}
+                placeholder="Optional gift card code"
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={checkingGiftCard || !giftCardCode.trim()}
+                onClick={() => void checkGiftCard()}
+              >
+                {checkingGiftCard ? '…' : 'Check'}
+              </button>
+            </div>
+            {giftCardMsg ? (
+              <p style={{ fontSize: 13, marginTop: 8, color: 'var(--c-text-2)' }}>{giftCardMsg}</p>
+            ) : null}
+            {giftCardApplied > 0 && giftCardApplied < orderTotal ? (
+              <p style={{ fontSize: 13, marginTop: 8, color: 'var(--c-warning)' }}>
+                Gift card covers ${giftCardApplied.toFixed(2)} — pay ${amountDue.toFixed(2)} with {payment.replace(/_/g, ' ').toLowerCase()}.
+              </p>
+            ) : null}
+          </div>
           <p style={{ marginTop: 16 }}>
             Subtotal ${cartSubtotal.toFixed(2)}
             {discountAmount > 0 ? ` · Discount −$${discountAmount.toFixed(2)}` : ''}
+            {giftCardApplied > 0 ? ` · Gift card −$${giftCardApplied.toFixed(2)}` : ''}
             {` · Tax $${taxAmount.toFixed(2)} · Total $${orderTotal.toFixed(2)}`}
+            {giftCardApplied > 0 ? ` · Due now $${amountDue.toFixed(2)}` : ''}
           </p>
           <p>
-            Pay with: <strong>{payment.replace(/_/g, ' ')}</strong>
+            Pay with: <strong>{amountDue === 0 && giftCardApplied > 0 ? 'GIFT CARD' : payment.replace(/_/g, ' ')}</strong>
             {payment === 'CARD' && cardPaymentMethodId ? (
               <span style={{ color: 'var(--c-success)', fontSize: 13 }}>
                 {' '}

@@ -48,6 +48,7 @@ const router = createBrowserRouter([
           { path: '/catalog', element: page(() => import('@/pages/catalog/page')) },
           { path: '/cart', element: page(() => import('@/pages/cart/page')) },
           { path: '/checkout', element: page(() => import('@/pages/checkout/page')) },
+          { path: '/gift-cards/purchase', element: page(() => import('@/pages/gift-cards/purchase/page')) },
           { path: '/orders', element: page(() => import('@/pages/orders/page')) },
           { path: '/orders/:id', element: page(() => import('@/pages/orders/[id]/page')) },
           {
@@ -100,6 +101,9 @@ const router = createBrowserRouter([
           { path: 'finance', element: page(() => import('@/pages/admin/finance/page')) },
           { path: 'approvals', element: page(() => import('@/pages/admin/approvals/page')) },
           { path: 'discounts', element: page(() => import('@/pages/admin/discounts/page')) },
+          { path: 'gift-cards', element: page(() => import('@/pages/admin/gift-cards/page')) },
+          { path: 'campaigns', element: page(() => import('@/pages/admin/campaigns/page')) },
+          { path: 'subscriptions', element: page(() => import('@/pages/admin/subscriptions/page')) },
           {
             path: 'finance/journals/:id',
             element: page(() => import('@/pages/admin/finance/journals/[id]/page')),
