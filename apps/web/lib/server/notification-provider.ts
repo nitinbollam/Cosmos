@@ -14,23 +14,46 @@ export type NotificationDeliveryResult = {
   body: string
 }
 
+/** Public app origin used to build deep links inside notification emails. Mirrors auth.ts's appPublicUrl(). */
+function appPublicUrl(): string {
+  const configured = process.env.APP_URL?.trim()
+  return configured ? configured.replace(/\/$/, '') : 'http://localhost:4000'
+}
+
+/** Short human-facing reference for an order — the app's own UI shows the same last-8-chars-uppercase form. */
+function shortOrderRef(orderId: string): string {
+  return orderId.slice(-8).toUpperCase()
+}
+
 const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subject: string; body: string }> = {
   'inventory.low_stock': (p) => ({
     subject: 'Low stock alert',
     body: `SKU ${String(p.skuCode ?? 'unknown')} is at ${String(p.qtyOnHand ?? '?')} units (reorder ${String(p.reorderPoint ?? '?')}).`,
   }),
-  'order.created': (p) => ({
-    subject: 'Order confirmation',
-    body: `Your order ${String(p.orderId ?? '').slice(0, 12)}… was placed for $${String(p.total ?? '')}. Thank you for your business.`,
-  }),
-  'order.shipped': (p) => ({
-    subject: 'Your order has shipped',
-    body: `Order ${String(p.orderId ?? '').slice(0, 12)}… is on its way.`,
-  }),
-  'invoice.issued': (p) => ({
-    subject: `Invoice ${String(p.invoiceNumber ?? '')}`,
-    body: `Invoice ${String(p.invoiceNumber ?? '')} for $${String(p.total ?? '')} is ready.${p.dueAt ? ` Due ${String(p.dueAt)}.` : ''} View it in your buyer portal.`,
-  }),
+  'order.created': (p) => {
+    const orderId = String(p.orderId ?? '')
+    const orderUrl = `${appPublicUrl()}/orders/${orderId}`
+    return {
+      subject: 'Order confirmation',
+      body: `Your order #${shortOrderRef(orderId)} was placed for $${String(p.total ?? '')}. Thank you for your business.\n\nView your order: ${orderUrl}`,
+    }
+  },
+  'order.shipped': (p) => {
+    const orderId = String(p.orderId ?? '')
+    const orderUrl = `${appPublicUrl()}/orders/${orderId}`
+    return {
+      subject: 'Your order has shipped',
+      body: `Order #${shortOrderRef(orderId)} is on its way.\n\nTrack your order: ${orderUrl}`,
+    }
+  },
+  'invoice.issued': (p) => {
+    const invoiceId = String(p.invoiceId ?? '')
+    const invoiceUrl = `${appPublicUrl()}/invoices/${invoiceId}`
+    return {
+      subject: `Invoice ${String(p.invoiceNumber ?? '')}`,
+      body: `Invoice ${String(p.invoiceNumber ?? '')} for $${String(p.total ?? '')} is ready.${p.dueAt ? ` Due ${String(p.dueAt)}.` : ''}\n\nView and pay your invoice: ${invoiceUrl}`,
+    }
+  },
   'payment.received': (p) => ({
     subject: 'Payment received',
     body: `We received your payment of $${String(p.amount ?? '')}${p.invoiceNumber ? ` for invoice ${String(p.invoiceNumber)}` : ''}. Thank you.`,
