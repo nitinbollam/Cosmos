@@ -72,6 +72,9 @@ export function ShopHeader() {
           <Link to="/catalog" className={navClass('/catalog')} onClick={() => setNavOpen(false)}>
             Catalog
           </Link>
+          <Link to="/marketplace" className={navClass('/marketplace')} onClick={() => setNavOpen(false)}>
+            Marketplace
+          </Link>
           <Link to="/orders" className={navClass('/orders')} onClick={() => setNavOpen(false)}>
             Orders
           </Link>

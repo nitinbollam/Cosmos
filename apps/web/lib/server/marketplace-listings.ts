@@ -156,6 +156,8 @@ export async function createListing(
   await getOrCreateMarketplaceProfile(tenantId)
   const sku = await inv.findSkuById(tenantId, dto.skuId)
   const snapshot = listingSnapshotFromSku(sku, dto.description)
+  const { assertSkuAvailableForListing } = await import('./marketplace-inventory')
+  await assertSkuAvailableForListing(tenantId, dto.skuId, quantity)
 
   const listing = await marketplaceDb.marketplaceListing.create({
     data: {
@@ -236,6 +238,14 @@ export async function approveListing(listingId: string, reviewerUserId: string) 
         })()
       : null
 
+  const { reserveListingInventory } = await import('./marketplace-inventory')
+  const reserved = await reserveListingInventory(
+    listing.sellerTenantId,
+    listing.id,
+    listing.sourceSkuId,
+    listing.quantity,
+  )
+
   const updated = await marketplaceDb.marketplaceListing.update({
     where: { id: listingId },
     data: {
@@ -243,6 +253,8 @@ export async function approveListing(listingId: string, reviewerUserId: string) 
       reviewedByUserId: reviewerUserId,
       reviewedAt: new Date(),
       rejectionReason: null,
+      inventoryReservationId: reserved.reservationId,
+      sellerWarehouseId: reserved.warehouseId,
       ...(endsAt ? { endsAt } : {}),
     },
   })
@@ -259,6 +271,9 @@ export async function rejectListing(listingId: string, reviewerUserId: string, r
   if (!listing) throw new ApiError(404, 'Listing not found')
   if (listing.status !== 'PENDING_REVIEW') throw new ApiError(400, 'Listing is not pending review')
 
+  const { releaseListingInventory } = await import('./marketplace-inventory')
+  await releaseListingInventory(listing.sellerTenantId, listing.inventoryReservationId)
+
   const updated = await marketplaceDb.marketplaceListing.update({
     where: { id: listingId },
     data: {
@@ -266,6 +281,7 @@ export async function rejectListing(listingId: string, reviewerUserId: string, r
       reviewedByUserId: reviewerUserId,
       reviewedAt: new Date(),
       rejectionReason: reason.trim() || 'Rejected by admin',
+      inventoryReservationId: null,
     },
   })
   return toPublicListing(updated)
@@ -278,9 +294,12 @@ export async function removeListing(tenantId: string, listingId: string) {
   if (!listing) throw new ApiError(404, 'Listing not found')
   if (listing.status === 'SOLD') throw new ApiError(400, 'Sold listings cannot be removed')
 
+  const { releaseListingInventory } = await import('./marketplace-inventory')
+  await releaseListingInventory(tenantId, listing.inventoryReservationId)
+
   const updated = await marketplaceDb.marketplaceListing.update({
     where: { id: listingId },
-    data: { status: 'REMOVED' },
+    data: { status: 'REMOVED', inventoryReservationId: null },
   })
   return toPublicListing(updated)
 }

@@ -32,7 +32,7 @@ const FEATURE_META: Array<{ key: keyof TenantFeatures; label: string; blurb: str
   {
     key: 'marketplace',
     label: 'Marketplace',
-    blurb: 'On by default for Growth/Enterprise; opt-in override for Starter tenants',
+    blurb: 'Cross-tenant B2B inventory exchange — on by default; disable here to hide from staff',
   },
 ]
 

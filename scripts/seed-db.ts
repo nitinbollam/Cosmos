@@ -79,7 +79,15 @@ const ID = {
   pickWaveDemo: 'seed_pick_wave_1',
   paymentIntent: 'seed_pay_intent',
   notifLowStock: 'seed_notif_lowstock',
+  skuOffice: 'seed_sku_office',
+  peerTenant: 'seed_peer_tenant',
+  mpListingLive: 'seed_mp_listing_live',
+  mpListingPeer: 'seed_mp_listing_peer',
 } as const
+
+const PEER_SLUG = 'demo-peer'
+const PEER_EMAIL = 'peer@pleros.local'
+const PEER_PASSWORD = 'peer1234'
 
 type SeedCtx = {
   tenantId: string
@@ -371,6 +379,19 @@ async function seedInventory(tenantId: string): Promise<{ warehouseId: string; w
         cost: 18,
         qty: 64,
         reorder: 10,
+        isTobacco: false,
+        ageRestricted: false,
+        minimumAge: null as number | null,
+      },
+      {
+        id: ID.skuOffice,
+        code: 'OFF-PEN-100',
+        name: 'Office Pen Pack (100)',
+        category: 'Office Supplies',
+        price: 24,
+        cost: 9,
+        qty: 120,
+        reorder: 20,
         isTobacco: false,
         ageRestricted: false,
         minimumAge: null as number | null,
@@ -1488,6 +1509,204 @@ async function seedNotifications(tenantId: string) {
   }
 }
 
+async function seedPeerTenant(): Promise<{ tenantId: string; userId: string; warehouseId: string; skuId: string }> {
+  const { PrismaClient: AuthClient } = loadPrisma<{ PrismaClient: new () => import('../apps/web/generated/prisma-auth').PrismaClient }>(
+    'AUTH_DATABASE_URL',
+    'pleros_auth',
+    './generated/prisma-auth',
+  )
+  const auth = new AuthClient()
+  const hash = (pw: string) => bcrypt.hash(pw, 12)
+  try {
+    const tenant = await auth.tenant.upsert({
+      where: { slug: PEER_SLUG },
+      update: { name: 'Demo Peer Distributors', plan: 'GROWTH', isActive: true },
+      create: { id: ID.peerTenant, name: 'Demo Peer Distributors', slug: PEER_SLUG, plan: 'GROWTH', settings: {} },
+    })
+    const user = await auth.user.upsert({
+      where: { tenantId_email: { tenantId: tenant.id, email: PEER_EMAIL } },
+      update: {
+        passwordHash: await hash(PEER_PASSWORD),
+        role: 'TENANT_ADMIN',
+        isActive: true,
+        emailVerifiedAt: new Date(),
+      },
+      create: {
+        tenantId: tenant.id,
+        email: PEER_EMAIL,
+        passwordHash: await hash(PEER_PASSWORD),
+        firstName: 'Pat',
+        lastName: 'Peer',
+        role: 'TENANT_ADMIN',
+        permissions: [],
+        emailVerifiedAt: new Date(),
+      },
+    })
+
+    const { PrismaClient: TenantClient } = loadPrisma<{ PrismaClient: new () => import('../apps/web/generated/prisma-tenant').PrismaClient }>(
+      'TENANT_DATABASE_URL',
+      'pleros_tenant',
+      './generated/prisma-tenant',
+    )
+    const tenantDb = new TenantClient()
+    await tenantDb.tenantOrganization.upsert({
+      where: { id: tenant.id },
+      update: {
+        displayName: 'Demo Peer Distributors',
+        slug: PEER_SLUG,
+        plan: 'GROWTH',
+        billingEmail: PEER_EMAIL,
+        onboardingPhase: 'READY',
+      },
+      create: {
+        id: tenant.id,
+        slug: PEER_SLUG,
+        displayName: 'Demo Peer Distributors',
+        plan: 'GROWTH',
+        billingEmail: PEER_EMAIL,
+        onboardingPhase: 'READY',
+        metadata: {},
+        settings: { currency: 'USD', salesTaxRate: 0.07 },
+      },
+    })
+    await tenantDb.$disconnect()
+
+    const { PrismaClient: InvClient, Prisma: InvPrisma } = loadPrisma<{
+      PrismaClient: new () => import('../apps/web/generated/prisma-inventory').PrismaClient
+      Prisma: typeof import('../apps/web/generated/prisma-inventory').Prisma
+    }>('INVENTORY_DATABASE_URL', 'pleros_inventory', './generated/prisma-inventory')
+    const inv = new InvClient()
+    const D = InvPrisma.Decimal
+    const whId = `${ID.peerTenant}_wh`
+    await inv.warehouse.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: 'MAIN' } },
+      update: { isActive: true, isDefault: true, address: { line1: '200 Peer Ave', city: 'Austin', state: 'TX', postalCode: '78701', country: 'US' } },
+      create: {
+        id: whId,
+        tenantId: tenant.id,
+        code: 'MAIN',
+        name: 'Peer Main',
+        isActive: true,
+        isDefault: true,
+        address: { line1: '200 Peer Ave', city: 'Austin', state: 'TX', postalCode: '78701', country: 'US' },
+      },
+    })
+    await inv.sKU.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: 'OFF-NOTE-50' } },
+      update: { category: 'Office Supplies', isActive: true },
+      create: {
+        id: `${ID.peerTenant}_sku`,
+        tenantId: tenant.id,
+        code: 'OFF-NOTE-50',
+        name: 'Sticky Notes Bulk',
+        category: 'Office Supplies',
+        price: new D(15),
+        cost: new D(6),
+        isActive: true,
+        imageUrls: [],
+        attributes: { demo: true },
+      },
+    })
+    await inv.stockLevel.upsert({
+      where: {
+        tenantId_skuId_warehouseId_batchId: {
+          tenantId: tenant.id,
+          skuId: `${ID.peerTenant}_sku`,
+          warehouseId: whId,
+          batchId: NO_BATCH,
+        },
+      },
+      update: { quantityOnHand: 80, quantityAvailable: 80, quantityReserved: 0 },
+      create: {
+        tenantId: tenant.id,
+        skuId: `${ID.peerTenant}_sku`,
+        warehouseId: whId,
+        batchId: NO_BATCH,
+        quantityOnHand: 80,
+        quantityAvailable: 80,
+        quantityReserved: 0,
+      },
+    })
+    await inv.$disconnect()
+
+    return { tenantId: tenant.id, userId: user.id, warehouseId: whId, skuId: `${ID.peerTenant}_sku` }
+  } finally {
+    await auth.$disconnect()
+  }
+}
+
+async function seedMarketplace(input: {
+  listingId: string
+  sellerTenantId: string
+  sellerSkuId: string
+  sellerWarehouseId: string
+  reviewerUserId: string
+  title: string
+}) {
+  const { PrismaClient } = loadPrisma<{ PrismaClient: new () => import('../apps/web/generated/prisma-marketplace').PrismaClient }>(
+    'MARKETPLACE_DATABASE_URL',
+    'pleros_marketplace',
+    './generated/prisma-marketplace',
+  )
+  const mp = new PrismaClient()
+  try {
+    const handle = input.sellerTenantId === ID.peerTenant ? 'demo-peer' : 'demo-seller'
+    await mp.marketplaceProfile.upsert({
+      where: { tenantId: input.sellerTenantId },
+      update: { handle, listingSuspended: false },
+      create: { tenantId: input.sellerTenantId, handle },
+    })
+
+    const existing = await mp.marketplaceListing.findUnique({ where: { id: input.listingId } })
+    const { releaseListingInventory, reserveListingInventory } = await import('../apps/web/lib/server/marketplace-inventory.ts')
+    if (existing?.inventoryReservationId) {
+      await releaseListingInventory(input.sellerTenantId, existing.inventoryReservationId)
+    }
+
+    const reserved = await reserveListingInventory(
+      input.sellerTenantId,
+      input.listingId,
+      input.sellerSkuId,
+      20,
+    )
+
+    await mp.marketplaceListing.upsert({
+      where: { id: input.listingId },
+      update: {
+        status: 'LIVE',
+        title: input.title,
+        category: 'Office Supplies',
+        priceCents: 2400,
+        quantity: 20,
+        listingType: 'FIXED',
+        inventoryReservationId: reserved.reservationId,
+        sellerWarehouseId: reserved.warehouseId,
+        reviewedAt: new Date(),
+        reviewedByUserId: input.reviewerUserId,
+      },
+      create: {
+        id: input.listingId,
+        sellerTenantId: input.sellerTenantId,
+        sourceSkuId: input.sellerSkuId,
+        title: input.title,
+        description: 'Seeded marketplace listing for local/staging smoke tests.',
+        listingType: 'FIXED',
+        priceCents: 2400,
+        quantity: 20,
+        category: 'Office Supplies',
+        photoUrlsJson: '[]',
+        status: 'LIVE',
+        inventoryReservationId: reserved.reservationId,
+        sellerWarehouseId: reserved.warehouseId,
+        reviewedAt: new Date(),
+        reviewedByUserId: input.reviewerUserId,
+      },
+    })
+  } finally {
+    await mp.$disconnect()
+  }
+}
+
 async function bootstrapWebEnv() {
   const dataDir = process.env.PLEROS_DATA_DIR ?? '.data'
   for (const [schema, dbName] of Object.entries(DB_BY_SCHEMA)) {
@@ -1531,6 +1750,25 @@ async function main() {
   await seedNotifications(tenantId)
 
   await import('../apps/web/server/register-paths.mjs')
+
+  const peer = await seedPeerTenant()
+  await seedMarketplace({
+    listingId: ID.mpListingLive,
+    sellerTenantId: tenantId,
+    sellerSkuId: ID.skuOffice,
+    sellerWarehouseId: ctx.warehouseId,
+    reviewerUserId: adminId,
+    title: 'Office Pen Pack (100) — demo listing',
+  })
+  await seedMarketplace({
+    listingId: ID.mpListingPeer,
+    sellerTenantId: peer.tenantId,
+    sellerSkuId: peer.skuId,
+    sellerWarehouseId: peer.warehouseId,
+    reviewerUserId: peer.userId,
+    title: 'Sticky Notes Bulk — peer listing',
+  })
+
   const { syncSnapshotsFromOrders } = await import('../apps/web/lib/server/analytics.ts')
   await syncSnapshotsFromOrders(tenantId, 30)
 
@@ -1554,6 +1792,12 @@ async function main() {
       compliance: `http://localhost:4000/admin/compliance/msa/${ID.msaReport}`,
       finance: `http://localhost:4000/admin/finance/journals/${ID.journalEntry}`,
       crm: `http://localhost:4000/admin/crm/customers/${ID.customerAcme}`,
+      marketplace: {
+        browse: 'http://localhost:4000/admin/marketplace',
+        shopBrowse: 'http://localhost:4000/marketplace',
+        listing: `http://localhost:4000/admin/marketplace/${ID.mpListingLive}`,
+        peerLogin: { email: PEER_EMAIL, password: PEER_PASSWORD },
+      },
     },
   }
 

@@ -37,9 +37,14 @@
     "infra:docker:logs": "docker compose -f docker-compose.yml logs -f",
     "seed": "tsx scripts/seed-db.ts",
     "migrate:all": "tsx scripts/migrate-all.ts",
-    "prod:preflight": "node scripts/production-preflight.mjs"
+    "prod:preflight": "node scripts/production-preflight.mjs",
+    "e2e:server": "node scripts/e2e-server.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install chromium"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/node": "^20.14.10",
     "prettier": "^3.3.3",
     "tsx": "^4.16.2",

@@ -10,6 +10,9 @@ type Order = {
   id: string
   listingId: string
   agreedPriceCents: number
+  merchandiseSubtotalCents?: number
+  taxAmountCents?: number
+  taxJurisdiction?: string | null
   quantity: number
   orderStatus: string
   paymentStatus: string
@@ -89,7 +92,15 @@ export default function MarketplaceOrdersPage() {
               <td className="py-2 font-mono text-xs">{o.id.slice(-8)}</td>
               <td>{o.orderStatus}</td>
               <td>{o.paymentStatus}</td>
-              <td>${(o.agreedPriceCents / 100).toFixed(2)}</td>
+              <td>
+                ${(o.agreedPriceCents / 100).toFixed(2)}
+                {(o.taxAmountCents ?? 0) > 0 ? (
+                  <span className="block text-xs text-pleros-text-3">
+                    incl. ${((o.taxAmountCents ?? 0) / 100).toFixed(2)} tax
+                    {o.taxJurisdiction ? ` (${o.taxJurisdiction})` : ''}
+                  </span>
+                ) : null}
+              </td>
               <td>{o.kalafleetShipmentRef ?? '—'}</td>
               <td className="py-2">
                 {role === 'buyer' && o.orderStatus === 'PENDING_PAYMENT' && (
