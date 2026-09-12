@@ -109,5 +109,11 @@ export async function markDropShipLinesShipped(
     dropLines.map((l) => ({ skuId: l.skuId, quantity: l.quantity })),
   ).catch((err) => console.error(`[orders] drop-ship invoicing failed for order ${orderId}:`, err))
 
+  if (dto.carrier?.trim() && dto.trackingNumber?.trim()) {
+    void import('./sales-channels/fulfillment-sync')
+      .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
+      .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${orderId}:`, err))
+  }
+
   return { orderId, shipmentNo }
 }

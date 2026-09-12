@@ -177,6 +177,8 @@ export async function assertAgeComplianceForOrder(
   // (B2B portal, admin, EDI, quotes, unknown) requires a licensed customer when
   // the policy says so — unknown channels must not bypass checks.
   const isPos = channel === 'POS'
+  // Shopify is the tenant's own D2C storefront — age verification is handled at checkout there.
+  if (channel === 'SHOPIFY') return { restrictedSkus, requiredMinAge }
 
   const customer = await crmDb.customer.findFirst({
     where: { id: input.customerId, tenantId },

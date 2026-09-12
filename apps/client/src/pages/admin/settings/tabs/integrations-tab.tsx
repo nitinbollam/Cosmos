@@ -6,6 +6,7 @@ import { connectStatusLabel, type StripeConnectStatus } from '@/lib/stripe-conne
 import { WebhookManager } from '@/components/settings/webhook-manager'
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { MsaConfig, StripeStatus, NotificationProviderStatus, errMsg } from '../types'
+import { SalesChannelsSection } from './sales-channels-section'
 
 export function IntegrationsTab() {
   const qc = useQueryClient()
@@ -119,6 +120,8 @@ export function IntegrationsTab() {
 
   return (
     <div className="space-y-6">
+      <SalesChannelsSection />
+
       <WebhookManager />
 
       <div className="pleros-card">

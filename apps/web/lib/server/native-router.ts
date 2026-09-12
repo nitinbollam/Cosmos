@@ -44,6 +44,7 @@ import { routeCampaigns, routeUnsubscribe } from './routes/campaigns'
 import { routeExpenseReports } from './routes/expense-reports'
 import { routeBudgets } from './routes/budgets'
 import { routeSystemJobs } from './routes/system-jobs'
+import { routeSalesChannels } from './routes/sales-channels'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -109,6 +110,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'expense-reports') return await routeExpenseReports(m, seg, req)
     if (seg[0] === 'budgets') return await routeBudgets(m, seg, req)
     if (seg[0] === 'system-jobs') return await routeSystemJobs(m, seg, req)
+    if (seg[0] === 'sales-channels') return await routeSalesChannels(m, seg, req)
     if (seg[0] === 'pos') return await routePos(m, seg, req)
     if (seg[0] === 'features') return await routeFeatures(m, seg, req)
     if (seg[0] === 'volume-prices') return await routeVolumePrices(m, seg, req)

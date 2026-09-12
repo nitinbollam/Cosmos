@@ -125,6 +125,10 @@ enum OrderChannel {
   SALES_REP
   API
   EDI
+  SHOPIFY
+  EBAY
+  WALMART
+  AMAZON
 }
 
 enum PaymentMethod {

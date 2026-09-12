@@ -55,7 +55,7 @@ export type CreateOrderInput = {
 export async function createOrder(
   tenantId: string,
   dto: CreateOrderInput,
-  opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string },
+  opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string; skipPriceValidation?: boolean },
 ) {
   let subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
   let discountAmount = 0
@@ -86,7 +86,9 @@ export async function createOrder(
     throw new ApiError(403, 'Cannot place orders for another customer')
   }
 
-  await assertOrderLinePrices(tenantId, customerId, dto.lineItems)
+  if (!opts?.skipPriceValidation) {
+    await assertOrderLinePrices(tenantId, customerId, dto.lineItems)
+  }
 
   const channel = (dto.channel || 'ADMIN').toUpperCase()
   // Age attestation is only valid for POS counter sales — ignore it elsewhere so
