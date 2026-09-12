@@ -21,6 +21,7 @@ export const DB_BY_SCHEMA = {
   notification: 'pleros_notification',
   analytics: 'pleros_analytics',
   marketplace: 'pleros_marketplace',
+  saleschannels: 'pleros_sales_channels',
 }
 
 export const WEB_DATABASE_ENV_KEYS = Object.keys(DB_BY_SCHEMA).map(

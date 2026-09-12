@@ -365,6 +365,10 @@ export async function onFulfillmentDispatched(
     console.error(`[orders] invoicing failed for order ${orderId}:`, err),
   )
 
+  void import('./sales-channels/fulfillment-sync')
+    .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
+    .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${orderId}:`, err))
+
   const { computeOrderCogs, postCogsJournal } = await import('./operations-gl')
   const cogs = await computeOrderCogs(tenantId, billedLines)
   await postCogsJournal(tenantId, orderId, cogs).catch((err) =>

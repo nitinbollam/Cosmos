@@ -71,7 +71,16 @@ export type OrderStatus =
   | 'FAILED'
   | 'RETURNED'
 
-export type OrderChannel = 'POS' | 'B2B_PORTAL' | 'SALES_REP' | 'API' | 'EDI'
+export type OrderChannel =
+  | 'POS'
+  | 'B2B_PORTAL'
+  | 'SALES_REP'
+  | 'API'
+  | 'EDI'
+  | 'SHOPIFY'
+  | 'EBAY'
+  | 'WALMART'
+  | 'AMAZON'
 
 export type PaymentMethod = 'CARD' | 'ACH' | 'CHECK' | 'CASH' | 'NET_TERMS'
 

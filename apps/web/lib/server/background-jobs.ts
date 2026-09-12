@@ -3,6 +3,7 @@
  */
 
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000
+const SALES_CHANNEL_FLUSH_MS = 90 * 1000
 
 let started = false
 
@@ -47,7 +48,22 @@ export function startBackgroundJobs(): void {
     }
   }
 
+  const flushSalesChannels = async () => {
+    try {
+      const { flushAllActiveConnections } = await import('./sales-channels/core')
+      const res = await flushAllActiveConnections()
+      if (res.pushed > 0 || res.failed > 0) {
+        console.log(`[jobs] sales-channels: pushed ${res.pushed}, failed ${res.failed}`)
+      }
+    } catch (err) {
+      console.error('[jobs] sales-channel flush failed:', err)
+    }
+  }
+
   void sweep()
+  void flushSalesChannels()
   const timer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS)
   timer.unref?.()
+  const salesChannelTimer = setInterval(() => void flushSalesChannels(), SALES_CHANNEL_FLUSH_MS)
+  salesChannelTimer.unref?.()
 }

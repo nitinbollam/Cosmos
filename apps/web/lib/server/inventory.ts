@@ -3,6 +3,12 @@ import { Prisma } from '@/generated/prisma-inventory'
 import { inventoryDb } from './db'
 import { ApiError } from './session'
 
+function queueSalesChannelPush(tenantId: string, skuId: string) {
+  void import('./sales-channels/core')
+    .then(({ queuePriceOrQuantityPush }) => queuePriceOrQuantityPush(tenantId, skuId))
+    .catch(() => undefined)
+}
+
 export type CreateSkuInput = {
   code: string
   name: string
@@ -281,6 +287,7 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
   const { fillBackordersOnReceipt } = await import('./backorders')
   void fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId).catch(() => undefined)
 
+  queueSalesChannelPush(tenantId, dto.skuId)
   return result
 }
 
@@ -378,6 +385,7 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
     })
   })
 
+  queueSalesChannelPush(tenantId, dto.skuId)
   return { ok: true }
 }
 
@@ -460,7 +468,7 @@ export async function updateSku(tenantId: string, id: string, patch: Partial<Cre
         : patch.isTobacco !== undefined
           ? Boolean(patch.isTobacco)
           : undefined
-    return await inventoryDb.sKU.update({
+    const updated = await inventoryDb.sKU.update({
       where: { id },
       data: {
         ...(patch.code !== undefined ? { code: patch.code } : {}),
@@ -495,6 +503,8 @@ export async function updateSku(tenantId: string, id: string, patch: Partial<Cre
         ...(patch.trackSerial !== undefined ? { trackSerial: Boolean(patch.trackSerial) } : {}),
       },
     })
+    if (patch.price !== undefined) queueSalesChannelPush(tenantId, id)
+    return updated
   } catch (e) {
     if ((e as { code?: string }).code === 'P2002') throw new ApiError(409, 'SKU code already exists for this tenant')
     throw e
@@ -682,6 +692,7 @@ export async function adjustStock(
     ).catch(() => undefined)
   }
 
+  queueSalesChannelPush(tenantId, dto.skuId)
   return result
 }
 
@@ -808,6 +819,7 @@ export async function reserveStock(
       },
     })
   })
+  queueSalesChannelPush(tenantId, dto.skuId)
   return reservationId
 }
 
@@ -836,6 +848,7 @@ export async function releaseExpiredReservations(limit = 200): Promise<{ release
         },
       }),
     ])
+    queueSalesChannelPush(row.tenantId, row.skuId)
   }
   return { released: rows.length }
 }
@@ -927,6 +940,9 @@ export async function commitShipmentForOrder(
     }
   })
 
+  for (const line of shipped) {
+    queueSalesChannelPush(tenantId, line.skuId)
+  }
   return { shipped }
 }
 
@@ -953,6 +969,7 @@ export async function releaseReservation(tenantId: string, reservationId: string
       },
     }),
   ])
+  queueSalesChannelPush(tenantId, reservation.skuId)
 }
 
 export async function releaseReservationsForOrder(tenantId: string, orderId: string): Promise<void> {

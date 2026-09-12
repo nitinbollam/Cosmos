@@ -13,6 +13,7 @@ import { PrismaClient as NotificationPrismaClient } from '@/generated/prisma-not
 import { PrismaClient as LedgerPrismaClient } from '@/generated/prisma-ledger'
 import { PrismaClient as AnalyticsPrismaClient } from '@/generated/prisma-analytics'
 import { PrismaClient as MarketplacePrismaClient } from '@/generated/prisma-marketplace'
+import { PrismaClient as SalesChannelsPrismaClient } from '@/generated/prisma-sales-channels'
 
 const globalDb = globalThis as unknown as {
   authDb?: AuthPrismaClient
@@ -30,6 +31,7 @@ const globalDb = globalThis as unknown as {
   ledgerDb?: LedgerPrismaClient
   analyticsDb?: AnalyticsPrismaClient
   marketplaceDb?: MarketplacePrismaClient
+  salesChannelsDb?: SalesChannelsPrismaClient
 }
 
 export const authDb = globalDb.authDb ?? new AuthPrismaClient()
@@ -47,6 +49,7 @@ export const notificationDb = globalDb.notificationDb ?? new NotificationPrismaC
 export const ledgerDb = globalDb.ledgerDb ?? new LedgerPrismaClient()
 export const analyticsDb = globalDb.analyticsDb ?? new AnalyticsPrismaClient()
 export const marketplaceDb = globalDb.marketplaceDb ?? new MarketplacePrismaClient()
+export const salesChannelsDb = globalDb.salesChannelsDb ?? new SalesChannelsPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') {
   globalDb.authDb = authDb
@@ -64,4 +67,5 @@ if (process.env.NODE_ENV !== 'production') {
   globalDb.ledgerDb = ledgerDb
   globalDb.analyticsDb = analyticsDb
   globalDb.marketplaceDb = marketplaceDb
+  globalDb.salesChannelsDb = salesChannelsDb
 }

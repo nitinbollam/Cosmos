@@ -201,6 +201,14 @@ export async function routeWebhooks(method: string, seg: string[], req: Request)
     const result = stripeConnect.handleStripeConnectWebhook(raw, sig)
     return Response.json(result)
   }
+  if (seg[1] === 'shopify' && seg[2] === 'orders' && method === 'POST') {
+    const hmac = req.headers.get('x-shopify-hmac-sha256') ?? ''
+    const shop = req.headers.get('x-shopify-shop-domain') ?? ''
+    const raw = Buffer.from(await req.arrayBuffer())
+    const { handleShopifyOrderWebhook } = await import('../sales-channels/shopify')
+    await handleShopifyOrderWebhook(JSON.parse(raw.toString('utf8')), hmac, shop, raw)
+    return new Response(null, { status: 200 })
+  }
 
   // Outbound webhook writes can exfiltrate data — keep admin-only protections.
   const session =

@@ -96,6 +96,11 @@ export async function createOrderShipments(
     })
     created.push(row)
   }
+  if (shipments.some((s) => s.carrier?.trim() && s.trackingNumber?.trim())) {
+    void import('./sales-channels/fulfillment-sync')
+      .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
+      .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${orderId}:`, err))
+  }
   return created
 }
 
@@ -116,10 +121,16 @@ export async function markShipmentShipped(tenantId: string, shipmentId: string) 
     }
   }
 
-  return orderDb.orderShipment.update({
+  const updated = await orderDb.orderShipment.update({
     where: { id: shipmentId },
     data: { status: ShipmentStatus.SHIPPED, shippedAt: new Date() },
   })
+  if (updated.carrier?.trim() && updated.trackingNumber?.trim()) {
+    void import('./sales-channels/fulfillment-sync')
+      .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, updated.orderId))
+      .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${updated.orderId}:`, err))
+  }
+  return updated
 }
 
 export async function getOrderTracking(tenantId: string, orderId: string, opts?: { buyerCustomerId?: string }) {
