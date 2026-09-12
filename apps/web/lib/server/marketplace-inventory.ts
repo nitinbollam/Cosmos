@@ -17,18 +17,35 @@ export async function getDefaultSellerWarehouseId(tenantId: string): Promise<str
 
 export async function assertSkuAvailableForListing(
   tenantId: string,
-  skuId: string,
+  skuIdOrCode: string,
   quantity: number,
 ): Promise<{ warehouseId: string; available: number }> {
-  const warehouseId = await getDefaultSellerWarehouseId(tenantId)
-  const level = await inventoryDb.stockLevel.findFirst({
-    where: { tenantId, skuId, warehouseId, batchId: '' },
+  const sku = await inv.findSkuById(tenantId, skuIdOrCode)
+  const canonicalSkuId = sku.id
+
+  const defaultWarehouseId = await getDefaultSellerWarehouseId(tenantId)
+  const defaultLevel = await inventoryDb.stockLevel.findFirst({
+    where: { tenantId, skuId: canonicalSkuId, warehouseId: defaultWarehouseId },
+    orderBy: { quantityAvailable: 'desc' },
   })
-  const available = level?.quantityAvailable ?? 0
-  if (available < quantity) {
-    throw new ApiError(400, `Insufficient inventory: ${available} available, ${quantity} requested`)
+  if (defaultLevel && defaultLevel.quantityAvailable >= quantity) {
+    return { warehouseId: defaultWarehouseId, available: defaultLevel.quantityAvailable }
   }
-  return { warehouseId, available }
+
+  const levels = await inventoryDb.stockLevel.findMany({
+    where: { tenantId, skuId: canonicalSkuId },
+    orderBy: { quantityAvailable: 'desc' },
+  })
+  const bestLevel = levels.find((l) => l.quantityAvailable >= quantity)
+  if (bestLevel) {
+    return { warehouseId: bestLevel.warehouseId, available: bestLevel.quantityAvailable }
+  }
+
+  const totalAvailable = levels.reduce((sum, l) => sum + (l.quantityAvailable ?? 0), 0)
+  throw new ApiError(
+    400,
+    `Insufficient inventory for ${sku.name} (${sku.code}): ${totalAvailable} available, ${quantity} requested`,
+  )
 }
 
 export async function reserveListingInventory(

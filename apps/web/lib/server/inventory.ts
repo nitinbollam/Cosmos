@@ -126,8 +126,14 @@ export async function listSkus(
   return { items: enriched, total, page, pageSize, hasMore: page * pageSize < total }
 }
 
-export async function findSkuById(tenantId: string, id: string) {
-  const sku = await inventoryDb.sKU.findFirst({ where: { id, tenantId } })
+export async function findSkuById(tenantId: string, idOrCode: string) {
+  const trimmed = idOrCode.trim()
+  const sku = await inventoryDb.sKU.findFirst({
+    where: {
+      tenantId,
+      OR: [{ id: trimmed }, { code: trimmed }],
+    },
+  })
   if (!sku) throw new ApiError(404, 'SKU not found')
   return sku
 }

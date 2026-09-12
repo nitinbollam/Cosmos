@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { MarketplaceNav } from '../marketplace-nav'
 import {
   Area,
   AreaChart,
@@ -134,31 +135,25 @@ export default function MarketplaceAnalyticsPage() {
   const hasSales = (s?.completedSales ?? 0) > 0
 
   return (
-    <div>
-      <Link to="/admin/marketplace" className="text-sm text-pleros-accent">
-        ← Marketplace
-      </Link>
-
-      <div className="flex flex-wrap items-start justify-between gap-4 mt-2 mb-6">
-        <div>
-          <h1 className="text-2xl font-display text-pleros-white">Seller analytics</h1>
-          <p className="text-sm text-pleros-text-3 mt-1">
-            Revenue, listings, and fulfillment performance for your marketplace sales
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {PERIODS.map((p) => (
-            <button
-              key={p.days}
-              type="button"
-              className={periodDays === p.days ? 'btn-primary text-sm' : 'neo-btn-secondary text-sm px-3 py-2 rounded'}
-              onClick={() => setPeriodDays(p.days)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <MarketplaceNav
+        title="Seller Analytics"
+        subtitle="Revenue, listings, and fulfillment performance for your marketplace sales"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {PERIODS.map((p) => (
+              <button
+                key={p.days}
+                type="button"
+                className={periodDays === p.days ? 'btn-primary !text-sm' : 'btn-ghost !text-sm'}
+                onClick={() => setPeriodDays(p.days)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {analyticsQ.isLoading && <p className="text-sm text-pleros-text-3">Loading analytics…</p>}
       {analyticsQ.isError && (

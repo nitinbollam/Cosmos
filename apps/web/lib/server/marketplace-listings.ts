@@ -157,7 +157,7 @@ export async function createListing(
   const sku = await inv.findSkuById(tenantId, dto.skuId)
   const snapshot = listingSnapshotFromSku(sku, dto.description)
   const { assertSkuAvailableForListing } = await import('./marketplace-inventory')
-  await assertSkuAvailableForListing(tenantId, dto.skuId, quantity)
+  const { warehouseId } = await assertSkuAvailableForListing(tenantId, sku.id, quantity)
 
   const listing = await marketplaceDb.marketplaceListing.create({
     data: {
@@ -170,6 +170,7 @@ export async function createListing(
       auctionDurationDays: listingType === 'AUCTION' ? (dto.auctionDurationDays ?? 7) : null,
       photoUrlsJson: JSON.stringify(dto.photoUrls ?? []),
       status: 'PENDING_REVIEW',
+      sellerWarehouseId: warehouseId,
     },
   })
 

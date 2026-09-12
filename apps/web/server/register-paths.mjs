@@ -41,5 +41,6 @@ tsconfigPaths.register({
     '@/generated/prisma-notification': ['./generated/prisma-notification'],
     '@/generated/prisma-ledger': ['./generated/prisma-ledger'],
     '@/generated/prisma-analytics': ['./generated/prisma-analytics'],
+    '@/generated/prisma-marketplace': ['./generated/prisma-marketplace'],
   },
 })

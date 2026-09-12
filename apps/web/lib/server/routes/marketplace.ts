@@ -17,17 +17,16 @@ async function requireMarketplaceEnabled(tenantId: string) {
 }
 
 export async function routeMarketplace(method: string, seg: string[], req: Request): Promise<Response> {
-  const isRead = method === 'GET'
-  const session = await requirePermission(req, isRead ? 'marketplace.read' : 'marketplace.write')
-  const url = new URL(req.url)
-
   if (seg[1] === 'uploads' && seg.length >= 3 && method === 'GET') {
-    await requireMarketplaceEnabled(session.tenantId)
     const relative = seg.slice(2).join('/')
     const file = readMarketplaceUpload(relative)
     if (!file) throw new ApiError(404, 'Upload not found')
     return new Response(file.buf, { headers: { 'Content-Type': file.mime, 'Cache-Control': 'public, max-age=86400' } })
   }
+
+  const isRead = method === 'GET'
+  const session = await requirePermission(req, isRead ? 'marketplace.read' : 'marketplace.write')
+  const url = new URL(req.url)
 
   if (seg[1] === 'uploads' && seg.length === 2 && method === 'POST') {
     await requireMarketplaceEnabled(session.tenantId)
