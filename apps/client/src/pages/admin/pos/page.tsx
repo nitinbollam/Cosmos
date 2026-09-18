@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { ScanButton, useKeyboardWedge } from '@/components/scanner'
 
 type Register = { id: string; name: string; warehouseId: string | null }
 type Customer = { id: string; name: string; email?: string | null; isLicensedTobacco?: boolean }
@@ -58,6 +59,7 @@ export default function PosPage() {
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'CHECK' | 'GIFT_CARD'>('CASH')
   const [posGiftCardCode, setPosGiftCardCode] = useState('')
   const [search, setSearch] = useState('')
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [cart, setCart] = useState<CartLine[]>([])
   const [lastOrderId, setLastOrderId] = useState<string | null>(null)
   const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null)
@@ -337,6 +339,34 @@ export default function PosPage() {
     })
   }
 
+  /**
+   * Resolve a scanned barcode and drop the product straight into the sale.
+   *
+   * Scanning adds to the cart rather than filling the search box — at a till the
+   * whole point is that a scan is a complete action. The lookup endpoint handles
+   * barcode and code, and normalizes GTIN-8/12/13/14 forms, so the same label
+   * resolves whether it came from the camera or a USB gun.
+   */
+  async function addByScan(rawValue: string) {
+    const value = rawValue.trim()
+    if (!value) return
+    setScanMsg(null)
+    try {
+      const sku = await api.get<Sku>(`/skus/lookup/scan-value?value=${encodeURIComponent(value)}`)
+      addToCart(sku)
+      setScanMsg({ ok: true, text: `Added ${sku.code} — ${sku.name}` })
+    } catch {
+      // The endpoint 404s on an unknown code — the normal miss at a till.
+      setScanMsg({ ok: false, text: `No product found for ${value}` })
+    }
+  }
+
+  // USB / handheld scan guns present as keyboards, so the till listens for them
+  // the whole time this page is open — the cashier just scans, with no control
+  // to press first. The hook ignores keystrokes while a text field has focus, so
+  // typing in the search box above is unaffected.
+  useKeyboardWedge((value) => void addByScan(value), true)
+
   function updateQty(skuId: string, quantity: number) {
     if (quantity <= 0) {
       setCart((prev) => prev.filter((l) => l.skuId !== skuId))
@@ -504,12 +534,28 @@ export default function PosPage() {
 
           <div className="pleros-card">
             <label className="text-xs text-pleros-text-3 block">Add products</label>
-            <input
-              className="pleros-input mt-1 mb-4 w-full"
-              placeholder="Search SKU name or code…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <div className="flex items-center gap-2 mt-1 mb-2">
+              <input
+                className="pleros-input flex-1"
+                placeholder="Search SKU name or code…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {/* Camera path. A USB scan gun needs no button — see useKeyboardWedge below. */}
+              <ScanButton
+                onScan={(r) => void addByScan(r.rawValue)}
+                title="Scan to add to sale"
+                continuous
+              />
+            </div>
+            {scanMsg && (
+              <p
+                className="text-[11px] mb-3"
+                style={{ color: scanMsg.ok ? 'var(--c-success)' : 'var(--c-danger)' }}
+              >
+                {scanMsg.text}
+              </p>
+            )}
             {skusQ.isLoading ? (
               <div className="skeleton h-24 w-full" />
             ) : (skusQ.data?.items ?? []).length === 0 ? (
