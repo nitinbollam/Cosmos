@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/pleros/empty-state'
 import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
+import { ScanButton } from '@/components/scanner'
 
 type SkuRow = {
   id: string
@@ -107,10 +108,40 @@ export default function InventoryPage() {
   const [adjDelta, setAdjDelta] = useState(0)
   const [adjReason, setAdjReason] = useState('')
 
+  // Code of the SKU resolved by the last scan, so we can show its stock summary.
+  const [scannedCode, setScannedCode] = useState<string | null>(null)
+  const [scanErr, setScanErr] = useState<string | null>(null)
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
     return () => clearTimeout(t)
   }, [searchInput])
+
+  /**
+   * Resolve a scanned barcode to a SKU and filter the list to it.
+   *
+   * We search by the resolved SKU *code* rather than the raw barcode, because
+   * the list endpoint matches code and name — not barcode. The lookup endpoint
+   * does the barcode work (and handles GTIN-8/12/13/14 variants), so a label
+   * that reads 12 digits on one device and 13 on another still lands here.
+   */
+  const resolveScan = useCallback(
+    async (rawValue: string) => {
+      const value = rawValue.trim()
+      if (!value) return
+      setScanErr(null)
+      setScannedCode(null)
+      try {
+        const sku = await api.get<SkuRow>(`/skus/lookup/scan-value?value=${encodeURIComponent(value)}`)
+        setSearchInput(sku.code)
+        setScannedCode(sku.code)
+      } catch {
+        // 404 is the expected miss here: a real barcode with no SKU behind it.
+        setScanErr(`No SKU found for ${value}`)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     setPage(1)
@@ -226,6 +257,13 @@ export default function InventoryPage() {
   })
 
   const totalPages = Math.max(1, Math.ceil((skusQ.data?.total ?? 0) / pageSize))
+
+  // The scanned SKU's row, once the filtered list lands. listSkus already
+  // enriches rows with stock figures, so answering "how many do I have?" needs
+  // no extra request — we just read the row the scan filtered us down to.
+  const scannedRow = scannedCode
+    ? (skusQ.data?.items ?? []).find((s) => s.code === scannedCode)
+    : undefined
 
   const drawerOpen = drawer === 'new' || drawer === 'edit'
 
@@ -345,13 +383,53 @@ export default function InventoryPage() {
       <div className="pleros-card flex flex-wrap gap-4 items-end">
         <div className="min-w-[200px] flex-1">
           <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Search</label>
-          <input
-            className="pleros-input"
-            placeholder="Code or name"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              className="pleros-input flex-1"
+              placeholder="Code or name"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+            <ScanButton onScan={(r) => void resolveScan(r.rawValue)} title="Scan to check stock" />
+          </div>
+          {scanErr && (
+            <p className="text-[11px] mt-1" style={{ color: 'var(--c-danger)' }}>
+              {scanErr}
+            </p>
+          )}
         </div>
+        {scannedRow && (
+          <div className="scan-stock-card">
+            <div className="scan-stock-id">
+              <span className="scan-stock-code">{scannedRow.code}</span>
+              <span className="scan-stock-name">{scannedRow.name}</span>
+            </div>
+            <div className="scan-stock-figures">
+              <div>
+                <span className="scan-stock-label">On hand</span>
+                <span className="scan-stock-value">{scannedRow.quantityOnHand ?? 0}</span>
+              </div>
+              <div>
+                <span className="scan-stock-label">Reserved</span>
+                <span className="scan-stock-value">{scannedRow.quantityReserved ?? 0}</span>
+              </div>
+              <div>
+                <span className="scan-stock-label">Available</span>
+                <span className="scan-stock-value strong">{scannedRow.quantityAvailable ?? 0}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="scan-stock-clear"
+              onClick={() => {
+                setScannedCode(null)
+                setSearchInput('')
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
         <div>
           <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Category</label>
           <select className="pleros-input w-[200px]" value={category} onChange={(e) => setCategory(e.target.value)}>
