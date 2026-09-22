@@ -744,6 +744,8 @@ function SkuDrawer({
   const [cat, setCat] = useState('')
   const [sub, setSub] = useState('')
   const [barcode, setBarcode] = useState('')
+  // The SKU that already owns this barcode, if any. Null means it is free.
+  const [barcodeOwner, setBarcodeOwner] = useState<SkuRow | null>(null)
   const [uom, setUom] = useState('EACH')
   const [weight, setWeight] = useState('')
   const [isTobacco, setIsTobacco] = useState(false)
@@ -761,6 +763,43 @@ function SkuDrawer({
   const [defWh, setDefWh] = useState('')
   const [defLoc, setDefLoc] = useState('')
   const [isActive, setIsActive] = useState(true)
+
+  /**
+   * Warn when the barcode is already assigned to another SKU.
+   *
+   * The check runs server-side via /skus/lookup/scan-value, because the list
+   * response carries no barcode field — a client-side scan of the loaded page
+   * would report "no duplicate" simply because it cannot see one, which is worse
+   * than no check at all. The endpoint also normalises GTIN-8/12/13/14, so a
+   * label stored as 12 digits is still caught when scanned as 13.
+   *
+   * Debounced so typing a barcode by hand doesn't fire a request per keystroke.
+   */
+  useEffect(() => {
+    const value = barcode.trim()
+    if (!value) {
+      setBarcodeOwner(null)
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(() => {
+      api
+        .get<SkuRow>(`/skus/lookup/scan-value?value=${encodeURIComponent(value)}`)
+        .then((sku) => {
+          if (cancelled) return
+          // Editing a SKU must not flag its own barcode as a clash.
+          setBarcodeOwner(sku && sku.id !== editId ? sku : null)
+        })
+        .catch(() => {
+          // 404 is the good case here: nothing owns this barcode yet.
+          if (!cancelled) setBarcodeOwner(null)
+        })
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [barcode, editId])
 
   const applyLevelsForWarehouse = useCallback(
     (wh: string, levels: StockLevelRow[] | undefined) => {
@@ -956,7 +995,22 @@ function SkuDrawer({
           <label className="text-xs text-pleros-text-3">Subcategory</label>
           <input className="pleros-input mb-3" value={sub} onChange={(e) => setSub(e.target.value)} />
           <label className="text-xs text-pleros-text-3">Barcode</label>
-          <input className="pleros-input mb-3" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+          <div className="flex items-center gap-2">
+            <input
+              className="pleros-input flex-1"
+              placeholder="Scan or type the product barcode"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+            />
+            <ScanButton onScan={(r) => setBarcode(r.rawValue)} title="Scan product barcode" />
+          </div>
+          {barcodeOwner ? (
+            <p className="text-[11px] mt-1 mb-3" style={{ color: 'var(--c-warning)' }}>
+              Already assigned to {barcodeOwner.code} — {barcodeOwner.name}
+            </p>
+          ) : (
+            <div className="mb-3" />
+          )}
           <label className="text-xs text-pleros-text-3">Unit of measure</label>
           <select className="pleros-input mb-3" value={uom} onChange={(e) => setUom(e.target.value)}>
             {UOM_OPTIONS.map((u) => (
