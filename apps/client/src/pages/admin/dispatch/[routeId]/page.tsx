@@ -5,8 +5,17 @@ import { useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { PodPhoto } from '@/components/pod/PodPhoto'
 
-type RouteStop = { id: string; sequence: number; status: string; address: unknown }
+type StopPod = { photoUrl?: string | null; deliveredAt?: string | null; recipientName?: string | null }
+
+type RouteStop = {
+  id: string
+  sequence: number
+  status: string
+  address: unknown
+  pod?: StopPod | null
+}
 type DeliveryRoute = {
   id: string
   name?: string | null
@@ -159,6 +168,7 @@ export default function DispatchRouteDetailPage() {
                     <th className="pb-2 pr-4">#</th>
                     <th className="pb-2 pr-4">Address</th>
                     <th className="pb-2 pr-4">Status</th>
+                    <th className="pb-2 pr-4">Proof</th>
                     <th className="pb-2">Actions</th>
                   </tr>
                 </thead>
@@ -171,6 +181,22 @@ export default function DispatchRouteDetailPage() {
                       </td>
                       <td className="py-2 pr-4">
                         <StatusBadge status={s.status} />
+                      </td>
+                      <td className="py-2 pr-4 align-top">
+                        {s.pod?.photoUrl ? (
+                          <PodPhoto
+                            src={s.pod.photoUrl}
+                            caption={
+                              s.pod.recipientName
+                                ? `Received by ${s.pod.recipientName}`
+                                : undefined
+                            }
+                          />
+                        ) : s.status === 'DELIVERED' ? (
+                          <span className="text-xs text-pleros-muted">No photo</span>
+                        ) : (
+                          <span className="text-xs text-pleros-muted">—</span>
+                        )}
                       </td>
                       <td className="py-2">
                         <div className="flex flex-wrap gap-1">
