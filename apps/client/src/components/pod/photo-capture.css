@@ -96,3 +96,51 @@
   font-size: 11px;
   color: var(--c-text-3);
 }
+
+/* Signature capture. */
+.pod-signature {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.pod-signature-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pod-signature-label {
+  font-size: 12px;
+  color: var(--c-text-2);
+}
+
+.pod-signature-canvas {
+  width: 100%;
+  display: block;
+  border: var(--border-width) dashed var(--c-border-card);
+  border-radius: var(--bento-radius-sm);
+  background: var(--c-surface);
+  /* Without this the page scrolls instead of drawing when a finger moves. */
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.pod-signature-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--c-text-3);
+}
+
+/* Read-only signature, staff surfaces only. */
+.pod-signature-view img {
+  width: 100%;
+  max-width: 260px;
+  border: var(--border-width) solid var(--c-border-card);
+  border-radius: var(--bento-radius-sm);
+  /* Signatures are dark line art on transparency — give them a light plate so
+     they read in both themes rather than vanishing into a dark surface. */
+  background: #f7f8f6;
+}

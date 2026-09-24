@@ -5,8 +5,9 @@ import { api } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
 import { PhotoCapture, type CapturedPhoto } from '@/components/pod/PhotoCapture'
 import { PodPhoto } from '@/components/pod/PodPhoto'
+import { SignaturePad, type CapturedSignature } from '@/components/pod/SignaturePad'
 
-type StopPod = { photoUrl?: string | null; deliveredAt?: string | null }
+type StopPod = { photoUrl?: string | null; signatureDataUrl?: string | null; deliveredAt?: string | null }
 
 type Stop = {
   id: string
@@ -32,6 +33,7 @@ export default function DeliveryRoutePage() {
   // Photos are held per stop: one delivery, one photo. The notes and recipient
   // fields above are shared across stops, which is pre-existing behaviour.
   const [photos, setPhotos] = useState<Record<string, CapturedPhoto | null>>({})
+  const [signatures, setSignatures] = useState<Record<string, CapturedSignature | null>>({})
 
   useEffect(() => {
     if (!id) return
@@ -53,7 +55,7 @@ export default function DeliveryRoutePage() {
       await api.post(`/dispatch/stops/${stopId}/pod`, {
         routeId: id,
         deliveredAt: new Date().toISOString(),
-        signatureDataUrl: null,
+        signatureDataUrl: signatures[stopId]?.dataUrl ?? null,
         // A data: URL is a valid URL, so the existing photoUrl field carries the
         // downscaled JPEG with no backend change. Swapping to hosted storage
         // later means changing what goes in here, nothing else.
@@ -64,6 +66,7 @@ export default function DeliveryRoutePage() {
       })
       await refreshRoute()
       setPhotos((prev) => ({ ...prev, [stopId]: null }))
+      setSignatures((prev) => ({ ...prev, [stopId]: null }))
       setErr(null)
     } catch (e) {
       setErr(axiosErr(e))
@@ -127,6 +130,10 @@ export default function DeliveryRoutePage() {
               <PhotoCapture
                 value={photos[s.id] ?? null}
                 onChange={(photo) => setPhotos((prev) => ({ ...prev, [s.id]: photo }))}
+              />
+              <SignaturePad
+                value={signatures[s.id] ?? null}
+                onChange={(sig) => setSignatures((prev) => ({ ...prev, [s.id]: sig }))}
               />
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                 <button type="button" className="btn-primary" onClick={() => void markDelivered(s.id)}>
