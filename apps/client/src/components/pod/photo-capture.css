@@ -1,0 +1,146 @@
+/* Proof-of-delivery photo capture and display.
+   Built on Pleros theme tokens so it follows obsidian/light like the rest of
+   the app. Imported by the components themselves to stay self-contained. */
+
+.pod-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.pod-capture-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* Drivers tap this one-handed, often in gloves — keep it a large target. */
+  min-height: 56px;
+  width: 100%;
+  border: var(--border-width) dashed var(--c-border-card);
+  border-radius: var(--bento-radius-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.pod-capture-btn:hover:not(:disabled) {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+.pod-capture-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pod-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pod-preview img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border-card);
+  background: var(--c-surface-2);
+}
+
+.pod-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pod-size {
+  font-size: 11px;
+  color: var(--c-text-3);
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.pod-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.pod-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-danger);
+}
+
+/* Read-only display, used on the staff and customer surfaces. */
+.pod-photo-view {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.pod-photo-view img {
+  width: 100%;
+  max-width: 320px;
+  border-radius: var(--bento-radius-sm);
+  border: var(--border-width) solid var(--c-border-card);
+  background: var(--c-surface-2);
+  cursor: zoom-in;
+}
+
+.pod-photo-caption {
+  font-size: 11px;
+  color: var(--c-text-3);
+}
+
+/* Signature capture. */
+.pod-signature {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.pod-signature-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pod-signature-label {
+  font-size: 12px;
+  color: var(--c-text-2);
+}
+
+.pod-signature-canvas {
+  width: 100%;
+  display: block;
+  border: var(--border-width) dashed var(--c-border-card);
+  border-radius: var(--bento-radius-sm);
+  background: var(--c-surface);
+  /* Without this the page scrolls instead of drawing when a finger moves. */
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.pod-signature-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--c-text-3);
+}
+
+/* Read-only signature, staff surfaces only. */
+.pod-signature-view img {
+  width: 100%;
+  max-width: 260px;
+  border: var(--border-width) solid var(--c-border-card);
+  border-radius: var(--bento-radius-sm);
+  /* Signatures are dark line art on transparency — give them a light plate so
+     they read in both themes rather than vanishing into a dark surface. */
+  background: #f7f8f6;
+}

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { useCartStore } from '@/stores/cart.store'
+import { PodPhoto } from '@/components/pod/PodPhoto'
 
 type Line = {
   id: string
@@ -53,6 +54,7 @@ type TrackingData = {
     stopStatus: string
     stopSequence: number
     eta: string | null
+    podPhotoUrl?: string | null
   } | null
 }
 
@@ -302,6 +304,10 @@ export default function StorefrontOrderDetailPage() {
                       Route status: {tracking.delivery.routeStatus.replace(/_/g, ' ')}
                     </p>
                   )}
+                  <PodPhoto
+                    src={tracking.delivery.podPhotoUrl}
+                    caption="Photo taken at delivery"
+                  />
                 </div>
               ) : null}
               {tracking.shipments.length > 0 ? (

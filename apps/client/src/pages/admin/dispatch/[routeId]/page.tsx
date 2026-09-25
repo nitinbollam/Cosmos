@@ -5,8 +5,23 @@ import { useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { PodPhoto } from '@/components/pod/PodPhoto'
+import { PodSignature } from '@/components/pod/PodSignature'
 
-type RouteStop = { id: string; sequence: number; status: string; address: unknown }
+type StopPod = {
+  photoUrl?: string | null
+  signatureDataUrl?: string | null
+  deliveredAt?: string | null
+  recipientName?: string | null
+}
+
+type RouteStop = {
+  id: string
+  sequence: number
+  status: string
+  address: unknown
+  pod?: StopPod | null
+}
 type DeliveryRoute = {
   id: string
   name?: string | null
@@ -159,6 +174,7 @@ export default function DispatchRouteDetailPage() {
                     <th className="pb-2 pr-4">#</th>
                     <th className="pb-2 pr-4">Address</th>
                     <th className="pb-2 pr-4">Status</th>
+                    <th className="pb-2 pr-4">Proof</th>
                     <th className="pb-2">Actions</th>
                   </tr>
                 </thead>
@@ -171,6 +187,25 @@ export default function DispatchRouteDetailPage() {
                       </td>
                       <td className="py-2 pr-4">
                         <StatusBadge status={s.status} />
+                      </td>
+                      <td className="py-2 pr-4 align-top">
+                        {s.pod?.photoUrl || s.pod?.signatureDataUrl ? (
+                          <div className="flex flex-col gap-2">
+                            <PodPhoto
+                              src={s.pod.photoUrl}
+                              caption={
+                                s.pod.recipientName
+                                  ? `Received by ${s.pod.recipientName}`
+                                  : undefined
+                              }
+                            />
+                            <PodSignature src={s.pod.signatureDataUrl} />
+                          </div>
+                        ) : s.status === 'DELIVERED' ? (
+                          <span className="text-xs text-pleros-muted">No proof captured</span>
+                        ) : (
+                          <span className="text-xs text-pleros-muted">—</span>
+                        )}
                       </td>
                       <td className="py-2">
                         <div className="flex flex-wrap gap-1">

@@ -3,8 +3,19 @@ import { useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
+import { PhotoCapture, type CapturedPhoto } from '@/components/pod/PhotoCapture'
+import { PodPhoto } from '@/components/pod/PodPhoto'
+import { SignaturePad, type CapturedSignature } from '@/components/pod/SignaturePad'
 
-type Stop = { id: string; sequence: number; status: string; address?: string }
+type StopPod = { photoUrl?: string | null; signatureDataUrl?: string | null; deliveredAt?: string | null }
+
+type Stop = {
+  id: string
+  sequence: number
+  status: string
+  address?: string
+  pod?: StopPod | null
+}
 
 type RouteDetail = {
   id: string
@@ -19,6 +30,10 @@ export default function DeliveryRoutePage() {
   const [notes, setNotes] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [recipientName, setRecipientName] = useState('')
+  // Photos are held per stop: one delivery, one photo. The notes and recipient
+  // fields above are shared across stops, which is pre-existing behaviour.
+  const [photos, setPhotos] = useState<Record<string, CapturedPhoto | null>>({})
+  const [signatures, setSignatures] = useState<Record<string, CapturedSignature | null>>({})
 
   useEffect(() => {
     if (!id) return
@@ -40,13 +55,18 @@ export default function DeliveryRoutePage() {
       await api.post(`/dispatch/stops/${stopId}/pod`, {
         routeId: id,
         deliveredAt: new Date().toISOString(),
-        signatureDataUrl: null,
-        photoUrl: null,
+        signatureDataUrl: signatures[stopId]?.dataUrl ?? null,
+        // A data: URL is a valid URL, so the existing photoUrl field carries the
+        // downscaled JPEG with no backend change. Swapping to hosted storage
+        // later means changing what goes in here, nothing else.
+        photoUrl: photos[stopId]?.dataUrl ?? null,
         notes: notes || undefined,
         ageConfirmed,
         recipientName: recipientName.trim() || undefined,
       })
       await refreshRoute()
+      setPhotos((prev) => ({ ...prev, [stopId]: null }))
+      setSignatures((prev) => ({ ...prev, [stopId]: null }))
       setErr(null)
     } catch (e) {
       setErr(axiosErr(e))
@@ -102,15 +122,28 @@ export default function DeliveryRoutePage() {
             <span style={{ fontSize: 12 }}>{s.status}</span>
           </div>
           {s.address && <p style={{ fontSize: 13, opacity: 0.7 }}>{typeof s.address === 'string' ? s.address : JSON.stringify(s.address)}</p>}
+          {s.status === 'DELIVERED' && (
+            <PodPhoto src={s.pod?.photoUrl} caption="Proof of delivery" />
+          )}
           {s.status !== 'DELIVERED' && s.status !== 'FAILED' && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-              <button type="button" className="btn-primary" onClick={() => void markDelivered(s.id)}>
-                Delivered
-              </button>
-              <button type="button" className="btn-ghost" onClick={() => void markFailed(s.id)}>
-                Failed
-              </button>
-            </div>
+            <>
+              <PhotoCapture
+                value={photos[s.id] ?? null}
+                onChange={(photo) => setPhotos((prev) => ({ ...prev, [s.id]: photo }))}
+              />
+              <SignaturePad
+                value={signatures[s.id] ?? null}
+                onChange={(sig) => setSignatures((prev) => ({ ...prev, [s.id]: sig }))}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                <button type="button" className="btn-primary" onClick={() => void markDelivered(s.id)}>
+                  Delivered
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => void markFailed(s.id)}>
+                  Failed
+                </button>
+              </div>
+            </>
           )}
         </div>
       ))}

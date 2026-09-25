@@ -157,6 +157,7 @@ export async function getOrderTracking(tenantId: string, orderId: string, opts?:
     stopStatus: string
     stopSequence: number
     eta: Date | null
+    podPhotoUrl: string | null
   } | null = null
 
   for (const route of routes) {
@@ -165,12 +166,24 @@ export async function getOrderTracking(tenantId: string, orderId: string, opts?:
       const eta = route.scheduledFor
         ? new Date(route.scheduledFor.getTime() + (stop.sequence - 1) * 45 * 60 * 1000)
         : null
+      // Proof-of-delivery photo, exposed so the customer can see their own
+      // delivery. `pod` is an opaque JSON column, so read it defensively rather
+      // than trusting a shape. Only the photo is surfaced — notes and age
+      // confirmation stay internal to staff.
+      const podRecord =
+        stop.pod && typeof stop.pod === 'object' && !Array.isArray(stop.pod)
+          ? (stop.pod as Record<string, unknown>)
+          : null
+      const rawPhoto = podRecord?.photoUrl
+      const podPhotoUrl = typeof rawPhoto === 'string' && rawPhoto ? rawPhoto : null
+
       delivery = {
         routeId: route.id,
         routeStatus: route.status,
         stopStatus: stop.status,
         stopSequence: stop.sequence,
         eta,
+        podPhotoUrl,
       }
       break
     }
