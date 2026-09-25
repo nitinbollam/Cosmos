@@ -4,6 +4,107 @@
    BarcodeScannerSheet.tsx rather than added to globals, to keep the component
    self-contained and easy to remove. */
 
+/* Stock card shown after a scan resolves — answers "how many do I have?"
+   without making the operator read across a wide table row. */
+.scan-stock-card {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: var(--border-width) solid var(--c-primary);
+  border-radius: var(--bento-radius-sm);
+  background: var(--c-primary-dim);
+}
+
+.scan-stock-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.scan-stock-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.scan-stock-name {
+  font-size: 12px;
+  color: var(--c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-stock-figures {
+  display: flex;
+  gap: 22px;
+}
+
+.scan-stock-figures > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.scan-stock-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--c-text-3);
+}
+
+.scan-stock-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-stock-value.strong {
+  color: var(--c-primary);
+}
+
+.scan-stock-clear {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--c-text-3);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ScanButton: the shared trigger placed beside search inputs. */
+.scan-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: var(--border-width) solid var(--c-border-card);
+  border-radius: var(--bento-radius-sm);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.scan-button:hover:not(:disabled) {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+.scan-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .scanner-sheet {
   position: fixed;
   inset: 0;

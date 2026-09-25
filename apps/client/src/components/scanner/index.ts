@@ -5,6 +5,7 @@
  *   import { BarcodeScannerSheet, type ScanResult } from "@pleros/barcode-scanner";
  */
 export { BarcodeScannerSheet } from './BarcodeScannerSheet'
+export { ScanButton } from './ScanButton'
 export { ScanFrameOverlay } from './ScanFrameOverlay'
 export { useScanner } from './useScanner'
 export { useKeyboardWedge } from './useKeyboardWedge'
