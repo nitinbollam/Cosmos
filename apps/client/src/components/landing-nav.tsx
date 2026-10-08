@@ -18,7 +18,7 @@ export function LandingNav() {
   useEffect(() => {
     refresh()
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'pleros.accessToken' || e.key === null) refresh()
+      if (e.key === null || Boolean(e.key?.endsWith('.accessToken'))) refresh()
     }
     const onAuth = () => refresh()
     window.addEventListener('storage', onStorage)

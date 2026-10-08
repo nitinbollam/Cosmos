@@ -6,6 +6,7 @@ import { axiosErr } from '@/lib/axios-error'
 import { CelestialMarkdown } from '@/components/celestial/celestial-markdown'
 import { streamCelestialChat } from '@/components/celestial/celestial-stream'
 import { useCelestialStore, type CelestialSurface } from '@/stores/celestial-store'
+import { getAccessToken } from '@/lib/auth-session'
 
 const BUYER_SUGGESTIONS = [
   'Where are my recent orders?',
@@ -71,7 +72,7 @@ export function CelestialChat({
 
   useEffect(() => {
     const refreshAuth = () =>
-      setHasToken(Boolean(typeof window !== 'undefined' && window.localStorage.getItem('pleros.accessToken')))
+      setHasToken(Boolean(getAccessToken()))
     refreshAuth()
     window.addEventListener('storage', refreshAuth)
     return () => window.removeEventListener('storage', refreshAuth)

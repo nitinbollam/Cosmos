@@ -1,20 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useSessionGate } from './use-session-gate'
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate()
-  const pathname = useLocation().pathname ?? '/'
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    const token = window.localStorage.getItem('pleros.accessToken')
-    if (!token) {
-      const next = pathname === '/admin' || pathname === '/admin/' ? '' : `?next=${encodeURIComponent(pathname)}`
-      navigate(`/admin/login${next}`)
-      return
-    }
-    setReady(true)
-  }, [pathname, navigate])
+  const ready = useSessionGate({ surface: 'admin', loginPath: '/admin/login', staffOnly: true })
 
   if (!ready) {
     return (

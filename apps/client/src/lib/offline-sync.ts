@@ -1,17 +1,21 @@
 import {
+  belongsTo,
   isReplayable,
   patchAction,
   readQueue,
   removeAction,
-  replayableCount,
+  replayableCountFor,
   requestBackgroundSync,
   type OfflineAction,
 } from '@/lib/offline-queue'
+import { currentIdentity } from '@/lib/session-identity'
 
 export type OfflineSyncResult = {
   synced: number
   failed: number
   conflicts: number
+  /** Queued by a different user on this device; kept until that user signs in again. */
+  held: number
   errors: Array<{ id: string; type: string; message: string; permanent: boolean }>
 }
 
@@ -82,16 +86,37 @@ export async function replayOfflineQueue(opts?: {
 
   replayInFlight = (async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      return { synced: 0, failed: 0, conflicts: 0, errors: [] }
+      return { synced: 0, failed: 0, conflicts: 0, held: 0, errors: [] }
+    }
+    const me = currentIdentity('mobile')
+    // Signed out (or the session just expired): nothing may be sent until someone signs in.
+    if (!me) {
+      return { synced: 0, failed: 0, conflicts: 0, held: readQueue().length, errors: [] }
     }
 
     const queue = readQueue()
     let synced = 0
     let failed = 0
     let conflicts = 0
+    let held = 0
     const errors: OfflineSyncResult['errors'] = []
 
     for (const action of queue) {
+      if (action.userId && !belongsTo(action, me)) {
+        held++
+        continue
+      }
+      if (!action.userId && action.status !== 'conflict' && !retryConflicts) {
+        // Queued before actions recorded their owner: we can't tell whose it is, so a person
+        // confirms with Retry before it is sent under the current session.
+        patchAction(action.id, {
+          status: 'conflict',
+          lastError: 'Queued before this app update — tap Retry to sync it as you',
+        })
+        conflicts++
+        errors.push({ id: action.id, type: action.type, message: 'Owner unknown — confirm to sync', permanent: true })
+        continue
+      }
       if (!retryConflicts && !isReplayable(action)) {
         conflicts++
         if (action.lastError) {
@@ -123,11 +148,12 @@ export async function replayOfflineQueue(opts?: {
       }
     }
 
-    if (replayableCount() > 0) {
+    // Held entries (another user's) must not re-arm Background Sync, or the SW wakes us in a loop.
+    if (replayableCountFor(me) > 0) {
       void requestBackgroundSync()
     }
 
-    return { synced, failed, conflicts, errors }
+    return { synced, failed, conflicts, held, errors }
   })().finally(() => {
     replayInFlight = null
   })
@@ -145,7 +171,7 @@ export function registerOfflineSyncListeners(
 ): () => void {
   const run = () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return
-    if (replayableCount() === 0) return
+    if (replayableCountFor(currentIdentity('mobile')) === 0) return
     void replayOfflineQueue().then((result) => {
       onDone?.(result)
     })

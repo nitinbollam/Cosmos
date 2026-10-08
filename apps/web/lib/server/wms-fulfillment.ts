@@ -1,6 +1,6 @@
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
-import { enrichPickItemsWithBins } from './pick-bin-resolver'
+import { enrichPickItemsWithBins, enrichPickItemsWithSkuLabels } from './pick-bin-resolver'
 import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
 
@@ -112,7 +112,7 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
     include: { pickLines: true },
   })
   if (!t) throw new ApiError(404, 'Task not found')
-  const pickItems = (await enrichPickItemsWithBins(
+  const withBins = await enrichPickItemsWithBins(
     tenantId,
     t.pickLines.map((p) => ({
       id: p.id,
@@ -122,7 +122,8 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
       pickedQty: p.pickedQty,
       status: p.status,
     })),
-  )).sort((a, b) => {
+  )
+  const pickItems = (await enrichPickItemsWithSkuLabels(tenantId, withBins)).sort((a, b) => {
     const left = a.binCode ?? 'ZZZ-NO-BIN'
     const right = b.binCode ?? 'ZZZ-NO-BIN'
     return left.localeCompare(right, undefined, { numeric: true })
@@ -207,16 +208,19 @@ export async function listFulfillmentTasks(
       warehouseId: t.warehouseId,
       assignedUserId: t.assignedUserId,
       createdAt: t.createdAt,
-      pickItems: await enrichPickItemsWithBins(
+      pickItems: await enrichPickItemsWithSkuLabels(
         tenantId,
-        t.pickLines.map((p) => ({
-          id: p.id,
-          skuId: p.skuId,
-          warehouseId: p.warehouseId,
-          quantity: p.quantity,
-          pickedQty: p.pickedQty,
-          status: p.status,
-        })),
+        await enrichPickItemsWithBins(
+          tenantId,
+          t.pickLines.map((p) => ({
+            id: p.id,
+            skuId: p.skuId,
+            warehouseId: p.warehouseId,
+            quantity: p.quantity,
+            pickedQty: p.pickedQty,
+            status: p.status,
+          })),
+        ),
       ),
     })),
   )

@@ -19,12 +19,16 @@ test('pwa-shell-routes.json lists warehouse, delivery, and sales shells', () => 
   assert.ok(cfg.staticAssets.includes('/manifest.webmanifest'))
 })
 
-test('public/sw.js uses shell-first navigation and SWR for API GETs', () => {
+test('public/sw.js uses shell-first navigation and network-first, per-user API caching', () => {
   const sw = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8')
   assert.match(sw, /shellFirstNavigation/)
-  assert.match(sw, /staleWhileRevalidate/)
-  assert.match(sw, /pleros-shell-v3/)
+  assert.match(sw, /networkFirstApi/)
+  assert.match(sw, /apiCacheNameFor/)
+  assert.match(sw, /PLEROS_CLEAR_API_CACHE/)
+  assert.match(sw, /pleros-shell-v4/)
   assert.match(sw, /isCacheableApiGet/)
+  // Cache-first API reads showed data from before a save and leaked across users.
+  assert.doesNotMatch(sw, /staleWhileRevalidate/)
   assert.match(sw, /\/m\/delivery/)
   assert.match(sw, /\/m\/sales/)
   assert.doesNotMatch(sw, /networkFirstNavigation/)

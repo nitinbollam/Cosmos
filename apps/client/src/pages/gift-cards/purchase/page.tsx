@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
-import { getB2bCustomerId } from '@/lib/session'
+import { ensureB2bCustomerId } from '@/lib/session'
 import { useNavigate, Link } from 'react-router-dom'
 import { axiosErr } from '@/lib/axios-error'
 import { useQuery } from '@tanstack/react-query'
@@ -37,7 +37,7 @@ export default function GiftCardPurchasePage() {
   }, [cards, selectedMethodId])
 
   async function purchase() {
-    const cid = getB2bCustomerId()
+    const cid = await ensureB2bCustomerId()
     if (!cid) {
       navigate('/login')
       return

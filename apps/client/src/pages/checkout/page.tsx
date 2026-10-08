@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
-import { getB2bCustomerId } from '@/lib/session'
+import { ensureB2bCustomerId } from '@/lib/session'
 import { useStripeConnect } from '@/lib/stripe-connect'
 import type { Stripe } from '@stripe/stripe-js'
 import { useCartStore } from '@/stores/cart.store'
@@ -85,7 +85,7 @@ export default function CheckoutPage() {
   const [saveNewCardToAccount, setSaveNewCardToAccount] = useState(true)
 
   const loadCustomer = useCallback(async () => {
-    if (!getB2bCustomerId()) {
+    if (!(await ensureB2bCustomerId())) {
       navigate('/login')
       return
     }
@@ -158,7 +158,7 @@ export default function CheckoutPage() {
   }
 
   async function validateDiscountCode() {
-    const cid = getB2bCustomerId()
+    const cid = await ensureB2bCustomerId()
     if (!cid || !discountCode.trim()) return
     setValidatingDiscount(true)
     setDiscountMsg(null)
@@ -194,7 +194,7 @@ export default function CheckoutPage() {
   }
 
   async function placeOrder() {
-    const cid = getB2bCustomerId()
+    const cid = await ensureB2bCustomerId()
     if (!cid) {
       navigate('/login')
       return

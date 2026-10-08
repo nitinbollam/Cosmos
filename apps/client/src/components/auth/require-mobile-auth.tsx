@@ -1,20 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useSessionGate } from './use-session-gate'
 
 export function RequireMobileAuth({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate()
-  const pathname = useLocation().pathname ?? '/m'
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    const token = window.localStorage.getItem('pleros.accessToken')
-    if (!token) {
-      const next = pathname.startsWith('/m/') ? `?next=${encodeURIComponent(pathname)}` : ''
-      navigate(`/m/login${next}`)
-      return
-    }
-    setReady(true)
-  }, [pathname, navigate])
+  const ready = useSessionGate({ surface: 'mobile', loginPath: '/m/login', staffOnly: true })
 
   if (!ready) {
     return (

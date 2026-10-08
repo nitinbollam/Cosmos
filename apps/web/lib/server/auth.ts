@@ -1,10 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import bcrypt from 'bcrypt'
 import * as jose from 'jose'
 import { assertPasswordPolicy } from './auth-security'
 import { authDb as prisma, tenantDb } from './db'
 import { jwtRefreshSecret, jwtSecret } from './env'
-import { ApiError, invalidateUserSessionCache } from './session'
+import { ApiError, invalidateAuthSessionCache, invalidateUserSessionCache } from './session'
 
 export type TokenPair = {
   accessToken: string
@@ -14,13 +14,29 @@ export type TokenPair = {
   permissions: string[]
 }
 
-async function signPair(user: {
+export type SessionMeta = {
+  userAgent?: string | null
+}
+
+/**
+ * How long a just-replaced refresh token keeps working. Two tabs that refresh at the same
+ * moment both present the same token; without this window the second would look like reuse.
+ */
+const ROTATION_GRACE_MS = 30_000
+
+type SignableUser = {
   id: string
   email: string
   role: string
   tenantId: string
   permissions?: unknown
-}): Promise<TokenPair> {
+}
+
+/**
+ * Issue an access/refresh pair bound to an AuthSession row (`sid`).
+ * Without `sessionId` a new session is created; with it the session's refresh token is rotated.
+ */
+async function signPair(user: SignableUser, opts: SessionMeta & { sessionId?: string } = {}): Promise<TokenPair> {
   const rawPerms = user.permissions
   const permissions: string[] = Array.isArray(rawPerms)
     ? (rawPerms as string[])
@@ -28,39 +44,95 @@ async function signPair(user: {
       ? JSON.parse(rawPerms)
       : []
 
+  const sid = opts.sessionId ?? randomUUID()
   const payload = {
     sub: user.id,
     email: user.email,
     role: user.role,
     tenantId: user.tenantId,
     permissions,
+    sid,
   }
-  const accessTtl = process.env.JWT_ACCESS_TTL ?? '15m'
+  const accessTtl = process.env.JWT_ACCESS_TTL ?? '45m'
   const refreshTtl = process.env.JWT_REFRESH_TTL ?? '7d'
   const accessSecret = new TextEncoder().encode(jwtSecret())
   const refreshSecret = new TextEncoder().encode(jwtRefreshSecret())
 
   const [accessToken, refreshToken] = await Promise.all([
-    new jose.SignJWT(payload)
+    new jose.SignJWT({ ...payload, typ: 'access' })
       .setProtectedHeader({ alg: 'HS256' })
+      .setJti(randomUUID())
       .setExpirationTime(accessTtl)
       .sign(accessSecret),
-    new jose.SignJWT(payload)
+    new jose.SignJWT({ ...payload, typ: 'refresh' })
       .setProtectedHeader({ alg: 'HS256' })
+      .setJti(randomUUID())
       .setExpirationTime(refreshTtl)
       .sign(refreshSecret),
   ])
 
-  const refreshTokenHash = await bcrypt.hash(refreshToken, 10)
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { refreshTokenHash },
-  })
+  const refreshExp = jose.decodeJwt(refreshToken).exp
+  const expiresAt = new Date((refreshExp ?? Math.floor(Date.now() / 1000) + 7 * 24 * 3600) * 1000)
+  const refreshTokenHash = sha256(refreshToken)
+  const now = new Date()
+
+  if (opts.sessionId) {
+    const current = await prisma.authSession.findUnique({ where: { id: sid } })
+    await prisma.authSession.update({
+      where: { id: sid },
+      data: {
+        refreshTokenHash,
+        prevTokenHash: current?.refreshTokenHash ?? null,
+        rotatedAt: now,
+        lastUsedAt: now,
+        expiresAt,
+      },
+    })
+  } else {
+    await prisma.authSession.create({
+      data: {
+        id: sid,
+        userId: user.id,
+        tenantId: user.tenantId,
+        refreshTokenHash,
+        userAgent: opts.userAgent?.slice(0, 300) ?? null,
+        expiresAt,
+      },
+    })
+  }
 
   return { accessToken, refreshToken, userId: user.id, role: user.role, permissions }
 }
 
-export async function loginUser(email: string, password: string): Promise<TokenPair> {
+/** Revoke every session for a user, optionally keeping one (the caller's own). */
+export async function revokeAllUserSessions(userId: string, opts?: { exceptSessionId?: string }): Promise<void> {
+  await prisma.authSession.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+      ...(opts?.exceptSessionId ? { id: { not: opts.exceptSessionId } } : {}),
+    },
+    data: { revokedAt: new Date() },
+  })
+  // Legacy single-slot token (pre-AuthSession); harmless to clear every time.
+  await prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } }).catch(() => undefined)
+  invalidateUserSessionCache(userId)
+}
+
+/** Verify a refresh token's signature and return its claims, or throw 401. */
+export async function verifyRefreshToken(refreshToken: string): Promise<jose.JWTPayload> {
+  try {
+    const { payload } = await jose.jwtVerify(refreshToken, new TextEncoder().encode(jwtRefreshSecret()))
+    // An access token must never refresh. Tokens issued before `typ` existed have no claim and are allowed.
+    if (payload.typ === 'access') throw new Error('wrong token type')
+    if (typeof payload.sub !== 'string') throw new Error('missing sub')
+    return payload
+  } catch {
+    throw new ApiError(401, 'Access denied')
+  }
+}
+
+export async function loginUser(email: string, password: string, meta: SessionMeta = {}): Promise<TokenPair> {
   const user = await prisma.user.findFirst({
     where: { email: email.trim().toLowerCase(), isActive: true },
   })
@@ -76,7 +148,7 @@ export async function loginUser(email: string, password: string): Promise<TokenP
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   })
-  return signPair(user)
+  return signPair(user, meta)
 }
 
 export type VerificationDelivery = {
@@ -102,6 +174,7 @@ export async function registerUser(input: {
   /** Invite accept and admin-created users skip the verification gate. */
   emailVerified?: boolean
   issueTokens?: boolean
+  sessionMeta?: SessionMeta
 }): Promise<TokenPair | VerificationDelivery> {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } })
   if (!tenant) throw new Error('Tenant does not exist')
@@ -136,27 +209,72 @@ export async function registerUser(input: {
         delivery: delivery.provider,
       }
     }
-    return signPair(user)
+    return signPair(user, input.sessionMeta)
   }
-  return signPair(user)
+  return signPair(user, input.sessionMeta)
 }
 
-export async function refreshUserTokens(userId: string, refreshToken: string): Promise<TokenPair> {
-  const refreshSecret = new TextEncoder().encode(jwtRefreshSecret())
-  try {
-    const { payload } = await jose.jwtVerify(refreshToken, refreshSecret)
-    if (payload.sub !== userId) throw new ApiError(401, 'Access denied')
-  } catch {
+/**
+ * Rotate a refresh token. The user comes from the token itself; `expectedUserId` is the
+ * optional legacy body field and must match when given.
+ */
+export async function refreshUserTokens(refreshToken: string, expectedUserId?: string): Promise<TokenPair> {
+  const payload = await verifyRefreshToken(refreshToken)
+  const userId = payload.sub as string
+  if (expectedUserId && expectedUserId !== userId) throw new ApiError(401, 'Access denied')
+
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user || !user.isActive) throw new ApiError(401, 'Access denied')
+  if (typeof payload.tenantId === 'string' && payload.tenantId !== user.tenantId) {
     throw new ApiError(401, 'Access denied')
   }
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user?.refreshTokenHash) throw new ApiError(401, 'Access denied')
-  const ok = await bcrypt.compare(refreshToken, user.refreshTokenHash)
-  if (!ok) throw new ApiError(401, 'Access denied')
-  return signPair(user)
+  if (!user.emailVerifiedAt && user.emailVerificationTokenHash) throw new ApiError(401, 'Access denied')
+
+  const tokenHash = sha256(refreshToken)
+  const sid = typeof payload.sid === 'string' ? payload.sid : null
+
+  if (!sid) {
+    // Token issued before AuthSession existed: accept once against the legacy column,
+    // then move the device onto a real session.
+    if (!user.refreshTokenHash) throw new ApiError(401, 'Access denied')
+    const ok = await bcrypt.compare(refreshToken, user.refreshTokenHash)
+    if (!ok) throw new ApiError(401, 'Access denied')
+    await prisma.user.update({ where: { id: user.id }, data: { refreshTokenHash: null } })
+    return signPair(user)
+  }
+
+  const session = await prisma.authSession.findUnique({ where: { id: sid } })
+  if (!session || session.userId !== user.id || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
+    throw new ApiError(401, 'Access denied')
+  }
+
+  const isCurrent = session.refreshTokenHash === tokenHash
+  const inGrace =
+    session.prevTokenHash === tokenHash &&
+    session.rotatedAt != null &&
+    Date.now() - session.rotatedAt.getTime() < ROTATION_GRACE_MS
+  if (!isCurrent && !inGrace) {
+    // A replaced token came back after the grace window: treat it as stolen and end the session.
+    await prisma.authSession.update({ where: { id: sid }, data: { revokedAt: new Date() } })
+    invalidateAuthSessionCache(sid)
+    throw new ApiError(401, 'Access denied')
+  }
+
+  return signPair(user, { sessionId: sid })
 }
 
-export async function logoutUser(userId: string): Promise<void> {
+/**
+ * End one device's session. Legacy tokens without `sid` clear the old single-slot column.
+ */
+export async function logoutUser(userId: string, sessionId?: string | null): Promise<void> {
+  if (sessionId) {
+    await prisma.authSession.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    })
+    invalidateAuthSessionCache(sessionId)
+    return
+  }
   await prisma.user.update({
     where: { id: userId },
     data: { refreshTokenHash: null },
@@ -173,6 +291,7 @@ export async function acceptInvite(input: {
   password: string
   firstName: string
   lastName: string
+  sessionMeta?: SessionMeta
 }): Promise<TokenPair & { tenantId: string }> {
   const invite = await tenantDb.tenantInvite.findUnique({ where: { token: input.token } })
   if (!invite || invite.revokedAt || invite.acceptedAt) {
@@ -191,6 +310,7 @@ export async function acceptInvite(input: {
     role: invite.role,
     emailVerified: true,
     issueTokens: true,
+    sessionMeta: input.sessionMeta,
   })
   if ('requiresVerification' in result) {
     throw new ApiError(500, 'Invite accept failed unexpectedly')
@@ -337,14 +457,19 @@ export async function resetPassword(token: string, newPassword: string): Promise
       passwordHash,
       passwordResetTokenHash: null,
       passwordResetExpiresAt: null,
-      // Invalidate existing sessions on password change.
-      refreshTokenHash: null,
     },
   })
-  invalidateUserSessionCache(user.id)
+  // Whoever had the old password may hold a session: end all of them.
+  await revokeAllUserSessions(user.id)
 }
 
-export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+/** Ends every other device's session; the caller's own session (`currentSessionId`) stays signed in. */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+  currentSessionId?: string | null,
+): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) throw new ApiError(404, 'User not found')
   const ok = await bcrypt.compare(currentPassword, user.passwordHash)
@@ -353,6 +478,7 @@ export async function changePassword(userId: string, currentPassword: string, ne
   const passwordHash = await bcrypt.hash(newPassword, 12)
   await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash, refreshTokenHash: null },
+    data: { passwordHash },
   })
+  await revokeAllUserSessions(userId, { exceptSessionId: currentSessionId ?? undefined })
 }

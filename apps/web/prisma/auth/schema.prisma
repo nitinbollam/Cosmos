@@ -33,6 +33,27 @@ model User {
   @@index([email])
 }
 
+/// One row per signed-in device. Refresh tokens carry the row id as `sid`.
+/// `User.refreshTokenHash` is kept only so tokens issued before this table existed
+/// can refresh once; drop it in a later release.
+model AuthSession {
+  id               String    @id
+  userId           String
+  tenantId         String
+  /// sha256 of the current refresh token
+  refreshTokenHash String
+  /// Previous hash, still accepted briefly after a rotation so two tabs refreshing at once don't revoke each other
+  prevTokenHash    String?
+  rotatedAt        DateTime?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  @@index([userId])
+}
+
 model Tenant {
   id        String   @id @default(cuid())
   name      String

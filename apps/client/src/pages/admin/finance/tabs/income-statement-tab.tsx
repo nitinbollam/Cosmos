@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, gatewayApiBaseUrl } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { authFetch } from '@/lib/auth-session'
 
 type IncomeStatement = {
   fromIso: string
@@ -38,15 +39,9 @@ export function IncomeStatementTab() {
   })
 
   async function downloadPdf() {
-    const token = localStorage.getItem('pleros.accessToken')
     const base = gatewayApiBaseUrl.replace(/\/$/, '')
     const url = `${base}/financial-statements/income-statement/pdf?fromIso=${encodeURIComponent(applied.fromIso)}&toIso=${encodeURIComponent(applied.toIso)}`
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'application/pdf',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    })
+    const res = await authFetch(url, { headers: { Accept: 'application/pdf' } })
     if (!res.ok) return
     const blob = await res.blob()
     const objectUrl = URL.createObjectURL(blob)

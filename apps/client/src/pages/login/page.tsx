@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { axiosErr, isEmailVerificationRequired } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 import { setB2bSession } from '@/lib/session'
+import { clearTokens, setTokens } from '@/lib/auth-session'
 
 type LoginRes = { accessToken: string; refreshToken: string }
 
@@ -34,16 +35,14 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const r = await api.post<LoginRes>('/auth/login', { email, password })
-      window.localStorage.setItem('pleros.accessToken', r.accessToken)
-      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
+      setTokens(r.accessToken, r.refreshToken)
 
       const me = await api.get<AuthMe>('/auth/me')
       if (!me.customerId) {
         setErr(
           'No CRM customer record matches your email. Ask your tenant admin to create a customer with this address.',
         )
-        window.localStorage.removeItem('pleros.accessToken')
-        window.localStorage.removeItem('pleros.refreshToken')
+        clearTokens()
         return
       }
 

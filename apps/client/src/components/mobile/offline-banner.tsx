@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   actionLabel,
+  belongsTo,
   conflictCount,
   discardFailedActions,
   failedCount,
-  queueLength,
   readQueue,
   replayableCount,
   resetFailedForRetry,
 } from '@/lib/offline-queue'
 import { replayOfflineQueue } from '@/lib/offline-sync'
+import { currentIdentity } from '@/lib/session-identity'
+
+/** The signed-in user's queued work (plus untagged legacy items); other users' items are held, not shown. */
+function myQueue() {
+  const me = currentIdentity('mobile')
+  return readQueue().filter((a) => !a.userId || belongsTo(a, me))
+}
 
 export function OfflineBanner() {
   const [offline, setOffline] = useState(false)
@@ -23,10 +30,11 @@ export function OfflineBanner() {
 
   const refreshCounts = () => {
     setOffline(!navigator.onLine)
-    setPending(queueLength())
-    setFailed(failedCount())
-    setConflicts(conflictCount())
-    setReplayable(replayableCount())
+    const mine = myQueue()
+    setPending(mine.length)
+    setFailed(failedCount(mine))
+    setConflicts(conflictCount(mine))
+    setReplayable(replayableCount(mine))
   }
 
   useEffect(() => {
@@ -71,7 +79,7 @@ export function OfflineBanner() {
   }, [offline, replayable])
 
   const failedItems = useMemo(() => {
-    return readQueue().filter((a) => a.status === 'failed' || a.status === 'conflict')
+    return myQueue().filter((a) => a.status === 'failed' || a.status === 'conflict')
   }, [pending, failed, conflicts])
 
   async function syncNow(forceConflicts = false) {
@@ -100,7 +108,7 @@ export function OfflineBanner() {
   }
 
   function discardFailed() {
-    const n = discardFailedActions()
+    const n = discardFailedActions(currentIdentity('mobile'))
     refreshCounts()
     setMsg(n > 0 ? `Discarded ${n} failed action(s)` : 'Nothing to discard')
     setExpanded(false)

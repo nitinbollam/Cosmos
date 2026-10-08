@@ -1,3 +1,5 @@
+import { currentIdentity, type SessionIdentity } from '@/lib/session-identity'
+
 const STORAGE_KEY = 'pleros.offlineQueue'
 
 /** Background Sync tag — must match `sw.js` sync listener. */
@@ -20,6 +22,29 @@ export type OfflineAction = {
    * `conflict` — permanent client error (409/404/…); needs user retry or discard
    */
   status?: OfflineActionStatus
+  /**
+   * Who queued it. Replay only sends an action under the same user's session, so work
+   * queued by one person on a shared device is never submitted as someone else.
+   * Absent on actions queued before this field existed.
+   */
+  userId?: string
+  tenantId?: string
+}
+
+export function belongsTo(action: OfflineAction, identity: SessionIdentity | null): boolean {
+  return Boolean(
+    identity && action.userId === identity.userId && action.tenantId === identity.tenantId,
+  )
+}
+
+/** Actions the signed-in user can replay now — other users' held work doesn't count. */
+export function replayableCountFor(identity: SessionIdentity | null, queue = readQueue()): number {
+  return queue.filter((a) => isReplayable(a) && (!a.userId || belongsTo(a, identity))).length
+}
+
+/** Unsynced actions owned by `identity` (used to warn before an explicit sign-out). */
+export function pendingCountFor(identity: SessionIdentity | null, queue = readQueue()): number {
+  return queue.filter((a) => belongsTo(a, identity)).length
 }
 
 export function readQueue(): OfflineAction[] {
@@ -68,12 +93,14 @@ export async function requestBackgroundSync(): Promise<boolean> {
 
 export function enqueueAction(type: string, payload: unknown): void {
   const q = readQueue()
+  const owner = currentIdentity('mobile')
   q.push({
     id: crypto.randomUUID(),
     type,
     payload,
     createdAt: new Date().toISOString(),
     status: 'pending',
+    ...(owner ? { userId: owner.userId, tenantId: owner.tenantId } : {}),
   })
   writeQueue(q)
   notifyQueueChanged()
@@ -120,10 +147,14 @@ export function failedCount(queue = readQueue()): number {
   return queue.filter((a) => a.status === 'failed' || a.status === 'conflict').length
 }
 
-/** Remove permanent + transient failures so the user can move on. */
-export function discardFailedActions(): number {
+/**
+ * Remove permanent + transient failures so the user can move on. With `owner`, only that
+ * user's (and untagged legacy) failures go — never another user's unsynced work.
+ */
+export function discardFailedActions(owner?: SessionIdentity | null): number {
   const before = readQueue()
-  const next = before.filter((a) => a.status !== 'failed' && a.status !== 'conflict')
+  const mayDiscard = (a: OfflineAction) => owner === undefined || !a.userId || belongsTo(a, owner)
+  const next = before.filter((a) => !(mayDiscard(a) && (a.status === 'failed' || a.status === 'conflict')))
   const removed = before.length - next.length
   if (removed > 0) {
     writeQueue(next)

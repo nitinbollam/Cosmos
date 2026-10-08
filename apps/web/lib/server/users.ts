@@ -1,5 +1,6 @@
 import { authDb } from './db'
 import { ApiError, invalidateUserSessionCache } from './session'
+import { revokeAllUserSessions } from './auth'
 
 export async function listUsers(tenantId: string, page = 1, pageSize = 20) {
   const [items, total] = await Promise.all([
@@ -42,11 +43,11 @@ export async function deactivateUser(tenantId: string, id: string) {
   if (!user) throw new ApiError(404, 'User not found')
   const updated = await authDb.user.update({
     where: { id },
-    // Clearing the refresh token forces re-login; session revalidation rejects within a minute.
-    data: { isActive: false, refreshTokenHash: null },
+    data: { isActive: false },
     select: { id: true, email: true, isActive: true },
   })
-  invalidateUserSessionCache(id)
+  // Ending the sessions stops refresh; session revalidation rejects open access tokens within a minute.
+  await revokeAllUserSessions(id)
   return updated
 }
 
@@ -87,9 +88,7 @@ export async function updateUser(
     data: {
       ...(patch.role !== undefined ? { role: patch.role as never } : {}),
       ...(patch.permissions !== undefined ? { permissions: patch.permissions } : {}),
-      ...(patch.isActive !== undefined
-        ? { isActive: patch.isActive, ...(patch.isActive ? {} : { refreshTokenHash: null }) }
-        : {}),
+      ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
     },
     select: {
       id: true,
@@ -101,7 +100,8 @@ export async function updateUser(
       isActive: true,
     },
   })
-  invalidateUserSessionCache(id)
+  if (patch.isActive === false) await revokeAllUserSessions(id)
+  else invalidateUserSessionCache(id)
   return {
     ...updated,
     permissions: Array.isArray(updated.permissions)
