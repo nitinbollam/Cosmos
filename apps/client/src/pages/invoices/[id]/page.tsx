@@ -6,6 +6,7 @@ import { axiosErr } from '@/lib/axios-error'
 import { useStripeConnect } from '@/lib/stripe-connect'
 import { StatusBadge } from '@/components/status-badge'
 import { StorefrontCardCapture } from '@/components/checkout-card-capture'
+import { authFetch } from '@/lib/auth-session'
 
 type Line = {
   id: string
@@ -196,12 +197,8 @@ export default function StorefrontInvoiceDetailPage() {
   }, [load])
 
   async function downloadPdf() {
-    const token = localStorage.getItem('pleros.accessToken')
-    const res = await fetch(`/api/v1/invoices/${encodeURIComponent(id)}/pdf`, {
-      headers: {
-        Accept: 'application/pdf',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+    const res = await authFetch(`/api/v1/invoices/${encodeURIComponent(id)}/pdf`, {
+      headers: { Accept: 'application/pdf' },
     })
     if (!res.ok) {
       setErr('Could not download invoice')

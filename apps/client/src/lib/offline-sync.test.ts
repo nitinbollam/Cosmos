@@ -3,8 +3,19 @@ import test, { afterEach, beforeEach, mock } from 'node:test'
 
 const memory = new Map<string, string>()
 
+/** Unsigned JWT-shaped token; the client only decodes it to learn who is signed in. */
+function fakeToken(sub: string, tenantId: string): string {
+  const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  return `${b64({ alg: 'HS256' })}.${b64({ sub, tenantId, exp: Math.floor(Date.now() / 1000) + 3600 })}.sig`
+}
+
+function signInAs(sub: string, tenantId = 't1') {
+  memory.set('pleros.mobile.accessToken', fakeToken(sub, tenantId))
+}
+
 function installBrowserMocks(online = true) {
   memory.clear()
+  signInAs('u1')
 
   const syncRegister = mock.fn(async () => undefined)
   const localStorage = {
@@ -85,7 +96,7 @@ test('replayOfflineQueue no-ops while offline', async () => {
   queue.clearQueue()
   queue.enqueueAction('receiving_scan', { sessionId: 's1', code: 'A' })
   const result = await sync.replayOfflineQueue({ post })
-  assert.deepEqual(result, { synced: 0, failed: 0, conflicts: 0, errors: [] })
+  assert.deepEqual(result, { synced: 0, failed: 0, conflicts: 0, held: 0, errors: [] })
   assert.equal(queue.queueLength(), 1)
   assert.equal(post.mock.calls.length, 0)
 })
@@ -211,4 +222,91 @@ test('registerOfflineSyncListeners cleans up all handlers', async () => {
   }
   assert.equal(win.removeEventListener.mock.calls.length >= 2, true)
   assert.equal(doc.removeEventListener.mock.calls.length >= 1, true)
+})
+
+test('replay only sends actions queued by the signed-in user', async () => {
+  installBrowserMocks(true)
+  const queue = await import('./offline-queue')
+  const sync = await import('./offline-sync')
+  const post = mock.fn(async () => undefined)
+
+  queue.clearQueue()
+  queue.enqueueAction('receiving_scan', { sessionId: 's1', code: 'MINE' })
+  signInAs('u2')
+  queue.enqueueAction('receiving_scan', { sessionId: 's1', code: 'THEIRS' })
+
+  const asU2 = await sync.replayOfflineQueue({ post })
+  assert.equal(asU2.synced, 1)
+  assert.equal(asU2.held, 1)
+  assert.equal(((post.mock.calls[0]?.arguments as unknown[])?.[1] as { code: string }).code, 'THEIRS')
+
+  signInAs('u1')
+  const asU1 = await sync.replayOfflineQueue({ post })
+  assert.equal(asU1.synced, 1)
+  assert.equal(queue.queueLength(), 0)
+})
+
+test('nothing replays while signed out', async () => {
+  installBrowserMocks(true)
+  const queue = await import('./offline-queue')
+  const sync = await import('./offline-sync')
+  const post = mock.fn(async () => undefined)
+
+  queue.clearQueue()
+  queue.enqueueAction('receiving_scan', { sessionId: 's1', code: 'A' })
+  memory.delete('pleros.mobile.accessToken')
+  const result = await sync.replayOfflineQueue({ post })
+  assert.equal(result.synced, 0)
+  assert.equal(result.held, 1)
+  assert.equal(post.mock.calls.length, 0)
+})
+
+test('actions queued before owners were recorded wait for a person to confirm', async () => {
+  installBrowserMocks(true)
+  const queue = await import('./offline-queue')
+  const sync = await import('./offline-sync')
+  const post = mock.fn(async () => undefined)
+
+  memory.set(
+    'pleros.offlineQueue',
+    JSON.stringify([{ id: 'legacy', type: 'receiving_scan', payload: { sessionId: 's1', code: 'OLD' }, createdAt: '', status: 'pending' }]),
+  )
+  const first = await sync.replayOfflineQueue({ post })
+  assert.equal(first.conflicts, 1)
+  assert.equal(post.mock.calls.length, 0)
+  assert.equal(queue.readQueue()[0]?.status, 'conflict')
+
+  const confirmed = await sync.replayOfflineQueue({ post, retryConflicts: true })
+  assert.equal(confirmed.synced, 1)
+  assert.equal(queue.queueLength(), 0)
+})
+
+test('pendingCountFor counts only the given user', async () => {
+  installBrowserMocks(true)
+  const queue = await import('./offline-queue')
+  queue.clearQueue()
+  queue.enqueueAction('receiving_scan', { sessionId: 's1', code: 'A' })
+  queue.enqueueAction('receiving_scan', { sessionId: 's1', code: 'B' })
+  assert.equal(queue.pendingCountFor({ userId: 'u1', tenantId: 't1' }), 2)
+  assert.equal(queue.pendingCountFor({ userId: 'u2', tenantId: 't1' }), 0)
+  assert.equal(queue.pendingCountFor(null), 0)
+})
+
+test("another user's held actions do not re-arm Background Sync", async () => {
+  const { syncRegister } = installBrowserMocks(true)
+  const queue = await import('./offline-queue')
+  const sync = await import('./offline-sync')
+  const post = mock.fn(async () => undefined)
+
+  queue.clearQueue()
+  signInAs('u2')
+  queue.enqueueAction('receiving_scan', { sessionId: 's1', code: 'THEIRS' })
+  signInAs('u1')
+  await new Promise((r) => setTimeout(r, 0))
+  syncRegister.mock.resetCalls()
+
+  const result = await sync.replayOfflineQueue({ post })
+  await new Promise((r) => setTimeout(r, 0))
+  assert.equal(result.held, 1)
+  assert.equal(syncRegister.mock.callCount(), 0)
 })

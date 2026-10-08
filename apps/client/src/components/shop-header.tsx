@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useCartStore } from '@/stores/cart.store'
 import { STOREFRONT_AUTH_EVENT } from '@/lib/auth-events'
 import { jwtEmail } from '@/lib/jwt'
-import { signOut } from '@/lib/auth-session'
+import { getAccessToken, signOut } from '@/lib/auth-session'
 import { ThemeSwitcher } from '@/components/theme-switcher'
+import { getB2bTenantId } from '@/lib/session'
 
 export function ShopHeader() {
   const location = useLocation()
@@ -16,16 +17,16 @@ export function ShopHeader() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const refreshAuth = useCallback(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('pleros.accessToken') : null
+    const token = getAccessToken()
     setUserEmail(jwtEmail(token))
-    const tid = typeof window !== 'undefined' ? window.sessionStorage.getItem('pleros.tenantId') : null
+    const tid = getB2bTenantId()
     if (tid) setTenantLabel(tid.slice(0, 8))
   }, [])
 
   useEffect(() => {
     refreshAuth()
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'pleros.accessToken' || e.key === null) refreshAuth()
+      if (e.key === null || Boolean(e.key?.endsWith('.accessToken'))) refreshAuth()
     }
     const onAuthEvt = () => refreshAuth()
     window.addEventListener('storage', onStorage)

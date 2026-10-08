@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { isUnauthorized } from '@/lib/axios-error'
-import { getB2bCustomerId } from '@/lib/session'
+import { ensureB2bCustomerId } from '@/lib/session'
 import { StatusBadge } from '@/components/status-badge'
 import { useCartStore } from '@/stores/cart.store'
 
@@ -39,12 +39,14 @@ export default function StorefrontOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [unauthorized, setUnauthorized] = useState(false)
   const [otherErr, setOtherErr] = useState<string | null>(null)
+  const [customerId, setCustomerId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     setOtherErr(null)
     setUnauthorized(false)
-    const cid = getB2bCustomerId()
+    const cid = await ensureB2bCustomerId()
+    setCustomerId(cid)
     try {
       const qs = new URLSearchParams({ page: '1', pageSize: '50', channel: 'B2B_PORTAL' })
       if (cid) qs.set('customerId', cid)
@@ -112,7 +114,7 @@ export default function StorefrontOrdersPage() {
         </p>
       ) : null}
       {otherErr ? <p style={{ marginTop: 24, color: 'var(--c-danger)' }}>{otherErr}</p> : null}
-      {!getB2bCustomerId() && !loading ? (
+      {!customerId && !loading ? (
         <p style={{ marginTop: 16, color: 'var(--c-warning)' }}>
           Complete sign-in to link your CRM customer, or{' '}
           <Link to="/login" style={{ color: 'var(--c-accent)' }}>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { jwtEmail } from '@/lib/jwt'
-import { signOut } from '@/lib/auth-session'
+import { getAccessToken, signOut } from '@/lib/auth-session'
 import { STOREFRONT_AUTH_EVENT } from '@/lib/auth-events'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 
@@ -22,14 +22,14 @@ export function UserMenu({ afterLogout = '/', showTheme = true }: UserMenuProps)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('pleros.accessToken') : null
+    const token = getAccessToken()
     setEmail(jwtEmail(token))
   }, [])
 
   useEffect(() => {
     refresh()
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'pleros.accessToken' || e.key === null) refresh()
+      if (e.key === null || Boolean(e.key?.endsWith('.accessToken'))) refresh()
     }
     const onAuth = () => refresh()
     window.addEventListener('storage', onStorage)
@@ -49,7 +49,7 @@ export function UserMenu({ afterLogout = '/', showTheme = true }: UserMenuProps)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
-  const token = typeof window !== 'undefined' ? window.localStorage.getItem('pleros.accessToken') : null
+  const token = getAccessToken()
   if (!token) return null
 
   const label = email ?? 'Account'

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { PlerosDialogModal } from '@/components/pleros/radix-overlays'
+import { authFetch } from '@/lib/auth-session'
 
 type Sku = {
   id: string
@@ -123,16 +124,13 @@ export default function SkuDetailPage() {
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
 
   async function printLabel() {
-    const token = localStorage.getItem('pleros.accessToken')
     const qty = Math.max(1, labelQty)
     const params = new URLSearchParams({
       qty: String(qty),
       size: labelSize,
       symbols: labelSymbols,
     })
-    const res = await fetch(`/api/v1/skus/${encodeURIComponent(skuId)}/label?${params}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const res = await authFetch(`/api/v1/skus/${encodeURIComponent(skuId)}/label?${params}`)
     if (!res.ok) return
     const html = await res.text()
     const blob = new Blob([html], { type: 'text/html' })

@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 import { setB2bSession } from '@/lib/session'
+import { moveTokens, setTokens } from '@/lib/auth-session'
 
 type AcceptRes = { accessToken: string; refreshToken: string; role: string }
 
@@ -31,8 +32,8 @@ export default function AcceptInvitePage() {
     setLoading(true)
     try {
       const r = await api.post<AcceptRes>('/auth/accept-invite', { token, firstName, lastName, password })
-      window.localStorage.setItem('pleros.accessToken', r.accessToken)
-      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
+      // Signed in to the buyer portal first; staff are moved to the admin login below.
+      setTokens(r.accessToken, r.refreshToken, 'shop')
       emitStorefrontAuthChanged()
       // Users whose email matches a CRM customer land in the buyer portal; staff go to admin.
       const me = await api.get<AuthMe>('/auth/me')
@@ -40,6 +41,7 @@ export default function AcceptInvitePage() {
         setB2bSession(me.tenantId, me.customerId)
         window.location.href = '/catalog'
       } else {
+        moveTokens('shop', 'admin')
         window.location.href = '/admin'
       }
     } catch (e: unknown) {

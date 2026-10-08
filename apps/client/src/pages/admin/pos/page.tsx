@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { ScanButton, useKeyboardWedge } from '@/components/scanner'
+import { authFetch } from '@/lib/auth-session'
 
 type Register = { id: string; name: string; warehouseId: string | null }
 type Customer = { id: string; name: string; email?: string | null; isLicensedTobacco?: boolean }
@@ -88,10 +89,7 @@ export default function PosPage() {
   })
 
   async function printReceipt(orderId: string) {
-    const token = window.localStorage.getItem('pleros.accessToken')
-    const res = await fetch(`/api/v1/pos/orders/${encodeURIComponent(orderId)}/receipt`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const res = await authFetch(`/api/v1/pos/orders/${encodeURIComponent(orderId)}/receipt`)
     if (!res.ok) throw new Error('Could not load receipt')
     const html = await res.text()
     const w = window.open('', '_blank', 'width=360,height=640')

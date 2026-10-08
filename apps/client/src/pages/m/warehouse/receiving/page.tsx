@@ -33,8 +33,10 @@ export default function ReceivingMobilePage() {
     setMsg(null)
     try {
       if (!navigator.onLine) {
-        enqueueAction('receiving_session_create', { poId })
-        setMsg('Queued offline — will sync when online')
+        // A queued "start" can't hand back a session id, so the screen would sit with scanning
+        // locked and a second tap online would open a duplicate session. Starting needs a
+        // connection; scans after that still queue offline.
+        setMsg("You're offline — connect to start a receiving session. Scans work offline once it has started.")
         return
       }
       const res = await api.post<{ id: string }>('/wms/receiving/sessions', {

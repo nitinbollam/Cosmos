@@ -5,6 +5,7 @@ import { PwaInstallHint } from '@/components/mobile/pwa-install-hint'
 import { api, formatApiReachabilityError } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
 import { parseJwtPayload } from '@/lib/jwt'
+import { setTokens } from '@/lib/auth-session'
 
 function defaultMobileHome(role: string | undefined): string {
   if (role === 'DRIVER') return '/m/delivery'
@@ -25,8 +26,7 @@ export default function MobileLoginPage() {
     setLoading(true)
     try {
       const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
-      window.localStorage.setItem('pleros.accessToken', r.accessToken)
-      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
+      setTokens(r.accessToken, r.refreshToken)
       const next = new URLSearchParams(window.location.search).get('next')
       if (next?.startsWith('/m/')) {
         navigate(next)

@@ -1,7 +1,11 @@
-/* Pleros mobile PWA — app-shell precache, SWR API GETs, offline queue sync */
-const CACHE_SHELL = 'pleros-shell-v3'
-const CACHE_ASSETS = 'pleros-assets-v3'
-const CACHE_API = 'pleros-api-v3'
+/* Pleros mobile PWA — app-shell precache, network-first per-user API GETs, offline queue sync */
+const CACHE_SHELL = 'pleros-shell-v4'
+const CACHE_ASSETS = 'pleros-assets-v4'
+/**
+ * API responses are cached per signed-in user: `pleros-api-v4:<tenantId>:<userId>`.
+ * One user's cached data is never served to another on a shared device.
+ */
+const CACHE_API_PREFIX = 'pleros-api-v4'
 
 /**
  * Mobile SPA shells (same document as /index.html).
@@ -44,9 +48,12 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      const keep = new Set([CACHE_SHELL, CACHE_ASSETS, CACHE_API])
+      const keep = new Set([CACHE_SHELL, CACHE_ASSETS])
       const keys = await caches.keys()
-      await Promise.all(keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k)))
+      // Drops every v3 cache, including the old shared API cache that wasn't split per user.
+      await Promise.all(
+        keys.filter((k) => !keep.has(k) && !k.startsWith(`${CACHE_API_PREFIX}:`)).map((k) => caches.delete(k)),
+      )
       await self.clients.claim()
     })(),
   )
@@ -77,9 +84,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Safe API GETs — stale-while-revalidate (instant from cache, refresh in bg)
+  // API GETs — network first so screens never show data from before a save; the per-user
+  // cache is only an offline fallback. Requests without a session are never cached.
   if (isCacheableApiGet(url.pathname)) {
-    event.respondWith(staleWhileRevalidate(req, CACHE_API))
+    const cacheName = apiCacheNameFor(req)
+    if (cacheName) event.respondWith(networkFirstApi(req, cacheName))
     return
   }
 
@@ -122,7 +131,15 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'PLEROS_SKIP_WAITING') {
     self.skipWaiting()
   }
+  if (event.data?.type === 'PLEROS_CLEAR_API_CACHE') {
+    event.waitUntil(clearApiCaches())
+  }
 })
+
+async function clearApiCaches() {
+  const keys = await caches.keys()
+  await Promise.all(keys.filter((k) => k.startsWith(`${CACHE_API_PREFIX}:`)).map((k) => caches.delete(k)))
+}
 
 function isMobilePath(pathname) {
   return pathname === '/m' || pathname.startsWith('/m/')
@@ -192,33 +209,43 @@ async function cacheFirst(req, cacheName) {
   }
 }
 
-/** Return cached response immediately; refresh cache in the background. */
-async function staleWhileRevalidate(req, cacheName) {
-  const cache = await caches.open(cacheName)
-  const cached = await cache.match(req)
-
-  const networkPromise = fetch(req)
-    .then((res) => {
-      if (res.ok) {
-        void cache.put(req, res.clone())
-      }
-      return res
-    })
-    .catch(() => undefined)
-
-  if (cached) {
-    void networkPromise
-    return cached
+/**
+ * Cache partition for the user making the request, from the Bearer token's (unverified)
+ * claims. The claims only pick a cache; the server still verifies every request.
+ */
+function apiCacheNameFor(req) {
+  const auth = req.headers.get('Authorization') || ''
+  if (!auth.startsWith('Bearer ')) return null
+  try {
+    const part = auth.slice(7).split('.')[1]
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')))
+    if (typeof json.sub !== 'string' || typeof json.tenantId !== 'string') return null
+    return `${CACHE_API_PREFIX}:${json.tenantId}:${json.sub}`
+  } catch {
+    return null
   }
+}
 
-  const res = await networkPromise
-  return (
-    res ??
-    new Response(JSON.stringify({ message: 'Offline — no cached API response' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    })
-  )
+/** Network first; fall back to this user's cached copy only when the network is unreachable. */
+async function networkFirstApi(req, cacheName) {
+  try {
+    const res = await fetch(req)
+    if (res.ok) {
+      const cache = await caches.open(cacheName)
+      void cache.put(req, res.clone())
+    }
+    return res
+  } catch {
+    const cache = await caches.open(cacheName)
+    const cached = await cache.match(req)
+    return (
+      cached ??
+      new Response(JSON.stringify({ message: 'Offline — no cached API response' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      })
+    )
+  }
 }
 
 /**

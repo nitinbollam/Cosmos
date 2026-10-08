@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 import { PlerosLogo } from '@/components/pleros-logo'
+import { setTokens } from '@/lib/auth-session'
 
 const FIELD_CONFIG: Array<{
   key: 'companyName' | 'slug' | 'email' | 'password' | 'firstName' | 'lastName'
@@ -66,8 +67,7 @@ export default function SignupPage() {
         })
         return
       }
-      if (data.accessToken) localStorage.setItem('pleros.accessToken', data.accessToken)
-      if (data.refreshToken) localStorage.setItem('pleros.refreshToken', data.refreshToken)
+      if (data.accessToken) setTokens(data.accessToken, data.refreshToken, 'admin')
       navigate('/admin')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed')

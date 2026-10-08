@@ -4,8 +4,20 @@ export function jwtSecret(): string {
   return s
 }
 
+let warnedMissingRefreshSecret = false
+
+/**
+ * Falls back to JWT_SECRET so existing deploys keep booting. The `typ` claim keeps the two
+ * token kinds apart either way, but production should set its own refresh secret.
+ */
 export function jwtRefreshSecret(): string {
-  return process.env.JWT_REFRESH_SECRET?.trim() || jwtSecret()
+  const s = process.env.JWT_REFRESH_SECRET?.trim()
+  if (s) return s
+  if (process.env.NODE_ENV === 'production' && !warnedMissingRefreshSecret) {
+    warnedMissingRefreshSecret = true
+    console.error('[auth] JWT_REFRESH_SECRET is not set — refresh tokens are signed with JWT_SECRET. Set a separate value.')
+  }
+  return jwtSecret()
 }
 
 /** Build a Postgres URL for a logical Pleros database on the same host as `baseUrl` (production / scaled dev). */

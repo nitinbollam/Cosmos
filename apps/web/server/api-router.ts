@@ -7,6 +7,7 @@ import {
   logoutUser,
   refreshUserTokens,
   requestPasswordReset,
+  verifyRefreshToken,
   resendEmailVerification,
   resetPassword,
   verifyEmail,
@@ -22,7 +23,27 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status })
 }
 
+/**
+ * API responses are per-user and change on every write, so nothing may cache them
+ * (browser, proxy or service worker). Routes that set their own Cache-Control keep it.
+ */
 export async function handleApiRequest(req: Request): Promise<Response> {
+  const res = await routeApiRequest(req)
+  if (!res.headers.has('Cache-Control')) {
+    try {
+      res.headers.set('Cache-Control', 'no-store')
+    } catch {
+      /* immutable headers (proxied response) — leave as is */
+    }
+  }
+  return res
+}
+
+function sessionMeta(req: Request) {
+  return { userAgent: req.headers.get('user-agent') }
+}
+
+async function routeApiRequest(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const pathname = url.pathname
 
@@ -82,7 +103,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     try {
       rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
       rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
-      return json(await loginUser(body.email.trim(), body.password))
+      return json(await loginUser(body.email.trim(), body.password, sessionMeta(req)))
     } catch (e) {
       if (e instanceof ApiError) return toJsonError(e)
       const msg = e instanceof Error ? e.message : 'Login failed'
@@ -146,6 +167,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
           password: body.password,
           firstName: body.firstName,
           lastName: body.lastName,
+          sessionMeta: sessionMeta(req),
         }),
         201,
       )
@@ -199,7 +221,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         return json({ message: 'currentPassword and newPassword required' }, 400)
       }
       rateLimit(`change-password:${session.userId}`, 5, 15 * 60 * 1000)
-      await changePassword(session.userId, body.currentPassword, body.newPassword)
+      await changePassword(session.userId, body.currentPassword, body.newPassword, session.sessionId)
       return json({ ok: true })
     } catch (e) {
       return toJsonError(e)
@@ -245,13 +267,20 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     } catch {
       return json({ message: 'Invalid JSON body' }, 400)
     }
-    if (!body.userId || !body.refreshToken) {
-      return json({ message: 'userId and refreshToken required' }, 400)
+    if (!body.refreshToken) {
+      return json({ message: 'refreshToken required' }, 400)
     }
     try {
-      return json(await refreshUserTokens(body.userId, body.refreshToken))
-    } catch {
-      return json({ message: 'Access denied' }, 403)
+      rateLimit(`refresh:${clientIp(req)}`, 120, 5 * 60 * 1000)
+      // userId is optional and only cross-checked; the token itself names the user.
+      return json(await refreshUserTokens(body.refreshToken, body.userId))
+    } catch (e) {
+      if (e instanceof ApiError) {
+        return e.status === 429 || e.status === 503 ? toJsonError(e) : json({ message: 'Access denied' }, 401)
+      }
+      // DB or other unexpected failure: 503 so the client keeps the session and retries later.
+      console.error('[auth] refresh failed:', e)
+      return json({ message: 'Authentication service unavailable' }, 503)
     }
   }
 
@@ -264,14 +293,32 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     }
   }
 
+  // Prefer the refresh token from the body: it still verifies after the access token has
+  // expired, which is exactly when people come back and press "Sign out".
   if (pathname === '/api/v1/auth/logout' && req.method === 'POST') {
+    let body: { refreshToken?: string } = {}
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      /* body is optional */
+    }
+    if (body.refreshToken) {
+      try {
+        const payload = await verifyRefreshToken(body.refreshToken)
+        await logoutUser(payload.sub as string, typeof payload.sid === 'string' ? payload.sid : null)
+        return json({ ok: true })
+      } catch {
+        /* fall through to the access token */
+      }
+    }
     const auth = req.headers.get('authorization')
     const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
     if (!token) return json({ message: 'Unauthorized' }, 401)
     try {
       const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret()))
+      if (payload.typ === 'refresh') return json({ message: 'Unauthorized' }, 401)
       const sub = payload.sub
-      if (typeof sub === 'string') await logoutUser(sub)
+      if (typeof sub === 'string') await logoutUser(sub, typeof payload.sid === 'string' ? payload.sid : null)
       return json({ ok: true })
     } catch {
       return json({ message: 'Unauthorized' }, 401)

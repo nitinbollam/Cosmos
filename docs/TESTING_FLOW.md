@@ -133,7 +133,7 @@ The following table lists every variable present in `.env.example` (root). Purpo
 | `PLEROS_DATA_DIR` | Directory (relative to `apps/web`) holding embedded SQLite `.db` files when running without Postgres. | Yes for SQLite mode (defaults to `.data`) |
 | `JWT_SECRET` | Signing secret for access tokens. | **Yes** — must be replaced with a real secret |
 | `JWT_REFRESH_SECRET` | Signing secret for refresh tokens. | **Yes** — must be replaced with a real secret |
-| `JWT_ACCESS_TTL` | Access-token lifetime (e.g. `15m`). | No (has a default) |
+| `JWT_ACCESS_TTL` | Access-token lifetime (default `45m`). | No (has a default) |
 | `JWT_REFRESH_TTL` | Refresh-token lifetime (e.g. `7d`). | No (has a default) |
 | `STRIPE_SECRET_KEY` | Stripe secret API key for server-side card checkout. | No locally (mock/dev-safe with placeholder); required for real Stripe flows |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key. | No locally |
@@ -3447,7 +3447,7 @@ sequenceDiagram
     API->>API: requireSession verifies the bearer JWT
     API-->>C: 200 { userId, email, role, tenantId, customerId, customerName, isPortalBuyer }
 
-    Note over C,API: accessToken expires after 15 minutes
+    Note over C,API: accessToken expires after 45 minutes
 
     C->>API: POST /api/v1/auth/refresh { userId, refreshToken }
     API->>Auth: refreshUserTokens(userId, refreshToken)

@@ -1,4 +1,5 @@
 import { DEFAULT_GATEWAY_PATH } from '@pleros/web-gateway-client'
+import { authFetch } from '@/lib/auth-session'
 
 export type CelestialStreamDone = {
   conversationId: string
@@ -12,19 +13,6 @@ type StreamHandlers = {
   onDelta: (text: string) => void
   onDone: (payload: CelestialStreamDone) => void
   onError: (message: string) => void
-}
-
-function accessToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return window.localStorage.getItem('pleros.accessToken')
-}
-
-function redirectToLogin(loginPath: string) {
-  if (typeof window === 'undefined') return
-  window.localStorage.removeItem('pleros.accessToken')
-  window.localStorage.removeItem('pleros.refreshToken')
-  const next = encodeURIComponent(window.location.pathname + window.location.search)
-  window.location.assign(`${loginPath}?next=${next}`)
 }
 
 function parseSseBlock(block: string, handlers: StreamHandlers) {
@@ -89,20 +77,14 @@ async function consumeJsonResponse(res: Response, handlers: StreamHandlers) {
   })
 }
 
-async function postCelestial(
-  gateway: string,
-  path: string,
-  body: unknown,
-  token: string | null,
-  signal?: AbortSignal,
-) {
-  return fetch(`${gateway}${path}`, {
+async function postCelestial(gateway: string, path: string, body: unknown, signal?: AbortSignal) {
+  // authFetch adds the token, refreshes once on 401 and ends the session if that fails.
+  return authFetch(`${gateway}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       'X-Celestial-Stream': '1',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
     signal,
@@ -117,17 +99,14 @@ export async function streamCelestialChat(
   signal?: AbortSignal,
 ) {
   const gateway = baseUrl || DEFAULT_GATEWAY_PATH
-  const token = accessToken()
 
-  let res = await postCelestial(gateway, '/celestial/chat/stream', body, token, signal)
+  let res = await postCelestial(gateway, '/celestial/chat/stream', body, signal)
   if (res.status === 404) {
-    res = await postCelestial(gateway, '/celestial/chat', body, token, signal)
+    res = await postCelestial(gateway, '/celestial/chat', body, signal)
   }
 
-  if (res.status === 401) {
-    redirectToLogin(loginPath)
-    throw new Error('Session expired — please sign in again')
-  }
+  // authFetch has already sent the user to sign in if the session could not be refreshed.
+  if (res.status === 401) throw new Error('Session expired — please sign in again')
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`

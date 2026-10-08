@@ -9,9 +9,11 @@ import './globals.css'
 import './globals-admin.css'
 import './globals-shop.css'
 import { applyTheme, getStoredTheme } from './lib/theme'
+import { installAuthSync } from './lib/auth-session'
 import { App } from './App'
 
 applyTheme(getStoredTheme())
+installAuthSync()
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

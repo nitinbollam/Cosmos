@@ -1,20 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useSessionGate } from './use-session-gate'
 
 /** B2B marketplace browse requires a signed-in tenant staff session (not portal-only). */
 export function RequireMarketplaceShop({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate()
-  const pathname = useLocation().pathname ?? '/marketplace'
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    const token = window.localStorage.getItem('pleros.accessToken')
-    if (!token) {
-      navigate(`/login?next=${encodeURIComponent(pathname)}`)
-      return
-    }
-    setReady(true)
-  }, [pathname, navigate])
+  const ready = useSessionGate({ surface: 'shop', loginPath: '/login' })
 
   if (!ready) {
     return (

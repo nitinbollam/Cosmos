@@ -5,6 +5,7 @@ import { PlerosLogo } from '@/components/pleros-logo'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
 import { axiosErr, isEmailVerificationRequired } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
+import { setTokens } from '@/lib/auth-session'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -26,8 +27,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
-      window.localStorage.setItem('pleros.accessToken', r.accessToken)
-      window.localStorage.setItem('pleros.refreshToken', r.refreshToken)
+      setTokens(r.accessToken, r.refreshToken)
       emitStorefrontAuthChanged()
       const next = new URLSearchParams(window.location.search).get('next')
       navigate(next?.startsWith('/') ? next : '/admin')

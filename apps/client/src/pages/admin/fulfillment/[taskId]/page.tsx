@@ -19,6 +19,8 @@ type TaskDetail = {
   pickItems: {
     id: string
     skuId: string
+    skuCode?: string
+    skuName?: string
     warehouseId: string
     quantity: number
     pickedQty: number
@@ -283,7 +285,11 @@ export default function FulfillmentTaskDetailPage() {
                   {t.pickItems.map((p) => (
                     <tr key={p.id} className="border-b border-pleros-border/60">
                       <td className="py-2 pr-3 font-mono text-[11px]">{p.id.slice(0, 8)}…</td>
-                      <td className="py-2 pr-3 font-mono text-[11px] text-pleros-text">{p.skuId}</td>
+                      <td className="py-2 pr-3 text-[11px] text-pleros-text">
+                        {p.skuCode ? <span className="font-mono">{p.skuCode}</span> : null}
+                        {p.skuCode && p.skuName ? ' — ' : null}
+                        {p.skuName ?? (!p.skuCode ? <span className="font-mono">{p.skuId}</span> : null)}
+                      </td>
                       <td className="py-2 pr-3">{p.quantity}</td>
                       <td className="py-2 pr-3">{p.pickedQty}</td>
                       <td className="py-2 pr-3">

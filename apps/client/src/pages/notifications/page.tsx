@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { jwtEmail } from '@/lib/jwt'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { getAccessToken } from '@/lib/auth-session'
 
 type NotificationRow = {
   id: string
@@ -55,7 +56,7 @@ export default function BuyerNotificationsPage() {
   const [retryingId, setRetryingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('pleros.accessToken') : null
+    const token = getAccessToken()
     const userEmail = jwtEmail(token)
     setEmail(userEmail)
     if (!userEmail) {
