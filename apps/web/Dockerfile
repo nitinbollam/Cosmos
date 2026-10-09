@@ -21,6 +21,13 @@ COPY docs ./docs
 COPY PLATFORM_FEATURES.md ./PLATFORM_FEATURES.md
 RUN npm run db:generate -w @pleros/web
 
+# The server imports workspace packages (e.g. @pleros/analytics-engine) through
+# node_modules symlinks whose package.json "main" is dist/index.js — build them,
+# or the container exits with MODULE_NOT_FOUND. Stale tsbuildinfo (local builds)
+# would make tsc skip emitting, so drop it first.
+RUN rm -f packages/*/tsconfig.tsbuildinfo \
+ && npm run build -w @pleros/types -w @pleros/analytics-engine -w @pleros/web-gateway-client -w @pleros/ui
+
 # Vite inlines import.meta.env.VITE_* at build time — these must be present
 # before `npm run build -w @pleros/client`. On Render, service env vars with the
 # same names are passed as Docker build-args automatically.
@@ -43,7 +50,9 @@ COPY --from=builder /repo/apps/client/dist ./apps/client/dist
 COPY --from=builder /repo/apps/client/server ./apps/client/server
 COPY --from=builder /repo/apps/client/package.json ./apps/client/package.json
 COPY --from=builder /repo/apps/client/vite.config.ts ./apps/client/vite.config.ts
-COPY --from=builder /repo/apps/web ./apps/web
+# Owned by the runtime user: start-server runs db:migrate, which rewrites the Prisma
+# provider and regenerates clients under apps/web — root-owned files fail with EACCES.
+COPY --chown=cosmos:cosmos --from=builder /repo/apps/web ./apps/web
 COPY --from=builder /repo/packages ./packages
 COPY --from=builder /repo/docs ./docs
 COPY --from=builder /repo/PLATFORM_FEATURES.md ./PLATFORM_FEATURES.md

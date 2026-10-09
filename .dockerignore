@@ -1,0 +1,19 @@
+# Keep local state and secrets out of image builds. Railway builds from git, but a
+# local or CI `docker build` sends the working tree — without this, local SQLite
+# data and .env secrets would be baked into the image.
+.git
+**/node_modules
+**/.data
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.production.example
+!**/.env.local.example
+**/dist
+**/generated
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+.claude
+.cursor
+.understand-anything

@@ -6,8 +6,19 @@
 import { execSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DB_BY_SCHEMA, databaseUrlForSchema, envKeyForSchema } from './db-urls.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// The server reads one *_DATABASE_URL per domain (AUTH_, INVENTORY_, …) from the environment.
+// db:migrate derives any that are missing (SQLite under apps/web/.data, or per-database
+// Postgres URLs from DATABASE_URL), but the server didn't — so a deploy that only set
+// DATABASE_URL (or nothing, for SQLite) booted and then failed every query. Derive them here,
+// once, the same way, so migrate and server always agree. Explicit env vars still win.
+for (const schema of Object.keys(DB_BY_SCHEMA)) {
+  const key = envKeyForSchema(schema)
+  if (!process.env[key]?.trim()) process.env[key] = databaseUrlForSchema(schema)
+}
 
 if (process.env.PLEROS_SKIP_DB_MIGRATE !== '1') {
   try {
