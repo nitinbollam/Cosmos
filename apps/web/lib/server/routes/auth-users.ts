@@ -7,8 +7,12 @@ export async function routeTenants(method: string, seg: string[], req: Request):
   const tenantId = session.tenantId
   assertNotBuyer(session)
   // Tenant settings, invites, plan, and onboarding are admin-only beyond reads.
-  if (method !== 'GET' || seg[2] === 'invites') {
-    assertPermission(session, seg[2] === 'invites' ? ['users.read', 'users.write', 'settings.write'] : 'settings.write')
+  // Sending an invite grants a role, so it needs write access to users — reading the
+  // user list (which managers have) must never be enough to mint an admin.
+  if (seg[2] === 'invites') {
+    assertPermission(session, method === 'GET' ? ['users.read', 'users.write', 'settings.write'] : 'users.write')
+  } else if (method !== 'GET') {
+    assertPermission(session, 'settings.write')
   } else {
     assertPermission(session, 'settings.read')
   }
@@ -25,7 +29,7 @@ export async function routeTenants(method: string, seg: string[], req: Request):
     if (method === 'POST') {
       const body = (await req.json()) as { email?: string; role?: string }
       if (!body.email) throw new ApiError(400, 'email required')
-      return Response.json(await tenant.createInvite(tenantId, { email: body.email, role: body.role }))
+      return Response.json(await tenant.createInvite(tenantId, { email: body.email, role: body.role }, session.role))
     }
   }
   if (seg[1] === 'me' && seg[2] === 'invites' && seg.length === 4 && method === 'DELETE') {
@@ -109,7 +113,7 @@ export async function routeUsers(method: string, seg: string[], req: Request): P
   }
   if (seg.length === 2 && method === 'PATCH') {
     const body = (await req.json()) as { role?: string; isActive?: boolean; permissions?: string[] }
-    return Response.json(await users.updateUser(session.tenantId, seg[1], body, session.userId))
+    return Response.json(await users.updateUser(session.tenantId, seg[1], body, session.userId, session.role))
   }
   if (seg.length === 2 && method === 'DELETE') {
     if (seg[1] === session.userId) throw new ApiError(400, 'You cannot deactivate your own account')

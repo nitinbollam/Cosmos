@@ -300,6 +300,11 @@ export async function acceptInvite(input: {
   if (invite.expiresAt.getTime() < Date.now()) {
     throw new ApiError(400, 'Invite has expired')
   }
+  // Invites created before role checks existed could carry a platform role; never honour one.
+  const { ASSIGNABLE_ROLES } = await import('./users')
+  if (!(ASSIGNABLE_ROLES as readonly string[]).includes(invite.role)) {
+    throw new ApiError(400, 'Invite is invalid or has already been used')
+  }
 
   const result = await registerUser({
     tenantId: invite.tenantId,

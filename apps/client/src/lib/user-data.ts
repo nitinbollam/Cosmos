@@ -1,19 +1,18 @@
 /**
- * Data that belongs to whoever is signed in to an area — carts, buyer identity and assistant
+ * Data that belongs to whoever is signed in to an area — quote cart, buyer identity and assistant
  * history — and must never carry over to the next person on a shared device.
  *
  * Each area has its own owner stamp, because each area has its own login:
- * - shop: cart, B2B cart, buyer identity, buyer-side assistant history
+ * - shop: B2B quote cart, buyer identity, buyer-side assistant history
+ *   (the main cart is kept per buyer instead — see `cart.store.ts` — so it survives sign-out)
  * - admin: admin-side assistant history
  * - mobile: nothing here (the offline queue tracks its own owners)
  *
- * An explicit sign-out wipes that area's data; a session that merely expires keeps it, so the
- * same person signing back in finds their cart where they left it.
+ * An explicit sign-out wipes that area's data; a session that merely expires keeps it.
  */
 import { clearCart as clearB2bCart } from '@/lib/b2b-cart'
 import { clearB2bSession } from '@/lib/session'
 import { currentIdentity, currentSurface, ownerKeyOf, type Surface } from '@/lib/session-identity'
-import { useCartStore } from '@/stores/cart.store'
 import { useCelestialStore } from '@/stores/celestial-store'
 
 const LEGACY_OWNER_KEY = 'pleros.dataOwner'
@@ -53,7 +52,6 @@ function blankAssistant() {
 export function wipeUserData(surface: Surface = currentSurface()) {
   if (typeof window === 'undefined') return
   if (surface === 'shop') {
-    useCartStore.getState().clear()
     clearB2bCart()
     clearB2bSession()
     useCelestialStore.setState({ shop: blankAssistant() })

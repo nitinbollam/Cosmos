@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import './photo-capture.css'
+import { safeImageSrc } from './safe-image'
 
 type PodPhotoProps = {
   /** A data URL or a hosted image URL — both render the same way. */
@@ -14,7 +15,7 @@ type PodPhotoProps = {
  * open. Until the blob URL is ready the link points at the photo itself.
  */
 function blobUrlFor(dataUrl: string): string | null {
-  const match = /^data:([^;,]+);base64,(.*)$/s.exec(dataUrl)
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,(.*)$/s.exec(dataUrl)
   if (!match) return null
   try {
     const binary = atob(match[2])
@@ -37,7 +38,9 @@ function blobUrlFor(dataUrl: string): string | null {
  * resolving a dispute actually wants — and, being a link, it works from the
  * keyboard as well as the mouse.
  */
-export function PodPhoto({ src, caption, alt = 'Proof of delivery photo' }: PodPhotoProps) {
+export function PodPhoto({ src: rawSrc, caption, alt = 'Proof of delivery photo' }: PodPhotoProps) {
+  // Stored proof could predate server validation: only real raster images or https links render.
+  const src = safeImageSrc(rawSrc)
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
 
   // Create and revoke in the same effect, so a StrictMode remount (or a new src)

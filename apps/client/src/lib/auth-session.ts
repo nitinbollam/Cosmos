@@ -28,6 +28,7 @@ import {
   type Surface,
 } from '@/lib/session-identity'
 import { reconcileUserDataOwner, wipeUserData } from '@/lib/user-data'
+import { syncCartToSession } from '@/stores/cart.store'
 
 export type { Surface } from '@/lib/session-identity'
 
@@ -61,12 +62,17 @@ export function setTokens(accessToken: string, refreshToken?: string | null, sur
   window.localStorage.setItem(accessTokenKey(surface), accessToken)
   if (refreshToken) window.localStorage.setItem(refreshTokenKey(surface), refreshToken)
   reconcileUserDataOwner(surface)
+  if (surface === 'shop') syncCartToSession()
 }
 
 export function clearTokens(surface: Surface = currentSurface()) {
   window.localStorage.removeItem(accessTokenKey(surface))
   window.localStorage.removeItem(refreshTokenKey(surface))
-  if (surface === 'shop') clearB2bSession()
+  if (surface === 'shop') {
+    clearB2bSession()
+    // Park the buyer's cart (it stays saved under their name) and show an empty guest cart.
+    syncCartToSession()
+  }
 }
 
 /** Hand a just-issued session from one area to another (invite accept decides after login). */
@@ -295,7 +301,10 @@ export function installAuthSync() {
   syncInstalled = true
   migrateLegacyTokens()
   reconcileUserDataOwner()
+  syncCartToSession()
   window.addEventListener('storage', (event) => {
+    // The buyer signed in or out in another tab: follow with the right cart.
+    if (event.key === accessTokenKey('shop') || event.key === null) syncCartToSession()
     const surface = currentSurface()
     if (event.key !== accessTokenKey(surface) && event.key !== null) return
     if (!getAccessToken(surface)) {

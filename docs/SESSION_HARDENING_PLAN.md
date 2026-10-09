@@ -287,3 +287,38 @@ What shipped, and where it differs from the plan above.
   - Signing out of the buyer portal left admin and driver signed in.
   - The old login migrated into the area of the first page loaded.
 
+---
+
+## Critical bugs found in a follow-up review (same commit)
+
+| # | Bug | Fix | Verified |
+|---|-----|-----|----------|
+| 1 | **Privilege escalation.** Creating an invite only needed `users.read`, which every MANAGER has, and the invite role was never checked. A manager, or any self-signup tenant admin, could invite someone as `TENANT_ADMIN` or as the Pleros-wide `SUPER_ADMIN`. That role reaches `/pleros-ops` and other tenants' KPI snapshots and expense receipts. | Sending invites requires `users.write`. Invite and role-edit roles must be in `ASSIGNABLE_ROLES` (never `SUPER_ADMIN`), and only admins can grant `TENANT_ADMIN`. Accept-invite refuses non-tenant roles, which covers invites already pending. | `role-escalation.test.ts`: fails on the old code, passes now |
+| 2 | **Stored XSS through proof of delivery.** The POD body was stored as-is, and the customer and staff pages rendered `photoUrl` and called `window.open(src)` on click. A `javascript:` "photo" would run in the app origin and could read login tokens. | The server whitelists POD fields and accepts only `data:image/(jpeg\|png\|webp)` (≤3 MB) or `https:` images. Order tracking exposes only safe stored images. The client renders only safe sources and opens inline images as blob URLs. Delivered stops can't be overwritten. | `pod-validation.test.ts`; live: `javascript:` photo → 400 |
+| 3 | **Duplicate orders on retry.** The checkout sent an `Idempotency-Key`, but `POST /orders` ignored it, so a retry after a timeout placed (and card-authorised) a second order. | Order creation runs at most once per (user, key). A concurrent duplicate gets 409, a later repeat gets the original order, and a failure releases the key. | `order-idempotency.test.ts` |
+| 4 | **Unbounded request bodies.** The production server buffered whole API bodies with no limit, so one large request could exhaust memory. | Bodies are capped at 10 MB, with 413 on both `Content-Length` and streamed size. | live: 11 MB → 413, normal requests unaffected |
+| 5 | **Cart lost on sign-out** (regression from this work). | The cart is saved per buyer (`pleros-cart-v1:<tenant>:<user>`). Sign-out switches to an empty guest cart, and sign-in restores the buyer's cart and merges guest items. The next buyer on a shared device never sees it. | `cart.store.test.ts`; live: add 2 items → sign out → sign in → both items back |
+
+**Checked and found sound:**
+- **Tenant scoping:** every update or delete by bare ID follows a tenant-scoped lookup.
+- **Webhooks:** Stripe and Shopify verify signatures and fail closed when the secret is missing.
+- **Buyer order list:** ignores a `customerId` supplied by the buyer.
+- **Raw SQL:** none.
+
+## Second review round (same commit)
+
+| # | Bug | Fix | Verified |
+|---|-----|-----|----------|
+| 6 | **Free goods through negative quantities.** Order lines were never validated. A buyer ordered 7 stands ($315) plus −10 energy cases ($−315). The order totalled $0, was accepted as fully paid, moved to PROCESSING and reserved the stands. | `createOrder` rejects any line that isn't a whole quantity from 1 to 1,000,000 at a finite price ≥ 0. Every channel goes through it: portal, admin, POS, quotes, subscriptions, EDI and Shopify. | Live exploit returned 201 before the fix and 400 after; `money-guards.test.ts` |
+| 7 | **Paid features unlocked for free.** Effective features were `{...planDefaults, ...overrides}`, and tenant admins write the overrides (the Features settings tab even offered switches above the plan). A Starter tenant could turn on POS, contract pricing, Celestial and more. | Overrides can only switch plan features off; the settings tab greys out features above the plan ("Requires upgrade"). | `money-guards.test.ts` |
+| 8 | **Gift card double spend.** Redemption read the balance and then wrote back an absolute value. On Postgres, two checkouts using the same card at once both spent the full balance. | Compare-and-set update (only succeeds if the balance is unchanged), done before the ledger entry. A lost race returns 409. | Code review. SQLite serialises writes, so the race only shows on Postgres. |
+| 9 | **Loyalty points double redemption.** The balance check ran outside the transaction, so parallel redemptions drove the balance negative and minted extra discount codes. Fractional points were also accepted. | Conditional decrement (`pointsBalance >= points`) inside the transaction; points must be whole numbers. | Code review |
+| 10 | **Rate limits bypassable.** `clientIp` trusted the first `X-Forwarded-For` entry, which the caller controls, so a fresh fake IP per request skipped the per-IP login, signup and reset limits. | Use the entry the proxy appended (`TRUSTED_PROXY_HOPS`, default 1). | `money-guards.test.ts` |
+
+**Checked and found sound:**
+- discounts are capped at the subtotal
+- credit memos validate return quantities
+- uploads must be images and are re-typed on save
+- CORS is suffix-restricted and auth uses bearer tokens, not cookies
+- Celestial requires a customer record for buyers and scopes every tool by tenant and customer
+

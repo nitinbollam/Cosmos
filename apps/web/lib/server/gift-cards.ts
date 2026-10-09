@@ -105,6 +105,17 @@ export async function redeemGiftCard(
     const amountApplied = +Math.min(input.amount, balance).toFixed(2)
     const remainingBalance = +(balance - amountApplied).toFixed(2)
 
+    // Compare-and-set: only spend the balance we just read. Two checkouts using the same card
+    // at once would otherwise both see the full balance and spend it twice (Postgres runs
+    // these transactions concurrently under READ COMMITTED).
+    const claimed = await tx.giftCard.updateMany({
+      where: { id: card.id, currentBalance: card.currentBalance },
+      data: { currentBalance: new Prisma.Decimal(remainingBalance) },
+    })
+    if (claimed.count !== 1) {
+      throw new ApiError(409, 'Gift card balance just changed — please try again')
+    }
+
     const journalEntryId = await postGiftCardRedeemJournal(tenantId, card.id, amountApplied)
     await tx.giftCardTransaction.create({
       data: {
@@ -114,11 +125,6 @@ export async function redeemGiftCard(
         orderRef: input.orderRef,
         journalEntryId,
       },
-    })
-
-    await tx.giftCard.update({
-      where: { id: card.id },
-      data: { currentBalance: new Prisma.Decimal(remainingBalance) },
     })
 
     return { amountApplied, remainingBalance }

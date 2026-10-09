@@ -52,11 +52,40 @@ export type CreateOrderInput = {
   }>
 }
 
+/** Largest quantity a single order line may carry; far above any real wholesale order. */
+const MAX_LINE_QUANTITY = 1_000_000
+
+/**
+ * Every order line must be a whole, positive quantity at a non-negative price. Without this a
+ * negative line (e.g. -10 cases) cancels out the cost of real goods: the order totals $0, counts
+ * as fully paid, and ships for free while the negative line inflates stock.
+ */
+export function assertValidOrderLines(lineItems: unknown): asserts lineItems is CreateOrderInput['lineItems'] {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    throw new ApiError(400, 'An order needs at least one line item')
+  }
+  for (const [i, li] of lineItems.entries()) {
+    const line = li as Partial<CreateOrderInput['lineItems'][number]> | null
+    const where = `Line ${i + 1}`
+    if (!line || typeof line.skuId !== 'string' || !line.skuId.trim()) throw new ApiError(400, `${where}: skuId is required`)
+    if (typeof line.warehouseId !== 'string' || !line.warehouseId.trim()) {
+      throw new ApiError(400, `${where}: warehouseId is required`)
+    }
+    if (!Number.isInteger(line.quantity) || (line.quantity as number) < 1 || (line.quantity as number) > MAX_LINE_QUANTITY) {
+      throw new ApiError(400, `${where}: quantity must be a whole number from 1 to ${MAX_LINE_QUANTITY}`)
+    }
+    if (typeof line.unitPrice !== 'number' || !Number.isFinite(line.unitPrice) || line.unitPrice < 0) {
+      throw new ApiError(400, `${where}: unitPrice must be a number of 0 or more`)
+    }
+  }
+}
+
 export async function createOrder(
   tenantId: string,
   dto: CreateOrderInput,
   opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string; skipPriceValidation?: boolean },
 ) {
+  assertValidOrderLines(dto.lineItems)
   let subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
   let discountAmount = 0
   let discountId: string | null = null

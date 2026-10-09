@@ -103,13 +103,20 @@ export function FeaturesTab() {
                     {overridden ? <span className="text-pleros-accent ml-2">· overridden</span> : null}
                   </p>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer">
+                {/* Overrides can only switch plan features off; turning more on needs a plan upgrade. */}
+                <label
+                  className={`flex items-center gap-2 ${planDefault ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                  title={planDefault ? undefined : 'Not included in your plan — upgrade in Billing to enable'}
+                >
                   <input
                     type="checkbox"
-                    checked={Boolean(toggles[key])}
+                    disabled={!planDefault}
+                    checked={planDefault && Boolean(toggles[key])}
                     onChange={(e) => setToggles((prev) => ({ ...prev, [key]: e.target.checked }))}
                   />
-                  <span className="text-sm text-pleros-text">{toggles[key] ? 'Enabled' : 'Disabled'}</span>
+                  <span className="text-sm text-pleros-text">
+                    {!planDefault ? 'Requires upgrade' : toggles[key] ? 'Enabled' : 'Disabled'}
+                  </span>
                 </label>
               </div>
             )

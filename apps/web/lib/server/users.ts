@@ -68,7 +68,8 @@ export async function deactivateUser(tenantId: string, id: string) {
   return updated
 }
 
-const ASSIGNABLE_ROLES = [
+/** Roles a tenant can hand out. SUPER_ADMIN is Pleros-internal and can never be granted from inside a tenant. */
+export const ASSIGNABLE_ROLES = [
   'TENANT_ADMIN',
   'MANAGER',
   'WAREHOUSE_STAFF',
@@ -79,19 +80,33 @@ const ASSIGNABLE_ROLES = [
   'STAFF',
 ] as const
 
+const TENANT_ADMIN_GRANTORS = ['SUPER_ADMIN', 'TENANT_ADMIN']
+
+/**
+ * Throws unless `role` may be granted by someone with `grantorRole`: it must be a tenant role,
+ * and only admins can make someone an admin (a manager with custom user rights cannot).
+ */
+export function assertGrantableRole(role: string, grantorRole: string) {
+  if (!(ASSIGNABLE_ROLES as readonly string[]).includes(role)) {
+    throw new ApiError(400, `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`)
+  }
+  if (role === 'TENANT_ADMIN' && !TENANT_ADMIN_GRANTORS.includes(grantorRole)) {
+    throw new ApiError(403, 'Only an admin can grant the admin role')
+  }
+}
+
 export async function updateUser(
   tenantId: string,
   id: string,
   patch: { role?: string; isActive?: boolean; permissions?: string[] },
   performedBy: string,
+  performedByRole = 'TENANT_ADMIN',
 ) {
   const user = await authDb.user.findFirst({ where: { id, tenantId } })
   if (!user) throw new ApiError(404, 'User not found')
   assertNotSuperAdmin(user)
 
-  if (patch.role !== undefined && !(ASSIGNABLE_ROLES as readonly string[]).includes(patch.role)) {
-    throw new ApiError(400, `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`)
-  }
+  if (patch.role !== undefined) assertGrantableRole(patch.role, performedByRole)
   if (id === performedBy && patch.role !== undefined && user.role === 'TENANT_ADMIN' && patch.role !== 'TENANT_ADMIN') {
     throw new ApiError(400, 'You cannot demote your own admin account')
   }

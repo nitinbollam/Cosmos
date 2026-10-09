@@ -36,3 +36,33 @@ export async function setIdempotentResponse(
     update: { tenantId, status, body: body as object, expiresAt },
   })
 }
+
+/** Status stored while the first request for a key is still running. */
+export const IDEMPOTENCY_IN_PROGRESS = 102
+
+/**
+ * Claim a key before doing the work, so two identical requests arriving together can't both
+ * run. Returns false when the key is already claimed (in progress or finished).
+ */
+export async function reserveIdempotencyKey(tenantId: string, key: string): Promise<boolean> {
+  try {
+    await paymentDb.paymentIdempotency.create({
+      data: {
+        id: scopedKey(tenantId, key),
+        tenantId,
+        status: IDEMPOTENCY_IN_PROGRESS,
+        body: {},
+        expiresAt: new Date(Date.now() + TTL_MS),
+      },
+    })
+    return true
+  } catch (e) {
+    if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') return false
+    throw e
+  }
+}
+
+/** Drop a claim whose work failed, so the client can retry with the same key. */
+export async function releaseIdempotencyKey(tenantId: string, key: string): Promise<void> {
+  await paymentDb.paymentIdempotency.delete({ where: { id: scopedKey(tenantId, key) } }).catch(() => undefined)
+}

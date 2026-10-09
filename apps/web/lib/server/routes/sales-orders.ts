@@ -27,6 +27,9 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
 
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as orders.CreateOrderInput
+    // The checkout sends an Idempotency-Key; honour it so a retry after a timeout returns the
+    // order already placed instead of creating (and charging) a second one.
+    const placeOnce = (create: () => Promise<unknown>) => placeOrderOnce(req, session, create)
     // Portal buyers cannot spoof POS channel or supply staff age attestation to
     // skip the licensed-customer gate for tobacco / age-restricted SKUs.
     if (buyerCustomerId) {
@@ -35,22 +38,20 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
         channel: 'B2B_PORTAL',
         ageAttestation: undefined,
       }
-      const order = await orders.createOrder(session.tenantId, safeBody, {
-        ...buyerOpts,
-        userId: session.userId,
-      })
-      return Response.json(order, { status: 201 })
+      return placeOnce(() =>
+        orders.createOrder(session.tenantId, safeBody, {
+          ...buyerOpts,
+          userId: session.userId,
+        }),
+      )
     }
     // Counter sales must go through /pos/orders so register + attestation rules apply.
     if (String(body.channel ?? '').toUpperCase() === 'POS') {
       throw new ApiError(400, 'POS sales must use POST /pos/orders')
     }
-    const order = await orders.createOrder(
-      session.tenantId,
-      { ...body, ageAttestation: undefined },
-      { ...buyerOpts, userId: session.userId },
+    return placeOnce(() =>
+      orders.createOrder(session.tenantId, { ...body, ageAttestation: undefined }, { ...buyerOpts, userId: session.userId }),
     )
-    return Response.json(order, { status: 201 })
   }
   if (seg.length === 2 && seg[1] === 'backorders' && method === 'GET') {
     return Response.json(await backorders.listOpenBackorders(session.tenantId, +(url.searchParams.get('limit') ?? 50)))
@@ -259,3 +260,38 @@ export async function routeOrderTemplates(method: string, seg: string[], req: Re
   }
   throw new ApiError(404, 'Order template route not found')
 }
+
+/**
+ * Run `create` at most once per (user, Idempotency-Key). Without a key the request behaves as
+ * before. A duplicate that arrives while the first is still running gets 409; one that arrives
+ * afterwards gets the original response.
+ */
+export async function placeOrderOnce(
+  req: Request,
+  session: { tenantId: string; userId: string },
+  create: () => Promise<unknown>,
+): Promise<Response> {
+  const header = req.headers.get('idempotency-key')?.trim()
+  if (!header) return Response.json(await create(), { status: 201 })
+  if (header.length > 200) throw new ApiError(400, 'Idempotency-Key is too long')
+
+  const idem = await import('../payment-idempotency')
+  const key = `order:${session.userId}:${header}`
+  const previous = await idem.getIdempotentResponse(session.tenantId, key)
+  if (previous && previous.status !== idem.IDEMPOTENCY_IN_PROGRESS) {
+    return Response.json(previous.body, { status: previous.status })
+  }
+  if (previous || !(await idem.reserveIdempotencyKey(session.tenantId, key))) {
+    throw new ApiError(409, 'This order is already being placed — check your orders before trying again')
+  }
+  try {
+    // JSON round-trip: the stored copy must be plain JSON (Decimals, Dates) like the response.
+    const body = JSON.parse(JSON.stringify(await create()))
+    await idem.setIdempotentResponse(key, session.tenantId, 201, body)
+    return Response.json(body, { status: 201 })
+  } catch (e) {
+    await idem.releaseIdempotencyKey(session.tenantId, key)
+    throw e
+  }
+}
+
