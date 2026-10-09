@@ -86,10 +86,30 @@
 .pod-photo-view img {
   width: 100%;
   max-width: 320px;
+  /* Portrait photos would otherwise run ~800px tall; the link opens full size. */
+  max-height: 320px;
+  object-fit: contain;
   border-radius: var(--bento-radius-sm);
   border: var(--border-width) solid var(--c-border-card);
   background: var(--c-surface-2);
   cursor: zoom-in;
+}
+
+/* The photo sits in a real button so keyboard users can open it too. */
+.pod-photo-open {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--bento-radius-sm);
+  cursor: zoom-in;
+}
+
+.pod-photo-open:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
 }
 
 .pod-photo-caption {
@@ -122,7 +142,9 @@
   display: block;
   border: var(--border-width) dashed var(--c-border-card);
   border-radius: var(--bento-radius-sm);
-  background: var(--c-surface);
+  /* The same light plate in every theme, matching SignaturePad's fixed dark ink:
+     what the recipient sees while signing is what staff see afterwards. */
+  background: #f7f8f6;
   /* Without this the page scrolls instead of drawing when a finger moves. */
   touch-action: none;
   cursor: crosshair;
@@ -138,9 +160,14 @@
 .pod-signature-view img {
   width: 100%;
   max-width: 260px;
+  /* A pad-shaped capture is around 9:1, so width alone squeezes it to a sliver
+     in a narrow table cell. Hold a readable height and letterbox instead. */
+  min-width: 180px;
+  height: 64px;
+  object-fit: contain;
   border: var(--border-width) solid var(--c-border-card);
   border-radius: var(--bento-radius-sm);
-  /* Signatures are dark line art on transparency — give them a light plate so
-     they read in both themes rather than vanishing into a dark surface. */
+  /* Signatures are dark ink on transparency (SignaturePad's fixed INK) — the
+     same light plate as the pad keeps them legible in both themes. */
   background: #f7f8f6;
 }

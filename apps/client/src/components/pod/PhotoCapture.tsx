@@ -21,6 +21,12 @@ type PhotoCaptureProps = {
   onChange: (photo: CapturedPhoto | null) => void
   label?: string
   disabled?: boolean
+  /**
+   * Reports when a picked photo is being processed. Until it turns false again,
+   * `value` still holds the previous photo (or nothing), so a parent submitting
+   * the photo must wait for it.
+   */
+  onBusyChange?: (busy: boolean) => void
 }
 
 /** Rough byte count of a data URL's payload, without allocating a Blob. */
@@ -70,7 +76,13 @@ function formatKb(bytes: number): string {
  * On a desktop browser the same input falls back to a file picker, which keeps
  * the dispatch screens testable without a phone.
  */
-export function PhotoCapture({ value, onChange, label = 'Add delivery photo', disabled }: PhotoCaptureProps) {
+export function PhotoCapture({
+  value,
+  onChange,
+  label = 'Add delivery photo',
+  disabled,
+  onBusyChange,
+}: PhotoCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,12 +91,14 @@ export function PhotoCapture({ value, onChange, label = 'Add delivery photo', di
     if (!file) return
     setError(null)
     setBusy(true)
+    onBusyChange?.(true)
     try {
       onChange(await downscale(file))
     } catch {
       setError('Could not read that photo. Try again.')
     } finally {
       setBusy(false)
+      onBusyChange?.(false)
       // Clear the input so re-picking the same file still fires a change event.
       if (inputRef.current) inputRef.current.value = ''
     }

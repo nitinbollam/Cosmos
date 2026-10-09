@@ -4,6 +4,16 @@ import './photo-capture.css'
 /** Logical drawing height. Width follows the container. */
 const PAD_HEIGHT = 180
 const STROKE_WIDTH = 2.5
+/**
+ * Fixed ink, deliberately not a theme token. The PNG outlives the screen it was
+ * drawn on: a pen taken from the dark theme's text colour is near-white, and
+ * vanishes on the light plate staff view it on. The pad itself is the same light
+ * plate in every theme (photo-capture.css), so what the recipient sees while
+ * signing is what gets stored.
+ */
+const INK = '#1f2328'
+
+type Point = { x: number; y: number }
 
 export type CapturedSignature = {
   /** PNG data URL of the signature on a transparent background. */
@@ -31,6 +41,10 @@ function dataUrlBytes(dataUrl: string): number {
  * the canvas stops the page scrolling out from under someone mid-signature,
  * which is the usual way these controls fail on a phone.
  *
+ * Strokes are kept as points as well as pixels. Resizing a canvas wipes it, and a
+ * phone rotating or a desktop window resizing mid-signature would otherwise
+ * leave a blank pad that still counts as signed.
+ *
  * Exported as PNG rather than JPEG — a signature is line art on a transparent
  * background, which PNG stores compactly and cleanly, where JPEG would add
  * visible artefacts around the strokes.
@@ -43,58 +57,113 @@ export function SignaturePad({
 }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
-  const hasInk = useRef(false)
+  const strokes = useRef<Point[][]>([])
+  const fittedWidth = useRef(0)
   const [dirty, setDirty] = useState(false)
 
-  /** Size the backing store to the device pixel ratio so strokes aren't fuzzy. */
-  const fitCanvas = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ratio = window.devicePixelRatio || 1
-    const width = canvas.clientWidth || 320
-    canvas.width = Math.round(width * ratio)
-    canvas.height = Math.round(PAD_HEIGHT * ratio)
+  const contextFor = (canvas: HTMLCanvasElement) => {
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.scale(ratio, ratio)
+    if (!ctx) return null
     ctx.lineWidth = STROKE_WIDTH
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    // Read the themed pen colour so the signature is legible in both themes.
-    ctx.strokeStyle =
-      getComputedStyle(document.documentElement).getPropertyValue('--c-text').trim() || '#e4e4e7'
+    ctx.strokeStyle = INK
+    return ctx
+  }
+
+  const redraw = useCallback((canvas: HTMLCanvasElement) => {
+    const ctx = contextFor(canvas)
+    if (!ctx) return
+    for (const stroke of strokes.current) {
+      if (stroke.length < 2) continue
+      ctx.beginPath()
+      ctx.moveTo(stroke[0].x, stroke[0].y)
+      for (const p of stroke.slice(1)) ctx.lineTo(p.x, p.y)
+      ctx.stroke()
+    }
   }, [])
+
+  /**
+   * Size the backing store to the device pixel ratio so strokes aren't fuzzy, and
+   * bring existing strokes across. Height-only changes (a mobile address bar
+   * collapsing) are ignored: the pad's height is fixed, so nothing needs redoing.
+   */
+  const fitCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const measured = canvas.clientWidth
+    // A hidden pad (e.g. while the stop's "mark failed" form is open) measures 0:
+    // leave the strokes as they are until it's shown again.
+    if (measured === 0 && fittedWidth.current > 0) return
+    const width = measured || 320
+    if (width === fittedWidth.current) return
+
+    // Shrink strokes to fit a narrower pad; never stretch them on a wider one.
+    const previous = fittedWidth.current
+    const scale = previous > 0 ? Math.min(1, width / previous) : 1
+    if (scale !== 1) {
+      strokes.current = strokes.current.map((stroke) => stroke.map((p) => ({ x: p.x * scale, y: p.y * scale })))
+    }
+    fittedWidth.current = width
+
+    const ratio = window.devicePixelRatio || 1
+    canvas.width = Math.round(width * ratio)
+    canvas.height = Math.round(PAD_HEIGHT * ratio)
+    canvas.getContext('2d')?.scale(ratio, ratio)
+    redraw(canvas)
+  }, [redraw])
 
   useEffect(() => {
     fitCanvas()
+    const canvas = canvasRef.current
+    if (canvas && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => fitCanvas())
+      observer.observe(canvas)
+      return () => observer.disconnect()
+    }
     window.addEventListener('resize', fitCanvas)
     return () => window.removeEventListener('resize', fitCanvas)
   }, [fitCanvas])
 
-  function pointFrom(e: React.PointerEvent<HTMLCanvasElement>) {
+  const clearPad = useCallback(() => {
+    const canvas = canvasRef.current
+    canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height)
+    strokes.current = []
+    drawing.current = false
+    setDirty(false)
+  }, [])
+
+  // The parent resets `value` to null after a delivery is recorded. Wipe the pad
+  // with it: strokes left on screen over an empty value look signed and aren't.
+  useEffect(() => {
+    if (value === null && strokes.current.length > 0) clearPad()
+  }, [value, clearPad])
+
+  function pointFrom(e: React.PointerEvent<HTMLCanvasElement>): Point {
     const rect = e.currentTarget.getBoundingClientRect()
     return { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled) return
-    const ctx = canvasRef.current?.getContext('2d')
-    if (!ctx) return
     e.currentTarget.setPointerCapture(e.pointerId)
     drawing.current = true
-    const { x, y } = pointFrom(e)
-    ctx.beginPath()
-    ctx.moveTo(x, y)
+    strokes.current.push([pointFrom(e)])
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!drawing.current) return
-    const ctx = canvasRef.current?.getContext('2d')
-    if (!ctx) return
-    const { x, y } = pointFrom(e)
-    ctx.lineTo(x, y)
+    const canvas = canvasRef.current
+    const ctx = canvas && contextFor(canvas)
+    const stroke = strokes.current[strokes.current.length - 1]
+    if (!ctx || !stroke) return
+    const from = stroke[stroke.length - 1]
+    const to = pointFrom(e)
+    stroke.push(to)
+    ctx.beginPath()
+    ctx.moveTo(from.x, from.y)
+    ctx.lineTo(to.x, to.y)
     ctx.stroke()
-    hasInk.current = true
     if (!dirty) setDirty(true)
   }
 
@@ -103,18 +172,13 @@ export function SignaturePad({
     drawing.current = false
     const canvas = canvasRef.current
     // Guard against a stray tap producing an "empty" signature.
-    if (!canvas || !hasInk.current) return
+    if (!canvas || !strokes.current.some((s) => s.length > 1)) return
     const dataUrl = canvas.toDataURL('image/png')
     onChange({ dataUrl, bytes: dataUrlBytes(dataUrl) })
   }
 
   function clear() {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!canvas || !ctx) return
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    hasInk.current = false
-    setDirty(false)
+    clearPad()
     onChange(null)
   }
 

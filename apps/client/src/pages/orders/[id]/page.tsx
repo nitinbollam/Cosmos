@@ -54,6 +54,7 @@ type TrackingData = {
     stopStatus: string
     stopSequence: number
     eta: string | null
+    deliveredAt?: string | null
     podPhotoUrl?: string | null
   } | null
 }
@@ -295,7 +296,11 @@ export default function StorefrontOrderDetailPage() {
                     <strong>Delivery route</strong> · stop #{tracking.delivery.stopSequence} ·{' '}
                     <StatusBadge status={tracking.delivery.stopStatus} />
                   </p>
-                  {tracking.delivery.eta ? (
+                  {tracking.delivery.deliveredAt ? (
+                    <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--c-text-2)' }}>
+                      Delivered: {new Date(tracking.delivery.deliveredAt).toLocaleString()}
+                    </p>
+                  ) : tracking.delivery.eta ? (
                     <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--c-accent)' }}>
                       Estimated arrival: {new Date(tracking.delivery.eta).toLocaleString()}
                     </p>
