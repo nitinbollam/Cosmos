@@ -1,0 +1,85 @@
+{
+  "batchIndex": 17,
+  "files": [
+    {
+      "path": ".env.example",
+      "language": "config",
+      "sizeLines": 55,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".env.production.example",
+      "language": "config",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ERP_FEATURE_GAP.md",
+      "language": "markdown",
+      "sizeLines": 275,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "MISSING.md",
+      "language": "markdown",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "PLATFORM_FEATURES.md",
+      "language": "markdown",
+      "sizeLines": 624,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "PRODUCTION_READINESS.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 67,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docker-compose.production.yml",
+      "language": "yaml",
+      "sizeLines": 70,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "docker-compose.yml",
+      "language": "yaml",
+      "sizeLines": 68,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "sizeLines": 48,
+      "fileCategory": "config"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    }
+  ],
+  "batchImportData": {
+    ".env.example": [],
+    ".env.production.example": [],
+    "ERP_FEATURE_GAP.md": [],
+    "MISSING.md": [],
+    "PLATFORM_FEATURES.md": [],
+    "PRODUCTION_READINESS.md": [],
+    "README.md": [],
+    "docker-compose.production.yml": [],
+    "docker-compose.yml": [],
+    "package.json": [],
+    "tsconfig.base.json": []
+  },
+  "neighborMap": {}
+}

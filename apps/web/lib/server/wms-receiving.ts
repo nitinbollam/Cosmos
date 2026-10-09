@@ -194,7 +194,10 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
       const line = it.purchaseOrderLineId
         ? poForCost.lines.find((l) => l.id === it.purchaseOrderLineId)
         : undefined
-      if (line?.unitCost != null) unitCost = Number(line.unitCost)
+      if (line?.unitCost != null) {
+        const { computeReceivedUnitCost } = await import('./landed-cost')
+        unitCost = computeReceivedUnitCost(Number(line.unitCost), poForCost, line.id, goodQty)
+      }
     }
 
     await inv.receiveStock(
@@ -221,6 +224,34 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
       }))
       .filter((r) => r.quantity > 0)
     await poReceiving.syncPurchaseOrderFromSkuReceipts(tenantId, session.poId, skuReceipts)
+  }
+
+  const putawayItems = session.items
+    .map((it) => ({
+      skuId: it.skuId,
+      batchId: it.batchId,
+      quantity: Math.max(0, it.receivedQty - (it.damagedQty ?? 0)),
+    }))
+    .filter((it) => it.quantity > 0)
+
+  if (putawayItems.length > 0) {
+    const { createPutawayTaskFromReceiving } = await import('./wms-putaway')
+    await createPutawayTaskFromReceiving(tenantId, sessionId, session.warehouseId, putawayItems).catch(
+      () => undefined,
+    )
+  }
+
+  const { recordLaborEvent } = await import('./wms-labor')
+  for (const it of session.items) {
+    const qty = Math.max(0, it.receivedQty - (it.damagedQty ?? 0))
+    if (qty <= 0) continue
+    void recordLaborEvent(tenantId, {
+      userId: performedBy,
+      eventType: 'RECEIVE_SCAN',
+      referenceId: it.id,
+      quantity: qty,
+      warehouseId: session.warehouseId,
+    }).catch(() => undefined)
   }
 
   await wmsDb.receivingSession.update({

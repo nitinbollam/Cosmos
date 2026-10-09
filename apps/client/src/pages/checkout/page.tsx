@@ -2,14 +2,22 @@ import { Link } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
-import { getB2bCustomerId } from '@/lib/session'
+import { ensureB2bCustomerId } from '@/lib/session'
+import { useStripeConnect } from '@/lib/stripe-connect'
+import type { Stripe } from '@stripe/stripe-js'
 import { useCartStore } from '@/stores/cart.store'
 import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
-type CustomerRow = { id: string; name: string; email?: string | null; phone?: string | null }
+type CustomerRow = {
+  id: string
+  name: string
+  email?: string | null
+  phone?: string | null
+  isLicensedTobacco?: boolean | null
+  tobaccoLicenseNumber?: string | null
+}
 
 type SavedCard = {
   id: string
@@ -36,11 +44,26 @@ export default function CheckoutPage() {
       : Math.random().toString(36).slice(2),
   )
 
-  const stripePromise = useMemo(() => (stripePublishable ? loadStripe(stripePublishable) : null), [])
+  const { stripePromise, chargesEnabled, loading: stripeConfigLoading } = useStripeConnect(api.get.bind(api), 'checkout-stripe')
 
   const [taxRate, setTaxRate] = useState(0.07)
-  const taxAmount = useMemo(() => +(cartSubtotal * taxRate).toFixed(2), [cartSubtotal, taxRate])
-  const orderTotal = cartSubtotal + taxAmount
+  const [discountCode, setDiscountCode] = useState('')
+  const [discountAmount, setDiscountAmount] = useState(0)
+  const [discountPending, setDiscountPending] = useState(false)
+  const [discountMsg, setDiscountMsg] = useState<string | null>(null)
+  const [validatingDiscount, setValidatingDiscount] = useState(false)
+
+  const [giftCardCode, setGiftCardCode] = useState('')
+  const [giftCardBalance, setGiftCardBalance] = useState<number | null>(null)
+  const [giftCardMsg, setGiftCardMsg] = useState<string | null>(null)
+  const [checkingGiftCard, setCheckingGiftCard] = useState(false)
+
+  const discountedSubtotal = Math.max(0, cartSubtotal - discountAmount)
+  const taxAmount = useMemo(() => +(discountedSubtotal * taxRate).toFixed(2), [discountedSubtotal, taxRate])
+  const orderTotal = discountedSubtotal + taxAmount
+  const giftCardApplied =
+    giftCardBalance != null && giftCardBalance > 0 ? Math.min(giftCardBalance, orderTotal) : 0
+  const amountDue = +(orderTotal - giftCardApplied).toFixed(2)
 
   const [step, setStep] = useState(1)
   const [customer, setCustomer] = useState<CustomerRow | null>(null)
@@ -62,7 +85,7 @@ export default function CheckoutPage() {
   const [saveNewCardToAccount, setSaveNewCardToAccount] = useState(true)
 
   const loadCustomer = useCallback(async () => {
-    if (!getB2bCustomerId()) {
+    if (!(await ensureB2bCustomerId())) {
       navigate('/login')
       return
     }
@@ -111,15 +134,78 @@ export default function CheckoutPage() {
     }
   }, [payment, cardMode, selectedSavedId, savedCards])
 
+  async function checkGiftCard() {
+    const code = giftCardCode.trim()
+    if (!code) return
+    setCheckingGiftCard(true)
+    setGiftCardMsg(null)
+    setGiftCardBalance(null)
+    try {
+      const res = await api.get<{ valid: boolean; balance?: number; expired?: boolean }>(
+        `/gift-cards/${encodeURIComponent(code)}/balance`,
+      )
+      if (!res.valid) {
+        setGiftCardMsg(res.expired ? 'Gift card expired' : 'Invalid gift card code')
+        return
+      }
+      setGiftCardBalance(res.balance ?? 0)
+      setGiftCardMsg(`Balance: $${(res.balance ?? 0).toFixed(2)}`)
+    } catch (e: unknown) {
+      setGiftCardMsg(axiosErr(e))
+    } finally {
+      setCheckingGiftCard(false)
+    }
+  }
+
+  async function validateDiscountCode() {
+    const cid = await ensureB2bCustomerId()
+    if (!cid || !discountCode.trim()) return
+    setValidatingDiscount(true)
+    setDiscountMsg(null)
+    setDiscountPending(false)
+    setDiscountAmount(0)
+    try {
+      const res = await api.post<{
+        valid: boolean
+        reason?: string
+        amountOff?: number
+        pendingApproval?: boolean
+      }>('/discounts/validate', {
+        code: discountCode.trim(),
+        orderSubtotal: cartSubtotal,
+        customerId: cid,
+      })
+      if (!res.valid) {
+        setDiscountMsg(res.reason ?? 'Invalid discount')
+        return
+      }
+      if (res.pendingApproval) {
+        setDiscountPending(true)
+        setDiscountMsg('Discount pending manager approval — checkout at full price or wait for approval.')
+        return
+      }
+      setDiscountAmount(res.amountOff ?? 0)
+      setDiscountMsg(`Discount applied: −$${(res.amountOff ?? 0).toFixed(2)}`)
+    } catch (e: unknown) {
+      setDiscountMsg(axiosErr(e))
+    } finally {
+      setValidatingDiscount(false)
+    }
+  }
+
   async function placeOrder() {
-    const cid = getB2bCustomerId()
+    const cid = await ensureB2bCustomerId()
     if (!cid) {
       navigate('/login')
       return
     }
-    if (payment === 'CARD') {
+    if (payment === 'CARD' && amountDue > 0) {
       if (!stripePublishable) {
         setErr('Set VITE_STRIPE_PUBLISHABLE_KEY for card checkout.')
+        return
+      }
+      if (!chargesEnabled) {
+        setErr('Card checkout is unavailable until your distributor completes Stripe Connect onboarding.')
         return
       }
       if (!cardPaymentMethodId) {
@@ -143,6 +229,8 @@ export default function CheckoutPage() {
             unitPrice: i.unitPrice,
           })),
           notes: `Ship to: ${company}, ${line1}${line2 ? `, ${line2}` : ''}, ${city}, ${state} ${zip}`,
+          ...(discountAmount > 0 && !discountPending ? { discountCode: discountCode.trim() } : {}),
+          ...(giftCardApplied > 0 && giftCardCode.trim() ? { giftCardCode: giftCardCode.trim() } : {}),
           shippingAddress: {
             company,
             line1,
@@ -155,16 +243,21 @@ export default function CheckoutPage() {
         { 'Idempotency-Key': idempotencyKey.current },
       )
 
-      if (payment === 'CARD' && cardPaymentMethodId) {
+      if (payment === 'CARD' && cardPaymentMethodId && amountDue > 0) {
         const authKey =
           typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
             ? crypto.randomUUID()
             : Math.random().toString(36).slice(2)
-        await api.post(
+        const authRes = await api.post<{
+          requiresAction?: boolean
+          clientSecret?: string
+          paymentIntentId?: string
+          status?: string
+        }>(
           '/payments/authorize',
           {
             orderId: order.id,
-            amount: Number(order.totalAmount),
+            amount: amountDue,
             currency: 'usd',
             paymentMethod: 'CARD',
             customerId: cid,
@@ -173,6 +266,22 @@ export default function CheckoutPage() {
           },
           { 'Idempotency-Key': authKey },
         )
+
+        if (authRes.requiresAction && authRes.clientSecret && stripePromise) {
+          const stripe = await stripePromise
+          if (!stripe) throw new Error('Stripe not ready')
+          const { error } = await stripe.confirmCardPayment(authRes.clientSecret)
+          if (error) throw error
+          const confirmKey =
+            typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+              ? crypto.randomUUID()
+              : Math.random().toString(36).slice(2)
+          await api.post(
+            '/payments/confirm',
+            { paymentIntentId: authRes.paymentIntentId, correlationId: confirmKey },
+            { 'Idempotency-Key': confirmKey },
+          )
+        }
 
         if (cardMode === 'new' && saveNewCardToAccount && cardPaymentMethodId.startsWith('pm_')) {
           await api
@@ -235,27 +344,27 @@ export default function CheckoutPage() {
       {err ? <p style={{ color: 'var(--c-danger)', marginBottom: 16 }}>{err}</p> : null}
 
       {step === 1 ? (
-        <div className="cosmos-card">
+        <div className="pleros-card">
           <h2 style={{ marginTop: 0 }}>Shipping</h2>
           <p style={{ color: 'var(--c-text-3)', fontSize: 14 }}>Customer: {customer?.name ?? '…'}</p>
           <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}>Company</label>
-          <input className="cosmos-input" style={{ marginTop: 8 }} value={company} onChange={(e) => setCompany(e.target.value)} />
+          <input className="pleros-input" style={{ marginTop: 8 }} value={company} onChange={(e) => setCompany(e.target.value)} />
           <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block' }}>Address line 1</label>
-          <input className="cosmos-input" style={{ marginTop: 8 }} value={line1} onChange={(e) => setLine1(e.target.value)} required />
+          <input className="pleros-input" style={{ marginTop: 8 }} value={line1} onChange={(e) => setLine1(e.target.value)} required />
           <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}>Address line 2</label>
-          <input className="cosmos-input" style={{ marginTop: 8 }} value={line2} onChange={(e) => setLine2(e.target.value)} />
+          <input className="pleros-input" style={{ marginTop: 8 }} value={line2} onChange={(e) => setLine2(e.target.value)} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
             <div>
               <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>City</label>
-              <input className="cosmos-input" style={{ marginTop: 8 }} value={city} onChange={(e) => setCity(e.target.value)} />
+              <input className="pleros-input" style={{ marginTop: 8 }} value={city} onChange={(e) => setCity(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>State</label>
-              <input className="cosmos-input" style={{ marginTop: 8 }} value={state} onChange={(e) => setState(e.target.value)} />
+              <input className="pleros-input" style={{ marginTop: 8 }} value={state} onChange={(e) => setState(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>ZIP</label>
-              <input className="cosmos-input" style={{ marginTop: 8 }} value={zip} onChange={(e) => setZip(e.target.value)} />
+              <input className="pleros-input" style={{ marginTop: 8 }} value={zip} onChange={(e) => setZip(e.target.value)} />
             </div>
           </div>
           <button type="button" className="btn-primary" style={{ marginTop: 24 }} onClick={() => setStep(2)} disabled={!line1.trim()}>
@@ -272,7 +381,8 @@ export default function CheckoutPage() {
           taxAmount={taxAmount}
           orderTotal={orderTotal}
           showStripe={showStripe}
-          stripeConfigured={!!stripePublishable}
+          stripeConfigured={!!stripePublishable && chargesEnabled}
+          stripeConnectPending={!stripeConfigLoading && !!stripePublishable && !chargesEnabled}
           stripePromise={stripePromise}
           cardPaymentMethodId={cardPaymentMethodId}
           setCardPaymentMethodId={setCardPaymentMethodId}
@@ -289,7 +399,7 @@ export default function CheckoutPage() {
       ) : null}
 
       {step === 3 ? (
-        <div className="cosmos-card">
+        <div className="pleros-card">
           <h2 style={{ marginTop: 0 }}>Review</h2>
           <ul style={{ paddingLeft: 18, color: 'var(--c-text-2)' }}>
             {items.map((i) => (
@@ -301,8 +411,91 @@ export default function CheckoutPage() {
           <p style={{ marginTop: 12 }}>
             Ship to: {company}, {line1}, {city} {state} {zip}
           </p>
+          {customer && !customer.isLicensedTobacco ? (
+            <p
+              style={{
+                marginTop: 12,
+                padding: 12,
+                borderRadius: 8,
+                background: 'var(--c-surface-2)',
+                border: '1px solid var(--c-border)',
+                color: 'var(--c-text-2)',
+                fontSize: 13,
+              }}
+            >
+              Your account is not marked as licensed for regulated / age-restricted products. Orders that include those
+              SKUs will be blocked until your distributor adds a license on your customer record.
+            </p>
+          ) : null}
+          <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--c-surface-2)' }}>
+            <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Discount code</label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                className="pleros-input"
+                value={discountCode}
+                onChange={(e) => {
+                  setDiscountCode(e.target.value)
+                  setDiscountAmount(0)
+                  setDiscountPending(false)
+                  setDiscountMsg(null)
+                }}
+                placeholder="Optional promo code"
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={validatingDiscount || !discountCode.trim()}
+                onClick={() => void validateDiscountCode()}
+              >
+                {validatingDiscount ? '…' : 'Apply'}
+              </button>
+            </div>
+            {discountMsg ? (
+              <p style={{ fontSize: 13, marginTop: 8, color: discountPending ? 'var(--c-warning)' : 'var(--c-text-2)' }}>
+                {discountMsg}
+              </p>
+            ) : null}
+          </div>
+          <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--c-surface-2)' }}>
+            <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Gift card</label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                className="pleros-input"
+                value={giftCardCode}
+                onChange={(e) => {
+                  setGiftCardCode(e.target.value)
+                  setGiftCardBalance(null)
+                  setGiftCardMsg(null)
+                }}
+                placeholder="Optional gift card code"
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={checkingGiftCard || !giftCardCode.trim()}
+                onClick={() => void checkGiftCard()}
+              >
+                {checkingGiftCard ? '…' : 'Check'}
+              </button>
+            </div>
+            {giftCardMsg ? (
+              <p style={{ fontSize: 13, marginTop: 8, color: 'var(--c-text-2)' }}>{giftCardMsg}</p>
+            ) : null}
+            {giftCardApplied > 0 && giftCardApplied < orderTotal ? (
+              <p style={{ fontSize: 13, marginTop: 8, color: 'var(--c-warning)' }}>
+                Gift card covers ${giftCardApplied.toFixed(2)} — pay ${amountDue.toFixed(2)} with {payment.replace(/_/g, ' ').toLowerCase()}.
+              </p>
+            ) : null}
+          </div>
+          <p style={{ marginTop: 16 }}>
+            Subtotal ${cartSubtotal.toFixed(2)}
+            {discountAmount > 0 ? ` · Discount −$${discountAmount.toFixed(2)}` : ''}
+            {giftCardApplied > 0 ? ` · Gift card −$${giftCardApplied.toFixed(2)}` : ''}
+            {` · Tax $${taxAmount.toFixed(2)} · Total $${orderTotal.toFixed(2)}`}
+            {giftCardApplied > 0 ? ` · Due now $${amountDue.toFixed(2)}` : ''}
+          </p>
           <p>
-            Pay with: <strong>{payment.replace(/_/g, ' ')}</strong>
+            Pay with: <strong>{amountDue === 0 && giftCardApplied > 0 ? 'GIFT CARD' : payment.replace(/_/g, ' ')}</strong>
             {payment === 'CARD' && cardPaymentMethodId ? (
               <span style={{ color: 'var(--c-success)', fontSize: 13 }}>
                 {' '}
@@ -339,6 +532,7 @@ function PaymentStep2({
   orderTotal,
   showStripe,
   stripeConfigured,
+  stripeConnectPending,
   stripePromise,
   cardPaymentMethodId,
   setCardPaymentMethodId,
@@ -359,6 +553,7 @@ function PaymentStep2({
   orderTotal: number
   showStripe: boolean
   stripeConfigured: boolean
+  stripeConnectPending: boolean
   stripePromise: Promise<Stripe | null> | null
   cardPaymentMethodId: string | null
   setCardPaymentMethodId: (id: string | null) => void
@@ -381,7 +576,7 @@ function PaymentStep2({
   const inner = (
     <>
       <h2 style={{ marginTop: 0 }}>Payment</h2>
-      <select className="cosmos-input" value={payment} onChange={(e) => setPayment(e.target.value as PaymentMethod)}>
+      <select className="pleros-input" value={payment} onChange={(e) => setPayment(e.target.value as PaymentMethod)}>
         <option value="NET_TERMS">Net terms</option>
         <option value="CASH">Cash</option>
         <option value="CHECK">Check</option>
@@ -469,7 +664,12 @@ function PaymentStep2({
           ) : null}
         </div>
       ) : null}
-      {payment === 'CARD' && !stripeConfigured ? (
+      {payment === 'CARD' && stripeConnectPending ? (
+        <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>
+          Card payments are not available yet — your distributor must finish Stripe Connect onboarding.
+        </p>
+      ) : null}
+      {payment === 'CARD' && !stripeConfigured && !stripeConnectPending ? (
         <p style={{ color: 'var(--c-danger)', marginTop: 12 }}>Missing VITE_STRIPE_PUBLISHABLE_KEY.</p>
       ) : null}
       <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 12 }}>
@@ -494,7 +694,7 @@ function PaymentStep2({
 
   if (showStripe && stripePromise && payment === 'CARD' && (cardMode === 'new' || savedCards.length === 0)) {
     return (
-      <div className="cosmos-card">
+      <div className="pleros-card">
         <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>
           {inner}
         </Elements>
@@ -502,5 +702,5 @@ function PaymentStep2({
     )
   }
 
-  return <div className="cosmos-card">{inner}</div>
+  return <div className="pleros-card">{inner}</div>
 }

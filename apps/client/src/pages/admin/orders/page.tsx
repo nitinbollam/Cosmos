@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type OrderRow = {
   id: string
   customerId: string
+  customerName?: string | null
   channel: string
   status: string
   totalAmount: string | number
@@ -39,14 +40,27 @@ const STATUS_TABS = [
 
 const CHANNELS = ['ALL', 'B2B_PORTAL', 'POS', 'SALES_REP', 'API'] as const
 
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `ORD-${id.slice(-8).toUpperCase()}`
+}
+
 function customerLabel(o: OrderRow): string {
+  if (o.customerName) return o.customerName
   const addr = o.shippingAddress
   if (addr && typeof addr === 'object' && addr !== null) {
     const a = addr as Record<string, unknown>
     if (typeof a.company === 'string' && a.company.trim()) return a.company
     if (typeof a.line1 === 'string' && a.line1.trim()) return a.line1
   }
-  return `Customer …${o.customerId.slice(-6)}`
+  if (o.customerId.startsWith('cust_')) {
+    const clean = o.customerId.replace('cust_', '').replace(/_/g, ' ')
+    return clean.charAt(0).toUpperCase() + clean.slice(1)
+  }
+  return `Customer #${o.customerId.slice(-6).toUpperCase()}`
 }
 
 function lineItemCount(o: OrderRow): number {
@@ -88,6 +102,7 @@ export default function OrdersPage() {
       if (toDate) q.set('to', toDate)
       return api.get<ListResp>(`/orders?${q.toString()}`)
     },
+    refetchInterval: 5000,
   })
 
   const cancelMut = useMutation({
@@ -106,10 +121,10 @@ export default function OrdersPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
             Orders
           </h1>
-          <p className="text-cosmos-text-3 text-sm mt-1">Tenant-scoped order pipeline</p>
+          <p className="text-pleros-text-3 text-sm mt-1">Tenant-scoped order pipeline</p>
         </div>
         <button type="button" className="btn-ghost !text-sm" onClick={() => void listQ.refetch()}>
           Refresh
@@ -134,19 +149,19 @@ export default function OrdersPage() {
         ))}
       </div>
 
-      <div className="cosmos-card flex flex-wrap gap-4 items-end">
+      <div className="pleros-card flex flex-wrap gap-4 items-end">
         <div className="min-w-[200px] flex-1">
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">Search</label>
+          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Search</label>
           <input
-            className="cosmos-input"
+            className="pleros-input"
             placeholder="Order # or customer id"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">Channel</label>
-          <select className="cosmos-input w-[180px]" value={channel} onChange={(e) => setChannel(e.target.value)}>
+          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Channel</label>
+          <select className="pleros-input w-[180px]" value={channel} onChange={(e) => setChannel(e.target.value)}>
             {CHANNELS.map((c) => (
               <option key={c} value={c}>
                 {c.replace(/_/g, ' ')}
@@ -155,16 +170,16 @@ export default function OrdersPage() {
           </select>
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">From</label>
-          <input type="date" className="cosmos-input w-[160px]" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">From</label>
+          <input type="date" className="pleros-input w-[160px]" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">To</label>
-          <input type="date" className="cosmos-input w-[160px]" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">To</label>
+          <input type="date" className="pleros-input w-[160px]" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         </div>
       </div>
 
-      <div className="cosmos-card overflow-x-auto">
+      <div className="pleros-card overflow-x-auto">
         {listQ.isLoading ? (
           <div className="py-8 space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
@@ -179,7 +194,7 @@ export default function OrdersPage() {
           <EmptyState icon="🛒" title="No orders" description="Try changing filters or date range." />
         ) : (
           <>
-            <table className="cosmos-table">
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>Order #</th>
@@ -196,20 +211,20 @@ export default function OrdersPage() {
                 {rows.map((o) => (
                   <tr key={o.id}>
                     <td className="font-mono text-sm">
-                      <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="text-cosmos-accent hover:underline">
-                        #{o.id.slice(-10)}
+                      <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="text-pleros-accent hover:underline font-semibold">
+                        #{formatOrderNumber(o.id)}
                       </Link>
                     </td>
                     <td className="max-w-[200px] truncate text-sm">{customerLabel(o)}</td>
                     <td>
-                      <span className="text-xs font-mono text-cosmos-text-2">{o.channel}</span>
+                      <span className="text-xs font-mono text-pleros-text-2">{o.channel}</span>
                     </td>
                     <td>
                       <StatusBadge status={o.status} />
                     </td>
                     <td>{lineItemCount(o)}</td>
                     <td className="font-mono">${Number(o.totalAmount).toFixed(2)}</td>
-                    <td className="text-sm text-cosmos-text-3">{new Date(o.createdAt).toLocaleString()}</td>
+                    <td className="text-sm text-pleros-text-3">{new Date(o.createdAt).toLocaleString()}</td>
                     <td className="whitespace-nowrap">
                       <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="btn-ghost !py-1 !px-2 !text-xs mr-1 inline-block">
                         View
@@ -233,7 +248,7 @@ export default function OrdersPage() {
               </tbody>
             </table>
             <div className="flex items-center justify-between mt-4 pt-4" style={{ borderTop: '1px solid var(--c-border)' }}>
-              <p className="text-sm text-cosmos-text-3">
+              <p className="text-sm text-pleros-text-3">
                 Page {listQ.data?.page ?? page} · {(listQ.data?.total ?? 0).toLocaleString()} orders
               </p>
               <div className="flex gap-2">
@@ -256,11 +271,11 @@ export default function OrdersPage() {
 
       {cancelId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setCancelId(null)}>
-          <div className="cosmos-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-cosmos-white font-display mb-3">Cancel order</h3>
-            <p className="text-sm text-cosmos-text-3 font-mono mb-2">#{cancelId.slice(-10)}</p>
-            <label className="text-xs text-cosmos-text-3">Reason (required)</label>
-            <input className="cosmos-input mb-4" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+          <div className="pleros-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-pleros-white font-display mb-3">Cancel order</h3>
+            <p className="text-sm text-pleros-text-3 font-mono mb-2">#{cancelId.slice(-10)}</p>
+            <label className="text-xs text-pleros-text-3">Reason (required)</label>
+            <input className="pleros-input mb-4" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
             <div className="flex gap-2 justify-end">
               <button type="button" className="btn-ghost" onClick={() => setCancelId(null)}>
                 Close

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Cosmos first-time bootstrap (@cosmos/web — Next.js only, local Postgres).
+# Pleros first-time bootstrap (@pleros/web — Next.js only, local Postgres).
 set -euo pipefail
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║     COSMOS BOOTSTRAP — FIRST RUN         ║"
+echo "║     PLEROS BOOTSTRAP — FIRST RUN         ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
@@ -30,7 +30,7 @@ echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║     BOOTSTRAP COMPLETE                   ║"
 echo "╠══════════════════════════════════════════╣"
-echo "║  Email:    admin@cosmos.local            ║"
+echo "║  Email:    admin@pleros.local            ║"
 echo "║  Password: admin1234                     ║"
 echo "║  App:      http://localhost:4000         ║"
 echo "╚══════════════════════════════════════════╝"

@@ -10,12 +10,12 @@ variable "private_subnet_ids" { type = list(string) }
 variable "node_type"           { type = string  default = "cache.t3.small" }
 
 resource "aws_elasticache_subnet_group" "this" {
-  name       = "cosmos-${var.environment}"
+  name       = "pleros-${var.environment}"
   subnet_ids = var.private_subnet_ids
 }
 
 resource "aws_security_group" "redis" {
-  name   = "cosmos-${var.environment}-redis"
+  name   = "pleros-${var.environment}-redis"
   vpc_id = var.vpc_id
 
   ingress {
@@ -27,8 +27,8 @@ resource "aws_security_group" "redis" {
 }
 
 resource "aws_elasticache_replication_group" "this" {
-  replication_group_id = "cosmos-${var.environment}"
-  description          = "Cosmos ${var.environment} Redis"
+  replication_group_id = "pleros-${var.environment}"
+  description          = "Pleros ${var.environment} Redis"
   engine               = "redis"
   engine_version       = "7.1"
   node_type            = var.node_type
@@ -38,7 +38,7 @@ resource "aws_elasticache_replication_group" "this" {
   subnet_group_name    = aws_elasticache_subnet_group.this.name
   security_group_ids   = [aws_security_group.redis.id]
 
-  tags = { Environment = var.environment, Project = "cosmos" }
+  tags = { Environment = var.environment, Project = "pleros" }
 }
 
 output "endpoint" { value = aws_elasticache_replication_group.this.primary_endpoint_address }

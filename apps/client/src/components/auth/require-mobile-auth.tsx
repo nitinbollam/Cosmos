@@ -1,24 +1,11 @@
-import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useSessionGate } from './use-session-gate'
 
 export function RequireMobileAuth({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate()
-  const pathname = useLocation().pathname ?? '/m'
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    const token = window.localStorage.getItem('cosmos.accessToken')
-    if (!token) {
-      const next = pathname.startsWith('/m/') ? `?next=${encodeURIComponent(pathname)}` : ''
-      navigate(`/m/login${next}`)
-      return
-    }
-    setReady(true)
-  }, [pathname, navigate])
+  const ready = useSessionGate({ surface: 'mobile', loginPath: '/m/login', staffOnly: true })
 
   if (!ready) {
     return (
-      <div className="min-h-[40vh] flex items-center justify-center text-cosmos-text-3 text-sm">
+      <div className="min-h-[40vh] flex items-center justify-center text-pleros-text-3 text-sm">
         Checking session…
       </div>
     )

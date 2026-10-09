@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma-sales-channels"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("SALESCHANNELS_DATABASE_URL")
+}
+
+enum SalesChannelType {
+  SHOPIFY
+  EBAY
+  WALMART
+  AMAZON
+}
+
+enum SalesChannelSyncStatus {
+  PENDING
+  SYNCED
+  ERROR
+}
+
+model SalesChannelConnection {
+  id           String           @id @default(cuid())
+  tenantId     String
+  type         SalesChannelType
+  credentials  String
+  shopDomain   String?
+  isActive     Boolean          @default(true)
+  lastSyncedAt DateTime?
+  createdAt    DateTime         @default(now())
+
+  listings SalesChannelListing[]
+  orders   SalesChannelOrder[]
+
+  @@unique([tenantId, type, shopDomain])
+  @@index([tenantId])
+}
+
+model SalesChannelListing {
+  id                String                 @id @default(cuid())
+  tenantId          String
+  connectionId      String
+  skuId             String
+  externalListingId String?
+  syncStatus        SalesChannelSyncStatus @default(PENDING)
+  lastSyncedAt      DateTime?
+  lastError         String?
+  connection        SalesChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, skuId])
+  @@index([tenantId, syncStatus])
+}
+
+model SalesChannelOrder {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  connectionId    String
+  orderId         String
+  externalOrderId String
+  createdAt       DateTime               @default(now())
+  connection      SalesChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, externalOrderId])
+  @@index([tenantId, orderId])
+}

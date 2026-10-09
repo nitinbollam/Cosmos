@@ -15,11 +15,18 @@ model TenantOrganization {
   plan             TenantPlan           @default(STARTER)
   onboardingPhase  OnboardingPhase      @default(PROFILE)
   settings         Json                 
-  billingEmail     String?
+  billingEmail           String?
+  stripeCustomerId       String?              @unique
+  stripeSubscriptionId   String?
+  billingStatus          String?
   timeZone         String               @default("Etc/UTC")
   industry         IndustryVertical     @default(GENERAL_WHOLESALE)
   suspended        Boolean              @default(false)
   metadata         Json                 
+  stripeConnectedAccountId String?
+  stripeChargesEnabled     Boolean        @default(false)
+  stripePayoutsEnabled     Boolean        @default(false)
+  stripeDetailsSubmitted   Boolean        @default(false)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   onboardingSteps  TenantOnboardingStep[]
@@ -29,14 +36,16 @@ model TenantOrganization {
 }
 
 model TenantInvite {
-  id        String   @id @default(cuid())
-  tenantId  String
-  email     String
-  role      String   @default("STAFF")
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
-  tenant    TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  tenantId   String
+  email      String
+  role       String   @default("STAFF")
+  token      String?  @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+  tenant     TenantOrganization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, email])
@@ -102,6 +111,287 @@ model AuditEvent {
   @@index([tenantId, entityId])
 }
 
+enum ApprovalType {
+  PURCHASE_ORDER
+  DISCOUNT
+  CREDIT_LIMIT_OVERRIDE
+  EXPENSE_REPORT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ApprovalRequest {
+  id           String         @id @default(cuid())
+  tenantId     String
+  type         ApprovalType
+  subjectId    String
+  requestedBy  String
+  context      Json
+  status       ApprovalStatus @default(PENDING)
+  decidedBy    String?
+  decidedAt    DateTime?
+  rejectReason String?
+  createdAt    DateTime       @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([tenantId, subjectId])
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountScope {
+  ORDER
+  LINE_ITEM
+}
+
+model Discount {
+  id               String        @id @default(cuid())
+  tenantId         String
+  code             String?
+  type             DiscountType
+  scope            DiscountScope
+  amount           Decimal
+  minPurchase      Decimal?
+  startsAt         DateTime?
+  expiresAt        DateTime?
+  usageLimit       Int?
+  perCustomerLimit Int?
+  timesUsed        Int           @default(0)
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  redemptions      DiscountRedemption[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+}
+
+model DiscountRedemption {
+  id         String   @id @default(cuid())
+  discountId String
+  orderId    String?
+  customerId String?
+  amountOff  Decimal
+  redeemedAt DateTime @default(now())
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+
+  @@index([discountId])
+  @@index([orderId])
+  @@index([customerId])
+}
+
+model Shift {
+  id         String    @id @default(cuid())
+  tenantId   String
+  userId     String
+  registerId String
+  clockInAt  DateTime  @default(now())
+  clockOutAt DateTime?
+
+  @@index([tenantId, userId])
+  @@index([tenantId, registerId])
+}
+
+model TillSession {
+  id            String    @id @default(cuid())
+  tenantId      String
+  registerId    String
+  shiftId       String
+  openedBy      String
+  openingFloat  Decimal
+  openedAt      DateTime  @default(now())
+  closedBy      String?
+  closingCount  Decimal?
+  expectedTotal Decimal?
+  variance      Decimal?
+  closedAt      DateTime?
+  tenders       PosTender[]
+
+  @@index([tenantId, registerId])
+  @@index([tenantId, shiftId])
+}
+
+enum PosTenderMethod {
+  CASH
+  CARD
+  CHECK
+  OTHER
+  GIFT_CARD
+}
+
+enum GiftCardTxnType {
+  ISSUE
+  REDEEM
+  REFUND
+  ADJUSTMENT
+}
+
+model GiftCard {
+  id                 String                @id @default(cuid())
+  tenantId           String
+  code               String
+  initialBalance     Decimal
+  currentBalance     Decimal
+  issuedToCustomerId String?
+  expiresAt          DateTime?
+  isActive           Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  transactions       GiftCardTransaction[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model GiftCardTransaction {
+  id             String          @id @default(cuid())
+  giftCardId     String
+  type           GiftCardTxnType
+  amount         Decimal
+  orderRef       String?
+  journalEntryId String?
+  createdAt      DateTime        @default(now())
+  giftCard       GiftCard        @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])
+}
+
+enum LoyaltyTxnType {
+  EARN
+  REDEEM
+  EXPIRE
+  ADJUSTMENT
+}
+
+model LoyaltyAccount {
+  id            String               @id @default(cuid())
+  tenantId      String
+  customerId    String
+  pointsBalance Int                  @default(0)
+  transactions  LoyaltyTransaction[]
+
+  @@unique([tenantId, customerId])
+}
+
+model LoyaltyTransaction {
+  id        String         @id @default(cuid())
+  accountId String
+  type      LoyaltyTxnType
+  points    Int
+  orderRef  String?
+  reason    String?
+  createdAt DateTime       @default(now())
+  account   LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([accountId, orderRef])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum SubscriptionInterval {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM_DAYS
+}
+
+model Subscription {
+  id                   String               @id @default(cuid())
+  tenantId             String
+  customerId           String
+  savedPaymentMethodId String
+  interval             SubscriptionInterval
+  intervalDays         Int?
+  nextOrderDate        DateTime
+  status               SubscriptionStatus   @default(ACTIVE)
+  lastFailureReason    String?
+  createdAt            DateTime             @default(now())
+  lines                SubscriptionLine[]
+
+  @@index([tenantId, status, nextOrderDate])
+  @@index([tenantId, customerId])
+}
+
+model SubscriptionLine {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  skuId          String
+  warehouseId    String
+  quantity       Int
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+}
+
+model CustomerSegment {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  filterCriteria Json
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  tenantId    String
+  name        String
+  segmentId   String
+  subject     String
+  body        String
+  scheduledAt DateTime?
+  status      CampaignStatus @default(DRAFT)
+  sentCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+
+  @@index([tenantId, status])
+}
+
+model CustomerSuppression {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String?
+  email      String?
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, email])
+}
+
+model PosTender {
+  id            String          @id @default(cuid())
+  tenantId      String
+  orderId       String
+  tillSessionId String?
+  method        PosTenderMethod
+  amount        Decimal
+  createdAt     DateTime        @default(now())
+  tillSession   TillSession?    @relation(fields: [tillSessionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, orderId])
+  @@index([tenantId, tillSessionId])
+}
+
 model PosRegister {
   id          String   @id @default(cuid())
   tenantId    String
@@ -112,4 +402,61 @@ model PosRegister {
   updatedAt   DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+model EdiTradingPartner {
+  id               String        @id @default(cuid())
+  tenantId         String
+  code             String
+  name             String
+  isaId            String?
+  inboundEnabled   Boolean       @default(true)
+  outboundEnabled  Boolean       @default(true)
+  autoCreateOrders Boolean       @default(true)
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  documents        EdiDocument[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+enum EdiDocType {
+  PO_850
+  INVOICE_810
+  ASN_856
+}
+
+enum EdiDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum EdiDocStatus {
+  RECEIVED
+  PROCESSED
+  SENT
+  FAILED
+}
+
+model EdiDocument {
+  id            String            @id @default(cuid())
+  tenantId      String
+  partnerId     String?
+  docType       EdiDocType
+  direction     EdiDirection
+  status        EdiDocStatus      @default(RECEIVED)
+  controlNumber String?
+  payload       Json
+  referenceType String?
+  referenceId   String?
+  errorMessage  String?
+  createdAt     DateTime          @default(now())
+  processedAt   DateTime?
+  partner       EdiTradingPartner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, docType, status])
+  @@index([tenantId, createdAt])
+  @@index([referenceType, referenceId])
 }

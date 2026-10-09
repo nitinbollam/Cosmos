@@ -30,6 +30,10 @@ async function sendWebResponse(res: express.Response, response: Response) {
     if (key.toLowerCase() === 'transfer-encoding') return
     res.setHeader(key, value)
   })
+  const contentType = response.headers.get('content-type') ?? ''
+  if (contentType.includes('text/event-stream') && typeof res.flushHeaders === 'function') {
+    res.flushHeaders()
+  }
   if (!response.body) {
     res.end()
     return
@@ -50,9 +54,41 @@ async function main() {
   loadEnv()
   await import('../../web/server/register-paths.mjs')
   const { handleApiRequest } = await import('../../web/server/api-router.ts')
+  const { startBackgroundJobs } = await import('../../web/lib/server/background-jobs.ts')
+  startBackgroundJobs()
 
   const app = express()
   app.disable('x-powered-by')
+
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self)')
+    if (isProd) {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    }
+    next()
+  })
+
+  // Allow cross-origin calls from the Vercel-hosted client build(s). Preview
+  // deployments get a new random hash per build, so match on the stable
+  // project suffix rather than one exact origin.
+  const corsOriginSuffix = process.env.CORS_ALLOWED_ORIGIN_SUFFIX ?? ''
+  app.use((req, res, next) => {
+    const origin = req.headers.origin
+    if (origin && corsOriginSuffix && origin.endsWith(corsOriginSuffix)) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Vary', 'Origin')
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+    }
+    if (req.method === 'OPTIONS') {
+      res.status(204).end()
+      return
+    }
+    next()
+  })
 
   app.use(async (req, res, next) => {
     if (!req.path.startsWith('/api')) return next()
@@ -101,7 +137,7 @@ async function main() {
   }
 
   app.listen(port, () => {
-    console.log(`[cosmos] Vite + API @ http://localhost:${port}`)
+    console.log(`[pleros] Vite + API @ http://localhost:${port}`)
   })
 }
 

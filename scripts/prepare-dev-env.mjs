@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { DB_BY_SCHEMA, sqliteDatabaseUrl } from './db-urls.mjs'
+import { DB_BY_SCHEMA, databaseUrlForSchema, getDbProvider } from './db-urls.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const rootEnvPath = path.join(root, '.env')
@@ -38,24 +38,34 @@ const baseVars = Object.fromEntries(
     .filter(Boolean),
 )
 
-const dataDir = baseVars.COSMOS_DATA_DIR ?? '.data'
+const dataDir = baseVars.PLEROS_DATA_DIR ?? '.data'
 
 const webVars = {
   ...baseVars,
-  COSMOS_DATA_DIR: dataDir,
+  PLEROS_DATA_DIR: dataDir,
   NEXT_PUBLIC_GATEWAY_URL: '/api/v1',
   NEXT_PUBLIC_WEB_ADMIN_ORIGIN: baseVars.NEXT_PUBLIC_WEB_ADMIN_ORIGIN ?? 'http://localhost:4000',
-  COSMOS_CLIENT_ORIGIN: baseVars.COSMOS_CLIENT_ORIGIN ?? 'http://localhost:4000',
+  PLEROS_CLIENT_ORIGIN: baseVars.PLEROS_CLIENT_ORIGIN ?? 'http://localhost:4000',
 }
 
-for (const [schema, dbName] of Object.entries(DB_BY_SCHEMA)) {
+const dbProvider = baseVars.PLEROS_DB_PROVIDER ?? ''
+if (dbProvider === 'postgres') {
+  webVars.PLEROS_DB_PROVIDER = 'postgres'
+  if (!webVars.DATABASE_URL) {
+    webVars.DATABASE_URL = baseVars.DATABASE_URL ?? 'postgresql://pleros:pleros@localhost:5432/postgres'
+  }
+}
+
+for (const [schema] of Object.entries(DB_BY_SCHEMA)) {
   const envKey = `${schema.toUpperCase()}_DATABASE_URL`
-  webVars[envKey] = baseVars[envKey] ?? sqliteDatabaseUrl(dbName, dataDir)
+  webVars[envKey] =
+    baseVars[envKey] ??
+    databaseUrlForSchema(schema, { dataDir })
 }
 
 const exampleLines = fs.existsSync(webExamplePath) ? fs.readFileSync(webExamplePath, 'utf8') : ''
 const orderedKeys = [
-  'COSMOS_DATA_DIR',
+  'PLEROS_DATA_DIR',
   'NEXT_PUBLIC_GATEWAY_URL',
   ...Object.keys(DB_BY_SCHEMA).map((s) => `${s.toUpperCase()}_DATABASE_URL`),
   'JWT_SECRET',
@@ -78,11 +88,12 @@ for (const [k, v] of Object.entries(webVars)) {
 }
 if (exampleLines.includes('# Legacy')) {
   lines.push('')
-  lines.push('# Legacy Nest URLs not used by @cosmos/web')
+  lines.push('# Legacy Nest URLs not used by @pleros/web')
 }
 
 fs.writeFileSync(webEnvPath, `${lines.join('\n')}\n`)
-console.log(`[env] apps/web/.env.local (${lines.length} vars, SQLite in apps/web/${dataDir})`)
+const mode = webVars.PLEROS_DB_PROVIDER === 'postgres' ? 'Postgres' : `SQLite in apps/web/${dataDir}`
+console.log(`[env] apps/web/.env.local (${lines.length} vars, ${mode})`)
 
 const clientEnv = [
   `VITE_GATEWAY_URL=${baseVars.VITE_GATEWAY_URL ?? '/api/v1'}`,
@@ -102,7 +113,7 @@ spawnSync(process.execPath, [path.join(root, 'scripts', 'generate-favicons.mjs')
 })
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const ae = spawnSync(npm, ['run', 'build', '-w', '@cosmos/analytics-engine'], {
+const ae = spawnSync(npm, ['run', 'build', '-w', '@pleros/analytics-engine'], {
   cwd: root,
   stdio: 'inherit',
   shell: process.platform === 'win32',

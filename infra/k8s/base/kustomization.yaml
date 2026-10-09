@@ -1,7 +1,7 @@
-# Next.js-only stack (@cosmos/web). Legacy per-service manifests remain in this folder but are not applied.
+# Next.js-only stack (@pleros/web). Legacy per-service manifests remain in this folder but are not applied.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: cosmos
+namespace: pleros
 resources:
   - namespace.yaml
   - configmap.yaml

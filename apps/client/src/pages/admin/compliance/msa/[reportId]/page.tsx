@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import { Card, CardTitle } from '@cosmos/ui'
+import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 type MsaReport = {
   id: string
@@ -42,21 +42,21 @@ export default function MsaReportDetailPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/admin/compliance" className="text-sm text-cosmos-muted hover:text-cosmos-white">
+        <Link to="/admin/compliance" className="text-sm text-pleros-muted hover:text-pleros-white">
           ← Compliance
         </Link>
       </div>
 
       {q.isLoading ? (
-        <p className="text-cosmos-muted">Loading…</p>
+        <p className="text-pleros-muted">Loading…</p>
       ) : q.error || !q.data ? (
         <p className="text-red-400">Report not found</p>
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-cosmos-white">MSA report</h1>
-              <p className="font-mono text-xs text-cosmos-muted mt-1">{q.data.id}</p>
+              <h1 className="text-2xl font-bold text-pleros-white">MSA report</h1>
+              <p className="font-mono text-xs text-pleros-muted mt-1">{q.data.id}</p>
               <div className="mt-2">
                 <StatusBadge status={q.data.status} />
               </div>
@@ -68,12 +68,12 @@ export default function MsaReportDetailPage() {
               <CardTitle>Period</CardTitle>
               <dl className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between gap-4">
-                  <dt className="text-cosmos-muted">Week start</dt>
-                  <dd className="text-cosmos-text">{new Date(q.data.weekStart).toLocaleString()}</dd>
+                  <dt className="text-pleros-muted">Week start</dt>
+                  <dd className="text-pleros-text">{new Date(q.data.weekStart).toLocaleString()}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-cosmos-muted">Week end</dt>
-                  <dd className="text-cosmos-text">{new Date(q.data.weekEnding).toLocaleString()}</dd>
+                  <dt className="text-pleros-muted">Week end</dt>
+                  <dd className="text-pleros-text">{new Date(q.data.weekEnding).toLocaleString()}</dd>
                 </div>
               </dl>
             </Card>
@@ -81,12 +81,12 @@ export default function MsaReportDetailPage() {
               <CardTitle>Totals</CardTitle>
               <dl className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between gap-4">
-                  <dt className="text-cosmos-muted">Transactions</dt>
-                  <dd className="text-cosmos-white">{q.data.totalTransactions}</dd>
+                  <dt className="text-pleros-muted">Transactions</dt>
+                  <dd className="text-pleros-white">{q.data.totalTransactions}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-cosmos-muted">Net purchases</dt>
-                  <dd className="font-mono text-cosmos-text">
+                  <dt className="text-pleros-muted">Net purchases</dt>
+                  <dd className="font-mono text-pleros-text">
                     ${Number(q.data.netPurchases ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </dd>
                 </div>
@@ -98,20 +98,20 @@ export default function MsaReportDetailPage() {
             <CardTitle>Identifiers</CardTitle>
             <dl className="mt-4 space-y-2 text-sm">
               <div>
-                <dt className="text-cosmos-muted">Manufacturer DID</dt>
-                <dd className="font-mono text-xs text-cosmos-text break-all mt-1">{q.data.manufacturerDid}</dd>
+                <dt className="text-pleros-muted">Manufacturer DID</dt>
+                <dd className="font-mono text-xs text-pleros-text break-all mt-1">{q.data.manufacturerDid}</dd>
               </div>
               <div>
-                <dt className="text-cosmos-muted">Reporter DID</dt>
-                <dd className="font-mono text-xs text-cosmos-text break-all mt-1">{q.data.reporterDid}</dd>
+                <dt className="text-pleros-muted">Reporter DID</dt>
+                <dd className="font-mono text-xs text-pleros-text break-all mt-1">{q.data.reporterDid}</dd>
               </div>
               <div>
-                <dt className="text-cosmos-muted">File</dt>
-                <dd className="font-mono text-xs text-cosmos-muted break-all mt-1">{q.data.filePath}</dd>
+                <dt className="text-pleros-muted">File</dt>
+                <dd className="font-mono text-xs text-pleros-muted break-all mt-1">{q.data.filePath}</dd>
               </div>
               <div>
-                <dt className="text-cosmos-muted">Hash</dt>
-                <dd className="font-mono text-xs text-cosmos-muted break-all mt-1">{q.data.fileHash}</dd>
+                <dt className="text-pleros-muted">Hash</dt>
+                <dd className="font-mono text-xs text-pleros-muted break-all mt-1">{q.data.fileHash}</dd>
               </div>
             </dl>
           </Card>
@@ -122,14 +122,14 @@ export default function MsaReportDetailPage() {
               <dl className="mt-4 space-y-2 text-sm">
                 {q.data.submittedAt && (
                   <div className="flex justify-between gap-4">
-                    <dt className="text-cosmos-muted">Submitted at</dt>
-                    <dd className="text-cosmos-text">{new Date(q.data.submittedAt).toLocaleString()}</dd>
+                    <dt className="text-pleros-muted">Submitted at</dt>
+                    <dd className="text-pleros-text">{new Date(q.data.submittedAt).toLocaleString()}</dd>
                   </div>
                 )}
                 {q.data.submissionConfirmation && (
                   <div>
-                    <dt className="text-cosmos-muted">Confirmation</dt>
-                    <dd className="text-cosmos-text text-xs mt-1 whitespace-pre-wrap">
+                    <dt className="text-pleros-muted">Confirmation</dt>
+                    <dd className="text-pleros-text text-xs mt-1 whitespace-pre-wrap">
                       {q.data.submissionConfirmation}
                     </dd>
                   </div>

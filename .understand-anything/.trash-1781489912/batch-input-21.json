@@ -1,0 +1,50 @@
+{
+  "batchIndex": 21,
+  "files": [
+    {
+      "path": "docs/celestial/01-platform-overview.md",
+      "language": "markdown",
+      "sizeLines": 189,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/02-admin-modules.md",
+      "language": "markdown",
+      "sizeLines": 279,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/03-buyer-mobile.md",
+      "language": "markdown",
+      "sizeLines": 178,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/04-api-finance-integrations.md",
+      "language": "markdown",
+      "sizeLines": 207,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/05-celestial-ai.md",
+      "language": "markdown",
+      "sizeLines": 157,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/celestial/06-faq.md",
+      "language": "markdown",
+      "sizeLines": 187,
+      "fileCategory": "docs"
+    }
+  ],
+  "batchImportData": {
+    "docs/celestial/01-platform-overview.md": [],
+    "docs/celestial/02-admin-modules.md": [],
+    "docs/celestial/03-buyer-mobile.md": [],
+    "docs/celestial/04-api-finance-integrations.md": [],
+    "docs/celestial/05-celestial-ai.md": [],
+    "docs/celestial/06-faq.md": []
+  },
+  "neighborMap": {}
+}

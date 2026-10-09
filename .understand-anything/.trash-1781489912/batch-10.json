@@ -1,0 +1,340 @@
+{
+  "nodes": [
+    {
+      "id": "file:scripts/apply-prisma-provider.mjs",
+      "type": "file",
+      "name": "apply-prisma-provider.mjs",
+      "filePath": "scripts/apply-prisma-provider.mjs",
+      "summary": "Rewrites the `provider` field in every Prisma schema file under apps/web/prisma to match the current COSMOS_DB_PROVIDER setting (sqlite or postgresql), ensuring schemas stay in sync before code generation or migrations.",
+      "tags": ["script", "database", "configuration", "infrastructure"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/db-urls.mjs",
+      "type": "file",
+      "name": "db-urls.mjs",
+      "filePath": "scripts/db-urls.mjs",
+      "summary": "Central utility module that resolves database connection URLs for all Prisma schemas in the monorepo, supporting both SQLite (local dev) and PostgreSQL (production) via environment variable inspection.",
+      "tags": ["utility", "database", "configuration", "service"],
+      "complexity": "moderate",
+      "languageNotes": "Exports a rich set of helpers (envKeyForSchema, getDbProvider, sqliteDatabaseUrl, postgresDatabaseUrl, databaseUrlForSchema, resolveAllDatabaseUrls) and constants (DB_BY_SCHEMA, WEB_DATABASE_ENV_KEYS) consumed by every other database script."
+    },
+    {
+      "id": "function:scripts/db-urls.mjs:databaseUrlForSchema",
+      "type": "function",
+      "name": "databaseUrlForSchema",
+      "filePath": "scripts/db-urls.mjs",
+      "lineRange": [54, 69],
+      "summary": "Returns the fully-resolved database URL for a given Prisma schema name, preferring an explicit env var override and then falling back to provider-specific URL construction (postgres or sqlite).",
+      "tags": ["utility", "database", "configuration"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/db-urls.mjs:resolveAllDatabaseUrls",
+      "type": "function",
+      "name": "resolveAllDatabaseUrls",
+      "filePath": "scripts/db-urls.mjs",
+      "lineRange": [71, 77],
+      "summary": "Iterates all known schemas in DB_BY_SCHEMA and returns a map of environment-variable keys to their resolved database URLs, used to bootstrap multi-schema env injection.",
+      "tags": ["utility", "database", "configuration"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/db-urls.mjs:postgresDatabaseUrl",
+      "type": "function",
+      "name": "postgresDatabaseUrl",
+      "filePath": "scripts/db-urls.mjs",
+      "lineRange": [44, 52],
+      "summary": "Builds a PostgreSQL connection URL for a named sub-database by appending the database name to a base URL, with search param normalisation.",
+      "tags": ["utility", "database"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/migrate-all.ts",
+      "type": "file",
+      "name": "migrate-all.ts",
+      "filePath": "scripts/migrate-all.ts",
+      "summary": "Dev-time script that iterates every Prisma schema in DB_BY_SCHEMA and runs `prisma db push` against each one with the resolved database URL, supporting both SQLite and PostgreSQL providers.",
+      "tags": ["script", "database", "migration", "infrastructure"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/seed-db.ts",
+      "type": "file",
+      "name": "seed-db.ts",
+      "filePath": "scripts/seed-db.ts",
+      "summary": "Comprehensive database seeding script for the Cosmos ERP platform that populates all domain-specific Prisma databases (auth, CRM, inventory, orders, WMS, dispatch, compliance, ledger, payments, notifications) with realistic fixture data for development and testing.",
+      "tags": ["script", "database", "data-pipeline", "development"],
+      "complexity": "complex",
+      "languageNotes": "Each seed function dynamically imports a separate Prisma client package at runtime to target the correct sub-database, disconnecting after each domain segment to avoid connection leaks. The main() orchestrator runs all seeders sequentially and also calls syncSnapshotsFromOrders to hydrate computed snapshots."
+    },
+    {
+      "id": "function:scripts/seed-db.ts:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [1380, 1442],
+      "summary": "Top-level orchestrator that calls every domain seeder in dependency order, then syncs order snapshots and prints a summary of inserted record counts.",
+      "tags": ["entry-point", "data-pipeline", "script"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedAuth",
+      "type": "function",
+      "name": "seedAuth",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [103, 156],
+      "summary": "Seeds the auth database with a default tenant record and two hashed-password user accounts (admin and viewer) using bcrypt and Prisma upserts.",
+      "tags": ["database", "authentication", "development"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedTenantOrg",
+      "type": "function",
+      "name": "seedTenantOrg",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [158, 227],
+      "summary": "Seeds tenant organisation profile, onboarding steps, an invite record, and a webhook subscription into the tenant Prisma database.",
+      "tags": ["database", "multi-tenancy", "development"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedInventory",
+      "type": "function",
+      "name": "seedInventory",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [229, 339],
+      "summary": "Seeds warehouse locations, bin locations, SKUs, and initial stock levels into the inventory Prisma database for a given tenant.",
+      "tags": ["database", "inventory", "development"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedCrm",
+      "type": "function",
+      "name": "seedCrm",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [341, 456],
+      "summary": "Seeds the CRM database with customer records, a lead, CRM activities, and customer-specific price overrides for a given tenant.",
+      "tags": ["database", "crm", "development"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedOrders",
+      "type": "function",
+      "name": "seedOrders",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [458, 520],
+      "summary": "Seeds sample sales orders with line items into the orders Prisma database, using upsert semantics to avoid duplicates across re-runs.",
+      "tags": ["database", "orders", "development"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedWms",
+      "type": "function",
+      "name": "seedWms",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [791, 921],
+      "summary": "Seeds the WMS database with fulfillment tasks, pick waves, receiving sessions, and cycle count records for warehouse operations testing.",
+      "tags": ["database", "warehouse", "development"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedCompliance",
+      "type": "function",
+      "name": "seedCompliance",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [982, 1061],
+      "summary": "Seeds MSA compliance records including tenant registration, manufacturer DIDs, transactions, and reports into the compliance Prisma database.",
+      "tags": ["database", "compliance", "development"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedLedger",
+      "type": "function",
+      "name": "seedLedger",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [1063, 1103],
+      "summary": "Seeds the accounting ledger database with chart-of-account entries and a sample journal entry for double-entry bookkeeping fixtures.",
+      "tags": ["database", "accounting", "development"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedTier8Extras",
+      "type": "function",
+      "name": "seedTier8Extras",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [1105, 1212],
+      "summary": "Seeds advanced tier-8 ERP data including volume price breaks, order templates, additional bin locations, bank accounts, bank statement lines, and POS registers across multiple Prisma databases.",
+      "tags": ["database", "erp", "development"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/seed-db.ts:seedNotifications",
+      "type": "function",
+      "name": "seedNotifications",
+      "filePath": "scripts/seed-db.ts",
+      "lineRange": [1240, 1369],
+      "summary": "Seeds notification requests and updates the tenant's notification preferences in the notifications and tenant Prisma databases.",
+      "tags": ["database", "notifications", "development"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/setup-sqlite.mjs",
+      "type": "file",
+      "name": "setup-sqlite.mjs",
+      "filePath": "scripts/setup-sqlite.mjs",
+      "summary": "Minimal bootstrap script that creates the apps/web/.data directory for local SQLite database files and prints guidance for the next setup steps.",
+      "tags": ["script", "database", "infrastructure", "development"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:scripts/apply-prisma-provider.mjs",
+      "target": "file:scripts/db-urls.mjs",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/migrate-all.ts",
+      "target": "file:scripts/db-urls.mjs",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/setup-sqlite.mjs",
+      "target": "file:scripts/db-urls.mjs",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/db-urls.mjs",
+      "target": "function:scripts/db-urls.mjs:databaseUrlForSchema",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/db-urls.mjs",
+      "target": "function:scripts/db-urls.mjs:resolveAllDatabaseUrls",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/db-urls.mjs",
+      "target": "function:scripts/db-urls.mjs:postgresDatabaseUrl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/db-urls.mjs",
+      "target": "function:scripts/db-urls.mjs:databaseUrlForSchema",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/db-urls.mjs",
+      "target": "function:scripts/db-urls.mjs:resolveAllDatabaseUrls",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/db-urls.mjs",
+      "target": "function:scripts/db-urls.mjs:postgresDatabaseUrl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedAuth",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedTenantOrg",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedInventory",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedCrm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedOrders",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedWms",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedCompliance",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedLedger",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedTier8Extras",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/seed-db.ts",
+      "target": "function:scripts/seed-db.ts:seedNotifications",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/migrate-all.ts",
+      "target": "file:scripts/apply-prisma-provider.mjs",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

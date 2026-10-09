@@ -40,13 +40,37 @@ export async function appendMessage(
   })
 }
 
-export async function listConversations(tenantId: string, userId: string, limit = 10) {
+export async function listConversations(
+  tenantId: string,
+  userId: string,
+  opts?: { limit?: number; surface?: string },
+) {
+  const limit = opts?.limit ?? 10
   return analyticsDb.celestialConversation.findMany({
-    where: { tenantId, userId },
+    where: {
+      tenantId,
+      userId,
+      ...(opts?.surface ? { surface: opts.surface } : {}),
+    },
     orderBy: { updatedAt: 'desc' },
     take: limit,
     include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
   })
+}
+
+export async function getConversation(tenantId: string, userId: string, conversationId: string) {
+  const conversation = await analyticsDb.celestialConversation.findFirst({
+    where: { id: conversationId, tenantId, userId },
+    include: {
+      messages: {
+        where: { role: { in: ['user', 'assistant'] } },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      },
+    },
+  })
+  if (!conversation) throw new ApiError(404, 'Conversation not found')
+  return conversation
 }
 
 export async function touchConversation(conversationId: string) {

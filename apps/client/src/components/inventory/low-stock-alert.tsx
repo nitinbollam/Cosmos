@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
-import { CardTitle } from '@cosmos/ui'
+import { CardTitle } from '@pleros/ui'
 import { adminPath } from '@/lib/admin-path'
 
 export type LowStockRow = { skuId: string; name: string; available: number; reorderPoint?: number }
 
 export function LowStockAlert({ alerts }: { alerts: LowStockRow[] }) {
   return (
-    <div className="cosmos-card">
+    <div className="pleros-card">
       <CardTitle>Low stock</CardTitle>
       {alerts.length === 0 ? (
         <p className="text-sm mt-3" style={{ color: 'var(--c-text-3)' }}>

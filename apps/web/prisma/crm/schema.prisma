@@ -35,6 +35,9 @@ model Customer {
   primaryCity          String?
   primaryState         String?
   primaryZip           String?
+  stripeCustomerId     String?
+  /** acct_... under which stripeCustomerId was created (Connect direct charges). */
+  stripeConnectAccountId String?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   activities           Activity[]

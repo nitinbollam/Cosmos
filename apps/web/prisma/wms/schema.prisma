@@ -30,14 +30,17 @@ model FulfillmentTask {
 }
 
 model PickLine {
-  id          String          @id @default(cuid())
-  taskId      String
-  skuId       String
-  warehouseId String
-  quantity    Int
-  pickedQty   Int             @default(0)
-  status      PickLineStatus  @default(PENDING)
-  task        FulfillmentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id            String          @id @default(cuid())
+  taskId        String
+  skuId         String
+  warehouseId   String
+  quantity      Int
+  pickedQty     Int             @default(0)
+  batchId       String?
+  locationId    String?
+  serialNumbers Json?
+  status        PickLineStatus  @default(PENDING)
+  task          FulfillmentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
 }
@@ -209,4 +212,71 @@ model PickWaveTask {
 
   @@unique([waveId, taskId])
   @@index([waveId])
+}
+
+enum PutawayTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PutawayLineStatus {
+  PENDING
+  PUTAWAY
+  SKIPPED
+}
+
+model PutawayTask {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  warehouseId        String
+  receivingSessionId String?
+  status             PutawayTaskStatus @default(PENDING)
+  assignedUserId     String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  lines              PutawayLine[]
+
+  @@index([tenantId, warehouseId, status])
+  @@index([tenantId, receivingSessionId])
+}
+
+model PutawayLine {
+  id              String            @id @default(cuid())
+  taskId          String
+  skuId           String
+  batchId         String?
+  quantity        Int
+  suggestedBinId  String?
+  suggestedBinCode String?
+  actualBinId     String?
+  actualBinCode   String?
+  status          PutawayLineStatus @default(PENDING)
+  task            PutawayTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([skuId])
+}
+
+enum WmsLaborEventType {
+  RECEIVE_SCAN
+  PUTAWAY
+  PICK
+  PACK
+  DISPATCH
+}
+
+model WmsLaborEvent {
+  id          String            @id @default(cuid())
+  tenantId    String
+  userId      String
+  eventType   WmsLaborEventType
+  referenceId String
+  quantity    Int               @default(0)
+  warehouseId String
+  createdAt   DateTime          @default(now())
+
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, warehouseId, eventType])
 }

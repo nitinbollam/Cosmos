@@ -1,6 +1,18 @@
-import { detectSeriesAnomalies, forecastCashFlow, type DetectRequest, type ForecastRequest } from '@cosmos/analytics-engine'
+import { detectSeriesAnomalies, forecastCashFlow, type DetectRequest, type ForecastRequest } from '@pleros/analytics-engine'
 import { jwtVerify } from 'jose'
-import { loginUser, logoutUser, refreshUserTokens, registerUser } from '../lib/server/auth'
+import {
+  acceptInvite,
+  changePassword,
+  loginUser,
+  logoutUser,
+  refreshUserTokens,
+  requestPasswordReset,
+  verifyRefreshToken,
+  resendEmailVerification,
+  resetPassword,
+  verifyEmail,
+} from '../lib/server/auth'
+import { assertPasswordPolicy, clientIp, rateLimit } from '../lib/server/auth-security'
 import { publicSignup } from '../lib/server/signup'
 import { getAuthProfile } from '../lib/server/buyer-context'
 import { jwtSecret } from '../lib/server/env'
@@ -11,7 +23,27 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status })
 }
 
+/**
+ * API responses are per-user and change on every write, so nothing may cache them
+ * (browser, proxy or service worker). Routes that set their own Cache-Control keep it.
+ */
 export async function handleApiRequest(req: Request): Promise<Response> {
+  const res = await routeApiRequest(req)
+  if (!res.headers.has('Cache-Control')) {
+    try {
+      res.headers.set('Cache-Control', 'no-store')
+    } catch {
+      /* immutable headers (proxied response) — leave as is */
+    }
+  }
+  return res
+}
+
+function sessionMeta(req: Request) {
+  return { userAgent: req.headers.get('user-agent') }
+}
+
+async function routeApiRequest(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const pathname = url.pathname
 
@@ -22,7 +54,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
   if (pathname === '/api/v1/health' && req.method === 'GET') {
     return json({
       status: 'ok',
-      service: 'cosmos',
+      service: 'pleros',
       api: 'native',
       timestamp: new Date().toISOString(),
     })
@@ -69,8 +101,11 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       return json({ message: 'email and password required' }, 400)
     }
     try {
-      return json(await loginUser(body.email.trim(), body.password))
+      rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
+      rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
+      return json(await loginUser(body.email.trim(), body.password, sessionMeta(req)))
     } catch (e) {
+      if (e instanceof ApiError) return toJsonError(e)
       const msg = e instanceof Error ? e.message : 'Login failed'
       return json({ message: msg }, msg === 'Invalid credentials' ? 401 : 500)
     }
@@ -94,6 +129,8 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       return json({ message: 'Missing required fields' }, 400)
     }
     try {
+      rateLimit(`signup:${clientIp(req)}`, 5, 60 * 60 * 1000)
+      assertPasswordPolicy(body.password)
       return json(
         await publicSignup({
           companyName: body.companyName,
@@ -110,43 +147,116 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     }
   }
 
-  if (pathname === '/api/v1/auth/register' && req.method === 'POST') {
-    let body: {
-      tenantId?: string
-      email?: string
-      password?: string
-      firstName?: string
-      lastName?: string
-      role?: string
-    }
+  // The old open /auth/register (arbitrary tenantId + role) was a tenant-takeover
+  // vector. Joining an existing tenant now requires an admin-issued invite token.
+  if (pathname === '/api/v1/auth/accept-invite' && req.method === 'POST') {
+    let body: { token?: string; password?: string; firstName?: string; lastName?: string }
     try {
       body = (await req.json()) as typeof body
     } catch {
       return json({ message: 'Invalid JSON body' }, 400)
     }
-    if (!body.tenantId || !body.email || !body.password || !body.firstName || !body.lastName) {
-      return json({ message: 'Missing required fields' }, 400)
+    if (!body.token || !body.password || !body.firstName?.trim() || !body.lastName?.trim()) {
+      return json({ message: 'token, password, firstName, and lastName are required' }, 400)
     }
     try {
+      rateLimit(`accept-invite:${clientIp(req)}`, 10, 60 * 60 * 1000)
       return json(
-        await registerUser({
-          tenantId: body.tenantId,
-          email: body.email.trim(),
+        await acceptInvite({
+          token: body.token,
           password: body.password,
           firstName: body.firstName,
           lastName: body.lastName,
-          role: body.role,
+          sessionMeta: sessionMeta(req),
         }),
+        201,
       )
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Registration failed'
-      const status =
-        msg === 'Tenant does not exist' || msg.includes('already registered')
-          ? 409
-          : msg === 'Invalid credentials'
-            ? 401
-            : 500
-      return json({ message: msg }, status)
+      if (e instanceof ApiError) return toJsonError(e)
+      const msg = e instanceof Error ? e.message : 'Failed to accept invite'
+      return json({ message: msg }, msg.includes('already registered') ? 409 : 500)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/forgot-password' && req.method === 'POST') {
+    let body: { email?: string }
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      return json({ message: 'Invalid JSON body' }, 400)
+    }
+    if (!body.email?.trim()) return json({ message: 'email required' }, 400)
+    try {
+      rateLimit(`forgot:${clientIp(req)}`, 5, 15 * 60 * 1000)
+      await requestPasswordReset(body.email)
+      // Always succeed so the endpoint can't be used to enumerate accounts.
+      return json({ ok: true })
+    } catch (e) {
+      return toJsonError(e)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/reset-password' && req.method === 'POST') {
+    let body: { token?: string; password?: string }
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      return json({ message: 'Invalid JSON body' }, 400)
+    }
+    if (!body.token || !body.password) return json({ message: 'token and password required' }, 400)
+    try {
+      rateLimit(`reset:${clientIp(req)}`, 10, 15 * 60 * 1000)
+      await resetPassword(body.token, body.password)
+      return json({ ok: true })
+    } catch (e) {
+      return toJsonError(e)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/change-password' && req.method === 'POST') {
+    try {
+      const session = await requireSession(req)
+      const body = (await req.json()) as { currentPassword?: string; newPassword?: string }
+      if (!body.currentPassword || !body.newPassword) {
+        return json({ message: 'currentPassword and newPassword required' }, 400)
+      }
+      rateLimit(`change-password:${session.userId}`, 5, 15 * 60 * 1000)
+      await changePassword(session.userId, body.currentPassword, body.newPassword, session.sessionId)
+      return json({ ok: true })
+    } catch (e) {
+      return toJsonError(e)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/verify-email' && req.method === 'POST') {
+    let body: { token?: string }
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      return json({ message: 'Invalid JSON body' }, 400)
+    }
+    if (!body.token) return json({ message: 'token required' }, 400)
+    try {
+      await verifyEmail(body.token)
+      return json({ ok: true })
+    } catch (e) {
+      return toJsonError(e)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/resend-verification' && req.method === 'POST') {
+    let body: { email?: string }
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      return json({ message: 'Invalid JSON body' }, 400)
+    }
+    if (!body.email?.trim()) return json({ message: 'email required' }, 400)
+    try {
+      rateLimit(`resend-verify:${clientIp(req)}`, 5, 15 * 60 * 1000)
+      return json(await resendEmailVerification(body.email))
+    } catch (e) {
+      return toJsonError(e)
     }
   }
 
@@ -157,13 +267,20 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     } catch {
       return json({ message: 'Invalid JSON body' }, 400)
     }
-    if (!body.userId || !body.refreshToken) {
-      return json({ message: 'userId and refreshToken required' }, 400)
+    if (!body.refreshToken) {
+      return json({ message: 'refreshToken required' }, 400)
     }
     try {
-      return json(await refreshUserTokens(body.userId, body.refreshToken))
-    } catch {
-      return json({ message: 'Access denied' }, 403)
+      rateLimit(`refresh:${clientIp(req)}`, 120, 5 * 60 * 1000)
+      // userId is optional and only cross-checked; the token itself names the user.
+      return json(await refreshUserTokens(body.refreshToken, body.userId))
+    } catch (e) {
+      if (e instanceof ApiError) {
+        return e.status === 429 || e.status === 503 ? toJsonError(e) : json({ message: 'Access denied' }, 401)
+      }
+      // DB or other unexpected failure: 503 so the client keeps the session and retries later.
+      console.error('[auth] refresh failed:', e)
+      return json({ message: 'Authentication service unavailable' }, 503)
     }
   }
 
@@ -176,14 +293,32 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     }
   }
 
+  // Prefer the refresh token from the body: it still verifies after the access token has
+  // expired, which is exactly when people come back and press "Sign out".
   if (pathname === '/api/v1/auth/logout' && req.method === 'POST') {
+    let body: { refreshToken?: string } = {}
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      /* body is optional */
+    }
+    if (body.refreshToken) {
+      try {
+        const payload = await verifyRefreshToken(body.refreshToken)
+        await logoutUser(payload.sub as string, typeof payload.sid === 'string' ? payload.sid : null)
+        return json({ ok: true })
+      } catch {
+        /* fall through to the access token */
+      }
+    }
     const auth = req.headers.get('authorization')
     const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
     if (!token) return json({ message: 'Unauthorized' }, 401)
     try {
       const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret()))
+      if (payload.typ === 'refresh') return json({ message: 'Unauthorized' }, 401)
       const sub = payload.sub
-      if (typeof sub === 'string') await logoutUser(sub)
+      if (typeof sub === 'string') await logoutUser(sub, typeof payload.sid === 'string' ? payload.sid : null)
       return json({ ok: true })
     } catch {
       return json({ message: 'Unauthorized' }, 401)

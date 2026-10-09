@@ -37,17 +37,32 @@ export async function publicSignup(dto: {
     },
   })
 
-  const tokens = await registerUser({
+  const { seedOnboardingSteps } = await import('./tenant')
+  await seedOnboardingSteps(tenantId)
+
+  const result = await registerUser({
     tenantId,
     email: dto.email.trim().toLowerCase(),
     password: dto.password,
     firstName: dto.firstName.trim(),
     lastName: dto.lastName.trim(),
     role: 'TENANT_ADMIN',
+    emailVerified: false,
+    issueTokens: false,
   })
 
   const { ensureTier5Accounts } = await import('./operations-gl')
   await ensureTier5Accounts(tenantId).catch(() => undefined)
 
-  return { tenantId, slug, ...tokens }
+  if ('requiresVerification' in result) {
+    return {
+      tenantId,
+      slug,
+      requiresVerification: true,
+      email: result.email,
+      verifyUrl: result.verifyUrl,
+      delivery: result.delivery,
+    }
+  }
+  return { tenantId, slug, ...result }
 }

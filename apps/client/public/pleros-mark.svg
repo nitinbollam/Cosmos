@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" fill="none" role="img" aria-label="Pleros">
+  <circle cx="26" cy="26" r="13.5" stroke="#5B8DEF" stroke-width="1.25"/>
+  <circle cx="26" cy="26" r="8.25" stroke="#5B8DEF" stroke-width="0.85" opacity="0.45"/>
+  <ellipse cx="26" cy="26" rx="19.5" ry="6.75" stroke="#6B9FD4" stroke-width="1" transform="rotate(-30 26 26)" opacity="0.75"/>
+  <circle cx="26" cy="26" r="2.1" fill="#5B8DEF"/>
+  <circle cx="41.5" cy="17.5" r="1.35" fill="#6B9FD4" opacity="0.9"/>
+</svg>

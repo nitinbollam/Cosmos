@@ -4,8 +4,16 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 
-type Line = { skuId: string; quantity: number; unitPrice: string | number }
+type Line = { skuId: string; skuCode?: string | null; skuName?: string | null; quantity: number; unitPrice: string | number }
 type OrderDetail = { id: string; status: string; totalAmount: string | number; lineItems: Line[]; notes?: string | null }
+
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `#ORD-${id.slice(-8).toUpperCase()}`
+}
 
 export default function OrderConfirmationPage() {
   const params = useParams<{ id: string }>()
@@ -47,12 +55,14 @@ export default function OrderConfirmationPage() {
       {order ? (
         <>
           <p style={{ color: 'var(--c-text-2)', marginTop: 12 }}>Order number</p>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--c-accent)' }}>{order.id}</p>
-          <div className="cosmos-card mt-6 text-left">
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--c-accent)' }}>
+            {formatOrderNumber(order.id)}
+          </p>
+          <div className="pleros-card mt-6 text-left">
             <h3 style={{ marginTop: 0 }}>Summary</h3>
             {order.lineItems.map((li) => (
               <div key={li.skuId} style={{ fontSize: 14, marginBottom: 8 }}>
-                {li.skuId.slice(0, 8)}… × {li.quantity} — ${(Number(li.unitPrice) * li.quantity).toFixed(2)}
+                <span style={{ fontWeight: 600 }}>{li.skuName || li.skuCode || li.skuId.slice(0, 8)}</span> × {li.quantity} — ${(Number(li.unitPrice) * li.quantity).toFixed(2)}
               </div>
             ))}
             <p style={{ fontWeight: 700 }}>Total ${Number(order.totalAmount).toFixed(2)}</p>

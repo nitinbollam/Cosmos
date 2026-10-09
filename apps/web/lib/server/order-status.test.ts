@@ -7,6 +7,8 @@ import {
 
 test('canTransitionOrderStatus allows forward fulfillment flow', () => {
   assert.equal(canTransitionOrderStatus('PENDING', 'PROCESSING'), true)
+  assert.equal(canTransitionOrderStatus('PENDING', 'BACKORDERED'), true)
+  assert.equal(canTransitionOrderStatus('BACKORDERED', 'PROCESSING'), true)
   assert.equal(canTransitionOrderStatus('PROCESSING', 'PACKED'), true)
   assert.equal(canTransitionOrderStatus('PACKED', 'SHIPPED'), true)
   assert.equal(canTransitionOrderStatus('SHIPPED', 'DELIVERED'), true)

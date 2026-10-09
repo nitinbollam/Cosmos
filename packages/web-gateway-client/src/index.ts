@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios'
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 
 export const DEFAULT_GATEWAY_PATH = '/api/v1'
 
@@ -9,7 +9,26 @@ export type CreateGatewayApiOptions = {
   refreshTokenStorageKey?: string
   loginPath?: string
   timeoutMs?: number
+  /**
+   * Returns the access token for the next request, refreshing it first when it is about to
+   * expire. Defaults to reading `accessTokenStorageKey` from localStorage.
+   */
+  getAccessToken?: () => string | null | Promise<string | null>
+  /**
+   * Exchange the refresh token for a new access token after a 401.
+   * Resolve the new token, resolve `null` when the session is definitely over, or throw on a
+   * transient failure (offline, 503) so the user is NOT signed out.
+   */
+  refresh?: () => Promise<string | null>
+  /** Called when the session is over (refresh impossible). Defaults to clearing tokens and redirecting to `loginPath`. */
+  onUnauthorized?: () => void
 }
+
+/** Auth endpoints answer 401 for bad credentials; those must never trigger refresh or sign-out. */
+const CREDENTIAL_ENDPOINTS =
+  /\/auth\/(login|refresh|logout|signup|accept-invite|forgot-password|reset-password|verify-email|resend-verification|change-password)\b/
+
+type RetriableConfig = InternalAxiosRequestConfig & { _plerosRetried?: boolean }
 
 export function resolveGatewayBaseUrl(override?: string): string {
   if (override) return override
@@ -60,13 +79,23 @@ export function createGatewayApi(options: CreateGatewayApiOptions = {}): {
   client: AxiosInstance
 } {
   const gatewayApiBaseUrl = resolveGatewayBaseUrl(options.baseUrl)
-  const accessKey = options.accessTokenStorageKey ?? 'cosmos.accessToken'
-  const refreshKey = options.refreshTokenStorageKey ?? 'cosmos.refreshToken'
+  const accessKey = options.accessTokenStorageKey ?? 'pleros.accessToken'
+  const refreshKey = options.refreshTokenStorageKey ?? 'pleros.refreshToken'
   const loginPath = options.loginPath ?? '/login'
 
-  function token(): string | null {
+  function storedToken(): string | null {
     if (typeof window === 'undefined') return null
     return window.localStorage.getItem(accessKey)
+  }
+
+  function defaultUnauthorized() {
+    window.localStorage.removeItem(accessKey)
+    window.localStorage.removeItem(refreshKey)
+    const path = window.location.pathname
+    if (path !== loginPath) {
+      const next = path ? `?next=${encodeURIComponent(path)}` : ''
+      window.location.assign(`${loginPath}${next}`)
+    }
   }
 
   const client: AxiosInstance = axios.create({
@@ -74,8 +103,8 @@ export function createGatewayApi(options: CreateGatewayApiOptions = {}): {
     timeout: options.timeoutMs ?? 25_000,
   })
 
-  client.interceptors.request.use((cfg) => {
-    const t = token()
+  client.interceptors.request.use(async (cfg) => {
+    const t = options.getAccessToken ? await options.getAccessToken() : storedToken()
     if (t) {
       cfg.headers = cfg.headers ?? {}
       cfg.headers.Authorization = `Bearer ${t}`
@@ -85,16 +114,28 @@ export function createGatewayApi(options: CreateGatewayApiOptions = {}): {
 
   client.interceptors.response.use(
     (res) => res,
-    (err) => {
-      if (typeof window !== 'undefined' && err?.response?.status === 401) {
-        window.localStorage.removeItem(accessKey)
-        window.localStorage.removeItem(refreshKey)
-        const path = window.location.pathname
-        const next = path && path !== loginPath ? `?next=${encodeURIComponent(path)}` : ''
-        if (path !== loginPath) {
-          window.location.assign(`${loginPath}${next}`)
+    async (err) => {
+      const cfg = err?.config as RetriableConfig | undefined
+      if (typeof window === 'undefined' || err?.response?.status !== 401 || !cfg) {
+        return Promise.reject(err)
+      }
+      if (CREDENTIAL_ENDPOINTS.test(String(cfg.url ?? ''))) return Promise.reject(err)
+
+      if (options.refresh && !cfg._plerosRetried) {
+        let next: string | null
+        try {
+          next = await options.refresh()
+        } catch {
+          // Offline or the auth service is down: keep the session, surface the original error.
+          return Promise.reject(err)
+        }
+        if (next) {
+          cfg._plerosRetried = true
+          cfg.headers.Authorization = `Bearer ${next}`
+          return client.request(cfg)
         }
       }
+      ;(options.onUnauthorized ?? defaultUnauthorized)()
       return Promise.reject(err)
     },
   )

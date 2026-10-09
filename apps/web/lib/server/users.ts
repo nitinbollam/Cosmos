@@ -1,6 +1,6 @@
-import bcrypt from 'bcrypt'
 import { authDb } from './db'
-import { ApiError } from './session'
+import { ApiError, invalidateUserSessionCache } from './session'
+import { revokeAllUserSessions } from './auth'
 
 export async function listUsers(tenantId: string, page = 1, pageSize = 20) {
   const [items, total] = await Promise.all([
@@ -14,6 +14,7 @@ export async function listUsers(tenantId: string, page = 1, pageSize = 20) {
         firstName: true,
         lastName: true,
         role: true,
+        permissions: true,
         isActive: true,
         lastLoginAt: true,
         createdAt: true,
@@ -21,15 +22,92 @@ export async function listUsers(tenantId: string, page = 1, pageSize = 20) {
     }),
     authDb.user.count({ where: { tenantId } }),
   ])
-  return { items, total, page, pageSize, hasMore: page * pageSize < total }
+  return {
+    items: items.map((u) => ({
+      ...u,
+      permissions: Array.isArray(u.permissions)
+        ? (u.permissions as string[])
+        : typeof u.permissions === 'string'
+          ? JSON.parse(u.permissions)
+          : [],
+    })),
+    total,
+    page,
+    pageSize,
+    hasMore: page * pageSize < total,
+  }
 }
 
 export async function deactivateUser(tenantId: string, id: string) {
   const user = await authDb.user.findFirst({ where: { id, tenantId } })
   if (!user) throw new ApiError(404, 'User not found')
-  return authDb.user.update({
+  const updated = await authDb.user.update({
     where: { id },
     data: { isActive: false },
     select: { id: true, email: true, isActive: true },
   })
+  // Ending the sessions stops refresh; session revalidation rejects open access tokens within a minute.
+  await revokeAllUserSessions(id)
+  return updated
+}
+
+const ASSIGNABLE_ROLES = [
+  'TENANT_ADMIN',
+  'MANAGER',
+  'WAREHOUSE_STAFF',
+  'SALES_REP',
+  'DRIVER',
+  'ACCOUNTANT',
+  'VIEWER',
+  'STAFF',
+] as const
+
+export async function updateUser(
+  tenantId: string,
+  id: string,
+  patch: { role?: string; isActive?: boolean; permissions?: string[] },
+  performedBy: string,
+) {
+  const user = await authDb.user.findFirst({ where: { id, tenantId } })
+  if (!user) throw new ApiError(404, 'User not found')
+
+  if (patch.role !== undefined && !(ASSIGNABLE_ROLES as readonly string[]).includes(patch.role)) {
+    throw new ApiError(400, `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`)
+  }
+  if (id === performedBy && patch.role !== undefined && user.role === 'TENANT_ADMIN' && patch.role !== 'TENANT_ADMIN') {
+    throw new ApiError(400, 'You cannot demote your own admin account')
+  }
+  if (patch.permissions !== undefined) {
+    if (!Array.isArray(patch.permissions) || !patch.permissions.every((p) => typeof p === 'string')) {
+      throw new ApiError(400, 'Permissions must be an array of strings')
+    }
+  }
+
+  const updated = await authDb.user.update({
+    where: { id },
+    data: {
+      ...(patch.role !== undefined ? { role: patch.role as never } : {}),
+      ...(patch.permissions !== undefined ? { permissions: patch.permissions } : {}),
+      ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+    },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      permissions: true,
+      isActive: true,
+    },
+  })
+  if (patch.isActive === false) await revokeAllUserSessions(id)
+  else invalidateUserSessionCache(id)
+  return {
+    ...updated,
+    permissions: Array.isArray(updated.permissions)
+      ? (updated.permissions as string[])
+      : typeof updated.permissions === 'string'
+        ? JSON.parse(updated.permissions)
+        : [],
+  }
 }

@@ -19,9 +19,32 @@ function assertJournalBalanced(lines: { debit: Prisma.Decimal; credit: Prisma.De
   if (!deb.equals(cred)) throw new ApiError(400, 'Journal entry must balance (debits = credits)')
 }
 
-export function listJournalEntries(tenantId: string) {
+export type JournalEntryListFilters = {
+  fromIso?: string
+  toIso?: string
+  accountId?: string
+  postedOnly?: boolean
+}
+
+export function listJournalEntries(tenantId: string, filters?: JournalEntryListFilters) {
+  const where: Prisma.JournalEntryWhereInput = { tenantId }
+
+  if (filters?.postedOnly !== undefined) {
+    where.isPosted = filters.postedOnly
+  }
+
+  if (filters?.fromIso || filters?.toIso) {
+    where.postedAt = {}
+    if (filters.fromIso) where.postedAt.gte = new Date(filters.fromIso)
+    if (filters.toIso) where.postedAt.lte = new Date(`${filters.toIso}T23:59:59.999Z`)
+  }
+
+  if (filters?.accountId) {
+    where.lines = { some: { accountId: filters.accountId } }
+  }
+
   return ledgerDb.journalEntry.findMany({
-    where: { tenantId },
+    where,
     include: { lines: { include: { account: true } } },
     orderBy: { postedAt: 'desc' },
   })
@@ -150,9 +173,43 @@ export async function patchChartAccount(
   })
 }
 
-export async function trialBalance(tenantId: string, year: number, month: number) {
-  const start = new Date(year, month - 1, 1)
-  const end = new Date(year, month, 0, 23, 59, 59, 999)
+export type TrialBalanceOptions = {
+  year: number
+  periodType?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  month?: number
+  quarter?: number
+}
+
+export async function trialBalance(
+  tenantId: string,
+  year: number,
+  monthOrOpts?: number | TrialBalanceOptions,
+) {
+  let start: Date
+  let end: Date
+
+  if (typeof monthOrOpts === 'object' && monthOrOpts !== null) {
+    const opts = monthOrOpts
+    const y = opts.year || year
+    const pType = opts.periodType ?? 'MONTHLY'
+    if (pType === 'YEARLY') {
+      start = new Date(y, 0, 1)
+      end = new Date(y, 11, 31, 23, 59, 59, 999)
+    } else if (pType === 'QUARTERLY') {
+      const q = Math.max(1, Math.min(4, opts.quarter ?? 1))
+      const startMonth = (q - 1) * 3
+      start = new Date(y, startMonth, 1)
+      end = new Date(y, startMonth + 3, 0, 23, 59, 59, 999)
+    } else {
+      const m = Math.max(1, Math.min(12, opts.month ?? 1))
+      start = new Date(y, m - 1, 1)
+      end = new Date(y, m, 0, 23, 59, 59, 999)
+    }
+  } else {
+    const m = typeof monthOrOpts === 'number' ? monthOrOpts : 1
+    start = new Date(year, m - 1, 1)
+    end = new Date(year, m, 0, 23, 59, 59, 999)
+  }
 
   const entries = await ledgerDb.journalEntry.findMany({
     where: {

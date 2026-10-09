@@ -1,29 +1,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cosmos-web
+  name: pleros-web
   labels:
-    app: cosmos-web
+    app: pleros-web
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: cosmos-web
+      app: pleros-web
   template:
     metadata:
       labels:
-        app: cosmos-web
+        app: pleros-web
     spec:
       containers:
         - name: web
-          image: cosmos/web:latest
+          image: pleros/web:latest
           ports:
             - containerPort: 4000
           envFrom:
             - configMapRef:
-                name: cosmos-config
+                name: pleros-config
             - secretRef:
-                name: cosmos-secrets
+                name: pleros-secrets
           env:
             - name: PORT
               value: "4000"
@@ -47,10 +47,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: cosmos-web
+  name: pleros-web
 spec:
   selector:
-    app: cosmos-web
+    app: pleros-web
   ports:
     - port: 80
       targetPort: 4000

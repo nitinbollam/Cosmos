@@ -21,6 +21,8 @@ apps/client/public/index.html
 !.env.example
 
 # embedded SQLite (dev)
+.data/
+apps/.data/
 apps/web/.data/
 apps/client/.env
 apps/client/dist/
@@ -35,6 +37,12 @@ yarn-debug.log*
 # coverage
 coverage/
 .nyc_output/
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 
 # IDE
 .vscode/
@@ -71,6 +79,7 @@ secrets/
 # misc
 .cache/
 tmp/
+.superpowers/
 
 # Prisma generated clients (per-service)
 services/*/src/generated/

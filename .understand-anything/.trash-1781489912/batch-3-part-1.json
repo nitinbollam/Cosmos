@@ -1,0 +1,680 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/web/lib/server/dispatch-order.ts",
+      "type": "file",
+      "name": "dispatch-order.ts",
+      "filePath": "apps/web/lib/server/dispatch-order.ts",
+      "summary": "Tiny utility module that extracts an order ID from a dispatch route stop's address field, used by the dispatch and order-shipments modules.",
+      "tags": ["utility", "dispatch", "service"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/dispatch.ts",
+      "type": "file",
+      "name": "dispatch.ts",
+      "filePath": "apps/web/lib/server/dispatch.ts",
+      "summary": "Manages last-mile delivery route logistics including creating routes from orders, assigning drivers, recording GPS locations, reordering stops, and marking stops delivered or failed.",
+      "tags": ["service", "dispatch", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/dispatch.ts:createRouteFromOrders",
+      "type": "function",
+      "name": "createRouteFromOrders",
+      "filePath": "apps/web/lib/server/dispatch.ts",
+      "lineRange": [91, 127],
+      "summary": "Builds a delivery route automatically by looking up orders and their customer shipping addresses, then calling createRoute.",
+      "tags": ["service", "dispatch", "factory"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/dispatch.ts:markStopDelivered",
+      "type": "function",
+      "name": "markStopDelivered",
+      "filePath": "apps/web/lib/server/dispatch.ts",
+      "lineRange": [190, 219],
+      "summary": "Marks a route stop as delivered, fires the order orchestration delivery callback, and marks the entire route complete when all stops are done.",
+      "tags": ["service", "dispatch", "event-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/drop-ship.ts",
+      "type": "file",
+      "name": "drop-ship.ts",
+      "filePath": "apps/web/lib/server/drop-ship.ts",
+      "summary": "Handles drop-ship order flows: automatically creates supplier purchase orders for drop-ship line items and marks those lines shipped when the supplier confirms.",
+      "tags": ["service", "drop-ship", "purchase-order"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/drop-ship.ts:createDropShipPurchaseOrders",
+      "type": "function",
+      "name": "createDropShipPurchaseOrders",
+      "filePath": "apps/web/lib/server/drop-ship.ts",
+      "lineRange": [8, 64],
+      "summary": "Groups drop-ship line items by supplier and creates one purchase order per supplier, then marks the order lines with the resulting PO references.",
+      "tags": ["service", "factory", "purchase-order"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/drop-ship.ts:markDropShipLinesShipped",
+      "type": "function",
+      "name": "markDropShipLinesShipped",
+      "filePath": "apps/web/lib/server/drop-ship.ts",
+      "lineRange": [66, 113],
+      "summary": "Records shipment for drop-ship lines, transitions the order status, and triggers invoice generation for the shipped quantities.",
+      "tags": ["service", "fulfillment", "event-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/edi.ts",
+      "type": "file",
+      "name": "edi.ts",
+      "filePath": "apps/web/lib/server/edi.ts",
+      "summary": "Implements EDI (Electronic Data Interchange) integration: manages trading partners, ingests and processes 850 purchase order documents into native orders, and generates 810 invoice and 856 shipment notices.",
+      "tags": ["service", "edi", "integration"],
+      "complexity": "complex",
+      "languageNotes": "Uses dynamic imports for lazy loading of inventory and orders modules to avoid circular dependencies."
+    },
+    {
+      "id": "function:apps/web/lib/server/edi.ts:process850Document",
+      "type": "function",
+      "name": "process850Document",
+      "filePath": "apps/web/lib/server/edi.ts",
+      "lineRange": [113, 166],
+      "summary": "Parses and converts an EDI 850 purchase order document into a native ERP sales order, resolving customer and SKU references in the process.",
+      "tags": ["service", "edi", "serialization"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/feature-flags.ts",
+      "type": "file",
+      "name": "feature-flags.ts",
+      "filePath": "apps/web/lib/server/feature-flags.ts",
+      "summary": "Provides tenant-scoped feature flag lookups, returning enabled plan features and exposing an assertFeature guard that throws when a feature is not available.",
+      "tags": ["service", "feature-flags", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/inventory-lots.ts",
+      "type": "file",
+      "name": "inventory-lots.ts",
+      "filePath": "apps/web/lib/server/inventory-lots.ts",
+      "summary": "Manages inventory lot/batch tracking including creating and upserting lots, listing batches, FEFO-based batch allocation for picking, and per-SKU lot tracking settings.",
+      "tags": ["service", "inventory", "lot-tracking"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/inventory-lots.ts:allocateBatchesFefo",
+      "type": "function",
+      "name": "allocateBatchesFefo",
+      "filePath": "apps/web/lib/server/inventory-lots.ts",
+      "lineRange": [55, 100],
+      "summary": "Allocates inventory from batches using First-Expired-First-Out order by sorting stock levels by lot expiry date and greedily consuming available quantity.",
+      "tags": ["service", "inventory", "allocation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/inventory-serials.ts",
+      "type": "file",
+      "name": "inventory-serials.ts",
+      "filePath": "apps/web/lib/server/inventory-serials.ts",
+      "summary": "Handles serial number tracking for inventory items: registering new units, listing and reserving serials, shipping them against orders, and enforcing serial assignment at fulfillment time.",
+      "tags": ["service", "inventory", "serial-tracking"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/inventory-serials.ts:enforceAndShipSerialsForOrder",
+      "type": "function",
+      "name": "enforceAndShipSerialsForOrder",
+      "filePath": "apps/web/lib/server/inventory-serials.ts",
+      "lineRange": [83, 118],
+      "summary": "Validates that all serial-tracked SKUs in a shipment have reserved serial numbers and marks those units as shipped.",
+      "tags": ["service", "inventory", "validation"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/inventory.ts",
+      "type": "file",
+      "name": "inventory.ts",
+      "filePath": "apps/web/lib/server/inventory.ts",
+      "summary": "Core inventory service managing SKUs, warehouses, stock levels, reservations, receipts, transfers, adjustments, and low-stock alerts across the entire platform.",
+      "tags": ["service", "inventory", "data-model"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/inventory.ts:receiveStock",
+      "type": "function",
+      "name": "receiveStock",
+      "filePath": "apps/web/lib/server/inventory.ts",
+      "lineRange": [184, 252],
+      "summary": "Posts a stock receipt for a SKU: upserts the stock level, creates a ledger entry, optionally handles lot association, and triggers backorder fill on completion.",
+      "tags": ["service", "inventory", "event-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/inventory.ts:reserveStock",
+      "type": "function",
+      "name": "reserveStock",
+      "filePath": "apps/web/lib/server/inventory.ts",
+      "lineRange": [674, 720],
+      "summary": "Creates a stock reservation for an order line, decrementing available quantity atomically and handling lot-tracked and serial-tracked SKUs.",
+      "tags": ["service", "inventory", "allocation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/inventory.ts:commitShipmentForOrder",
+      "type": "function",
+      "name": "commitShipmentForOrder",
+      "filePath": "apps/web/lib/server/inventory.ts",
+      "lineRange": [759, 839],
+      "summary": "Commits shipped inventory quantities against reserved stock levels, releases reservations, and posts stock ledger debit entries for the shipment.",
+      "tags": ["service", "inventory", "fulfillment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/inventory.ts:adjustStock",
+      "type": "function",
+      "name": "adjustStock",
+      "filePath": "apps/web/lib/server/inventory.ts",
+      "lineRange": [512, 594],
+      "summary": "Posts a manual stock adjustment with an optional reason code, updating the stock level and writing a ledger entry.",
+      "tags": ["service", "inventory", "utility"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/invoice-gl.ts",
+      "type": "file",
+      "name": "invoice-gl.ts",
+      "filePath": "apps/web/lib/server/invoice-gl.ts",
+      "summary": "Posts accounts-receivable journal entries to the general ledger when invoices are issued and when credit memos are applied.",
+      "tags": ["service", "accounting", "general-ledger"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/invoices.ts",
+      "type": "file",
+      "name": "invoices.ts",
+      "filePath": "apps/web/lib/server/invoices.ts",
+      "summary": "Full invoice lifecycle service: issuing invoices for orders, generating partial shipment invoices, synchronising invoice status from payment data, listing/getting invoices, recording payments, and applying credit memos.",
+      "tags": ["service", "invoicing", "accounting"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/invoices.ts:issueInvoiceForOrder",
+      "type": "function",
+      "name": "issueInvoiceForOrder",
+      "filePath": "apps/web/lib/server/invoices.ts",
+      "lineRange": [21, 104],
+      "summary": "Creates an invoice record for an order, posts the AR journal entry, sends a notification to the customer, and triggers EDI 810 generation asynchronously.",
+      "tags": ["service", "invoicing", "event-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/invoices.ts:applyCreditMemo",
+      "type": "function",
+      "name": "applyCreditMemo",
+      "filePath": "apps/web/lib/server/invoices.ts",
+      "lineRange": [389, 582],
+      "summary": "Applies a credit memo against an outstanding invoice, updating balances, posting the credit memo journal entry, and handling partial and full credit scenarios.",
+      "tags": ["service", "invoicing", "accounting"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/ledger.ts",
+      "type": "file",
+      "name": "ledger.ts",
+      "filePath": "apps/web/lib/server/ledger.ts",
+      "summary": "General ledger service exposing journal entry CRUD (list, get, create draft, post), chart of accounts management, and a trial balance report grouped by account code.",
+      "tags": ["service", "accounting", "general-ledger"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/ledger.ts:trialBalance",
+      "type": "function",
+      "name": "trialBalance",
+      "filePath": "apps/web/lib/server/ledger.ts",
+      "lineRange": [153, 195],
+      "summary": "Computes a trial balance for a given year/month by aggregating journal line debits and credits per chart-of-accounts code.",
+      "tags": ["service", "accounting", "reporting"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "file:apps/web/lib/server/dispatch-order.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "file:apps/web/lib/server/order-orchestration.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "file:apps/web/lib/server/order-orchestration.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "file:apps/web/lib/server/purchasing.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/edi.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/edi.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/edi.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/edi.ts",
+      "target": "file:apps/web/lib/server/orders.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/edi.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/feature-flags.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-lots.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-lots.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-serials.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-serials.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoice-gl.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "file:apps/web/lib/server/invoice-gl.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "file:apps/web/lib/server/invoice-status.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "file:apps/web/lib/server/notification-triggers.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/ledger.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/ledger.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "function:apps/web/lib/server/dispatch.ts:createRouteFromOrders",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "function:apps/web/lib/server/dispatch.ts:markStopDelivered",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "function:apps/web/lib/server/dispatch.ts:createRouteFromOrders",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/dispatch.ts",
+      "target": "function:apps/web/lib/server/dispatch.ts:markStopDelivered",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "function:apps/web/lib/server/drop-ship.ts:createDropShipPurchaseOrders",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "function:apps/web/lib/server/drop-ship.ts:markDropShipLinesShipped",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "function:apps/web/lib/server/drop-ship.ts:createDropShipPurchaseOrders",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/drop-ship.ts",
+      "target": "function:apps/web/lib/server/drop-ship.ts:markDropShipLinesShipped",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/edi.ts",
+      "target": "function:apps/web/lib/server/edi.ts:process850Document",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/edi.ts",
+      "target": "function:apps/web/lib/server/edi.ts:process850Document",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-lots.ts",
+      "target": "function:apps/web/lib/server/inventory-lots.ts:allocateBatchesFefo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-lots.ts",
+      "target": "function:apps/web/lib/server/inventory-lots.ts:allocateBatchesFefo",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-serials.ts",
+      "target": "function:apps/web/lib/server/inventory-serials.ts:enforceAndShipSerialsForOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory-serials.ts",
+      "target": "function:apps/web/lib/server/inventory-serials.ts:enforceAndShipSerialsForOrder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:receiveStock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:reserveStock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:commitShipmentForOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:adjustStock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:receiveStock",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:reserveStock",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:commitShipmentForOrder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/inventory.ts",
+      "target": "function:apps/web/lib/server/inventory.ts:adjustStock",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "function:apps/web/lib/server/invoices.ts:issueInvoiceForOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "function:apps/web/lib/server/invoices.ts:applyCreditMemo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "function:apps/web/lib/server/invoices.ts:issueInvoiceForOrder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/invoices.ts",
+      "target": "function:apps/web/lib/server/invoices.ts:applyCreditMemo",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/ledger.ts",
+      "target": "function:apps/web/lib/server/ledger.ts:trialBalance",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/ledger.ts",
+      "target": "function:apps/web/lib/server/ledger.ts:trialBalance",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/dispatch.ts:markStopDelivered",
+      "target": "function:apps/web/lib/server/order-orchestration.ts:onDeliveryStopDelivered",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/drop-ship.ts:createDropShipPurchaseOrders",
+      "target": "file:apps/web/lib/server/purchasing.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/edi.ts:process850Document",
+      "target": "file:apps/web/lib/server/orders.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:apps/web/lib/server/invoices.ts:issueInvoiceForOrder",
+      "target": "file:apps/web/lib/server/invoice-gl.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

@@ -1,9 +1,20 @@
 import { lazy, Suspense, type ComponentType } from 'react'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router-dom'
 import { RootLayout } from '@/layouts/RootLayout'
 import { ShopLayout } from '@/layouts/ShopLayout'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { MobileLayout } from '@/layouts/MobileLayout'
+import { OpsLayout } from '@/layouts/OpsLayout'
+import { RequireMarketplaceShop } from '@/components/auth/require-marketplace-shop'
+
+function AdminCustomersRedirect() {
+  return <Navigate to="/admin/crm" replace />
+}
+
+function AdminCustomerDetailRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/admin/crm/customers/${id ?? ''}`} replace />
+}
 
 function page(importFn: () => Promise<{ default: ComponentType }>) {
   const Lazy = lazy(importFn)
@@ -14,6 +25,10 @@ function page(importFn: () => Promise<{ default: ComponentType }>) {
   )
 }
 
+function marketplaceShopPage(importFn: () => Promise<{ default: ComponentType }>) {
+  return <RequireMarketplaceShop>{page(importFn)}</RequireMarketplaceShop>
+}
+
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
@@ -21,12 +36,20 @@ const router = createBrowserRouter([
       { path: '/', element: page(() => import('@/pages/home/page')) },
       { path: '/login', element: page(() => import('@/pages/login/page')) },
       { path: '/signup', element: page(() => import('@/pages/signup/page')) },
+      { path: '/forgot-password', element: page(() => import('@/pages/forgot-password/page')) },
+      { path: '/reset-password', element: page(() => import('@/pages/reset-password/page')) },
+      { path: '/accept-invite', element: page(() => import('@/pages/accept-invite/page')) },
+      { path: '/verify-email', element: page(() => import('@/pages/verify-email/page')) },
+      { path: '/terms', element: page(() => import('@/pages/legal/terms/page')) },
+      { path: '/privacy', element: page(() => import('@/pages/legal/privacy/page')) },
+      { path: '/unsubscribe', element: page(() => import('@/pages/unsubscribe/page')) },
       {
         element: <ShopLayout />,
         children: [
           { path: '/catalog', element: page(() => import('@/pages/catalog/page')) },
           { path: '/cart', element: page(() => import('@/pages/cart/page')) },
           { path: '/checkout', element: page(() => import('@/pages/checkout/page')) },
+          { path: '/gift-cards/purchase', element: page(() => import('@/pages/gift-cards/purchase/page')) },
           { path: '/orders', element: page(() => import('@/pages/orders/page')) },
           { path: '/orders/:id', element: page(() => import('@/pages/orders/[id]/page')) },
           {
@@ -39,7 +62,17 @@ const router = createBrowserRouter([
           { path: '/invoices', element: page(() => import('@/pages/invoices/page')) },
           { path: '/invoices/:id', element: page(() => import('@/pages/invoices/[id]/page')) },
           { path: '/account', element: page(() => import('@/pages/account/page')) },
+          { path: '/account/expenses', element: page(() => import('@/pages/account/expenses/page')) },
           { path: '/notifications', element: page(() => import('@/pages/notifications/page')) },
+          { path: '/marketplace', element: marketplaceShopPage(() => import('@/pages/marketplace/page')) },
+          {
+            path: '/marketplace/orders',
+            element: marketplaceShopPage(() => import('@/pages/marketplace/orders/page')),
+          },
+          {
+            path: '/marketplace/:id',
+            element: marketplaceShopPage(() => import('@/pages/marketplace/[id]/page')),
+          },
         ],
       },
       {
@@ -47,6 +80,7 @@ const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { index: true, element: page(() => import('@/pages/admin/page')) },
+          { path: 'onboarding', element: page(() => import('@/pages/admin/onboarding/page')) },
           { path: 'login', element: page(() => import('@/pages/admin/login/page')) },
           { path: 'compliance', element: page(() => import('@/pages/admin/compliance/page')) },
           {
@@ -59,21 +93,25 @@ const router = createBrowserRouter([
             element: page(() => import('@/pages/admin/crm/customers/[id]/page')),
           },
           { path: 'quotes', element: page(() => import('@/pages/admin/quotes/page')) },
-          { path: 'customers', element: page(() => import('@/pages/admin/customers/page')) },
-          {
-            path: 'customers/:id',
-            element: page(() => import('@/pages/admin/customers/[id]/page')),
-          },
+          { path: 'customers', element: <AdminCustomersRedirect /> },
+          { path: 'customers/:id', element: <AdminCustomerDetailRedirect /> },
           { path: 'dispatch', element: page(() => import('@/pages/admin/dispatch/page')) },
           {
             path: 'dispatch/:routeId',
             element: page(() => import('@/pages/admin/dispatch/[routeId]/page')),
           },
           { path: 'finance', element: page(() => import('@/pages/admin/finance/page')) },
+          { path: 'approvals', element: page(() => import('@/pages/admin/approvals/page')) },
+          { path: 'discounts', element: page(() => import('@/pages/admin/discounts/page')) },
+          { path: 'gift-cards', element: page(() => import('@/pages/admin/gift-cards/page')) },
+          { path: 'campaigns', element: page(() => import('@/pages/admin/campaigns/page')) },
+          { path: 'subscriptions', element: page(() => import('@/pages/admin/subscriptions/page')) },
+          { path: 'budgets', element: page(() => import('@/pages/admin/budgets/page')) },
           {
             path: 'finance/journals/:id',
             element: page(() => import('@/pages/admin/finance/journals/[id]/page')),
           },
+          { path: 'reports', element: page(() => import('@/pages/admin/reports/page')) },
           { path: 'fulfillment', element: page(() => import('@/pages/admin/fulfillment/page')) },
           {
             path: 'fulfillment/:taskId',
@@ -96,6 +134,43 @@ const router = createBrowserRouter([
           { path: 'pos', element: page(() => import('@/pages/admin/pos/page')) },
           { path: 'celestial', element: page(() => import('@/pages/admin/celestial/page')) },
           { path: 'warehouse', element: page(() => import('@/pages/admin/warehouse/page')) },
+          { path: 'marketplace', element: page(() => import('@/pages/marketplace/page')) },
+          {
+            path: 'marketplace/create',
+            element: page(() => import('@/pages/marketplace/create/page')),
+          },
+          {
+            path: 'marketplace/orders',
+            element: page(() => import('@/pages/marketplace/orders/page')),
+          },
+          {
+            path: 'marketplace/my-listings',
+            element: page(() => import('@/pages/marketplace/my-listings/page')),
+          },
+          {
+            path: 'marketplace/payment-methods',
+            element: page(() => import('@/pages/marketplace/payment-methods/page')),
+          },
+          {
+            path: 'marketplace/alerts',
+            element: page(() => import('@/pages/marketplace/alerts/page')),
+          },
+          {
+            path: 'marketplace/analytics',
+            element: page(() => import('@/pages/marketplace/analytics/page')),
+          },
+          {
+            path: 'marketplace/:id',
+            element: page(() => import('@/pages/marketplace/[id]/page')),
+          },
+        ],
+      },
+      {
+        path: '/ops',
+        element: <OpsLayout />,
+        children: [
+          { index: true, element: page(() => import('@/pages/ops/marketplace/page')) },
+          { path: 'marketplace', element: page(() => import('@/pages/ops/marketplace/page')) },
         ],
       },
       {

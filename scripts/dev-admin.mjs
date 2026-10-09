@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-console.warn('[dev:admin] Deprecated: starting @cosmos/web instead (admin + shop + mobile PWA).')
+console.warn('[dev:admin] Deprecated: starting @pleros/web instead (admin + shop + mobile PWA).')
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const devWeb = path.join(root, 'scripts', 'dev-web.mjs')

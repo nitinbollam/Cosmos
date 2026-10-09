@@ -1,0 +1,43 @@
+{
+  "batchIndex": 22,
+  "files": [
+    {
+      "path": "infra/k8s/base/configmap.yaml",
+      "language": "yaml",
+      "sizeLines": 10,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/kustomization.yaml",
+      "language": "yaml",
+      "sizeLines": 9,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 6,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/secret.yaml",
+      "language": "yaml",
+      "sizeLines": 15,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/base/web.yaml",
+      "language": "yaml",
+      "sizeLines": 56,
+      "fileCategory": "infra"
+    }
+  ],
+  "batchImportData": {
+    "infra/k8s/base/configmap.yaml": [],
+    "infra/k8s/base/kustomization.yaml": [],
+    "infra/k8s/base/namespace.yaml": [],
+    "infra/k8s/base/secret.yaml": [],
+    "infra/k8s/base/web.yaml": []
+  },
+  "neighborMap": {}
+}

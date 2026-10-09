@@ -1,0 +1,87 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/client/src/globals-admin.css",
+      "type": "file",
+      "name": "globals-admin.css",
+      "filePath": "apps/client/src/globals-admin.css",
+      "summary": "Admin surface stylesheet using Tailwind directives and CSS custom properties to define color utilities, typography defaults, table and form styling, badge variants, and layout helpers for the ERP admin interface.",
+      "tags": ["markup", "configuration", "component"],
+      "complexity": "complex",
+      "languageNotes": "Uses @layer utilities to extend Tailwind with Cosmos design-token aliases, remapping legacy Tailwind color classes to CSS variable-backed semantic tokens for theme consistency."
+    },
+    {
+      "id": "file:apps/client/src/globals-shop.css",
+      "type": "file",
+      "name": "globals-shop.css",
+      "filePath": "apps/client/src/globals-shop.css",
+      "summary": "B2B shop portal stylesheet defining layout components such as the shop header, navigation, brand bar, product grid, and mobile-responsive helpers built on top of the shared global theme tokens.",
+      "tags": ["markup", "component", "service"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/globals-theme.css",
+      "type": "file",
+      "name": "globals-theme.css",
+      "filePath": "apps/client/src/globals-theme.css",
+      "summary": "Core design-token stylesheet defining shared CSS custom properties for both the 'obsidian' (dark enterprise) and 'aurora' (light lavender) themes, including color palette, typography scale, spacing, border, and shadow tokens.",
+      "tags": ["markup", "configuration", "utility"],
+      "complexity": "complex",
+      "languageNotes": "Themes are activated via data-theme attribute on :root, set inline in index.html before first paint to prevent FOUC. Covers obsidian and aurora theme variants with distinct color palettes."
+    },
+    {
+      "id": "file:apps/client/src/globals.css",
+      "type": "file",
+      "name": "globals.css",
+      "filePath": "apps/client/src/globals.css",
+      "summary": "Global CSS entry point that @imports the theme, admin, and shop stylesheets, then sets universal box-sizing, base body/html defaults, selection styling, and layout class defaults for the shop, mobile, and hub sections.",
+      "tags": ["entry-point", "markup", "configuration"],
+      "complexity": "complex",
+      "languageNotes": "Acts as a CSS barrel, composing globals-theme.css, globals-admin.css, and globals-shop.css via @import, making it the single stylesheet consumers (main.tsx) need to import."
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/src/globals.css",
+      "target": "file:apps/client/src/globals-theme.css",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:apps/client/src/globals.css",
+      "target": "file:apps/client/src/globals-admin.css",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:apps/client/src/globals.css",
+      "target": "file:apps/client/src/globals-shop.css",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/globals.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/globals-admin.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/main.tsx",
+      "target": "file:apps/client/src/globals-shop.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

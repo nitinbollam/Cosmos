@@ -1,0 +1,436 @@
+{
+  "nodes": [
+    {
+      "id": "file:.npmrc",
+      "type": "file",
+      "name": ".npmrc",
+      "filePath": ".npmrc",
+      "summary": "pnpm configuration enabling automatic peer dependency installation, isolated node linker mode, and relaxed peer-dependency strictness for the monorepo.",
+      "tags": ["configuration", "package-manager", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:.understand-anything/.understandignore",
+      "type": "file",
+      "name": ".understandignore",
+      "filePath": ".understand-anything/.understandignore",
+      "summary": "Pattern exclusion file for the understand-anything analysis tool, listing directories and file patterns to skip during codebase scanning, mirroring .gitignore conventions.",
+      "tags": ["configuration", "tooling", "analysis"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:apps/.data/msa/test/1780332349092/sample.txt",
+      "type": "document",
+      "name": "sample.txt",
+      "filePath": "apps/.data/msa/test/1780332349092/sample.txt",
+      "summary": "Sample MSA (Manufacturer Sales Agent) test data file containing a single EDI-style header record used for integration testing.",
+      "tags": ["data", "test", "msa"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:apps/.data/msa/test/1780332793234/sample.txt",
+      "type": "document",
+      "name": "sample.txt",
+      "filePath": "apps/.data/msa/test/1780332793234/sample.txt",
+      "summary": "Sample MSA test data file containing a single EDI-style record for compliance/manufacturer integration testing.",
+      "tags": ["data", "test", "msa"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:apps/.data/msa/test/1780333010155/sample.txt",
+      "type": "document",
+      "name": "sample.txt",
+      "filePath": "apps/.data/msa/test/1780333010155/sample.txt",
+      "summary": "Sample MSA test data file containing a single EDI-style record for compliance/manufacturer integration testing.",
+      "tags": ["data", "test", "msa"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:apps/.data/msa/test/1780333192379/sample.txt",
+      "type": "document",
+      "name": "sample.txt",
+      "filePath": "apps/.data/msa/test/1780333192379/sample.txt",
+      "summary": "Sample MSA test data file containing a single EDI-style record for compliance/manufacturer integration testing.",
+      "tags": ["data", "test", "msa"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:apps/.data/msa/test/1780333398883/sample.txt",
+      "type": "document",
+      "name": "sample.txt",
+      "filePath": "apps/.data/msa/test/1780333398883/sample.txt",
+      "summary": "Sample MSA test data file containing a single EDI-style record for compliance/manufacturer integration testing.",
+      "tags": ["data", "test", "msa"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:apps/.data/msa/test/1780333596068/sample.txt",
+      "type": "document",
+      "name": "sample.txt",
+      "filePath": "apps/.data/msa/test/1780333596068/sample.txt",
+      "summary": "Sample MSA test data file containing a single EDI-style record for compliance/manufacturer integration testing.",
+      "tags": ["data", "test", "msa"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/client/eslint.config.mjs",
+      "type": "config",
+      "name": "eslint.config.mjs",
+      "filePath": "apps/client/eslint.config.mjs",
+      "summary": "ESLint flat config for the client app, ignoring node_modules, dist, and public directories while linting TypeScript and JavaScript source files in src and server.",
+      "tags": ["configuration", "linting", "code-quality"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/client/postcss.config.js",
+      "type": "config",
+      "name": "postcss.config.js",
+      "filePath": "apps/client/postcss.config.js",
+      "summary": "PostCSS configuration enabling Tailwind CSS processing and autoprefixer for cross-browser CSS compatibility in the client app.",
+      "tags": ["configuration", "css", "build-system"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/public/manifest.webmanifest",
+      "type": "file",
+      "name": "manifest.webmanifest",
+      "filePath": "apps/client/public/manifest.webmanifest",
+      "summary": "Progressive Web App manifest for Cosmos ERP, configuring the app name, start URL at the warehouse mobile view, display mode, theme colors, and icon assets.",
+      "tags": ["configuration", "pwa", "mobile"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/public/sw.js",
+      "type": "file",
+      "name": "sw.js",
+      "filePath": "apps/client/public/sw.js",
+      "summary": "Service worker for the Cosmos mobile PWA that handles offline fallback caching for /m/ and /api/ routes, and relays background sync events to window clients for offline queue processing.",
+      "tags": ["service-worker", "pwa", "offline", "mobile"],
+      "complexity": "simple",
+      "languageNotes": "Uses Background Sync API to notify clients when connectivity is restored, enabling the offline queue to drain."
+    },
+    {
+      "id": "file:apps/client/server/index.ts",
+      "type": "file",
+      "name": "index.ts",
+      "filePath": "apps/client/server/index.ts",
+      "summary": "Main Express server entry point that serves the Vite React SPA alongside the web API on a single port, bridging HTTP requests to the web app's fetch-based API router and adding security headers.",
+      "tags": ["entry-point", "server", "middleware"],
+      "complexity": "moderate",
+      "languageNotes": "Bridges Express (Node.js streams) with the web app's fetch-based Request/Response API model, streaming SSE responses via reader/writer."
+    },
+    {
+      "id": "function:apps/client/server/index.ts:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "apps/client/server/index.ts",
+      "lineRange": [53, 123],
+      "summary": "Bootstraps the Express server by loading env, dynamically importing the API router and background jobs, wiring up API proxy middleware and Vite dev/static serving, then listening on the configured port.",
+      "tags": ["entry-point", "server", "bootstrap"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/server/index.ts:sendWebResponse",
+      "type": "function",
+      "name": "sendWebResponse",
+      "filePath": "apps/client/server/index.ts",
+      "lineRange": [27, 51],
+      "summary": "Converts a fetch API Response object into an Express response, handling streaming bodies and SSE content types.",
+      "tags": ["utility", "middleware", "streaming"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/components/cosmos-img.tsx",
+      "type": "file",
+      "name": "cosmos-img.tsx",
+      "filePath": "apps/client/src/components/cosmos-img.tsx",
+      "summary": "Thin wrapper React component around the native img element, providing a typed ImgProps interface compatible with Next.js Image API signatures for easy migration.",
+      "tags": ["component", "utility", "ui"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/vite-env.d.ts",
+      "type": "file",
+      "name": "vite-env.d.ts",
+      "filePath": "apps/client/src/vite-env.d.ts",
+      "summary": "TypeScript ambient type declarations for Vite environment variables used in the client app, including gateway URL, Stripe publishable key, and web admin origin.",
+      "tags": ["type-definition", "configuration", "vite"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/client/tailwind.config.ts",
+      "type": "config",
+      "name": "tailwind.config.ts",
+      "filePath": "apps/client/tailwind.config.ts",
+      "summary": "Tailwind CSS configuration defining the Cosmos design system token set including a dark-themed color palette, Inter/JetBrains Mono font stacks, and custom border radius and shadow values.",
+      "tags": ["configuration", "design-system", "css"],
+      "complexity": "simple",
+      "languageNotes": "The 'cosmos' color object defines all brand tokens used across the UI package and client app."
+    },
+    {
+      "id": "config:apps/client/vite.config.ts",
+      "type": "config",
+      "name": "vite.config.ts",
+      "filePath": "apps/client/vite.config.ts",
+      "summary": "Vite build configuration for the React client app, setting up path aliases for @, @cosmos/web-gateway-client, and @cosmos/ui monorepo packages, and configuring port 4000.",
+      "tags": ["configuration", "build-system", "vite"],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:apps/web/eslint.config.mjs",
+      "type": "config",
+      "name": "eslint.config.mjs",
+      "filePath": "apps/web/eslint.config.mjs",
+      "summary": "ESLint flat config for the web app, globally ignoring node_modules, generated, .next, dist, and public directories.",
+      "tags": ["configuration", "linting", "code-quality"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/background-jobs.ts",
+      "type": "file",
+      "name": "background-jobs.ts",
+      "filePath": "apps/web/lib/server/background-jobs.ts",
+      "summary": "Lightweight in-process background job scheduler that runs an inventory reservation sweep every 10 minutes, started once by the API server at startup.",
+      "tags": ["service", "background-jobs", "inventory"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/retrieval.test.ts",
+      "type": "file",
+      "name": "retrieval.test.ts",
+      "filePath": "apps/web/lib/server/celestial/retrieval.test.ts",
+      "summary": "Unit tests for the Celestial AI RAG retrieval module, verifying document chunk loading, keyword scoring, and plain-language preference across multiple domain queries.",
+      "tags": ["test", "ai", "retrieval"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "type": "file",
+      "name": "retrieval.ts",
+      "filePath": "apps/web/lib/server/celestial/retrieval.ts",
+      "summary": "RAG (retrieval-augmented generation) document retrieval engine for the Celestial AI assistant, loading and chunking platform Markdown docs, scoring chunks by keyword and synonym expansion, and returning the most relevant context for a given query.",
+      "tags": ["ai", "retrieval", "rag", "service"],
+      "complexity": "complex",
+      "languageNotes": "Implements a custom BM25-style scoring with domain-specific synonym expansion (e.g. 'pos' expands to 'register', 'checkout') and plain-language mode boosting for non-technical responses."
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/retrieval.ts:retrievePlatformDocs",
+      "type": "function",
+      "name": "retrievePlatformDocs",
+      "filePath": "apps/web/lib/server/celestial/retrieval.ts",
+      "lineRange": [217, 243],
+      "summary": "Main exported retrieval function that scores all loaded document chunks against a query and returns the top matching chunks, with fallback to broad-topic matches when scoring yields insufficient results.",
+      "tags": ["ai", "retrieval", "rag"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/retrieval.ts:formatDocContext",
+      "type": "function",
+      "name": "formatDocContext",
+      "filePath": "apps/web/lib/server/celestial/retrieval.ts",
+      "lineRange": [245, 248],
+      "summary": "Formats an array of document chunks into a Markdown-formatted string suitable for injection into an LLM prompt context.",
+      "tags": ["ai", "utility", "formatting"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/celestial/retrieval.ts:parseMarkdownFile",
+      "type": "function",
+      "name": "parseMarkdownFile",
+      "filePath": "apps/web/lib/server/celestial/retrieval.ts",
+      "lineRange": [61, 123],
+      "summary": "Parses a Markdown file into structured DocChunk objects by splitting on H2 and H3 section headings, truncating body text to a maximum chunk size.",
+      "tags": ["utility", "parsing", "docs"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/cycle-count-adjust.test.ts",
+      "type": "file",
+      "name": "cycle-count-adjust.test.ts",
+      "filePath": "apps/web/lib/server/cycle-count-adjust.test.ts",
+      "summary": "Unit tests for cycle count delta and adjustment determination utility functions, covering positive/negative delta and null count edge cases.",
+      "tags": ["test", "warehouse", "inventory"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/cycle-count-adjust.ts",
+      "type": "file",
+      "name": "cycle-count-adjust.ts",
+      "filePath": "apps/web/lib/server/cycle-count-adjust.ts",
+      "summary": "Pure utility functions for warehouse cycle count reconciliation: computes the inventory delta between system quantity and counted quantity, and determines whether a line needs adjustment.",
+      "tags": ["utility", "warehouse", "inventory"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/event-bus.ts",
+      "type": "file",
+      "name": "event-bus.ts",
+      "filePath": "apps/web/lib/server/event-bus.ts",
+      "summary": "Minimal event bus stub that publishes domain events to Redis when configured, or falls back to console logging, with a convenience function for order-domain events.",
+      "tags": ["service", "event-bus", "messaging"],
+      "complexity": "simple",
+      "languageNotes": "Stub implementation — the Redis transport path is present but only logs to console; a real Redis client would need to be wired in for production pub/sub."
+    },
+    {
+      "id": "file:apps/web/lib/server/invoice-document.ts",
+      "type": "file",
+      "name": "invoice-document.ts",
+      "filePath": "apps/web/lib/server/invoice-document.ts",
+      "summary": "Generates printable HTML invoice documents for the AR module, fetching customer name from CRM and rendering line items, credit memos, totals, and print-friendly styling.",
+      "tags": ["service", "invoicing", "ar"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/invoice-document.ts:buildInvoiceHtml",
+      "type": "function",
+      "name": "buildInvoiceHtml",
+      "filePath": "apps/web/lib/server/invoice-document.ts",
+      "lineRange": [32, 94],
+      "summary": "Async function that builds a complete HTML invoice document string from invoice input data, resolving the customer name via CRM and escaping all user-provided values to prevent XSS.",
+      "tags": ["service", "invoicing", "html-generation"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/server/index.ts",
+      "target": "function:apps/client/server/index.ts:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/server/index.ts",
+      "target": "function:apps/client/server/index.ts:sendWebResponse",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/server/index.ts",
+      "target": "function:apps/client/server/index.ts:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "target": "function:apps/web/lib/server/celestial/retrieval.ts:retrievePlatformDocs",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "target": "function:apps/web/lib/server/celestial/retrieval.ts:formatDocContext",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "target": "function:apps/web/lib/server/celestial/retrieval.ts:parseMarkdownFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "target": "function:apps/web/lib/server/celestial/retrieval.ts:retrievePlatformDocs",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "target": "function:apps/web/lib/server/celestial/retrieval.ts:formatDocContext",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/invoice-document.ts",
+      "target": "function:apps/web/lib/server/invoice-document.ts:buildInvoiceHtml",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/invoice-document.ts",
+      "target": "function:apps/web/lib/server/invoice-document.ts:buildInvoiceHtml",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.test.ts",
+      "target": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/cycle-count-adjust.test.ts",
+      "target": "file:apps/web/lib/server/cycle-count-adjust.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/invoice-document.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "target": "file:apps/web/lib/server/celestial/retrieval.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/lib/server/cycle-count-adjust.ts",
+      "target": "file:apps/web/lib/server/cycle-count-adjust.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:apps/client/tailwind.config.ts",
+      "target": "file:apps/client/src/components/cosmos-img.tsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:apps/client/vite.config.ts",
+      "target": "file:apps/client/server/index.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:apps/client/postcss.config.js",
+      "target": "config:apps/client/tailwind.config.ts",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:apps/web/lib/server/celestial/retrieval.ts",
+      "target": "file:apps/web/lib/server/celestial/orchestrator.ts",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/lib/server/invoice-document.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

@@ -49,7 +49,7 @@ export default function DeliveryMobilePage() {
   return (
     <div>
       <OfflineBanner />
-      <h1 style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem' }}>Active routes</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>Active routes</h1>
       <button type="button" className="btn-ghost" onClick={() => void load()} style={{ marginBottom: 12 }}>
         Refresh
       </button>
@@ -58,7 +58,7 @@ export default function DeliveryMobilePage() {
         <Link
           key={r.id}
           to={`/m/delivery/route/${r.id}`}
-          className="cosmos-mobile-card"
+          className="pleros-mobile-card"
           style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
         >
           <strong>Route {r.id.slice(-8)}</strong>

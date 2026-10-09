@@ -1,0 +1,488 @@
+{
+  "nodes": [],
+  "edges": [
+    {
+      "source": "file:apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/orders/[id]/page.tsx:OrderDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/orders/[id]/page.tsx:OrderDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "function:apps/client/src/pages/admin/purchasing/page.tsx:PurchasingPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "function:apps/client/src/pages/admin/purchasing/page.tsx:PurchasingPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "function:apps/client/src/pages/admin/purchasing/page.tsx:PoDrawer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "function:apps/client/src/pages/admin/purchasing/page.tsx:SupplierDrawer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "function:apps/client/src/pages/admin/warehouse/page.tsx:WarehousePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "function:apps/client/src/pages/admin/warehouse/page.tsx:WarehousePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "target": "file:apps/client/src/lib/toast.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/purchasing/[poId]/page.tsx:PurchaseOrderDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/purchasing/[poId]/page.tsx:PurchaseOrderDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/purchasing/[poId]/page.tsx:ReceiveDrawer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "target": "file:apps/client/src/lib/toast.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/quotes/page.tsx",
+      "target": "function:apps/client/src/pages/admin/quotes/page.tsx:AdminQuotesPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/quotes/page.tsx",
+      "target": "function:apps/client/src/pages/admin/quotes/page.tsx:AdminQuotesPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/quotes/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/quotes/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/quotes/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/pos/page.tsx",
+      "target": "function:apps/client/src/pages/admin/pos/page.tsx:PosPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/pos/page.tsx",
+      "target": "function:apps/client/src/pages/admin/pos/page.tsx:PosPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/pos/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/pos/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/notifications/page.tsx",
+      "target": "function:apps/client/src/pages/admin/notifications/page.tsx:NotificationsPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/notifications/page.tsx",
+      "target": "function:apps/client/src/pages/admin/notifications/page.tsx:NotificationsPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/notifications/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/notifications/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/notifications/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/page.tsx",
+      "target": "function:apps/client/src/pages/admin/fulfillment/page.tsx:FulfillmentTasksPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/page.tsx",
+      "target": "function:apps/client/src/pages/admin/fulfillment/page.tsx:FulfillmentTasksPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx:FulfillmentTaskDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx:FulfillmentTaskDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/page.tsx",
+      "target": "function:apps/client/src/pages/admin/finance/page.tsx:FinancePage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/page.tsx",
+      "target": "function:apps/client/src/pages/admin/finance/page.tsx:FinancePage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/finance/journals/[id]/page.tsx:JournalDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/finance/journals/[id]/page.tsx:JournalDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/inventory/[skuId]/page.tsx:SkuDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/inventory/[skuId]/page.tsx:SkuDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

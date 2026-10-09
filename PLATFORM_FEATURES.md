@@ -1,6 +1,6 @@
-# Cosmos Platform — Features & Recent Additions
+# Pleros Platform — Features & Recent Additions
 
-Comprehensive reference for the Cosmos ERP/distribution platform: what the product does today, what was added in recent development, and how to run it locally.
+Comprehensive reference for the Pleros ERP/distribution platform: what the product does today, what was added in recent development, and how to run it locally.
 
 > **Celestial AI knowledge base:** LLM-optimized documentation lives in [`docs/celestial/`](docs/celestial/) (indexed automatically by Celestial RAG). This file is the full human + machine reference; celestial docs use Q&A-friendly sections with keywords, workflows, and FAQ.
 
@@ -23,12 +23,13 @@ Comprehensive reference for the Cosmos ERP/distribution platform: what the produ
 13. [Local development](#local-development)
 14. [Demo accounts & seed data](#demo-accounts--seed-data)
 15. [Known gaps / deferred work](#known-gaps--deferred-work)
+16. [ERP industry comparison](#erp-industry-comparison)
 
 ---
 
 ## Overview
 
-**Cosmos** is a production-oriented ERP and distribution platform for SMB wholesalers and distributors. It covers inventory, orders, warehouse operations, purchasing, CRM, dispatch, compliance, finance, and a buyer-facing B2B portal — plus mobile apps for warehouse, delivery, and sales.
+**Pleros** is a production-oriented ERP and distribution platform for SMB wholesalers and distributors. It covers inventory, orders, warehouse operations, purchasing, CRM, dispatch, compliance, finance, and a buyer-facing B2B portal — plus mobile apps for warehouse, delivery, and sales.
 
 **Stack:** React 19 + Vite (UI), Express + Prisma + SQLite (API), npm workspaces monorepo.
 
@@ -43,7 +44,7 @@ Comprehensive reference for the Cosmos ERP/distribution platform: what the produ
 | **Client UI** | `apps/client` | Vite SPA, React Router, TanStack Query, Tailwind, Zustand |
 | **API server** | `apps/web` | Express handlers in `apps/web/lib/server/`, entry `apps/web/server/api-router.ts` |
 | **Dev server** | `apps/client/server/index.ts` | Vite middleware (HMR) + `/api/*` proxy to web API |
-| **Shared packages** | `packages/*` | `@cosmos/types`, `@cosmos/ui`, `@cosmos/web-gateway-client`, `@cosmos/analytics-engine` |
+| **Shared packages** | `packages/*` | `@pleros/types`, `@pleros/ui`, `@pleros/web-gateway-client`, `@pleros/analytics-engine` |
 | **Database** | `apps/web/.data/*.db` | 14 separate SQLite databases (one Prisma schema each) |
 | **Seed & migrations** | `scripts/seed-db.ts`, `scripts/migrate-all.ts` | Multi-DB setup |
 
@@ -53,8 +54,9 @@ Comprehensive reference for the Cosmos ERP/distribution platform: what the produ
 |-------------|---------|
 | `/` | Hub — links to Admin, Shop, Mobile |
 | `/admin/*` | ERP admin console |
-| `/catalog`, `/cart`, `/checkout`, `/orders`, `/quotes` | B2B buyer portal |
+| `/catalog`, `/cart`, `/checkout`, `/orders`, `/quotes`, `/invoices`, `/account` | B2B buyer portal |
 | `/m/*` | Mobile warehouse / delivery / sales |
+| `/admin/celestial` | Full-page Celestial AI assistant (admin) |
 | `/api/v1/*` | REST API |
 | `/api/cashflow`, `/api/anomaly` | Analytics endpoints |
 
@@ -89,17 +91,23 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | Module | Route | Highlights |
 |--------|-------|------------|
 | **Dashboard** | `/admin` | Revenue/orders KPIs, cashflow forecast chart, low-stock alerts, recent orders, compliance badge |
-| **Inventory** | `/admin/inventory` | SKU catalog, stock by warehouse, adjustments, transfers, spreadsheet import, low-stock alerts |
-| **Orders** | `/admin/orders` | Order list, detail with saga timeline, confirm/cancel/fulfill, **returns (RMA)**, invoice link |
+| **Inventory** | `/admin/inventory` | SKU catalog, stock by warehouse, adjustments, transfers, spreadsheet import, low-stock alerts, barcode labels |
+| **Orders** | `/admin/orders` | Order list, detail with saga timeline, confirm/cancel/fulfill, **returns (RMA)**, split shipments, invoice link |
 | **Fulfillment** | `/admin/fulfillment` | Pick/pack tasks, assign picker, pick-all / pack / dispatch actions |
-| **Warehouse** | `/admin/warehouse` | Pick tasks, receiving sessions, cycle counts |
+| **Warehouse** | `/admin/warehouse` | Pick tasks, receiving sessions, cycle counts, **wave picking**, **bin locations** |
 | **Purchasing** | `/admin/purchasing` | Purchase orders, suppliers, receive goods |
 | **Compliance** | `/admin/compliance` | MSA reports, tax exposure summary, batch tracking context |
-| **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion |
+| **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion, contract/volume pricing |
+| **Quotes** | `/admin/quotes` | Admin quote approval, counter-offers |
 | **Dispatch** | `/admin/dispatch` | Delivery routes, stop reorder, driver assignment, map, proof of delivery |
-| **Finance** | `/admin/finance` | **AR invoices**, AP (PO bills), trial balance, cashflow chart, record payment |
-| **Settings** | `/admin/settings` | Company profile, onboarding, team invites, warehouses, webhooks, Stripe/MSA, billing plan |
-| **Notifications** | `/admin/notifications` | Notification request inbox (stub provider) |
+| **Finance** | `/admin/finance` | **AR invoices** (paginated + CSV + `GET /invoices/ar-summary`), AP (PO bills), 3-way match, bank recon, trial balance, cashflow chart, record payment |
+| **Reports** | `/admin/reports` | Saved report builder — orders, inventory, AR aging with CSV export |
+| **POS** | `/admin/pos` | In-store checkout: register, customer, SKU cart, cash/card/check, receipt print |
+| **Notifications** | `/admin/notifications` | Notification request inbox (SendGrid/Twilio when configured) |
+| **Celestial** | `/admin/celestial` | Full-page AI copilot (also floating ✦ panel on all admin pages) |
+| **Settings** | `/admin/settings` | Company profile, onboarding, team invites, warehouses, webhooks, feature flags, audit log, Stripe/MSA, billing plan |
+
+**Navigation notes:** Sidebar order matches `SIDEBAR_NAV` in `sidebar.tsx`. Celestial sidebar link is hidden when the `celestial` feature flag is off. `/admin/customers` and `/admin/customers/:id` redirect to `/admin/crm` and `/admin/crm/customers/:id`.
 
 **Shell components:** `dashboard-shell.tsx`, `sidebar.tsx`, `sidebar-icons.tsx`.
 
@@ -131,7 +139,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 
 **Layout:** `layouts/MobileLayout.tsx` — tab bar, logo header, safe-area padding.
 
-**Offline:** `lib/offline-queue.ts` + `OfflineBanner` — localStorage action queue (no full service-worker sync yet).
+**Offline / PWA:** `sw.js` precaches mobile app shells (`/m/warehouse|delivery|sales|…`) + Vite assets; shell-first navigations and stale-while-revalidate API GETs for instant offline load after first visit; `offline-queue.ts` Background Sync; conflict banner (retry/discard); install hint on `/m/login`; icons include 192×192.
 
 ---
 
@@ -157,7 +165,10 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | Finance | journal entries, chart of accounts, reports | `ledger.ts` |
 | Analytics | KPIs, snapshots | `analytics.ts` |
 | Webhooks | subscription CRUD, test | `webhooks.ts` |
-| Notifications | list, send (stub) | `notifications.ts` |
+| Notifications | list, send, provider status | `notifications.ts` |
+| Features | `GET /features` — plan defaults + tenant overrides | `feature-flags.ts` |
+| POS | `POST /pos/orders`, receipt | `pos.ts`, `pos-receipt.ts` |
+| **Celestial** | `POST /celestial/chat`, `POST /celestial/chat/stream`, `GET /celestial/status`, `GET /celestial/conversations`, `GET /celestial/conversations/:id` | `celestial/` |
 
 **Order saga:** `order-saga.ts` + `order-orchestration.ts` — orchestrated confirm → allocate → pick → ship pipeline.
 
@@ -182,7 +193,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | `ledger` | ChartAccount, JournalEntry, JournalLine |
 | `compliance` | MSATenant, MSAReport, Batch, … |
 | `notification` | NotificationRequest |
-| `analytics` | DailyKpiSnapshot |
+| `analytics` | DailyKpiSnapshot, **CelestialConversation**, **CelestialMessage**, **SavedReport** |
 
 **Commands:** `npm run db:setup`, `db:generate`, `db:migrate`, `seed`.
 
@@ -194,8 +205,11 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 |------------|-------|
 | Dashboard KPIs | `GET /api/v1/analytics/kpis`, admin dashboard |
 | KPI snapshots | `GET /api/v1/kpi/snapshots` — feeds revenue chart |
-| Cashflow forecast | `POST /api/cashflow` — `@cosmos/analytics-engine` |
-| Anomaly detection | `POST /api/anomaly` |
+| Cashflow history | `GET /api/v1/analytics/cashflow-history` — weekly AR/AP collections (revenue proxy fallback) |
+| Report builder | `GET/POST /api/v1/report-builder/*` — saved reports + run/export for orders, inventory, AR aging |
+| Cashflow forecast | `POST /api/cashflow` — `@pleros/analytics-engine` EWMA (+ seasonal when history ≥ 8 weeks) |
+| Demand forecast | `forecastDemandUsage` in analytics-engine; `GET /inventory/demand-plan` uses ledger daily series + EWMA |
+| Anomaly detection | `POST /api/anomaly` (engine only; no admin UI yet) |
 | Trial balance | Finance page + ledger API |
 | **AR invoicing** | Auto-issue on ship, invoice list/detail, balance & overdue |
 | **Credit memos** | Returns flow posts credit + optional GL |
@@ -205,17 +219,19 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 
 ## Branding, theme & UX
 
-### Color palette (Powder Petal / Mauve / Purple)
+### Themes — Obsidian (default) & Aurora
 
-Defined in `apps/client/src/globals-theme.css`:
+Two switchable themes defined as `[data-theme]` token sets in `apps/client/src/globals-theme.css`:
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| Powder Petal | `#EFD9CE` | Cards, sidebar surface |
-| Mauve | `#DEC0F1` | Page background |
-| Wisteria | `#B79CED` | Accents |
-| Soft Periwinkle | `#957FEF` | Links, orbit ring |
-| Medium Slate Blue | `#7161EF` | Primary buttons, logo mark |
+| Theme | Style | Key colors |
+|-------|-------|------------|
+| **Obsidian** (default) | Matte black, minimal enterprise | bg `#09090B`, surfaces `#141416`–`#222226`, primary `#5B8DEF`, accent `#6B9FD4` |
+| **Aurora** | Light wholesale (original palette) | Mauve `#DEC0F1` bg, Powder Petal `#EFD9CE` surfaces, primary `#7161EF` |
+
+- **Switcher** (`components/theme-switcher.tsx`) in landing, admin, shop, and mobile headers plus all auth pages
+- Persisted in `localStorage` (`pleros.theme`); applied pre-paint by an inline script in `index.html` (no flash)
+- `lib/theme.ts` — storage, `applyTheme`, change events; meta `theme-color` updated per theme
+- Typography: **Inter** (body + display), JetBrains Mono (code)
 
 Styles split across `globals-theme.css`, `globals-admin.css`, `globals-shop.css`.
 
@@ -223,13 +239,13 @@ Styles split across `globals-theme.css`, `globals-admin.css`, `globals-shop.css`
 
 | Asset / component | Path |
 |-------------------|------|
-| Source SVG | `cosmos_logo.svg` (repo root) |
-| React component | `apps/client/src/components/cosmos-logo.tsx` |
+| Source SVG | `pleros_logo.svg` (repo root) |
+| React component | `apps/client/src/components/pleros-logo.tsx` |
 | Variants | `full` (mark + wordmark), `mark`, `wordmark`; sizes `sm` / `md` / `lg` |
-| Static fallbacks | `apps/client/public/cosmos-logo.svg`, `cosmos-mark.svg`, `cosmos-logo-lockup.svg` |
-| Favicons | `favicon-32.png`, `apple-touch-icon.png`, `cosmos-icon-512.png` (from `scripts/generate-favicons.mjs`) |
+| Static fallbacks | `apps/client/public/pleros-logo.svg`, `pleros-mark.svg`, `pleros-logo-lockup.svg` |
+| Favicons | `favicon-32.png`, `apple-touch-icon.png`, `pleros-icon-512.png` (from `scripts/generate-favicons.mjs`) |
 
-Logo uses inline SVG (orbital rings + lowercase “cosmos” wordmark) for reliable rendering; lockup includes “DISTRIBUTION ERP” tagline on login screens.
+Logo uses inline SVG (orbital rings + “Pleros” wordmark) for reliable rendering; lockup includes “DISTRIBUTION ERP” tagline on login screens.
 
 ### Admin shell UX
 
@@ -241,7 +257,7 @@ Logo uses inline SVG (orbital rings + lowercase “cosmos” wordmark) for relia
 ### Text & contrast
 
 - Semantic text tokens (`--c-heading`, `--c-text`, `--c-text-2`, `--c-text-3`)
-- Tailwind utility remaps for light theme (`text-cosmos-white` → dark heading color)
+- Tailwind utility remaps for light theme (`text-pleros-white` → dark heading color)
 - Fixed white-on-light bugs across admin, shop, and mobile pages
 
 ---
@@ -254,7 +270,7 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **4.1 Invoicing & AR** | `Invoice` model; auto-issue on ship (`issueInvoiceForOrder`); `GET /invoices`, `GET /invoices/:id`, `GET /orders/:id/invoice`; Finance AR tab; GL posting via `invoice-gl.ts` |
+| **4.1 Invoicing & AR** | `Invoice` model; auto-issue on ship (`issueInvoiceForOrder`); `GET /invoices` (page/pageSize), `GET /invoices/ar-summary`, `GET /invoices/:id`, `GET /orders/:id/invoice`; Finance AR tab with CSV export; GL posting via `invoice-gl.ts` |
 | **4.2 Returns / RMA** | `POST /orders/:id/returns` — restock, credit memo, `returnedQty` on line items, `RETURNED` status; admin order detail “Process return” modal |
 | **4.3 Buyer-scoped quotes** | Quote list/create/get filtered by buyer `customerRef`; wired in `native-router.ts` |
 | **4.4 UI, seed & tests** | Finance/orders/quotes UI updates; `seedInvoices` in seed script; `tier4.test.ts` |
@@ -269,7 +285,7 @@ Summary of major work completed in the current development cycle.
 
 ### Logo & sidebar redesign
 
-- Replaced legacy PNG/black-box logo with `cosmos_logo.svg`-based design
+- Replaced legacy PNG/black-box logo with `pleros_logo.svg`-based design
 - Inline SVG component with proper viewBox padding (no clipping)
 - Sidebar: icon nav, brand footer, B2B storefront link, collapse control
 - Regenerated PWA/favicon assets from orbital mark
@@ -278,7 +294,7 @@ Summary of major work completed in the current development cycle.
 
 - Darkened secondary text tokens for contrast on light backgrounds
 - Global fixes for dashboard headers, checkout steps, warehouse tabs, fulfillment buttons
-- `@cosmos/ui` secondary button text fix
+- `@pleros/ui` secondary button text fix
 - Chart tooltip colors; mobile error/success message tokens
 
 ### Mobile-friendly layout
@@ -316,9 +332,9 @@ Summary of major work completed in the current development cycle.
 | Item | What was added |
 |------|----------------|
 | **7.1 Stripe invoice pay** | `POST /invoices/:id/pay/stripe` + card UI on buyer invoice detail |
-| **7.2 Invoice PDF** | `GET /invoices/:id/pdf` — printable HTML download |
+| **7.2 Invoice PDF** | `GET /invoices/:id/pdf` — native PDF (pdfkit); `GET /invoices/:id/html` — print preview |
 | **7.3 Reorder + contract prices** | `GET /orders/:id/reorder-lines` resolves current contract/list prices |
-| **7.4 Offline sync** | Service worker (`public/sw.js`), queue replay (`offline-sync.ts`), mobile sync banner |
+| **7.4 Offline sync** | Service worker app-shell caching (`pwa-shell-routes.json` → precache `/m/*`), SWR API GETs, queue replay, conflict banner (retry + discard) |
 | **7.5 Low-stock PO prefill** | `/admin/purchasing?skuId=` pre-fills PO drawer with `reorderQty` |
 | **7.6 Buyer account portal** | `/account` — credit, terms, address; `PATCH /customers/me` |
 | **7.7 Quote approval** | Statuses OPEN → PENDING_APPROVAL → APPROVED → SUBMITTED; `/admin/quotes` |
@@ -339,7 +355,7 @@ Summary of major work completed in the current development cycle.
 | **8.8 Split shipments & ETA** | `OrderShipment` model; `GET /orders/:id/tracking` |
 | **8.9 Saved payment methods** | `SavedPaymentMethod` + buyer API |
 | **8.10 Wave picking & bins** | `PickWave`, `BinLocation` models + APIs |
-| **8.11 Barcode labels** | `GET /skus/:id/label` printable HTML |
+| **8.11 Barcode labels** | `GET /skus/:id/label` printable HTML with Code128 + QR (`size`, `symbols`, `qty`) |
 | **8.12 Platform** | Audit log, RBAC permissions map, feature flags, global search, public signup, POS registers |
 
 **Key files:** `operations-gl.ts`, `bank-recon.ts`, `order-templates.ts`, `order-shipments.ts`, `wave-picking.ts`, `audit-log.ts`, `pos.ts`, `search.ts`, `signup.ts`.
@@ -387,7 +403,7 @@ Summary of major work completed in the current development cycle.
 | Item | What was added |
 |------|----------------|
 | **12.1 3-way AP match UI** | Finance → Bills: match status column, filters, detail modal, re-run match |
-| **12.2 Barcode label print** | SKU detail: print qty + opens printable HTML label (`GET /skus/:id/label`) |
+| **12.2 Barcode label print** | SKU detail: size / Code128·QR / qty → printable HTML (`GET /skus/:id/label`) |
 | **12.3 Mobile wave picking** | `/m/warehouse` Waves tab + wave detail with start/complete and task links |
 | **12.4 Seed polish** | Demo vendor bill MATCHED; seed pick wave for mobile warehouse demo |
 
@@ -421,16 +437,67 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — RAG on `docs/celestial/*.md` + `PLATFORM_FEATURES.md`, intent-based tools, LLM providers |
-| **15.2 Chat API** | `POST /celestial/chat`, `GET /celestial/status` · gated by `celestial` feature flag |
-| **15.3 Buyer + admin UI** | Floating ✦ Celestial panel on shop and admin layouts with contextual page hints |
-| **15.4 Tooling** | Live data: orders, invoices, catalog, quotes (buyer); global search + low stock (admin) |
-| **15.5 Conversation store** | `CelestialConversation` / `CelestialMessage` in analytics DB · audit `celestial.chat` events |
-| **15.6 Streaming UI** | `POST /celestial/chat/stream` (SSE) · Markdown + syntax-highlighted code in chat panel |
+| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — hybrid RAG + live-data tools + LLM synthesis (OpenRouter, Groq, Gemini, Ollama, mock) |
+| **15.2 Knowledge base (RAG)** | `docs/celestial/*.md` (6 LLM-optimized files) + `PLATFORM_FEATURES.md` · chunked `##`/`###` retrieval with synonym scoring |
+| **15.3 Chat API** | `POST /celestial/chat` (JSON or SSE via `Accept: text/event-stream` / `X-Celestial-Stream: 1`), `POST /celestial/chat/stream`, `GET /celestial/status` (`enabled` + provider/model) · gated by `celestial` feature flag |
+| **15.4 Conversation history API** | `GET /celestial/conversations?surface=&limit=`, `GET /celestial/conversations/:id` — server-side thread restore across devices |
+| **15.5 Buyer + admin UI** | Floating ✦ panel on shop/admin layouts · full page `/admin/celestial` · shared Zustand store `pleros-celestial-v1` |
+| **15.6 Live data tools** | `get_my_orders`, `get_order_detail`, `list_my_invoices`, `search_catalog`, `list_my_quotes`, `list_warehouses`, `global_search`, `list_low_stock` — buyer-scoped where applicable |
+| **15.7 Answer pipeline** | Intent detection → tools + doc retrieval → direct Markdown tables when data exists → LLM synthesis for how-to/general → doc fallback if LLM empty/fails (always returns an answer) |
+| **15.8 Streaming UI** | SSE token streaming · `react-markdown` + GFM + syntax highlighting · contextual deep links from tool results |
+| **15.9 Conversation store** | `CelestialConversation` / `CelestialMessage` in analytics DB · links/metadata on assistant messages · audit `celestial.chat` events |
+| **15.10 Feature gating** | Settings → Features tab · sidebar Celestial link hidden when disabled · shop FAB hidden until login |
 
-**LLM env vars:** `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, or `CELESTIAL_PROVIDER=ollama`. Runs in **mock mode** without keys (tool-backed answers).
+**LLM env vars:** `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, or `CELESTIAL_PROVIDER=ollama`. Set `CELESTIAL_MODEL` as needed. Runs in **mock mode** without keys (tool-backed structured answers still work).
 
-**Key files:** `apps/web/lib/server/celestial/`, `apps/client/src/components/celestial/celestial-chat.tsx`.
+**Knowledge base files (`docs/celestial/`):**
+
+| File | Contents |
+|------|----------|
+| `01-platform-overview.md` | Platform summary, architecture, order lifecycle, demo accounts, glossary |
+| `02-admin-modules.md` | Per-module how-to guides (Dashboard → Settings, POS, warehouse, finance) |
+| `03-buyer-mobile.md` | B2B shop, account, invoices, mobile warehouse/delivery/sales apps |
+| `04-api-finance-integrations.md` | REST API domains, AR/AP/GL workflows, Stripe, MSA, feature flags |
+| `05-celestial-ai.md` | Celestial tools, API, env vars, example questions |
+| `06-faq.md` | Common Q&A (POS, fulfillment, logins, local dev) |
+
+**Key files:** `apps/web/lib/server/celestial/` (orchestrator, intent, tools, retrieval, compose, llm, prompts), `apps/client/src/components/celestial/`, `apps/client/src/stores/celestial-store.ts`, `apps/client/src/pages/admin/celestial/`.
+
+### Tier 16 — ERP depth: lots/serials, putaway, labor, backorders, drop ship
+
+| Item | What was added |
+|------|----------------|
+| **16.1 Lot/batch tracking** | `InventoryLot` model, FEFO allocation, SKU `trackLot` toggle, receiving + SKU detail UI |
+| **16.2 Serial numbers** | `SerialUnit` register/reserve/ship lifecycle, SKU `trackSerial` toggle |
+| **16.3 Directed putaway** | Bin suggestions, putaway tasks generated from receiving, admin confirm tab |
+| **16.4 Labor / productivity** | `WmsLaborEvent` recorded on pick/receive/putaway; 7-day metrics tab (`GET /wms/labor/metrics`) |
+| **16.5 Backorders** | Partial reservation, `BACKORDERED` status, `BackorderLine` queue, auto-fill on PO receipt (`GET /orders/backorders`) |
+| **16.6 Drop shipping** | `DROP_SHIP` order lines, auto-PO per supplier, ship + invoice from admin order detail |
+
+**Key files:** `apps/web/lib/server/inventory-lots.ts`, `inventory-serials.ts`, `wms-putaway.ts`, `wms-labor.ts`, `backorders.ts`, `drop-ship.ts`.
+
+### Tier 17 — EDI, demand planning, landed cost & Postgres path
+
+| Item | What was added |
+|------|----------------|
+| **17.1 EDI** | Trading partners (Settings → Integrations), inbound 850 → orders, outbound 810/856 documents, `OrderChannel.EDI` |
+| **17.2 Demand planning** | EWMA on daily outbound ledger series (~70d); methods `USAGE_EWMA` / `USAGE_EWMA_SEASONAL` / `STATIC_REORDER`; `GET /inventory/demand-plan`, replenishment table shows method + EWMA/day |
+| **17.3 Landed cost** | Freight/duty/other on PO allocated into inventory unit cost on receive; PO detail UI |
+| **17.4 Postgres hardening** | `PLEROS_DB_PROVIDER=postgres`, `npm run db:setup:postgres`, dual-mode `migrate-all.ts`, `GET /health/db` |
+
+**Key files:** `apps/web/lib/server/edi.ts`, `demand-planning.ts`, `landed-cost.ts`, `db-health.ts`, `scripts/setup-postgres.mjs`, `scripts/db-urls.mjs`.
+
+### Tier 18 — Obsidian theme, theme switcher, landing & logout
+
+| Item | What was added |
+|------|----------------|
+| **18.1 Obsidian theme** | New default matte-black enterprise theme; Inter typography; flat surfaces, hairline borders, steel-blue accent |
+| **18.2 Theme switcher** | Obsidian ↔ Aurora toggle in landing/admin/shop/mobile headers and auth pages; persisted `pleros.theme`; pre-paint apply (no flash) |
+| **18.3 Landing page** | `/` — role-based quick start, 6 feature modules, Celestial section, order-to-cash flow, workspace cards, demo credentials |
+| **18.4 Logout everywhere** | Central `signOut()` (`lib/auth-session.ts`) — revokes server session (`POST /auth/logout`), clears tokens + B2B session; admin avatar menu, shop dropdown, mobile header, landing nav |
+| **18.5 Celestial plain language** | Intent-aware plain-language answers for non-technical users; technical URLs/commands stripped unless asked |
+
+**Key files:** `apps/client/src/globals-theme.css`, `lib/theme.ts`, `lib/auth-session.ts`, `components/theme-switcher.tsx`, `components/user-menu.tsx`, `pages/home/page.tsx`.
 
 ### Tier 5 — Deferred (not yet implemented)
 
@@ -451,7 +518,12 @@ Summary of major work completed in the current development cycle.
 | `apps/web/lib/server/cycle-count-adjust.test.ts` | Cycle count |
 | `apps/web/lib/server/po-receiving.test.ts` | PO receiving |
 | `apps/web/lib/server/notification-provider.test.ts` | Notification stub |
+| `apps/web/lib/server/celestial/intent.test.ts` | Celestial intent detection (orders, POS how-to, warehouses) |
+| `apps/web/lib/server/celestial/compose.test.ts` | Direct compose tables, doc fallback replies |
+| `apps/web/lib/server/celestial/retrieval.test.ts` | RAG chunk loading, POS/FAQ/warehouse retrieval |
 | `packages/analytics-engine/src/cashflow.test.ts` | Cashflow forecast |
+| `packages/analytics-engine/src/demand.test.ts` | Demand EWMA forecast |
+| `apps/web/lib/server/cashflow-history.test.ts` | AR/AP weekly bucket helpers |
 | `packages/web-gateway-client/src/resolve-gateway.test.ts` | API base URL |
 | `apps/client/src/lib/admin-path.test.ts` | Admin path helpers |
 
@@ -490,7 +562,7 @@ Open **http://localhost:4000**.
 |---------|-------------|
 | `npm run dev` | Vite HMR + API on port 4000 |
 | `npm run build` | Production build (all workspaces) |
-| `npm run start -w @cosmos/client` | Serve built SPA + API |
+| `npm run start -w @pleros/client` | Serve built SPA + API |
 | `npm run seed` | Load demo tenant, SKUs, orders, invoices, etc. |
 | `npm run db:migrate` | Run all Prisma migrations |
 | `npm run sync:client` | Sync UI from legacy web app sources |
@@ -500,28 +572,33 @@ Open **http://localhost:4000**.
 
 ## Demo accounts & seed data
 
-After `npm run seed`, the following accounts are available (demo tenant: **Cosmos Demo Distributors**, slug `demo`):
+After `npm run seed`, the following accounts are available (demo tenant: **Pleros Demo Distributors**, slug `demo`):
 
 | Role | Email | Password | URL |
 |------|-------|----------|-----|
-| **Admin** | `admin@cosmos.local` | `admin1234` | http://localhost:4000/admin/login |
+| **Admin** | `admin@pleros.local` | `admin1234` | http://localhost:4000/admin/login |
 | **B2B buyer** | `buyer@acme-retail.com` | `buyer1234` | http://localhost:4000/login |
-| **Driver** | `driver@cosmos.local` | `driver1234` | http://localhost:4000/m/delivery |
-| **Warehouse** | `warehouse@cosmos.local` | `warehouse1234` | http://localhost:4000/m/warehouse |
-| **Sales** | `sales@cosmos.local` | `sales1234` | http://localhost:4000/m/sales |
+| **Driver** | `driver@pleros.local` | `driver1234` | http://localhost:4000/m/delivery |
+| **Warehouse** | `warehouse@pleros.local` | `warehouse1234` | http://localhost:4000/m/warehouse |
+| **Sales** | `sales@pleros.local` | `sales1234` | http://localhost:4000/m/sales |
 
 **Seed includes:** catalog SKUs, sample orders (various statuses), open quote, POs, fulfillment tasks, dispatch route, MSA report, journal entry, **seed invoices**, KPI snapshots for dashboard charts.
 
 ---
 
+## ERP industry comparison
+
+See **[ERP_FEATURE_GAP.md](ERP_FEATURE_GAP.md)** for a full comparison of Pleros vs established wholesale/distribution ERP platforms (NetSuite, Business Central, Acumatica, Prophet 21, etc.) — module coverage, gaps, and suggested roadmap priorities.
+
+---
+
 ## Known gaps / deferred work
 
-Documented in `MISSING.md` and backlog:
+Documented in `MISSING.md`, `ERP_FEATURE_GAP.md`, and backlog:
 
 - Legacy Nest/Expo/Python microservices not on this branch
 - Redis event bus (stub in `event-bus.ts`; set `REDIS_URL` for production wiring)
-- MSA S3 upload / EDI cron (metadata + stub; full S3/EDI automation pending)
-- Full native PDF generation (invoice download is print-ready HTML)
+- MSA automation depends on env (`MSA_S3_BUCKET`, `MSA_UPLOAD_WEBHOOK_URL`, manufacturer `ediEndpoint`); local archive + cron (`POST /msa/cron`) implemented in Tier 9
 - Postgres unified dev path (local uses SQLite; production URL helpers in `env.ts`)
 
 ---
@@ -535,14 +612,18 @@ Documented in `MISSING.md` and backlog:
 | Shop pages | `apps/client/src/pages/catalog/`, `cart/`, `checkout/`, `orders/`, `quotes/` |
 | Mobile pages | `apps/client/src/pages/m/` |
 | Theme | `apps/client/src/globals-theme.css` |
-| Logo | `apps/client/src/components/cosmos-logo.tsx`, `cosmos_logo.svg` |
+| Logo | `apps/client/src/components/pleros-logo.tsx`, `pleros_logo.svg` |
 | Sidebar / shell | `apps/client/src/components/layout/` |
 | API router | `apps/web/lib/server/native-router.ts` |
+| Celestial AI | `apps/web/lib/server/celestial/`, `apps/client/src/components/celestial/`, `apps/client/src/stores/celestial-store.ts` |
+| Celestial knowledge base | `docs/celestial/*.md` (RAG source; indexed by `retrieval.ts`) |
+| ERP industry gap analysis | `ERP_FEATURE_GAP.md` |
 | Invoices / returns | `apps/web/lib/server/invoices.ts` |
 | Quotes | `apps/web/lib/server/quotes.ts` |
+| POS | `apps/web/lib/server/pos.ts`, `apps/client/src/pages/admin/pos/` |
 | Seed | `scripts/seed-db.ts` |
 | Migrations | `scripts/migrate-all.ts` |
 
 ---
 
-*Last updated: May 2026 — reflects Tier 15 Celestial AI assistant.*
+*Last updated: May 2026 — reflects Tier 15 Celestial AI (RAG knowledge base, conversation API, streaming UI, feature gating).*

@@ -1,9 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Elements } from '@stripe/react-stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { getB2bCustomerId } from '@/lib/session'
 import { useCartStore } from '@/stores/cart.store'
+import { useStripeConnect } from '@/lib/stripe-connect'
+import { StorefrontCardCapture } from '@/components/checkout-card-capture'
 
 type CustomerProfile = {
   id: string
@@ -39,6 +42,171 @@ function money(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
+function LoyaltySection() {
+  const [points, setPoints] = useState<number | null>(null)
+  const [redeemPts, setRedeemPts] = useState('500')
+  const [discountCode, setDiscountCode] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    void api.get<{ pointsBalance: number }>('/loyalty/me').then((a) => setPoints(a.pointsBalance)).catch(() => setPoints(0))
+  }, [])
+
+  async function redeem() {
+    setErr(null)
+    try {
+      const res = await api.post<{ discountCode: string }>('/loyalty/me/redeem', { points: Number(redeemPts) })
+      setDiscountCode(res.discountCode)
+      setPoints((p) => (p != null ? p - Number(redeemPts) : p))
+    } catch (e: unknown) {
+      setErr(axiosErr(e))
+    }
+  }
+
+  return (
+    <div className="pleros-card" style={{ marginTop: 16 }}>
+      <h2 style={{ marginTop: 0, fontSize: 16 }}>Loyalty rewards</h2>
+      <p style={{ color: 'var(--c-text-3)', fontSize: 14 }}>Balance: {points ?? '…'} points</p>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <input className="pleros-input" type="number" min={1} value={redeemPts} onChange={(e) => setRedeemPts(e.target.value)} />
+        <button type="button" className="btn-primary" onClick={() => void redeem()}>
+          Redeem
+        </button>
+      </div>
+      {discountCode ? <p style={{ color: 'var(--c-success)', fontSize: 13, marginTop: 8 }}>Use code {discountCode} at checkout</p> : null}
+      {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p> : null}
+    </div>
+  )
+}
+
+type SubscriptionRow = {
+  id: string
+  status: string
+  interval: string
+  nextOrderDate: string
+  lines: Array<{ skuId: string; quantity: number }>
+}
+
+function SubscriptionsSection({
+  cartItems,
+  savedCards,
+}: {
+  cartItems: Array<{ skuId: string; warehouseId: string; quantity: number; skuName: string }>
+  savedCards: SavedCard[]
+}) {
+  const [rows, setRows] = useState<SubscriptionRow[]>([])
+  const [interval, setInterval] = useState<'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'>('MONTHLY')
+  const [savedPaymentMethodId, setSavedPaymentMethodId] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    void api.get<SubscriptionRow[]>('/subscriptions').then(setRows).catch(() => setRows([]))
+  }, [])
+
+  useEffect(() => {
+    const def = savedCards.find((c) => c.isDefault) ?? savedCards[0]
+    if (def) setSavedPaymentMethodId(def.id)
+  }, [savedCards])
+
+  async function pause(id: string) {
+    await api.post(`/subscriptions/${encodeURIComponent(id)}/pause`, {})
+    setRows(await api.get('/subscriptions'))
+  }
+
+  async function cancel(id: string) {
+    await api.post(`/subscriptions/${encodeURIComponent(id)}/cancel`, {})
+    setRows(await api.get('/subscriptions'))
+  }
+
+  async function createFromCart() {
+    if (!cartItems.length) {
+      setErr('Add items to your cart first.')
+      return
+    }
+    if (!savedPaymentMethodId) {
+      setErr('Save a payment method before subscribing.')
+      return
+    }
+    setCreating(true)
+    setErr(null)
+    try {
+      await api.post('/subscriptions', {
+        savedPaymentMethodId,
+        interval,
+        lines: cartItems.map((i) => ({
+          skuId: i.skuId,
+          warehouseId: i.warehouseId,
+          quantity: i.quantity,
+        })),
+      })
+      setRows(await api.get('/subscriptions'))
+    } catch (e: unknown) {
+      setErr(axiosErr(e))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="pleros-card" style={{ marginTop: 16 }}>
+      <h2 style={{ marginTop: 0, fontSize: 16 }}>Subscribe & save</h2>
+      {rows.length ? (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {rows.map((s) => (
+            <li key={s.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--c-border)' }}>
+              <span style={{ fontSize: 14 }}>
+                {s.status} · {s.interval} · next {new Date(s.nextOrderDate).toLocaleDateString()}
+              </span>
+              {s.status === 'ACTIVE' ? (
+                <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
+                  <button type="button" className="btn-ghost" onClick={() => void pause(s.id)}>
+                    Pause
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => void cancel(s.id)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p style={{ color: 'var(--c-text-3)', fontSize: 14, marginTop: 0 }}>No active subscriptions.</p>
+      )}
+      {cartItems.length && savedCards.length ? (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--c-border)' }}>
+          <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 0 }}>
+            Subscribe to {cartItems.length} cart item{cartItems.length === 1 ? '' : 's'} on a recurring schedule.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+            <select className="pleros-input" value={interval} onChange={(e) => setInterval(e.target.value as typeof interval)}>
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Every 2 weeks</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+            <select
+              className="pleros-input"
+              value={savedPaymentMethodId}
+              onChange={(e) => setSavedPaymentMethodId(e.target.value)}
+            >
+              {savedCards.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.brand ?? 'Card'} •••• {c.last4 ?? '????'}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn-primary" disabled={creating} onClick={() => void createFromCart()}>
+              {creating ? 'Creating…' : 'Subscribe from cart'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {err ? <p style={{ color: 'var(--c-danger)', fontSize: 13, marginTop: 8 }}>{err}</p> : null}
+    </div>
+  )
+}
+
 export default function AccountPage() {
   const navigate = useNavigate()
   const addItems = useCartStore((s) => s.addItems)
@@ -51,8 +219,8 @@ export default function AccountPage() {
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [templateName, setTemplateName] = useState('')
-  const [cardLast4, setCardLast4] = useState('')
-  const [cardBrand, setCardBrand] = useState('visa')
+  const [showAddCard, setShowAddCard] = useState(false)
+  const { stripePromise, chargesEnabled } = useStripeConnect(api.get.bind(api), 'account-stripe')
 
   const [phone, setPhone] = useState('')
   const [line1, setLine1] = useState('')
@@ -194,20 +362,16 @@ export default function AccountPage() {
     setTemplates((t) => t.filter((x) => x.id !== id))
   }
 
-  async function addSavedCard() {
-    if (!cardLast4.trim()) return
+  async function handleSaveCard(paymentMethodId: string) {
     setBusy(true)
+    setErr(null)
     try {
       const row = await api.post<SavedCard>('/saved-payment-methods', {
-        stripePaymentMethodId: `pm_demo_${cardLast4}`,
-        brand: cardBrand,
-        last4: cardLast4.trim(),
-        expMonth: 12,
-        expYear: new Date().getFullYear() + 3,
+        stripePaymentMethodId: paymentMethodId,
         isDefault: cards.length === 0,
       })
       setCards((c) => [row, ...c])
-      setCardLast4('')
+      setShowAddCard(false)
     } catch (e: unknown) {
       setErr(axiosErr(e))
     } finally {
@@ -227,68 +391,68 @@ export default function AccountPage() {
 
   if (!getB2bCustomerId() && !loading) {
     return (
-      <main className="cosmos-shop-page-main">
+      <main className="pleros-shop-page-main">
         <h1 style={{ fontSize: 24, color: 'var(--c-heading)' }}>Account</h1>
-        <p className="cosmos-shop-error" style={{ marginTop: 16 }}>
-          <Link to="/login" className="cosmos-shop-link-accent">Sign in</Link> to view your account.
+        <p className="pleros-shop-error" style={{ marginTop: 16 }}>
+          <Link to="/login" className="pleros-shop-link-accent">Sign in</Link> to view your account.
         </p>
       </main>
     )
   }
 
   return (
-    <main className="cosmos-shop-page-main">
+    <main className="pleros-shop-page-main">
       <h1 style={{ fontSize: 24, margin: 0, color: 'var(--c-heading)' }}>Your account</h1>
-      <p className="cosmos-shop-muted" style={{ marginTop: 8, fontSize: 14 }}>
+      <p className="pleros-shop-muted" style={{ marginTop: 8, fontSize: 14 }}>
         Credit terms, billing profile, and shipping address.
       </p>
-      {loading ? <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
-      {err ? <p className="cosmos-shop-error" style={{ marginTop: 16 }}>{err}</p> : null}
+      {loading ? <p className="pleros-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
+      {err ? <p className="pleros-shop-error" style={{ marginTop: 16 }}>{err}</p> : null}
       {saved ? <p style={{ color: 'var(--c-success)', marginTop: 12 }}>Profile saved.</p> : null}
 
       {profile ? (
         <div style={{ marginTop: 24, display: 'grid', gap: 20, maxWidth: 720 }}>
-          <div className="cosmos-card" style={{ padding: 16 }}>
+          <div className="pleros-card" style={{ padding: 16 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>{profile.name}</h2>
-            <p className="cosmos-shop-muted" style={{ fontSize: 14 }}>{profile.email ?? '—'}</p>
+            <p className="pleros-shop-muted" style={{ fontSize: 14 }}>{profile.email ?? '—'}</p>
             <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Credit limit</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Credit limit</div>
                 <div style={{ fontWeight: 600 }}>{credit.limit > 0 ? money(credit.limit) : '—'}</div>
               </div>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Credit used</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Credit used</div>
                 <div style={{ fontWeight: 600 }}>{money(credit.used)}</div>
               </div>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Available</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Available</div>
                 <div style={{ fontWeight: 600, color: 'var(--c-accent)' }}>{money(credit.available)}</div>
               </div>
               <div>
-                <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>Payment terms</div>
+                <div className="pleros-shop-muted" style={{ fontSize: 12 }}>Payment terms</div>
                 <div style={{ fontWeight: 600 }}>{profile.paymentTermsDays ?? 0} days NET</div>
               </div>
             </div>
           </div>
 
-          <div className="cosmos-card" style={{ padding: 16 }}>
+          <div className="pleros-card" style={{ padding: 16 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Contact & address</h2>
-            <label className="cosmos-shop-muted" style={{ fontSize: 12 }}>Phone</label>
-            <input className="cosmos-input" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ marginBottom: 12 }} />
-            <label className="cosmos-shop-muted" style={{ fontSize: 12 }}>Address line 1</label>
-            <input className="cosmos-input" value={line1} onChange={(e) => setLine1(e.target.value)} style={{ marginBottom: 12 }} />
+            <label className="pleros-shop-muted" style={{ fontSize: 12 }}>Phone</label>
+            <input className="pleros-input" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ marginBottom: 12 }} />
+            <label className="pleros-shop-muted" style={{ fontSize: 12 }}>Address line 1</label>
+            <input className="pleros-input" value={line1} onChange={(e) => setLine1(e.target.value)} style={{ marginBottom: 12 }} />
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
               <div>
-                <label className="cosmos-shop-muted" style={{ fontSize: 12 }}>City</label>
-                <input className="cosmos-input" value={city} onChange={(e) => setCity(e.target.value)} />
+                <label className="pleros-shop-muted" style={{ fontSize: 12 }}>City</label>
+                <input className="pleros-input" value={city} onChange={(e) => setCity(e.target.value)} />
               </div>
               <div>
-                <label className="cosmos-shop-muted" style={{ fontSize: 12 }}>State</label>
-                <input className="cosmos-input" value={state} onChange={(e) => setState(e.target.value)} />
+                <label className="pleros-shop-muted" style={{ fontSize: 12 }}>State</label>
+                <input className="pleros-input" value={state} onChange={(e) => setState(e.target.value)} />
               </div>
               <div>
-                <label className="cosmos-shop-muted" style={{ fontSize: 12 }}>ZIP</label>
-                <input className="cosmos-input" value={zip} onChange={(e) => setZip(e.target.value)} />
+                <label className="pleros-shop-muted" style={{ fontSize: 12 }}>ZIP</label>
+                <input className="pleros-input" value={zip} onChange={(e) => setZip(e.target.value)} />
               </div>
             </div>
             <button type="button" className="btn-primary" style={{ marginTop: 16 }} disabled={busy} onClick={() => void save()}>
@@ -296,9 +460,9 @@ export default function AccountPage() {
             </button>
           </div>
 
-          <div className="cosmos-card" style={{ padding: 16 }}>
+          <div className="pleros-card" style={{ padding: 16 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Notification preferences</h2>
-            <p className="cosmos-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
+            <p className="pleros-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
               Control email and SMS alerts for orders and invoices. SMS requires a phone number on your profile.
             </p>
             <div style={{ display: 'grid', gap: 10 }}>
@@ -332,14 +496,14 @@ export default function AccountPage() {
             </button>
           </div>
 
-          <div className="cosmos-card" style={{ padding: 16 }}>
+          <div className="pleros-card" style={{ padding: 16 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Order templates</h2>
-            <p className="cosmos-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
+            <p className="pleros-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
               Save your cart as a reusable order list with current contract prices applied when you reorder.
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <input
-                className="cosmos-input"
+                className="pleros-input"
                 placeholder="Template name"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
@@ -355,7 +519,7 @@ export default function AccountPage() {
               </button>
             </div>
             {templates.length === 0 ? (
-              <p className="cosmos-shop-muted" style={{ fontSize: 13 }}>No templates yet.</p>
+              <p className="pleros-shop-muted" style={{ fontSize: 13 }}>No templates yet.</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
                 {templates.map((t) => (
@@ -372,7 +536,7 @@ export default function AccountPage() {
                   >
                     <div>
                       <div style={{ fontWeight: 600 }}>{t.name}</div>
-                      <div className="cosmos-shop-muted" style={{ fontSize: 12 }}>
+                      <div className="pleros-shop-muted" style={{ fontSize: 12 }}>
                         {t.lines.length} line{t.lines.length === 1 ? '' : 's'}
                       </div>
                     </div>
@@ -390,13 +554,13 @@ export default function AccountPage() {
             )}
           </div>
 
-          <div className="cosmos-card" style={{ padding: 16 }}>
+          <div className="pleros-card" style={{ padding: 16 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Saved payment methods</h2>
-            <p className="cosmos-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
-              Store cards for faster checkout and invoice pay (demo entries use placeholder Stripe IDs).
+            <p className="pleros-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
+              Store cards securely for faster checkout and invoice pay.
             </p>
-            {cards.length === 0 ? (
-              <p className="cosmos-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>No saved cards.</p>
+            {cards.length === 0 && !showAddCard ? (
+              <p className="pleros-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>No saved cards.</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px', display: 'grid', gap: 8 }}>
                 {cards.map((c) => (
@@ -419,28 +583,42 @@ export default function AccountPage() {
                 ))}
               </ul>
             )}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <select className="cosmos-input" value={cardBrand} onChange={(e) => setCardBrand(e.target.value)} style={{ width: 100 }}>
-                <option value="visa">Visa</option>
-                <option value="mastercard">Mastercard</option>
-                <option value="amex">Amex</option>
-              </select>
-              <input
-                className="cosmos-input"
-                placeholder="Last 4 digits"
-                maxLength={4}
-                value={cardLast4}
-                onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, ''))}
-                style={{ width: 120 }}
-              />
-              <button type="button" className="btn-ghost" disabled={busy || cardLast4.length < 4} onClick={() => void addSavedCard()}>
-                Add card
+
+            {showAddCard ? (
+              stripePromise && chargesEnabled ? (
+                <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}>
+                  <Elements stripe={stripePromise} options={{ appearance: { theme: 'stripe' } }}>
+                    <StorefrontCardCapture onPaymentMethodId={(pmId) => void handleSaveCard(pmId)} />
+                  </Elements>
+                  <button type="button" className="btn-ghost" style={{ marginTop: 8 }} onClick={() => setShowAddCard(false)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <p className="pleros-shop-muted" style={{ fontSize: 13, marginTop: 8 }}>
+                  Card saving is unavailable until your distributor completes Stripe Connect onboarding.
+                </p>
+              )
+            ) : (
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setShowAddCard(true)}
+              >
+                + Add new card
               </button>
-            </div>
+            )}
           </div>
 
+          <LoyaltySection />
+          <SubscriptionsSection cartItems={cartItems} savedCards={cards} />
+
           <p style={{ fontSize: 13 }}>
-            <Link to="/invoices" className="cosmos-shop-link-accent">View open invoices →</Link>
+            <Link to="/gift-cards/purchase" className="pleros-shop-link-accent">Purchase a gift card →</Link>
+            {' · '}
+            <Link to="/account/expenses" className="pleros-shop-link-accent">Expense reports →</Link>
+            {' · '}
+            <Link to="/invoices" className="pleros-shop-link-accent">View open invoices →</Link>
           </p>
         </div>
       ) : null}
