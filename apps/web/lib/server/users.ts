@@ -16,15 +16,24 @@ export async function listUsers(tenantId: string, page = 1, pageSize = 20) {
         role: true,
         permissions: true,
         isActive: true,
+        emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
       },
     }),
     authDb.user.count({ where: { tenantId } }),
   ])
+  const sessions = await authDb.authSession.groupBy({
+    by: ['userId'],
+    where: { userId: { in: items.map((u) => u.id) }, revokedAt: null, expiresAt: { gt: new Date() } },
+    _count: { _all: true },
+  })
+  const sessionsByUser = new Map(sessions.map((s) => [s.userId, s._count._all]))
   return {
-    items: items.map((u) => ({
+    items: items.map(({ emailVerifiedAt, ...u }) => ({
       ...u,
+      emailVerified: Boolean(emailVerifiedAt),
+      activeSessions: sessionsByUser.get(u.id) ?? 0,
       permissions: Array.isArray(u.permissions)
         ? (u.permissions as string[])
         : typeof u.permissions === 'string'
@@ -38,9 +47,17 @@ export async function listUsers(tenantId: string, page = 1, pageSize = 20) {
   }
 }
 
+/** Super admins are platform accounts: only the server CLI (npm run users) may change them. */
+function assertNotSuperAdmin(user: { role: string }) {
+  if (user.role === 'SUPER_ADMIN') {
+    throw new ApiError(403, 'Super admin accounts are managed from the server CLI (npm run users)')
+  }
+}
+
 export async function deactivateUser(tenantId: string, id: string) {
   const user = await authDb.user.findFirst({ where: { id, tenantId } })
   if (!user) throw new ApiError(404, 'User not found')
+  assertNotSuperAdmin(user)
   const updated = await authDb.user.update({
     where: { id },
     data: { isActive: false },
@@ -70,6 +87,7 @@ export async function updateUser(
 ) {
   const user = await authDb.user.findFirst({ where: { id, tenantId } })
   if (!user) throw new ApiError(404, 'User not found')
+  assertNotSuperAdmin(user)
 
   if (patch.role !== undefined && !(ASSIGNABLE_ROLES as readonly string[]).includes(patch.role)) {
     throw new ApiError(400, `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`)

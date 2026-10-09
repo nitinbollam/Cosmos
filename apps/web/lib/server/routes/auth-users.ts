@@ -115,5 +115,23 @@ export async function routeUsers(method: string, seg: string[], req: Request): P
     if (seg[1] === session.userId) throw new ApiError(400, 'You cannot deactivate your own account')
     return Response.json(await users.deactivateUser(session.tenantId, seg[1]))
   }
+  // Account recovery for a company's own users. Same rules as the CLI, scoped to this company:
+  // no acting on other companies' users, on super admins, or on yourself.
+  if (seg.length === 3 && method === 'POST') {
+    const userAdmin = await import('../user-admin')
+    const actor: import('../user-admin').Actor = { kind: 'tenant-admin', userId: session.userId, tenantId: session.tenantId }
+    switch (seg[2]) {
+      case 'reset-password':
+        return Response.json(await userAdmin.setPassword(seg[1], undefined, actor))
+      case 'reset-link':
+        return Response.json(await userAdmin.emailPasswordReset(seg[1], actor))
+      case 'revoke-sessions':
+        return Response.json(await userAdmin.revokeSessions(seg[1], actor))
+      case 'reactivate':
+        return Response.json(await userAdmin.setActive(seg[1], true, actor))
+      case 'verify-email':
+        return Response.json(await userAdmin.markEmailVerified(seg[1], actor))
+    }
+  }
   throw new ApiError(404, 'User route not found')
 }

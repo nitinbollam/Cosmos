@@ -418,7 +418,19 @@ export async function resendEmailVerification(
 export async function requestPasswordReset(email: string): Promise<void> {
   const user = await prisma.user.findFirst({ where: { email: email.trim().toLowerCase(), isActive: true } })
   if (!user) return
+  await sendPasswordResetLink(user)
+}
 
+/**
+ * Issue a 30-minute reset token for one specific user and email the link. By id rather than
+ * email because the same address can belong to users in several tenants.
+ */
+export async function sendPasswordResetLink(user: {
+  id: string
+  email: string
+  tenantId: string
+  firstName: string
+}): Promise<void> {
   const token = randomBytes(32).toString('hex')
   await prisma.user.update({
     where: { id: user.id },

@@ -18,6 +18,8 @@ export type UserRow = {
   role: string
   permissions?: string[] | null
   isActive: boolean
+  emailVerified?: boolean
+  activeSessions?: number
   lastLoginAt?: string | null
   createdAt?: string
 }
