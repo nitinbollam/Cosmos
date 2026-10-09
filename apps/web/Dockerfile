@@ -35,8 +35,7 @@ RUN npm run build -w @pleros/client
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-RUN addgroup --system --gid 1001 cosmos && adduser --system --uid 1001 cosmos
-RUN mkdir -p /app/apps/web/.data && chown -R cosmos:cosmos /app/apps/web/.data
+RUN addgroup --system --gid 1001 pleros && adduser --system --uid 1001 pleros
 COPY --from=builder /repo/node_modules ./node_modules
 COPY --from=builder /repo/package.json ./package.json
 COPY --from=builder /repo/apps/client/dist ./apps/client/dist
