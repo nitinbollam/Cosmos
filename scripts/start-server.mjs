@@ -30,4 +30,17 @@ if (process.env.PLEROS_SKIP_DB_MIGRATE !== '1') {
   }
 }
 
+// Opt-in demo data for a fresh staging database: set PLEROS_SEED_DEMO=1, deploy once, then
+// remove the variable. The seed upserts, so it never duplicates rows — but while the flag is on,
+// every boot resets the demo records (passwords, stock levels) back to their seeded values.
+if (process.env.PLEROS_SEED_DEMO === '1') {
+  try {
+    console.log('[start] PLEROS_SEED_DEMO=1 — seeding demo data (remove the variable after this deploy)…')
+    execSync('npm run seed', { cwd: ROOT, stdio: 'inherit' })
+  } catch (err) {
+    // Demo data is a convenience; never block the app from starting because of it.
+    console.error('[start] demo seed failed:', err)
+  }
+}
+
 execSync('npx tsx apps/client/server/index.ts', { cwd: ROOT, stdio: 'inherit' })
