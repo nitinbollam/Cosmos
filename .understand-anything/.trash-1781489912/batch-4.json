@@ -1,0 +1,1357 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/web/lib/server/po-receiving.test.ts",
+      "type": "file",
+      "name": "po-receiving.test.ts",
+      "filePath": "apps/web/lib/server/po-receiving.test.ts",
+      "summary": "Smoke-test file for the purchase order receiving module, importing po-receiving and session to verify basic module loading.",
+      "tags": ["test", "purchasing", "smoke-test"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/po-receiving.ts",
+      "type": "file",
+      "name": "po-receiving.ts",
+      "filePath": "apps/web/lib/server/po-receiving.ts",
+      "summary": "Implements the core goods-receiving workflow for purchase orders, including receipt validation, inventory posting, PO status refresh, and AP payment recording against received goods.",
+      "tags": ["service", "purchasing", "inventory", "receiving"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/po-receiving.ts:getPurchaseOrderForReceiving",
+      "type": "function",
+      "name": "getPurchaseOrderForReceiving",
+      "filePath": "apps/web/lib/server/po-receiving.ts",
+      "lineRange": [15, 22],
+      "summary": "Fetches a purchase order with its lines for the receiving workflow by tenant and PO id.",
+      "tags": ["utility", "purchasing", "data-access"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/po-receiving.ts:validateAndApplyPoLineReceipts",
+      "type": "function",
+      "name": "validateAndApplyPoLineReceipts",
+      "filePath": "apps/web/lib/server/po-receiving.ts",
+      "lineRange": [33, 64],
+      "summary": "Validates receipt quantities against PO lines and persists received quantities in a database transaction, then refreshes PO status.",
+      "tags": ["service", "purchasing", "validation", "transaction"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/po-receiving.ts:postInventoryForPoReceipts",
+      "type": "function",
+      "name": "postInventoryForPoReceipts",
+      "filePath": "apps/web/lib/server/po-receiving.ts",
+      "lineRange": [86, 128],
+      "summary": "Looks up SKUs by code and calls receiveStock for each received PO line, propagating unit cost to the inventory ledger.",
+      "tags": ["service", "inventory", "purchasing"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/po-receiving.ts:receivePurchaseOrderGoods",
+      "type": "function",
+      "name": "receivePurchaseOrderGoods",
+      "filePath": "apps/web/lib/server/po-receiving.ts",
+      "lineRange": [208, 240],
+      "summary": "Orchestrates the full goods-receipt flow: validates and applies PO line receipts, posts inventory, and triggers AP bill creation.",
+      "tags": ["service", "purchasing", "orchestration"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/po-receiving.ts:recordPoPayment",
+      "type": "function",
+      "name": "recordPoPayment",
+      "filePath": "apps/web/lib/server/po-receiving.ts",
+      "lineRange": [242, 282],
+      "summary": "Records a payment against a purchase order, optionally synchronizing with the AP bill and posting an AP payment journal entry.",
+      "tags": ["service", "purchasing", "payment", "accounting"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/pos-receipt.ts",
+      "type": "file",
+      "name": "pos-receipt.ts",
+      "filePath": "apps/web/lib/server/pos-receipt.ts",
+      "summary": "Generates an HTML receipt document for a point-of-sale order, querying order and tenant data then rendering a styled receipt template.",
+      "tags": ["service", "pos", "html-generation", "receipt"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/pos-receipt.ts:buildPosReceiptHtml",
+      "type": "function",
+      "name": "buildPosReceiptHtml",
+      "filePath": "apps/web/lib/server/pos-receipt.ts",
+      "lineRange": [12, 69],
+      "summary": "Fetches tenant and order data and renders an HTML receipt with line items, totals, tax, and payment info for a POS transaction.",
+      "tags": ["utility", "html-generation", "pos"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/pos.ts",
+      "type": "file",
+      "name": "pos.ts",
+      "filePath": "apps/web/lib/server/pos.ts",
+      "summary": "Provides point-of-sale register management and order creation, orchestrating stock commitment, serial enforcement, order status transitions, and audit logging for POS transactions.",
+      "tags": ["service", "pos", "order-management", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/pos.ts:createPosOrder",
+      "type": "function",
+      "name": "createPosOrder",
+      "filePath": "apps/web/lib/server/pos.ts",
+      "lineRange": [22, 103],
+      "summary": "Creates a POS order end-to-end: validates feature flags, creates the base order, checks payment, commits inventory, enforces serial tracking, transitions order status, and writes an audit log.",
+      "tags": ["service", "pos", "orchestration", "order-management"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/pricing.ts",
+      "type": "file",
+      "name": "pricing.ts",
+      "filePath": "apps/web/lib/server/pricing.ts",
+      "summary": "Manages customer-specific pricing contracts and volume price breaks, providing resolution logic that applies tiered pricing when determining unit prices for orders.",
+      "tags": ["service", "pricing", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/pricing.ts:resolvePricesForCustomer",
+      "type": "function",
+      "name": "resolvePricesForCustomer",
+      "filePath": "apps/web/lib/server/pricing.ts",
+      "lineRange": [71, 123],
+      "summary": "Resolves effective unit prices for a set of SKUs for a given customer, combining contract prices, volume break pricing, and list prices into a result map.",
+      "tags": ["service", "pricing", "utility"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/pricing.ts:assertOrderLinePrices",
+      "type": "function",
+      "name": "assertOrderLinePrices",
+      "filePath": "apps/web/lib/server/pricing.ts",
+      "lineRange": [136, 154],
+      "summary": "Validates that each order line's submitted unit price matches the resolved customer price within a tolerance, throwing if any mismatch is detected.",
+      "tags": ["validation", "pricing"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/purchasing.ts",
+      "type": "file",
+      "name": "purchasing.ts",
+      "filePath": "apps/web/lib/server/purchasing.ts",
+      "summary": "Exposes the full purchase order lifecycle (create, submit, cancel, receive, payment) and supplier CRUD, delegating goods-receipt logic to po-receiving.",
+      "tags": ["service", "purchasing", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/purchasing.ts:createPurchaseOrder",
+      "type": "function",
+      "name": "createPurchaseOrder",
+      "filePath": "apps/web/lib/server/purchasing.ts",
+      "lineRange": [45, 75],
+      "summary": "Creates a new purchase order with line items after validating the supplier exists within the tenant.",
+      "tags": ["service", "purchasing"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/purchasing.ts:updatePurchaseOrderLandedCosts",
+      "type": "function",
+      "name": "updatePurchaseOrderLandedCosts",
+      "filePath": "apps/web/lib/server/purchasing.ts",
+      "lineRange": [117, 143],
+      "summary": "Updates freight, duty, and insurance landed-cost fields on a purchase order and persists the changes.",
+      "tags": ["service", "purchasing", "landed-cost"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/quotes.ts",
+      "type": "file",
+      "name": "quotes.ts",
+      "filePath": "apps/web/lib/server/quotes.ts",
+      "summary": "Manages B2B quote lifecycle including creation, approval workflow, counter-offers, and conversion to sales orders, integrating with CRM and inventory for line resolution.",
+      "tags": ["service", "crm", "quote", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/quotes.ts:createQuote",
+      "type": "function",
+      "name": "createQuote",
+      "filePath": "apps/web/lib/server/quotes.ts",
+      "lineRange": [33, 61],
+      "summary": "Creates a new B2B quote record with line items in the storefront database for the given tenant.",
+      "tags": ["service", "crm", "quote"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/quotes.ts:submitQuote",
+      "type": "function",
+      "name": "submitQuote",
+      "filePath": "apps/web/lib/server/quotes.ts",
+      "lineRange": [130, 168],
+      "summary": "Converts an approved B2B quote into a sales order by resolving line items and customer identity, then marks the quote as submitted.",
+      "tags": ["service", "crm", "order-management"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/saved-payment-methods.ts",
+      "type": "file",
+      "name": "saved-payment-methods.ts",
+      "filePath": "apps/web/lib/server/saved-payment-methods.ts",
+      "summary": "Manages customer saved payment methods (card/ACH tokens), supporting list, save, delete, and default-setting operations against the payment database.",
+      "tags": ["service", "payment", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/search.ts",
+      "type": "file",
+      "name": "search.ts",
+      "filePath": "apps/web/lib/server/search.ts",
+      "summary": "Provides a cross-entity global search function querying orders, customers, SKUs, and B2B quotes simultaneously using full-text prefix matching.",
+      "tags": ["service", "search", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/session.ts",
+      "type": "file",
+      "name": "session.ts",
+      "filePath": "apps/web/lib/server/session.ts",
+      "summary": "Provides JWT-based session management including token verification, role-assertion helpers, an ApiError class, and user-state caching with cache invalidation.",
+      "tags": ["service", "authentication", "middleware", "session"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/session.ts:getSession",
+      "type": "function",
+      "name": "getSession",
+      "filePath": "apps/web/lib/server/session.ts",
+      "lineRange": [43, 68],
+      "summary": "Parses and verifies the Bearer JWT from a request, then revalidates the user's active status and tenant membership, returning a typed session object.",
+      "tags": ["authentication", "middleware", "session"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:apps/web/lib/server/session.ts:ApiError",
+      "type": "class",
+      "name": "ApiError",
+      "filePath": "apps/web/lib/server/session.ts",
+      "lineRange": [76, 83],
+      "summary": "Custom error class carrying an HTTP status code and message for structured API error responses.",
+      "tags": ["utility", "error-handling"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/stripe.ts",
+      "type": "file",
+      "name": "stripe.ts",
+      "filePath": "apps/web/lib/server/stripe.ts",
+      "summary": "Wraps the Stripe SDK to provide payment intent authorization, ACH processing, capture, void, refund, and webhook signature verification for the ERP payment subsystem.",
+      "tags": ["service", "payment", "stripe", "integration"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/stripe.ts:authorizePayment",
+      "type": "function",
+      "name": "authorizePayment",
+      "filePath": "apps/web/lib/server/stripe.ts",
+      "lineRange": [36, 58],
+      "summary": "Creates a Stripe PaymentIntent in manual-capture mode for card authorization, returning the intent ID and client secret.",
+      "tags": ["service", "payment", "stripe"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/tenant-tax.ts",
+      "type": "file",
+      "name": "tenant-tax.ts",
+      "filePath": "apps/web/lib/server/tenant-tax.ts",
+      "summary": "Manages per-tenant sales tax rate configuration stored in the tenant organization record, providing get and update helpers.",
+      "tags": ["service", "tax", "tenant"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/tenant.ts",
+      "type": "file",
+      "name": "tenant.ts",
+      "filePath": "apps/web/lib/server/tenant.ts",
+      "summary": "Provides tenant management operations including profile patching, plan updates, onboarding step tracking, and team invitation creation and revocation.",
+      "tags": ["service", "tenant", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/tenant.ts:createInvite",
+      "type": "function",
+      "name": "createInvite",
+      "filePath": "apps/web/lib/server/tenant.ts",
+      "lineRange": [136, 172],
+      "summary": "Creates a team invite token for a given email/role, persists it with expiry, and fires an invite notification email.",
+      "tags": ["service", "tenant", "notification"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/tenant.ts:patchOnboardingStep",
+      "type": "function",
+      "name": "patchOnboardingStep",
+      "filePath": "apps/web/lib/server/tenant.ts",
+      "lineRange": [94, 124],
+      "summary": "Updates a specific onboarding step's completion state and marks the tenant as fully onboarded when all steps are done.",
+      "tags": ["service", "tenant", "onboarding"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/tier2.test.ts",
+      "type": "file",
+      "name": "tier2.test.ts",
+      "filePath": "apps/web/lib/server/tier2.test.ts",
+      "summary": "Integration test file for Tier 2 ERP features, exercising compliance tax, credit limit, and dispatch order modules.",
+      "tags": ["test", "compliance", "credit", "dispatch"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/tier8.test.ts",
+      "type": "file",
+      "name": "tier8.test.ts",
+      "filePath": "apps/web/lib/server/tier8.test.ts",
+      "summary": "Integration test file for Tier 8 ERP features, exercising AP bills, compliance tax, and general ledger journal posting modules.",
+      "tags": ["test", "accounting", "compliance", "ap-bills"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/users.ts",
+      "type": "file",
+      "name": "users.ts",
+      "filePath": "apps/web/lib/server/users.ts",
+      "summary": "Provides paginated user listing, user deactivation, and role/profile update operations for tenant administrators, invalidating session cache on changes.",
+      "tags": ["service", "user-management", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/users.ts:updateUser",
+      "type": "function",
+      "name": "updateUser",
+      "filePath": "apps/web/lib/server/users.ts",
+      "lineRange": [50, 78],
+      "summary": "Updates a user's role and profile fields, validates against the allowed role list, and invalidates the session cache to force revalidation.",
+      "tags": ["service", "user-management"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/wave-picking.ts",
+      "type": "file",
+      "name": "wave-picking.ts",
+      "filePath": "apps/web/lib/server/wave-picking.ts",
+      "summary": "Manages warehouse pick wave creation, lifecycle (start, complete), and detailed pick wave retrieval with bin-sorted pick lines using the pick-bin-resolver.",
+      "tags": ["service", "wms", "picking", "warehouse"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/web/lib/server/wave-picking.ts:getPickWaveDetail",
+      "type": "function",
+      "name": "getPickWaveDetail",
+      "filePath": "apps/web/lib/server/wave-picking.ts",
+      "lineRange": [74, 116],
+      "summary": "Returns a full pick wave with enriched pick lines (bin locations resolved) sorted by bin code for optimized picker routing.",
+      "tags": ["service", "wms", "picking"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/webhooks.ts",
+      "type": "file",
+      "name": "webhooks.ts",
+      "filePath": "apps/web/lib/server/webhooks.ts",
+      "summary": "Manages webhook subscription CRUD with SSRF protection (private IP blocking, DNS resolution check) and HMAC-SHA256 payload signing, plus a test-fire endpoint.",
+      "tags": ["service", "webhooks", "security", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/webhooks.ts:assertSafeWebhookUrl",
+      "type": "function",
+      "name": "assertSafeWebhookUrl",
+      "filePath": "apps/web/lib/server/webhooks.ts",
+      "lineRange": [31, 59],
+      "summary": "Validates a webhook URL is not targeting private/internal IP ranges by checking both direct IP addresses and DNS-resolved addresses, guarding against SSRF attacks.",
+      "tags": ["security", "validation", "webhooks"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "type": "file",
+      "name": "wms-cycle-count.ts",
+      "filePath": "apps/web/lib/server/wms-cycle-count.ts",
+      "summary": "Manages warehouse cycle count workflows including creation with smart line selection (ABC/random/location modes), count entry, approval, and inventory adjustment posting.",
+      "tags": ["service", "wms", "inventory", "cycle-count"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-cycle-count.ts:approveCycleCount",
+      "type": "function",
+      "name": "approveCycleCount",
+      "filePath": "apps/web/lib/server/wms-cycle-count.ts",
+      "lineRange": [205, 275],
+      "summary": "Approves a cycle count by computing adjustment deltas for each variance line and posting stock adjustments to inventory, collecting any errors before marking the count closed.",
+      "tags": ["service", "wms", "inventory", "cycle-count"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-cycle-count.ts:createCycleCount",
+      "type": "function",
+      "name": "createCycleCount",
+      "filePath": "apps/web/lib/server/wms-cycle-count.ts",
+      "lineRange": [62, 99],
+      "summary": "Creates a cycle count record and populates its lines by selecting stock levels based on the configured count type (ABC, random, or location-based).",
+      "tags": ["service", "wms", "cycle-count"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "type": "file",
+      "name": "wms-fulfillment.ts",
+      "filePath": "apps/web/lib/server/wms-fulfillment.ts",
+      "summary": "Core WMS fulfillment module managing pick task lifecycle from creation through line confirmation, packing, and dispatch, including labor event recording and bin-enriched line display.",
+      "tags": ["service", "wms", "fulfillment", "picking"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-fulfillment.ts:confirmPickLine",
+      "type": "function",
+      "name": "confirmPickLine",
+      "filePath": "apps/web/lib/server/wms-fulfillment.ts",
+      "lineRange": [225, 281],
+      "summary": "Records a picker's confirmation of a pick line quantity, updates pick and task status, fires a labor event, and returns the refreshed task.",
+      "tags": ["service", "wms", "picking"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-fulfillment.ts:listFulfillmentTasks",
+      "type": "function",
+      "name": "listFulfillmentTasks",
+      "filePath": "apps/web/lib/server/wms-fulfillment.ts",
+      "lineRange": [143, 223],
+      "summary": "Lists fulfillment tasks with optional status, warehouse, and order filters, enriching each task's pick lines with bin location data.",
+      "tags": ["service", "wms", "fulfillment"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-fulfillment.ts:markFulfillmentPacked",
+      "type": "function",
+      "name": "markFulfillmentPacked",
+      "filePath": "apps/web/lib/server/wms-fulfillment.ts",
+      "lineRange": [334, 353],
+      "summary": "Transitions a fulfillment task to PACKED status after verifying all pick lines are picked, and triggers the order-orchestration packed callback.",
+      "tags": ["service", "wms", "fulfillment"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/web/lib/server/wms-labor.ts",
+      "type": "file",
+      "name": "wms-labor.ts",
+      "filePath": "apps/web/lib/server/wms-labor.ts",
+      "summary": "Records warehouse labor events (pick, putaway, receive) and computes per-worker productivity metrics over a rolling time window.",
+      "tags": ["service", "wms", "labor", "analytics"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/wms-putaway.ts",
+      "type": "file",
+      "name": "wms-putaway.ts",
+      "filePath": "apps/web/lib/server/wms-putaway.ts",
+      "summary": "Manages WMS putaway tasks generated from receiving sessions, providing bin suggestion, task creation, and line confirmation with stock bin-level updates.",
+      "tags": ["service", "wms", "putaway", "receiving"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-putaway.ts:confirmPutawayLine",
+      "type": "function",
+      "name": "confirmPutawayLine",
+      "filePath": "apps/web/lib/server/wms-putaway.ts",
+      "lineRange": [73, 153],
+      "summary": "Confirms a putaway line by validating the target bin, moving stock to the bin location, updating task completion status, and recording a labor event.",
+      "tags": ["service", "wms", "putaway", "inventory"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/web/lib/server/wms-receiving.ts",
+      "type": "file",
+      "name": "wms-receiving.ts",
+      "filePath": "apps/web/lib/server/wms-receiving.ts",
+      "summary": "Manages WMS receiving sessions for scanning goods into the warehouse, including PO-linked pre-population, item scan, session completion with inventory receipt, and putaway task creation.",
+      "tags": ["service", "wms", "receiving", "inventory"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-receiving.ts:completeReceivingSession",
+      "type": "function",
+      "name": "completeReceivingSession",
+      "filePath": "apps/web/lib/server/wms-receiving.ts",
+      "lineRange": [163, 267],
+      "summary": "Finalizes a receiving session by posting stock receipts to inventory, syncing PO receipt records, updating backorder fills, and spawning a putaway task.",
+      "tags": ["service", "wms", "receiving", "orchestration"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/web/lib/server/wms-receiving.ts:scanReceivingItem",
+      "type": "function",
+      "name": "scanReceivingItem",
+      "filePath": "apps/web/lib/server/wms-receiving.ts",
+      "lineRange": [78, 152],
+      "summary": "Processes a barcode scan during receiving, resolving the SKU, matching against expected items, and creating or updating receiving item records.",
+      "tags": ["service", "wms", "receiving"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/web/lib/server/po-receiving.test.ts",
+      "target": "file:apps/web/lib/server/po-receiving.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.test.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.test.ts",
+      "target": "file:apps/web/lib/server/po-receiving.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:getPurchaseOrderForReceiving",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:validateAndApplyPoLineReceipts",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:postInventoryForPoReceipts",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:receivePurchaseOrderGoods",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:recordPoPayment",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:getPurchaseOrderForReceiving",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:validateAndApplyPoLineReceipts",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:postInventoryForPoReceipts",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:receivePurchaseOrderGoods",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/po-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:recordPoPayment",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/pos-receipt.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pos-receipt.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pos-receipt.ts",
+      "target": "function:apps/web/lib/server/pos-receipt.ts:buildPosReceiptHtml",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/pos-receipt.ts",
+      "target": "function:apps/web/lib/server/pos-receipt.ts:buildPosReceiptHtml",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/pos.ts",
+      "target": "file:apps/web/lib/server/audit-log.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pos.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pos.ts",
+      "target": "file:apps/web/lib/server/feature-flags.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pos.ts",
+      "target": "file:apps/web/lib/server/orders.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pos.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pos.ts",
+      "target": "function:apps/web/lib/server/pos.ts:createPosOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/pos.ts",
+      "target": "function:apps/web/lib/server/pos.ts:createPosOrder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/pricing.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pricing.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/pricing.ts",
+      "target": "function:apps/web/lib/server/pricing.ts:resolvePricesForCustomer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/pricing.ts",
+      "target": "function:apps/web/lib/server/pricing.ts:assertOrderLinePrices",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/pricing.ts",
+      "target": "function:apps/web/lib/server/pricing.ts:resolvePricesForCustomer",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/pricing.ts",
+      "target": "function:apps/web/lib/server/pricing.ts:assertOrderLinePrices",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "file:apps/web/lib/server/po-receiving.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "function:apps/web/lib/server/purchasing.ts:createPurchaseOrder",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "function:apps/web/lib/server/purchasing.ts:updatePurchaseOrderLandedCosts",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "function:apps/web/lib/server/purchasing.ts:createPurchaseOrder",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "function:apps/web/lib/server/purchasing.ts:updatePurchaseOrderLandedCosts",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:receivePurchaseOrderGoods",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/purchasing.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:recordPoPayment",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "file:apps/web/lib/server/crm.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "file:apps/web/lib/server/orders.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "function:apps/web/lib/server/quotes.ts:createQuote",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "function:apps/web/lib/server/quotes.ts:submitQuote",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "function:apps/web/lib/server/quotes.ts:createQuote",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/quotes.ts",
+      "target": "function:apps/web/lib/server/quotes.ts:submitQuote",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/saved-payment-methods.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/saved-payment-methods.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/search.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/session.ts",
+      "target": "file:apps/web/lib/server/env.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/session.ts",
+      "target": "function:apps/web/lib/server/session.ts:getSession",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/session.ts",
+      "target": "class:apps/web/lib/server/session.ts:ApiError",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/session.ts",
+      "target": "function:apps/web/lib/server/session.ts:getSession",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/session.ts",
+      "target": "class:apps/web/lib/server/session.ts:ApiError",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/tenant-tax.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tenant.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tenant.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tenant.ts",
+      "target": "function:apps/web/lib/server/tenant.ts:createInvite",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/tenant.ts",
+      "target": "function:apps/web/lib/server/tenant.ts:patchOnboardingStep",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/tenant.ts",
+      "target": "function:apps/web/lib/server/tenant.ts:createInvite",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/tenant.ts",
+      "target": "function:apps/web/lib/server/tenant.ts:patchOnboardingStep",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/tier2.test.ts",
+      "target": "file:apps/web/lib/server/compliance-tax.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tier2.test.ts",
+      "target": "file:apps/web/lib/server/credit-limit.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tier2.test.ts",
+      "target": "file:apps/web/lib/server/dispatch-order.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tier8.test.ts",
+      "target": "file:apps/web/lib/server/ap-bills.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tier8.test.ts",
+      "target": "file:apps/web/lib/server/compliance-tax.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/tier8.test.ts",
+      "target": "file:apps/web/lib/server/operations-gl.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/users.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/users.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/users.ts",
+      "target": "function:apps/web/lib/server/users.ts:updateUser",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/users.ts",
+      "target": "function:apps/web/lib/server/users.ts:updateUser",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/users.ts",
+      "target": "function:apps/web/lib/server/session.ts:getSession",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wave-picking.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wave-picking.ts",
+      "target": "file:apps/web/lib/server/pick-bin-resolver.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wave-picking.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wave-picking.ts",
+      "target": "function:apps/web/lib/server/wave-picking.ts:getPickWaveDetail",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wave-picking.ts",
+      "target": "function:apps/web/lib/server/wave-picking.ts:getPickWaveDetail",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/webhooks.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/webhooks.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/webhooks.ts",
+      "target": "function:apps/web/lib/server/webhooks.ts:assertSafeWebhookUrl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/webhooks.ts",
+      "target": "function:apps/web/lib/server/webhooks.ts:assertSafeWebhookUrl",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "file:apps/web/lib/server/cycle-count-adjust.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "function:apps/web/lib/server/wms-cycle-count.ts:approveCycleCount",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "function:apps/web/lib/server/wms-cycle-count.ts:createCycleCount",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "function:apps/web/lib/server/wms-cycle-count.ts:approveCycleCount",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-cycle-count.ts",
+      "target": "function:apps/web/lib/server/wms-cycle-count.ts:createCycleCount",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "file:apps/web/lib/server/pick-bin-resolver.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "file:apps/web/lib/server/pick-line-status.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "function:apps/web/lib/server/wms-fulfillment.ts:confirmPickLine",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "function:apps/web/lib/server/wms-fulfillment.ts:listFulfillmentTasks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "function:apps/web/lib/server/wms-fulfillment.ts:markFulfillmentPacked",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "function:apps/web/lib/server/wms-fulfillment.ts:confirmPickLine",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "function:apps/web/lib/server/wms-fulfillment.ts:listFulfillmentTasks",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-fulfillment.ts",
+      "target": "function:apps/web/lib/server/wms-fulfillment.ts:markFulfillmentPacked",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-labor.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-putaway.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-putaway.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-putaway.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-putaway.ts",
+      "target": "file:apps/web/lib/server/wms-labor.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-putaway.ts",
+      "target": "function:apps/web/lib/server/wms-putaway.ts:confirmPutawayLine",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-putaway.ts",
+      "target": "function:apps/web/lib/server/wms-putaway.ts:confirmPutawayLine",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-putaway.ts",
+      "target": "file:apps/web/lib/server/wms-labor.ts",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "file:apps/web/lib/server/db.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "file:apps/web/lib/server/inventory.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "file:apps/web/lib/server/po-receiving.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "file:apps/web/lib/server/session.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "function:apps/web/lib/server/wms-receiving.ts:completeReceivingSession",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "function:apps/web/lib/server/wms-receiving.ts:scanReceivingItem",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "function:apps/web/lib/server/wms-receiving.ts:completeReceivingSession",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "function:apps/web/lib/server/wms-receiving.ts:scanReceivingItem",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:getPurchaseOrderForReceiving",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/wms-receiving.ts",
+      "target": "function:apps/web/lib/server/po-receiving.ts:syncPurchaseOrderFromSkuReceipts",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ]
+}

@@ -1,0 +1,828 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/client/src/pages/admin/customers/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/customers/page.tsx",
+      "summary": "Admin customers list page that fetches, displays, and creates customer records using React Query mutations with an inline creation form.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/customers/page.tsx:CustomersPage",
+      "type": "function",
+      "name": "CustomersPage",
+      "filePath": "apps/client/src/pages/admin/customers/page.tsx",
+      "lineRange": [15, 106],
+      "summary": "Default-exported React page component that renders the customer list and handles customer creation via a mutation form.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "summary": "Dynamic route detail page for a specific dispatch route, allowing driver assignment and per-stop delivery/failure status updates.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx:DispatchRouteDetailPage",
+      "type": "function",
+      "name": "DispatchRouteDetailPage",
+      "filePath": "apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "lineRange": [48, 213],
+      "summary": "Page component for a single dispatch route, showing route metadata, stop list with delivery actions, and driver assignment UI.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/dispatch/page.tsx",
+      "summary": "Full dispatch management page with route listing, drag-and-drop stop reordering, driver assignment, POD photo modal, and route creation drawer.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex",
+      "languageNotes": "Uses @dnd-kit for drag-and-drop sortable stop rows and OpenStreetMap embeds for route map visualization."
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/dispatch/page.tsx:DispatchPage",
+      "type": "function",
+      "name": "DispatchPage",
+      "filePath": "apps/client/src/pages/admin/dispatch/page.tsx",
+      "lineRange": [133, 141],
+      "summary": "Thin shell component that wraps the DispatchDashboard, acting as the default route export.",
+      "tags": ["component", "entry-point"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/dispatch/page.tsx:DispatchDashboard",
+      "type": "function",
+      "name": "DispatchDashboard",
+      "filePath": "apps/client/src/pages/admin/dispatch/page.tsx",
+      "lineRange": [143, 468],
+      "summary": "Core dispatch dashboard that manages route selection, date filtering, stop reordering, driver assignment, and POD/failure actions.",
+      "tags": ["component", "api-handler", "event-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/dispatch/page.tsx:CreateRouteDrawer",
+      "type": "function",
+      "name": "CreateRouteDrawer",
+      "filePath": "apps/client/src/pages/admin/dispatch/page.tsx",
+      "lineRange": [704, 895],
+      "summary": "Slide-out drawer for creating new dispatch routes by selecting orders and composing delivery stops.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/inventory/page.tsx",
+      "summary": "Comprehensive inventory management page featuring SKU listing with search/filter/pagination, stock editing, adjustment modal, and spreadsheet import.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/inventory/page.tsx:InventoryPage",
+      "type": "function",
+      "name": "InventoryPage",
+      "filePath": "apps/client/src/pages/admin/inventory/page.tsx",
+      "lineRange": [87, 622],
+      "summary": "Main inventory page component handling SKU queries, stock mutations, spreadsheet import, inventory adjustment, and ledger history.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/inventory/page.tsx:SkuDrawer",
+      "type": "function",
+      "name": "SkuDrawer",
+      "filePath": "apps/client/src/pages/admin/inventory/page.tsx",
+      "lineRange": [624, 956],
+      "summary": "Slide-out drawer component for creating or editing a SKU record including stock level fields per warehouse.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/orders/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/orders/page.tsx",
+      "summary": "Admin orders list page with search, status filter, pagination, and inline order creation, linking to individual order detail pages.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/orders/page.tsx:OrdersPage",
+      "type": "function",
+      "name": "OrdersPage",
+      "filePath": "apps/client/src/pages/admin/orders/page.tsx",
+      "lineRange": [56, 283],
+      "summary": "Orders list page component with filtering, mutation for new order creation, and navigation to individual order detail pages.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/page.tsx",
+      "summary": "Admin dashboard home page rendering KPI bento cards, sparklines, donut charts, recent orders, and low-stock alerts.",
+      "tags": ["component", "admin", "entry-point"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/page.tsx:DashboardPage",
+      "type": "function",
+      "name": "DashboardPage",
+      "filePath": "apps/client/src/pages/admin/page.tsx",
+      "lineRange": [81, 352],
+      "summary": "Admin home dashboard component that fetches metrics, orders, and inventory data and renders bento-card visualizations.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/settings/page.tsx",
+      "summary": "Full-featured settings page with tabbed sections for Company, Users, Tax, Password, Warehouses, Integrations, Billing, Features, and Audit log.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/settings/page.tsx:SettingsPage",
+      "type": "function",
+      "name": "SettingsPage",
+      "filePath": "apps/client/src/pages/admin/settings/page.tsx",
+      "lineRange": [116, 168],
+      "summary": "Top-level settings page shell that reads the active tab from URL search params and renders the appropriate tab component.",
+      "tags": ["component", "entry-point"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/settings/page.tsx:CompanyTab",
+      "type": "function",
+      "name": "CompanyTab",
+      "filePath": "apps/client/src/pages/admin/settings/page.tsx",
+      "lineRange": [170, 318],
+      "summary": "Settings tab for editing company profile fields such as name, address, and contact information.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/settings/page.tsx:UsersTab",
+      "type": "function",
+      "name": "UsersTab",
+      "filePath": "apps/client/src/pages/admin/settings/page.tsx",
+      "lineRange": [320, 581],
+      "summary": "Settings tab for managing team users: listing, inviting, role changes, and password reset.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/settings/page.tsx:WarehousesTab",
+      "type": "function",
+      "name": "WarehousesTab",
+      "filePath": "apps/client/src/pages/admin/settings/page.tsx",
+      "lineRange": [721, 884],
+      "summary": "Settings tab for managing warehouse locations including creating, editing, and deleting warehouses.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/settings/page.tsx:IntegrationsTab",
+      "type": "function",
+      "name": "IntegrationsTab",
+      "filePath": "apps/client/src/pages/admin/settings/page.tsx",
+      "lineRange": [886, 1209],
+      "summary": "Settings tab for managing external integrations (webhooks, API keys, third-party connectors) via the WebhookManager component.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/settings/page.tsx:FeaturesTab",
+      "type": "function",
+      "name": "FeaturesTab",
+      "filePath": "apps/client/src/pages/admin/settings/page.tsx",
+      "lineRange": [1393, 1476],
+      "summary": "Settings tab for toggling feature flags with per-tenant overrides.",
+      "tags": ["component", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "summary": "Dynamic order detail page showing line items, shipping address, status timeline, and order actions like cancellation and fulfillment.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/orders/[id]/page.tsx:OrderDetailPage",
+      "type": "function",
+      "name": "OrderDetailPage",
+      "filePath": "apps/client/src/pages/admin/orders/[id]/page.tsx",
+      "lineRange": [101, 789],
+      "summary": "Full order detail page component: fetches a single order by ID, renders line items, addresses, status badges, and action buttons.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/purchasing/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/purchasing/page.tsx",
+      "summary": "Purchase order management page with list view, PO creation drawer with reorder suggestion prefill, and supplier management drawer.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/purchasing/page.tsx:PurchasingPage",
+      "type": "function",
+      "name": "PurchasingPage",
+      "filePath": "apps/client/src/pages/admin/purchasing/page.tsx",
+      "lineRange": [40, 305],
+      "summary": "Main purchasing list page that loads POs with status filtering, supports reorder suggestion prefill, and opens PO and supplier drawers.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/purchasing/page.tsx:PoDrawer",
+      "type": "function",
+      "name": "PoDrawer",
+      "filePath": "apps/client/src/pages/admin/purchasing/page.tsx",
+      "lineRange": [307, 454],
+      "summary": "Slide-out drawer for creating a new purchase order, with line item entry and supplier selection.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/purchasing/page.tsx:SupplierDrawer",
+      "type": "function",
+      "name": "SupplierDrawer",
+      "filePath": "apps/client/src/pages/admin/purchasing/page.tsx",
+      "lineRange": [456, 523],
+      "summary": "Slide-out drawer for creating or editing a supplier record.",
+      "tags": ["component", "api-handler"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/warehouse/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/warehouse/page.tsx",
+      "summary": "Comprehensive WMS (warehouse management) page handling pick tasks, bin locations, transfers, replenishment, and spreadsheet import for warehouse operations.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/warehouse/page.tsx:WarehousePage",
+      "type": "function",
+      "name": "WarehousePage",
+      "filePath": "apps/client/src/pages/admin/warehouse/page.tsx",
+      "lineRange": [133, 1735],
+      "summary": "Monolithic WMS page component managing pick task queues, location/transfer forms, and warehouse data import via spreadsheet.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "summary": "Purchase order detail page showing PO header, line items, and a drawer for recording goods receipts against the PO.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/purchasing/[poId]/page.tsx:PurchaseOrderDetailPage",
+      "type": "function",
+      "name": "PurchaseOrderDetailPage",
+      "filePath": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "lineRange": [43, 317],
+      "summary": "Detail page for a purchase order showing supplier info, line items, and actions to approve, issue, or receive the PO.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/purchasing/[poId]/page.tsx:ReceiveDrawer",
+      "type": "function",
+      "name": "ReceiveDrawer",
+      "filePath": "apps/client/src/pages/admin/purchasing/[poId]/page.tsx",
+      "lineRange": [319, 454],
+      "summary": "Drawer component for entering and submitting goods receipt quantities against a purchase order.",
+      "tags": ["component", "api-handler"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/quotes/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/quotes/page.tsx",
+      "summary": "Admin sales quotes page for listing, creating, and converting quotes with line item editing and status management.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/quotes/page.tsx:AdminQuotesPage",
+      "type": "function",
+      "name": "AdminQuotesPage",
+      "filePath": "apps/client/src/pages/admin/quotes/page.tsx",
+      "lineRange": [30, 331],
+      "summary": "Quotes page component that fetches quotes, supports inline line item editing, status transitions, and converting quotes to orders.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/pos/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/pos/page.tsx",
+      "summary": "Point-of-sale page for admin users allowing product search, cart building, and order submission with price calculations.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/pos/page.tsx:PosPage",
+      "type": "function",
+      "name": "PosPage",
+      "filePath": "apps/client/src/pages/admin/pos/page.tsx",
+      "lineRange": [35, 331],
+      "summary": "POS page component managing a product catalog search, shopping cart state, currency formatting, and order placement mutation.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/notifications/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/notifications/page.tsx",
+      "summary": "Admin notifications page listing system alerts and notification events with timestamps and status badges.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/notifications/page.tsx:NotificationsPage",
+      "type": "function",
+      "name": "NotificationsPage",
+      "filePath": "apps/client/src/pages/admin/notifications/page.tsx",
+      "lineRange": [18, 94],
+      "summary": "Notifications list page that fetches and renders system notification records with status badges and formatted timestamps.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/fulfillment/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/fulfillment/page.tsx",
+      "summary": "Fulfillment tasks list page with status and warehouse filtering, linking to individual task detail pages.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/fulfillment/page.tsx:FulfillmentTasksPage",
+      "type": "function",
+      "name": "FulfillmentTasksPage",
+      "filePath": "apps/client/src/pages/admin/fulfillment/page.tsx",
+      "lineRange": [45, 198],
+      "summary": "Page component listing fulfillment pick tasks with status/warehouse filters and links to task detail pages.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "summary": "Dynamic fulfillment task detail page showing pick item list, assigned user, and actions to start, complete, or reassign the task.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx:FulfillmentTaskDetailPage",
+      "type": "function",
+      "name": "FulfillmentTaskDetailPage",
+      "filePath": "apps/client/src/pages/admin/fulfillment/[taskId]/page.tsx",
+      "lineRange": [46, 323],
+      "summary": "Fulfillment task detail component showing pick items, task status, assigned user, and action buttons for task lifecycle management.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/finance/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/finance/page.tsx",
+      "summary": "Finance module page covering accounts payable, journal entries, and P&L reporting with currency formatting and AP status calculations.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/finance/page.tsx:FinancePage",
+      "type": "function",
+      "name": "FinancePage",
+      "filePath": "apps/client/src/pages/admin/finance/page.tsx",
+      "lineRange": [131, 787],
+      "summary": "Finance page component with tabbed views for AP invoices, journal ledger entries, and P&L summary with year/month filtering.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "summary": "Journal entry detail page showing debit/credit lines and providing an action to post (finalize) the journal entry.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/finance/journals/[id]/page.tsx:JournalDetailPage",
+      "type": "function",
+      "name": "JournalDetailPage",
+      "filePath": "apps/client/src/pages/admin/finance/journals/[id]/page.tsx",
+      "lineRange": [36, 148],
+      "summary": "Journal entry detail page component that fetches a journal by ID and renders its debit/credit lines with a post action.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "type": "file",
+      "name": "page.tsx",
+      "filePath": "apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "summary": "SKU detail page showing product info, multi-warehouse stock levels, demand forecast, movement ledger, and inline edit/adjustment dialogs.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:apps/client/src/pages/admin/inventory/[skuId]/page.tsx:SkuDetailPage",
+      "type": "function",
+      "name": "SkuDetailPage",
+      "filePath": "apps/client/src/pages/admin/inventory/[skuId]/page.tsx",
+      "lineRange": [63, 553],
+      "summary": "SKU detail page component that fetches and displays product metadata, stock per warehouse, demand chart, inventory ledger, and edit/adjustment modals.",
+      "tags": ["component", "api-handler", "admin"],
+      "complexity": "complex"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/client/src/pages/admin/customers/page.tsx",
+      "target": "function:apps/client/src/pages/admin/customers/page.tsx:CustomersPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/customers/page.tsx",
+      "target": "function:apps/client/src/pages/admin/customers/page.tsx:CustomersPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/customers/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/customers/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx:DispatchRouteDetailPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "target": "function:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx:DispatchRouteDetailPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/[routeId]/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "function:apps/client/src/pages/admin/dispatch/page.tsx:DispatchPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "function:apps/client/src/pages/admin/dispatch/page.tsx:DispatchPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "function:apps/client/src/pages/admin/dispatch/page.tsx:DispatchDashboard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "function:apps/client/src/pages/admin/dispatch/page.tsx:CreateRouteDrawer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/dispatch/page.tsx",
+      "target": "file:apps/client/src/lib/use-query-params.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "function:apps/client/src/pages/admin/inventory/page.tsx:InventoryPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "function:apps/client/src/pages/admin/inventory/page.tsx:InventoryPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "function:apps/client/src/pages/admin/inventory/page.tsx:SkuDrawer",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/spreadsheet-import-panel.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/inventory/page.tsx",
+      "target": "file:apps/client/src/lib/spreadsheet-import.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/page.tsx",
+      "target": "function:apps/client/src/pages/admin/orders/page.tsx:OrdersPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/page.tsx",
+      "target": "function:apps/client/src/pages/admin/orders/page.tsx:OrdersPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/page.tsx",
+      "target": "file:apps/client/src/lib/admin-path.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/orders/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/page.tsx",
+      "target": "function:apps/client/src/pages/admin/page.tsx:DashboardPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/page.tsx",
+      "target": "function:apps/client/src/pages/admin/page.tsx:DashboardPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/bento-cards.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/status-badge.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/page.tsx",
+      "target": "file:apps/client/src/components/inventory/low-stock-alert.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/page.tsx",
+      "target": "file:apps/client/src/components/orders/recent-orders.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "function:apps/client/src/pages/admin/settings/page.tsx:SettingsPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "function:apps/client/src/pages/admin/settings/page.tsx:SettingsPage",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "function:apps/client/src/pages/admin/settings/page.tsx:CompanyTab",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "function:apps/client/src/pages/admin/settings/page.tsx:UsersTab",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "function:apps/client/src/pages/admin/settings/page.tsx:WarehousesTab",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "function:apps/client/src/pages/admin/settings/page.tsx:IntegrationsTab",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "function:apps/client/src/pages/admin/settings/page.tsx:FeaturesTab",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/empty-state.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "file:apps/client/src/components/cosmos/radix-overlays.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "file:apps/client/src/components/settings/webhook-manager.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "file:apps/client/src/lib/api-admin.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/client/src/pages/admin/settings/page.tsx",
+      "target": "file:apps/client/src/lib/use-query-params.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

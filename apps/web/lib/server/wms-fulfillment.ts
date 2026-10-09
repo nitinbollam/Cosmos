@@ -1,6 +1,6 @@
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
-import { enrichPickItemsWithBins } from './pick-bin-resolver'
+import { enrichPickItemsWithBins, enrichPickItemsWithSkuLabels } from './pick-bin-resolver'
 import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
 
@@ -21,19 +21,19 @@ export type CreateFulfillmentTaskInput = {
   orderId: string
   correlationId: string
   priority?: string
-  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number }>
+  lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; batchId?: string; locationId?: string }>
 }
 
+const OPEN_TASK_STATUSES: FulfillmentTaskStatus[] = ['PENDING', 'PICKING', 'PACKED']
+
 export async function createFulfillmentTask(tenantId: string, dto: CreateFulfillmentTaskInput) {
-  const existing = await wmsDb.fulfillmentTask.findUnique({
-    where: { tenantId_orderId: { tenantId, orderId: dto.orderId } },
+  // Only one *open* task per order; DISPATCHED tasks stay as history so backorder
+  // fills can create follow-up tasks for the same order.
+  const existing = await wmsDb.fulfillmentTask.findFirst({
+    where: { tenantId, orderId: dto.orderId, status: { in: OPEN_TASK_STATUSES } },
   })
-  if (existing && existing.status !== 'CANCELLED') {
+  if (existing) {
     throw new ApiError(409, `Fulfillment already exists for order ${dto.orderId}`)
-  }
-  if (existing?.status === 'CANCELLED') {
-    await wmsDb.pickLine.deleteMany({ where: { taskId: existing.id } })
-    await wmsDb.fulfillmentTask.delete({ where: { id: existing.id } })
   }
 
   const first = dto.lineItems[0]
@@ -55,6 +55,8 @@ export async function createFulfillmentTask(tenantId: string, dto: CreateFulfill
           skuId: li.skuId,
           warehouseId: li.warehouseId,
           quantity: li.quantity,
+          batchId: li.batchId ?? null,
+          locationId: li.locationId ?? null,
         })),
       },
     },
@@ -65,16 +67,43 @@ export async function createFulfillmentTask(tenantId: string, dto: CreateFulfill
 }
 
 export async function cancelFulfillmentByOrder(tenantId: string, orderId: string, _correlationId: string) {
-  const task = await wmsDb.fulfillmentTask.findUnique({
-    where: { tenantId_orderId: { tenantId, orderId } },
-  })
-  if (!task) return { cancelled: false }
-  if (task.status === 'CANCELLED') return { cancelled: false }
-  await wmsDb.fulfillmentTask.update({
-    where: { id: task.id },
+  const result = await wmsDb.fulfillmentTask.updateMany({
+    where: { tenantId, orderId, status: { in: OPEN_TASK_STATUSES } },
     data: { status: 'CANCELLED' },
   })
-  return { cancelled: true }
+  return { cancelled: result.count > 0 }
+}
+
+/**
+ * Route newly allocated quantities (e.g. backorder fills) to the warehouse floor:
+ * append pick lines to an open PENDING/PICKING task, or create a fresh task.
+ */
+export async function ensureFulfillmentForLines(
+  tenantId: string,
+  orderId: string,
+  lines: Array<{ skuId: string; warehouseId: string; quantity: number; batchId?: string }>,
+) {
+  if (lines.length === 0) return null
+  const open = await wmsDb.fulfillmentTask.findFirst({
+    where: { tenantId, orderId, status: { in: ['PENDING', 'PICKING'] } },
+  })
+  if (open) {
+    await wmsDb.pickLine.createMany({
+      data: lines.map((li) => ({
+        taskId: open.id,
+        skuId: li.skuId,
+        warehouseId: li.warehouseId,
+        quantity: li.quantity,
+        batchId: li.batchId ?? null,
+      })),
+    })
+    return { taskId: open.id, status: open.status }
+  }
+  return createFulfillmentTask(tenantId, {
+    orderId,
+    correlationId: `backorder-fill-${Date.now()}`,
+    lineItems: lines,
+  })
 }
 
 export async function getFulfillmentTask(tenantId: string, taskId: string) {
@@ -83,7 +112,7 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
     include: { pickLines: true },
   })
   if (!t) throw new ApiError(404, 'Task not found')
-  const pickItems = (await enrichPickItemsWithBins(
+  const withBins = await enrichPickItemsWithBins(
     tenantId,
     t.pickLines.map((p) => ({
       id: p.id,
@@ -93,7 +122,8 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
       pickedQty: p.pickedQty,
       status: p.status,
     })),
-  )).sort((a, b) => {
+  )
+  const pickItems = (await enrichPickItemsWithSkuLabels(tenantId, withBins)).sort((a, b) => {
     const left = a.binCode ?? 'ZZZ-NO-BIN'
     const right = b.binCode ?? 'ZZZ-NO-BIN'
     return left.localeCompare(right, undefined, { numeric: true })
@@ -178,16 +208,19 @@ export async function listFulfillmentTasks(
       warehouseId: t.warehouseId,
       assignedUserId: t.assignedUserId,
       createdAt: t.createdAt,
-      pickItems: await enrichPickItemsWithBins(
+      pickItems: await enrichPickItemsWithSkuLabels(
         tenantId,
-        t.pickLines.map((p) => ({
-          id: p.id,
-          skuId: p.skuId,
-          warehouseId: p.warehouseId,
-          quantity: p.quantity,
-          pickedQty: p.pickedQty,
-          status: p.status,
-        })),
+        await enrichPickItemsWithBins(
+          tenantId,
+          t.pickLines.map((p) => ({
+            id: p.id,
+            skuId: p.skuId,
+            warehouseId: p.warehouseId,
+            quantity: p.quantity,
+            pickedQty: p.pickedQty,
+            status: p.status,
+          })),
+        ),
       ),
     })),
   )
@@ -213,6 +246,10 @@ export async function confirmPickLine(
 
   const line = task.pickLines.find((p) => p.id === lineId)
   if (!line) throw new ApiError(404, 'Pick line not found')
+  if (line.batchId) {
+    const { checkBatchNotRecalled } = await import('./compliance-recall')
+    await checkBatchNotRecalled(tenantId, line.batchId, line.skuId)
+  }
   if (pickedQty > line.quantity) {
     throw new ApiError(400, `pickedQty cannot exceed ordered quantity (${line.quantity})`)
   }
@@ -237,6 +274,17 @@ export async function confirmPickLine(
     })
   }
 
+  if (pickedQty > 0) {
+    const { recordLaborEvent } = await import('./wms-labor')
+    void recordLaborEvent(tenantId, {
+      userId: task.assignedUserId ?? 'system',
+      eventType: 'PICK',
+      referenceId: lineId,
+      quantity: pickedQty,
+      warehouseId: task.warehouseId,
+    }).catch(() => undefined)
+  }
+
   return getFulfillmentTask(tenantId, taskId)
 }
 
@@ -248,6 +296,13 @@ export async function confirmAllPickLines(tenantId: string, taskId: string) {
   if (!task) throw new ApiError(404, 'Task not found')
   assertTaskPickable(task.status)
   if (task.pickLines.length === 0) throw new ApiError(400, 'Task has no pick lines')
+
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const line of task.pickLines) {
+    if (line.batchId) {
+      await checkBatchNotRecalled(tenantId, line.batchId, line.skuId)
+    }
+  }
 
   await wmsDb.$transaction(
     task.pickLines.map((line) =>
@@ -263,6 +318,17 @@ export async function confirmAllPickLines(tenantId: string, taskId: string) {
       where: { id: taskId },
       data: { status: 'PICKING' },
     })
+  }
+
+  const { recordLaborEvent } = await import('./wms-labor')
+  for (const line of task.pickLines) {
+    void recordLaborEvent(tenantId, {
+      userId: task.assignedUserId ?? 'system',
+      eventType: 'PICK',
+      referenceId: line.id,
+      quantity: line.quantity,
+      warehouseId: task.warehouseId,
+    }).catch(() => undefined)
   }
 
   return getFulfillmentTask(tenantId, taskId)
@@ -294,6 +360,13 @@ export async function markFulfillmentPacked(tenantId: string, taskId: string) {
   const ready = t.pickLines.every((p) => p.status === 'PICKED' || p.status === 'SHORT')
   if (!ready) throw new ApiError(400, 'All lines must be PICKED or SHORT before packing')
 
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const p of t.pickLines) {
+    if (p.batchId) {
+      await checkBatchNotRecalled(tenantId, p.batchId, p.skuId)
+    }
+  }
+
   const updated = await wmsDb.fulfillmentTask.update({
     where: { id: t.id },
     data: { status: 'PACKED' },
@@ -301,13 +374,26 @@ export async function markFulfillmentPacked(tenantId: string, taskId: string) {
   return { taskId: updated.id, orderId: t.orderId, status: updated.status }
 }
 
-export async function markFulfillmentDispatched(tenantId: string, taskId: string) {
+/** Raw task + pick lines (incl. batch) for dispatch processing. */
+export async function getFulfillmentTaskRaw(tenantId: string, taskId: string) {
   const t = await wmsDb.fulfillmentTask.findFirst({
     where: { id: taskId, tenantId },
     include: { pickLines: true },
   })
   if (!t) throw new ApiError(404, 'Task not found')
+  return t
+}
+
+export async function markFulfillmentDispatched(tenantId: string, taskId: string) {
+  const t = await getFulfillmentTaskRaw(tenantId, taskId)
   if (t.status !== 'PACKED') throw new ApiError(400, 'Task must be PACKED before dispatch')
+
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const p of t.pickLines) {
+    if (p.batchId) {
+      await checkBatchNotRecalled(tenantId, p.batchId, p.skuId)
+    }
+  }
 
   const updated = await wmsDb.fulfillmentTask.update({
     where: { id: t.id },

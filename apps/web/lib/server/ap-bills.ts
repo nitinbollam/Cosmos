@@ -34,13 +34,20 @@ export type ThreeWayMatchResult = {
 
 export function computeThreeWayMatch(input: {
   poLines: Array<{ qtyOrdered: number; qtyReceived: number; unitCost: number | null }>
-  billLines: Array<{ quantity: number; unitCost: number }>
+  billLines: Array<{ quantity: number; unitCost: number; skuCode?: string | null }>
+  /** Expected landed charges (freight/duty/other) billed alongside goods. */
+  landedExpected?: number
 }): ThreeWayMatchResult {
   const poTotal = +input.poLines.reduce((s, l) => s + l.qtyOrdered * toNum(l.unitCost), 0).toFixed(2)
-  const receivedTotal = +input.poLines.reduce((s, l) => s + l.qtyReceived * toNum(l.unitCost), 0).toFixed(2)
+  const receivedTotal = +(
+    input.poLines.reduce((s, l) => s + l.qtyReceived * toNum(l.unitCost), 0) + (input.landedExpected ?? 0)
+  ).toFixed(2)
   const billTotal = +input.billLines.reduce((s, l) => s + l.quantity * l.unitCost, 0).toFixed(2)
 
-  const qtyOk = input.billLines.every((bl, i) => {
+  // Lines with an explicit null skuCode (landed charges) are amount-checked via
+  // receivedTotal rather than quantity-matched against PO lines.
+  const goodsLines = input.billLines.filter((bl) => bl.skuCode !== null)
+  const qtyOk = goodsLines.every((bl, i) => {
     const po = input.poLines[i]
     return po && bl.quantity <= po.qtyReceived
   })
@@ -74,9 +81,17 @@ export async function runThreeWayMatch(tenantId: string, billId: string) {
   })
   if (!po) throw new ApiError(404, 'Purchase order not found')
 
+  const { totalLandedCharges } = await import('./landed-cost')
+  const landedTotal = totalLandedCharges(po)
+  const poBase = po.lines.reduce((s, l) => s + l.qtyOrdered * toNum(l.unitCost), 0)
+  const receivedBase = po.lines.reduce((s, l) => s + l.qtyReceived * toNum(l.unitCost), 0)
+  const landedExpected =
+    landedTotal > 0 && poBase > 0 ? +((landedTotal * receivedBase) / poBase).toFixed(2) : 0
+
   const match = computeThreeWayMatch({
     poLines: po.lines.map((l) => ({ qtyOrdered: l.qtyOrdered, qtyReceived: l.qtyReceived, unitCost: toNum(l.unitCost) })),
-    billLines: bill.lines.map((l) => ({ quantity: l.quantity, unitCost: toNum(l.unitCost) })),
+    billLines: bill.lines.map((l) => ({ quantity: l.quantity, unitCost: toNum(l.unitCost), skuCode: l.skuCode })),
+    landedExpected,
   })
 
   return purchasingDb.vendorBill.update({
@@ -91,9 +106,19 @@ export async function runThreeWayMatch(tenantId: string, billId: string) {
   })
 }
 
-export async function listVendorBills(tenantId: string, status?: string) {
+export async function listVendorBills(
+  tenantId: string,
+  status?: string,
+  opts?: { startDate?: string; endDate?: string },
+) {
   const where: Prisma.VendorBillWhereInput = { tenantId }
   if (status && status !== 'ALL') where.status = status as VendorBillStatus
+
+  if (opts?.startDate || opts?.endDate) {
+    where.issuedAt = {}
+    if (opts.startDate) where.issuedAt.gte = new Date(opts.startDate)
+    if (opts.endDate) where.issuedAt.lte = new Date(`${opts.endDate}T23:59:59.999Z`)
+  }
 
   const rows = await purchasingDb.vendorBill.findMany({
     where,
@@ -152,6 +177,23 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
 
   if (billLines.length === 0) throw new ApiError(400, 'No received quantities to bill')
 
+  // Landed charges (freight/duty/other) bill in proportion to the received fraction so
+  // the AP side stays aligned with inventory, which is posted at landed unit cost.
+  const { totalLandedCharges } = await import('./landed-cost')
+  const landedTotal = totalLandedCharges(po)
+  const poBase = po.lines.reduce((s, l) => s + l.qtyOrdered * toNum(l.unitCost), 0)
+  const receivedBase = billLines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
+  const landedShare = landedTotal > 0 && poBase > 0 ? +((landedTotal * receivedBase) / poBase).toFixed(2) : 0
+  if (landedShare > 0) {
+    billLines.push({
+      lineNo: (po.lines.at(-1)?.lineNo ?? billLines.length) + 1,
+      skuCode: null,
+      description: 'Landed charges (freight / duty / other)',
+      quantity: 1,
+      unitCost: landedShare,
+    })
+  }
+
   const subtotal = billLines.reduce((s, l) => s + l.quantity * l.unitCost, 0)
   const totalAmount = +subtotal.toFixed(2)
 
@@ -180,6 +222,12 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
   const dueAt = new Date()
   dueAt.setDate(dueAt.getDate() + dueDays)
 
+  const fx = await (async () => {
+    const { resolveFxRateAtCreation } = await import('./exchange-rates')
+    const { normalizeCurrency } = await import('./fx-util')
+    return resolveFxRateAtCreation(tenantId, normalizeCurrency((po as { currency?: string }).currency))
+  })()
+
   const bill = await purchasingDb.vendorBill.create({
     data: {
       tenantId,
@@ -190,6 +238,8 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
       subtotal: new Prisma.Decimal(subtotal),
       taxAmount: new Prisma.Decimal(0),
       totalAmount: new Prisma.Decimal(totalAmount),
+      currency: fx.currency,
+      fxRateToBase: new Prisma.Decimal(fx.fxRateToBase),
       dueAt,
       notes: input.notes ?? `Bill for ${po.number}`,
       lines: {
@@ -205,7 +255,10 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
     include: { supplier: true, lines: true },
   })
 
-  const journalEntryId = await postPoReceiptJournal(tenantId, bill.id, totalAmount).catch(() => null)
+  const { toBaseAmount } = await import('./fx-util')
+  const journalEntryId = await postPoReceiptJournal(tenantId, bill.id, toBaseAmount(totalAmount, fx.fxRateToBase)).catch(
+    () => null,
+  )
   if (journalEntryId) {
     await purchasingDb.vendorBill.update({ where: { id: bill.id }, data: { journalEntryId } })
   }

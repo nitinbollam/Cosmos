@@ -4,7 +4,7 @@ import * as orders from '../orders'
 import * as quotes from '../quotes'
 import * as search from '../search'
 import { isPortalBuyer } from '../buyer-context'
-import type { SessionUser } from '../session'
+import { ApiError, type SessionUser } from '../session'
 import type { CelestialToolName } from './intent'
 
 export type ToolContext = {
@@ -21,13 +21,20 @@ export type ToolResult = {
   name: CelestialToolName
   data: unknown
   links: Array<{ label: string; href: string }>
+  error?: string
 }
 
 export async function runTools(names: CelestialToolName[], ctx: ToolContext): Promise<ToolResult[]> {
   const results: ToolResult[] = []
   for (const name of names) {
-    const result = await runTool(name, ctx)
-    if (result) results.push(result)
+    try {
+      const result = await runTool(name, ctx)
+      if (result) results.push(result)
+    } catch (e) {
+      const message =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Tool query failed'
+      results.push({ name, data: null, links: [], error: message })
+    }
   }
   return results
 }
@@ -150,17 +157,19 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'list_low_stock': {
-      const page = await inv.listSkus(session.tenantId, 1, 10, undefined, { inStockOnly: false })
-      const low = page.items.filter((s) => (s.quantityAvailable ?? 0) <= (s.reorderPoint ?? 0))
+      const { lowStock } = await inv.lowStockAlerts(session.tenantId)
       return {
         name,
-        data: low.map((s) => ({
+        data: lowStock.map((s) => ({
           code: s.code,
           name: s.name,
-          available: s.quantityAvailable,
+          available: s.available,
           reorderPoint: s.reorderPoint,
+          id: s.skuId,
         })),
-        links: low.map((s) => ({ label: s.code, href: `/admin/inventory/${s.id}` })),
+        links: isBuyer
+          ? [{ label: 'Browse catalog', href: '/catalog' }]
+          : lowStock.map((s) => ({ label: s.code, href: `/admin/inventory/${s.skuId}` })),
       }
     }
     case 'list_warehouses': {
@@ -176,10 +185,12 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
           address: formatWarehouseAddress(w.address),
           city: formatWarehouseCity(w.address),
         })),
-        links: [
-          { label: 'Warehouse ops', href: '/admin/warehouse' },
-          { label: 'Manage warehouses', href: '/admin/settings?tab=warehouses' },
-        ],
+        links: isBuyer
+          ? []
+          : [
+              { label: 'Warehouse ops', href: '/admin/warehouse' },
+              { label: 'Manage warehouses', href: '/admin/settings?tab=warehouses' },
+            ],
       }
     }
     default:
@@ -190,7 +201,10 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
 export function formatToolResultsForPrompt(results: ToolResult[]): string {
   if (results.length === 0) return '(No live data was fetched for this question.)'
   return results
-    .map((r) => `Tool: ${r.name}\n${JSON.stringify(r.data, null, 2)}`)
+    .map((r) => {
+      if (r.error) return `Tool: ${r.name} (error: ${r.error})`
+      return `Tool: ${r.name}\n${JSON.stringify(r.data, null, 2)}`
+    })
     .join('\n\n')
 }
 

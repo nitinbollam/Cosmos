@@ -14,26 +14,81 @@ export type NotificationDeliveryResult = {
   body: string
 }
 
+/** Public app origin used to build deep links inside notification emails. Mirrors auth.ts's appPublicUrl(). */
+function appPublicUrl(): string {
+  const configured = process.env.APP_URL?.trim()
+  return configured ? configured.replace(/\/$/, '') : 'http://localhost:4000'
+}
+
+/** Short human-facing reference for an order — the app's own UI shows the same last-8-chars-uppercase form. */
+function shortOrderRef(orderId: string): string {
+  return orderId.slice(-8).toUpperCase()
+}
+
 const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subject: string; body: string }> = {
   'inventory.low_stock': (p) => ({
     subject: 'Low stock alert',
     body: `SKU ${String(p.skuCode ?? 'unknown')} is at ${String(p.qtyOnHand ?? '?')} units (reorder ${String(p.reorderPoint ?? '?')}).`,
   }),
-  'order.created': (p) => ({
-    subject: 'Order confirmation',
-    body: `Your order ${String(p.orderId ?? '').slice(0, 12)}… was placed for $${String(p.total ?? '')}. Thank you for your business.`,
-  }),
-  'order.shipped': (p) => ({
-    subject: 'Your order has shipped',
-    body: `Order ${String(p.orderId ?? '').slice(0, 12)}… is on its way.`,
-  }),
-  'invoice.issued': (p) => ({
-    subject: `Invoice ${String(p.invoiceNumber ?? '')}`,
-    body: `Invoice ${String(p.invoiceNumber ?? '')} for $${String(p.total ?? '')} is ready.${p.dueAt ? ` Due ${String(p.dueAt)}.` : ''} View it in your buyer portal.`,
-  }),
+  'order.created': (p) => {
+    const orderId = String(p.orderId ?? '')
+    const orderUrl = `${appPublicUrl()}/orders/${orderId}`
+    return {
+      subject: 'Order confirmation',
+      body: `Your order #${shortOrderRef(orderId)} was placed for $${String(p.total ?? '')}. Thank you for your business.\n\nView your order: ${orderUrl}`,
+    }
+  },
+  'order.shipped': (p) => {
+    const orderId = String(p.orderId ?? '')
+    const orderUrl = `${appPublicUrl()}/orders/${orderId}`
+    return {
+      subject: 'Your order has shipped',
+      body: `Order #${shortOrderRef(orderId)} is on its way.\n\nTrack your order: ${orderUrl}`,
+    }
+  },
+  'invoice.issued': (p) => {
+    const invoiceId = String(p.invoiceId ?? '')
+    const invoiceUrl = `${appPublicUrl()}/invoices/${invoiceId}`
+    return {
+      subject: `Invoice ${String(p.invoiceNumber ?? '')}`,
+      body: `Invoice ${String(p.invoiceNumber ?? '')} for $${String(p.total ?? '')} is ready.${p.dueAt ? ` Due ${String(p.dueAt)}.` : ''}\n\nView and pay your invoice: ${invoiceUrl}`,
+    }
+  },
   'payment.received': (p) => ({
     subject: 'Payment received',
     body: `We received your payment of $${String(p.amount ?? '')}${p.invoiceNumber ? ` for invoice ${String(p.invoiceNumber)}` : ''}. Thank you.`,
+  }),
+  'auth.email_verify': (p) => ({
+    subject: 'Verify your Pleros email',
+    body: `Hi ${String(p.firstName ?? 'there')},\n\nThanks for signing up. Confirm your email within 24 hours:\n\n${String(p.verifyUrl ?? '')}\n\nIf you didn't create an account, you can ignore this email.`,
+  }),
+  'auth.password_reset': (p) => ({
+    subject: 'Reset your Pleros password',
+    body: `Hi ${String(p.firstName ?? 'there')},\n\nWe received a request to reset your password. Use the link below within 30 minutes:\n\n${String(p.resetUrl ?? '')}\n\nIf you didn't request this, you can safely ignore this email.`,
+  }),
+  'tenant.invite': (p) => ({
+    subject: `You've been invited to join ${String(p.orgName ?? 'a team')} on Pleros`,
+    body: `You've been invited to join ${String(p.orgName ?? 'a team')} as ${String(p.role ?? 'STAFF')}.\n\nAccept the invite within 7 days:\n\n${String(p.inviteUrl ?? '')}`,
+  }),
+  'marketplace.auction.outbid': (p) => ({
+    subject: 'You were outbid on a marketplace auction',
+    body: `Another bidder placed $${String(p.newBid ?? '')} on "${String(p.listingTitle ?? 'a listing')}". Place a higher bid before the auction ends.`,
+  }),
+  'marketplace.auction.won': (p) => ({
+    subject: 'You won a marketplace auction',
+    body: `Congratulations — you won "${String(p.listingTitle ?? 'a listing')}" for $${String(p.amount ?? '')}. Complete payment in My orders if not already charged.`,
+  }),
+  'marketplace.payment.due': (p) => ({
+    subject: 'Marketplace payment required',
+    body: `Order …${String(p.orderId ?? '')} requires payment of $${String(p.amount ?? '')}. Open Marketplace → My orders to pay.`,
+  }),
+  'marketplace.search.match': (p) => ({
+    subject: 'New marketplace listing matches your saved search',
+    body: `"${String(p.listingTitle ?? 'A listing')}" in ${String(p.category ?? 'your category')} is now live.`,
+  }),
+  'marketplace.message.received': (p) => ({
+    subject: 'New marketplace order message',
+    body: `You have a new message on order …${String(p.orderId ?? '')}: ${String(p.preview ?? '')}`,
   }),
 }
 
@@ -49,7 +104,7 @@ function renderNotification(input: NotificationDeliveryInput): { subject: string
 async function sendViaSendGrid(recipient: string, subject: string, body: string): Promise<void> {
   const key = process.env.SENDGRID_API_KEY?.trim()
   if (!key) throw new Error('SENDGRID_API_KEY not configured')
-  const from = process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@cosmos.local'
+  const from = process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@pleros.local'
   const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
@@ -58,7 +113,7 @@ async function sendViaSendGrid(recipient: string, subject: string, body: string)
     },
     body: JSON.stringify({
       personalizations: [{ to: [{ email: recipient }] }],
-      from: { email: from, name: 'Cosmos' },
+      from: { email: from, name: 'Pleros' },
       subject,
       content: [{ type: 'text/plain', value: body }],
     }),

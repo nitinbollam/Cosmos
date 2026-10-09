@@ -1,0 +1,48 @@
+{
+  "nodes": [
+    {
+      "id": "file:packages/ui/src/Button.tsx",
+      "type": "file",
+      "name": "Button.tsx",
+      "filePath": "packages/ui/src/Button.tsx",
+      "summary": "Reusable Button UI component for the shared component library, exporting a styled button with variant and size props using class-name merging via cn.",
+      "tags": ["component", "ui", "utility"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:packages/ui/src/Card.tsx",
+      "type": "file",
+      "name": "Card.tsx",
+      "filePath": "packages/ui/src/Card.tsx",
+      "summary": "Exports three composable Card UI primitives (Card, CardTitle, CardSection) with tone and className props for building content panels in the ERP frontend.",
+      "tags": ["component", "ui", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:packages/ui/src/cn.ts",
+      "type": "file",
+      "name": "cn.ts",
+      "filePath": "packages/ui/src/cn.ts",
+      "summary": "Thin wrapper around clsx that provides a unified cn() utility for merging Tailwind class names across all shared UI components.",
+      "tags": ["utility", "type-definition", "component"],
+      "complexity": "simple",
+      "languageNotes": "Delegates to clsx for conditional class merging; a common pattern in Tailwind-based component libraries."
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/ui/src/Button.tsx",
+      "target": "file:packages/ui/src/cn.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:packages/ui/src/Card.tsx",
+      "target": "file:packages/ui/src/cn.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

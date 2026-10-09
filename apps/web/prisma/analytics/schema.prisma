@@ -47,3 +47,19 @@ model CelestialMessage {
 
   @@index([conversationId])
 }
+
+/** Ad-hoc / saved operational reports (COS-605). */
+model SavedReport {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  name      String
+  /// ORDERS | INVENTORY | AR_AGING
+  type      String
+  filters   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, userId])
+  @@index([tenantId, type])
+}

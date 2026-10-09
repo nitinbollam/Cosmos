@@ -1,0 +1,110 @@
+{
+  "nodes": [
+    {
+      "id": "file:apps/web/lib/server/erp-features.test.ts",
+      "type": "file",
+      "name": "erp-features.test.ts",
+      "filePath": "apps/web/lib/server/erp-features.test.ts",
+      "summary": "Unit test focused on the backorder flow, verifying that an order can transition from CONFIRMED to BACKORDERED and then to PROCESSING or CANCELLED but not directly to SHIPPED.",
+      "tags": ["test", "order-status", "backorder", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/order-status.test.ts",
+      "type": "file",
+      "name": "order-status.test.ts",
+      "filePath": "apps/web/lib/server/order-status.test.ts",
+      "summary": "Comprehensive unit tests for the order status state machine, covering valid forward fulfillment transitions, invalid jump prevention, and WMS fulfillment task status mapping.",
+      "tags": ["test", "order-status", "state-machine", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:apps/web/lib/server/order-status.ts",
+      "type": "file",
+      "name": "order-status.ts",
+      "filePath": "apps/web/lib/server/order-status.ts",
+      "summary": "Defines the OrderStatus type union and a finite-state-machine adjacency map that enforces valid order lifecycle transitions, plus a mapper from WMS fulfillment task statuses to order statuses.",
+      "tags": ["type-definition", "state-machine", "utility", "service"],
+      "complexity": "simple",
+      "languageNotes": "Uses a Record<OrderStatus, OrderStatus[]> adjacency map pattern to encode allowed transitions, keeping transition logic data-driven and easy to audit."
+    },
+    {
+      "id": "function:apps/web/lib/server/order-status.ts:canTransitionOrderStatus",
+      "type": "function",
+      "name": "canTransitionOrderStatus",
+      "filePath": "apps/web/lib/server/order-status.ts",
+      "lineRange": [26, 29],
+      "summary": "Returns true if transitioning an order from one status to another is permitted according to the FORWARD adjacency map, allowing self-transitions unconditionally.",
+      "tags": ["validation", "state-machine", "utility"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:apps/web/lib/server/order-status.ts:fulfillmentTaskStatusToOrderStatus",
+      "type": "function",
+      "name": "fulfillmentTaskStatusToOrderStatus",
+      "filePath": "apps/web/lib/server/order-status.ts",
+      "lineRange": [31, 45],
+      "summary": "Maps WMS fulfillment task statuses (PICKING, PACKED, DISPATCHED) to the corresponding order-level statuses, returning null for unrecognized or terminal task states such as CANCELLED.",
+      "tags": ["utility", "state-machine", "serialization"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:apps/web/lib/server/order-status.ts",
+      "target": "function:apps/web/lib/server/order-status.ts:canTransitionOrderStatus",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/order-status.ts",
+      "target": "function:apps/web/lib/server/order-status.ts:fulfillmentTaskStatusToOrderStatus",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:apps/web/lib/server/order-status.ts",
+      "target": "function:apps/web/lib/server/order-status.ts:canTransitionOrderStatus",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/order-status.ts",
+      "target": "function:apps/web/lib/server/order-status.ts:fulfillmentTaskStatusToOrderStatus",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:apps/web/lib/server/erp-features.test.ts",
+      "target": "file:apps/web/lib/server/order-status.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-status.test.ts",
+      "target": "file:apps/web/lib/server/order-status.ts",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:apps/web/lib/server/order-status.ts",
+      "target": "file:apps/web/lib/server/erp-features.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:apps/web/lib/server/order-status.ts",
+      "target": "file:apps/web/lib/server/order-status.test.ts",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

@@ -5,10 +5,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { useCartStore } from '@/stores/cart.store'
+import { PodPhoto } from '@/components/pod/PodPhoto'
 
 type Line = {
   id: string
   skuId: string
+  skuCode?: string | null
+  skuName?: string | null
   warehouseId: string
   quantity: number
   unitPrice: string | number
@@ -51,6 +54,7 @@ type TrackingData = {
     stopStatus: string
     stopSequence: number
     eta: string | null
+    podPhotoUrl?: string | null
   } | null
 }
 
@@ -69,6 +73,14 @@ function trackingUrl(carrier: string | null | undefined, trackingNumber: string 
 }
 
 const ADMIN_BASE = import.meta.env.VITE_WEB_ADMIN_ORIGIN?.replace(/\/$/, '') ?? ''
+
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `#ORD-${id.slice(-8).toUpperCase()}`
+}
 
 export default function StorefrontOrderDetailPage() {
   const params = useParams<{ id: string }>()
@@ -186,15 +198,15 @@ export default function StorefrontOrderDetailPage() {
   const flowIdx = o ? ORDER_FLOW.indexOf(o.status as (typeof ORDER_FLOW)[number]) : -1
 
   return (
-    <main className="cosmos-shop-page-main">
-      <Link to="/orders" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+    <main className="pleros-shop-page-main">
+      <Link to="/orders" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← All orders
       </Link>
-      {loading ? <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
+      {loading ? <p className="pleros-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
       {err ? (
-        <p className="cosmos-shop-error" style={{ marginTop: 24 }}>
+        <p className="pleros-shop-error" style={{ marginTop: 24 }}>
           {err}{' '}
-          <Link to="/login" className="cosmos-shop-link-accent">
+          <Link to="/login" className="pleros-shop-link-accent">
             Sign in
           </Link>
         </p>
@@ -202,15 +214,15 @@ export default function StorefrontOrderDetailPage() {
       {o ? (
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-            <h1 style={{ fontSize: 22, margin: 0, color: 'var(--c-heading)' }}>Order · {o.id.slice(0, 12)}…</h1>
+            <h1 style={{ fontSize: 22, margin: 0, color: 'var(--c-heading)' }}>Order {formatOrderNumber(o.id)}</h1>
             <div style={{ fontSize: 13 }}>
               <a
                 href={storefrontAdminHref(`/orders/${encodeURIComponent(o.id)}`)}
-                className="cosmos-shop-link-accent"
+                className="pleros-shop-link-accent"
                 target={ADMIN_BASE ? '_blank' : undefined}
                 rel={ADMIN_BASE ? 'noreferrer' : undefined}
               >
-                Open in Cosmos Admin
+                Open in Pleros Admin
               </a>
             </div>
           </div>
@@ -220,7 +232,7 @@ export default function StorefrontOrderDetailPage() {
             {invoice ? (
               <>
                 {' · '}
-                <Link to={`/invoices/${invoice.id}`} className="cosmos-shop-link-accent">
+                <Link to={`/invoices/${invoice.id}`} className="pleros-shop-link-accent">
                   {invoice.invoiceNumber}
                 </Link>
                 <StatusBadge status={invoice.displayStatus} />
@@ -228,13 +240,13 @@ export default function StorefrontOrderDetailPage() {
             ) : null}
           </p>
           {o.notes ? (
-            <p className="cosmos-shop-subtle" style={{ marginTop: 12, whiteSpace: 'pre-wrap', fontSize: 14 }}>
+            <p className="pleros-shop-subtle" style={{ marginTop: 12, whiteSpace: 'pre-wrap', fontSize: 14 }}>
               {o.notes}
             </p>
           ) : null}
 
           {o.status !== 'CANCELLED' && o.status !== 'FAILED' ? (
-            <div className="cosmos-card" style={{ marginTop: 20, padding: 16 }}>
+            <div className="pleros-card" style={{ marginTop: 20, padding: 16 }}>
               <p style={{ fontSize: 12, color: 'var(--c-text-3)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Order progress
               </p>
@@ -268,7 +280,7 @@ export default function StorefrontOrderDetailPage() {
           ) : null}
 
           {tracking && (tracking.shipments.length > 0 || tracking.delivery) ? (
-            <div className="cosmos-card" style={{ marginTop: 20, padding: 16 }}>
+            <div className="pleros-card" style={{ marginTop: 20, padding: 16 }}>
               <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Shipping &amp; delivery</h2>
               {tracking.delivery ? (
                 <div
@@ -292,6 +304,10 @@ export default function StorefrontOrderDetailPage() {
                       Route status: {tracking.delivery.routeStatus.replace(/_/g, ' ')}
                     </p>
                   )}
+                  <PodPhoto
+                    src={tracking.delivery.podPhotoUrl}
+                    caption="Photo taken at delivery"
+                  />
                 </div>
               ) : null}
               {tracking.shipments.length > 0 ? (
@@ -329,7 +345,7 @@ export default function StorefrontOrderDetailPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <StatusBadge status={s.status} />
                           {url ? (
-                            <a href={url} target="_blank" rel="noreferrer" className="cosmos-shop-link-accent" style={{ fontSize: 13 }}>
+                            <a href={url} target="_blank" rel="noreferrer" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
                               Track package →
                             </a>
                           ) : null}
@@ -358,7 +374,7 @@ export default function StorefrontOrderDetailPage() {
             ) : null}
           </div>
           <h2 style={{ fontSize: 16, marginTop: 28, color: 'var(--c-heading)' }}>Line items</h2>
-          <table className="cosmos-shop-table">
+          <table className="pleros-shop-table">
             <thead>
               <tr>
                 <th>SKU</th>
@@ -370,9 +386,17 @@ export default function StorefrontOrderDetailPage() {
             <tbody>
               {o.lineItems.map((li) => (
                 <tr key={li.id}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{li.skuId}</td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: 'var(--c-heading)' }}>
+                      {li.skuName || li.skuCode || li.skuId}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--c-text-3)' }}>
+                      {li.skuCode ? `${li.skuCode} · ` : ''}
+                      {li.skuId}
+                    </div>
+                  </td>
                   <td>{li.quantity}</td>
-                  <td>${Number(li.unitPrice).toFixed(4)}</td>
+                  <td>${Number(li.unitPrice).toFixed(2)}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{li.warehouseId.slice(0, 8)}…</td>
                 </tr>
               ))}

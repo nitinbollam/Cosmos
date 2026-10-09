@@ -3,9 +3,41 @@ import { orderDb } from './db'
 import { ApiError } from './session'
 
 export async function listOrderShipments(tenantId: string, orderId: string) {
-  return orderDb.orderShipment.findMany({
+  const rows = await orderDb.orderShipment.findMany({
     where: { tenantId, orderId },
     orderBy: { shipmentNo: 'asc' },
+  })
+  const skuIds = [
+    ...new Set(
+      rows.flatMap((r) =>
+        Array.isArray(r.lineItems)
+          ? (r.lineItems as Array<{ skuId?: string }>).map((l) => l.skuId).filter(Boolean)
+          : [],
+      ),
+    ),
+  ] as string[]
+  const { inventoryDb } = await import('./db')
+  const skus =
+    skuIds.length > 0
+      ? await inventoryDb.sKU.findMany({ where: { tenantId, id: { in: skuIds } } })
+      : []
+  const skuMap = new Map(skus.map((s) => [s.id, s]))
+
+  return rows.map((r) => {
+    const rawItems = Array.isArray(r.lineItems)
+      ? (r.lineItems as Array<{ skuId: string; warehouseId: string; quantity: number }>)
+      : []
+    return {
+      ...r,
+      lineItems: rawItems.map((li) => {
+        const sku = skuMap.get(li.skuId)
+        return {
+          ...li,
+          skuCode: sku?.code ?? null,
+          skuName: sku?.name ?? null,
+        }
+      }),
+    }
   })
 }
 
@@ -24,6 +56,13 @@ export async function createOrderShipments(
   })
   if (!order) throw new ApiError(404, 'Order not found')
   if (shipments.length === 0) throw new ApiError(400, 'At least one shipment required')
+
+  const { checkBatchNotRecalled } = await import('./compliance-recall')
+  for (const li of order.lineItems) {
+    if (li.preferredBatchId) {
+      await checkBatchNotRecalled(tenantId, li.preferredBatchId, li.skuId)
+    }
+  }
 
   const allocated = new Map<string, number>()
   for (const ship of shipments) {
@@ -57,16 +96,41 @@ export async function createOrderShipments(
     })
     created.push(row)
   }
+  if (shipments.some((s) => s.carrier?.trim() && s.trackingNumber?.trim())) {
+    void import('./sales-channels/fulfillment-sync')
+      .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
+      .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${orderId}:`, err))
+  }
   return created
 }
 
 export async function markShipmentShipped(tenantId: string, shipmentId: string) {
   const row = await orderDb.orderShipment.findFirst({ where: { id: shipmentId, tenantId } })
   if (!row) throw new ApiError(404, 'Shipment not found')
-  return orderDb.orderShipment.update({
+
+  const order = await orderDb.order.findFirst({
+    where: { id: row.orderId, tenantId },
+    include: { lineItems: true },
+  })
+  if (order) {
+    const { checkBatchNotRecalled } = await import('./compliance-recall')
+    for (const li of order.lineItems) {
+      if (li.preferredBatchId) {
+        await checkBatchNotRecalled(tenantId, li.preferredBatchId, li.skuId)
+      }
+    }
+  }
+
+  const updated = await orderDb.orderShipment.update({
     where: { id: shipmentId },
     data: { status: ShipmentStatus.SHIPPED, shippedAt: new Date() },
   })
+  if (updated.carrier?.trim() && updated.trackingNumber?.trim()) {
+    void import('./sales-channels/fulfillment-sync')
+      .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, updated.orderId))
+      .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${updated.orderId}:`, err))
+  }
+  return updated
 }
 
 export async function getOrderTracking(tenantId: string, orderId: string, opts?: { buyerCustomerId?: string }) {
@@ -93,6 +157,7 @@ export async function getOrderTracking(tenantId: string, orderId: string, opts?:
     stopStatus: string
     stopSequence: number
     eta: Date | null
+    podPhotoUrl: string | null
   } | null = null
 
   for (const route of routes) {
@@ -101,12 +166,24 @@ export async function getOrderTracking(tenantId: string, orderId: string, opts?:
       const eta = route.scheduledFor
         ? new Date(route.scheduledFor.getTime() + (stop.sequence - 1) * 45 * 60 * 1000)
         : null
+      // Proof-of-delivery photo, exposed so the customer can see their own
+      // delivery. `pod` is an opaque JSON column, so read it defensively rather
+      // than trusting a shape. Only the photo is surfaced — notes and age
+      // confirmation stay internal to staff.
+      const podRecord =
+        stop.pod && typeof stop.pod === 'object' && !Array.isArray(stop.pod)
+          ? (stop.pod as Record<string, unknown>)
+          : null
+      const rawPhoto = podRecord?.photoUrl
+      const podPhotoUrl = typeof rawPhoto === 'string' && rawPhoto ? rawPhoto : null
+
       delivery = {
         routeId: route.id,
         routeStatus: route.status,
         stopStatus: stop.status,
         stopSequence: stop.sequence,
         eta,
+        podPhotoUrl,
       }
       break
     }

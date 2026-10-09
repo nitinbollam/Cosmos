@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import type { Prisma } from '@/generated/prisma-tenant'
 import { OnboardingPhase } from '@/generated/prisma-tenant'
 import { tenantDb } from './db'
@@ -74,8 +75,20 @@ export async function patchTenant(
 }
 
 export async function updateTenantPlan(tenantId: string, plan: 'STARTER' | 'GROWTH' | 'ENTERPRISE') {
+  const { devUpdateTenantPlan } = await import('./billing')
+  return devUpdateTenantPlan(tenantId, plan)
+}
+
+/** Create default onboarding checklist rows for a brand-new tenant. */
+export async function seedOnboardingSteps(tenantId: string) {
   await ensureExists(tenantId)
-  return tenantDb.tenantOrganization.update({ where: { id: tenantId }, data: { plan } })
+  for (const stepKey of DEFAULT_STEP_KEYS) {
+    await tenantDb.tenantOnboardingStep.upsert({
+      where: { tenantId_stepKey: { tenantId, stepKey } },
+      update: {},
+      create: { tenantId, stepKey, completed: false, payload: {} },
+    })
+  }
 }
 
 export async function patchOnboardingStep(
@@ -112,27 +125,50 @@ export async function patchOnboardingStep(
 
 export async function listPendingInvites(tenantId: string) {
   await ensureExists(tenantId)
-  return tenantDb.tenantInvite.findMany({
-    where: { tenantId, revokedAt: null, expiresAt: { gt: new Date() } },
+  const rows = await tenantDb.tenantInvite.findMany({
+    where: { tenantId, revokedAt: null, acceptedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: 'desc' },
   })
+  // Never expose the raw token after creation.
+  return rows.map(({ token: _token, ...rest }) => rest)
 }
 
 export async function createInvite(tenantId: string, input: { email: string; role?: string }) {
-  await ensureExists(tenantId)
+  const org = await ensureExists(tenantId)
   const email = input.email.trim().toLowerCase()
   const pending = await tenantDb.tenantInvite.findFirst({
-    where: { tenantId, email, revokedAt: null, expiresAt: { gt: new Date() } },
+    where: { tenantId, email, revokedAt: null, acceptedAt: null, expiresAt: { gt: new Date() } },
   })
   if (pending) throw new ApiError(409, 'An invite is already pending for this email')
-  return tenantDb.tenantInvite.create({
+
+  const token = randomBytes(32).toString('hex')
+  const row = await tenantDb.tenantInvite.create({
     data: {
       tenantId,
       email,
       role: input.role ?? 'STAFF',
+      token,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   })
+
+  const appUrl = process.env.APP_URL?.trim() || 'http://localhost:5173'
+  const inviteUrl = `${appUrl}/accept-invite?token=${token}`
+  try {
+    const { deliverNotification } = await import('./notification-provider')
+    await deliverNotification({
+      tenantId,
+      channel: 'EMAIL',
+      recipient: email,
+      templateKey: 'tenant.invite',
+      payload: { inviteUrl, role: row.role, orgName: org.displayName },
+    })
+  } catch (err) {
+    console.error('[tenant] failed to deliver invite email:', err)
+  }
+
+  // Returned once so the admin can copy the link if email isn't configured.
+  return { ...row, inviteUrl }
 }
 
 export async function revokeInvite(tenantId: string, inviteId: string) {

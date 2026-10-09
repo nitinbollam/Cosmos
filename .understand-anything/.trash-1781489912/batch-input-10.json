@@ -1,0 +1,51 @@
+{
+  "batchIndex": 10,
+  "files": [
+    {
+      "path": "scripts/apply-prisma-provider.mjs",
+      "language": "javascript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/db-urls.mjs",
+      "language": "javascript",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/migrate-all.ts",
+      "language": "typescript",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/prepare-dev-env.mjs",
+      "language": "javascript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/setup-sqlite.mjs",
+      "language": "javascript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "scripts/apply-prisma-provider.mjs": [
+      "scripts/db-urls.mjs"
+    ],
+    "scripts/db-urls.mjs": [],
+    "scripts/migrate-all.ts": [
+      "scripts/db-urls.mjs"
+    ],
+    "scripts/prepare-dev-env.mjs": [
+      "scripts/db-urls.mjs"
+    ],
+    "scripts/setup-sqlite.mjs": [
+      "scripts/db-urls.mjs"
+    ]
+  },
+  "neighborMap": {}
+}

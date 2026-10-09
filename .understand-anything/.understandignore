@@ -1,0 +1,61 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+# Lines below are suggestions — uncomment to activate.
+# Use ! prefix to force-include something excluded by defaults.
+#
+# Built-in defaults (always excluded unless negated):
+#   node_modules/, .git/, dist/, build/, obj/, *.lock, *.min.js, etc.
+#
+# --- From .gitignore (uncomment to exclude) ---
+
+.pnpm-store/
+# .expo/
+# apps/web/public/
+# apps/client/public/assets/
+# apps/client/public/index.html
+# *.tsbuildinfo
+# .env
+# .env.local
+# .env.*.local
+# !.env.example
+# apps/web/.data/
+# apps/client/.env
+# apps/client/dist/
+# logs/
+# npm-debug.log*
+# pnpm-debug.log*
+# yarn-debug.log*
+# .nyc_output/
+# *.swp
+# *.swo
+# .DS_Store
+# Thumbs.db
+# *.pyc
+# *.pyo
+# .pytest_cache/
+# .mypy_cache/
+# .ruff_cache/
+# *.tfstate
+# *.tfstate.*
+# .terraform/
+# .terraform.lock.hcl
+# crash.log
+# *.pem
+# .service-jwt-private.pem
+# .service-jwt-public.pem
+# *.key
+# secrets/
+# tmp/
+# services/*/src/generated/
+# apps/web/generated/
+
+# --- Detected directories (uncomment to exclude) ---
+
+# docs/
+# scripts/
+
+# --- Test file patterns (uncomment to exclude) ---
+
+# *.test.*
+# *.spec.*
+# *.snap

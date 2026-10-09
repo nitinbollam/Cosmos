@@ -47,6 +47,8 @@ model RouteStop {
   sequence Int
   address  Json
   status   StopStatus    @default(PENDING)
+  /** Proof of delivery payload (signature, photo, age confirmation, notes). */
+  pod      Json?
   route    DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
   @@unique([routeId, sequence])

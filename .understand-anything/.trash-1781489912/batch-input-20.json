@@ -1,0 +1,29 @@
+{
+  "batchIndex": 20,
+  "files": [
+    {
+      "path": "apps/web/.env.local.example",
+      "language": "config",
+      "sizeLines": 32,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/web/package.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "apps/web/tsconfig.json",
+      "language": "json",
+      "sizeLines": 36,
+      "fileCategory": "config"
+    }
+  ],
+  "batchImportData": {
+    "apps/web/.env.local.example": [],
+    "apps/web/package.json": [],
+    "apps/web/tsconfig.json": []
+  },
+  "neighborMap": {}
+}

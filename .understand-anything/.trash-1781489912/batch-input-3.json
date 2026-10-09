@@ -1,0 +1,1856 @@
+{
+  "batchIndex": 3,
+  "files": [
+    {
+      "path": "apps/web/lib/server/dispatch-order.ts",
+      "language": "typescript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/dispatch.ts",
+      "language": "typescript",
+      "sizeLines": 231,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/drop-ship.ts",
+      "language": "typescript",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/edi.ts",
+      "language": "typescript",
+      "sizeLines": 238,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/feature-flags.ts",
+      "language": "typescript",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/inventory-lots.ts",
+      "language": "typescript",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/inventory-serials.ts",
+      "language": "typescript",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/inventory.ts",
+      "language": "typescript",
+      "sizeLines": 896,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/invoice-gl.ts",
+      "language": "typescript",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/invoices.ts",
+      "language": "typescript",
+      "sizeLines": 582,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/ledger.ts",
+      "language": "typescript",
+      "sizeLines": 195,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/native-router.ts",
+      "language": "typescript",
+      "sizeLines": 1708,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notification-triggers.ts",
+      "language": "typescript",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/notifications.ts",
+      "language": "typescript",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/operations-gl.ts",
+      "language": "typescript",
+      "sizeLines": 240,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-orchestration.ts",
+      "language": "typescript",
+      "sizeLines": 418,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-payment-sync.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-saga.ts",
+      "language": "typescript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-shipments.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/order-templates.ts",
+      "language": "typescript",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/orders.ts",
+      "language": "typescript",
+      "sizeLines": 259,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/payment-idempotency.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/payments.ts",
+      "language": "typescript",
+      "sizeLines": 324,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/permissions.ts",
+      "language": "typescript",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/lib/server/pick-bin-resolver.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/web/lib/server/dispatch-order.ts": [],
+    "apps/web/lib/server/dispatch.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/dispatch-order.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/drop-ship.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/purchasing.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/edi.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/orders.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/feature-flags.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/inventory-lots.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/inventory-serials.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/inventory.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/invoice-gl.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/invoices.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/invoice-gl.ts",
+      "apps/web/lib/server/invoice-status.ts",
+      "apps/web/lib/server/notification-triggers.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/ledger.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/native-router.ts": [
+      "apps/web/lib/server/analytics.ts",
+      "apps/web/lib/server/ap-bills.ts",
+      "apps/web/lib/server/audit-log.ts",
+      "apps/web/lib/server/backorders.ts",
+      "apps/web/lib/server/bank-recon.ts",
+      "apps/web/lib/server/barcode-labels.ts",
+      "apps/web/lib/server/bin-locations.ts",
+      "apps/web/lib/server/buyer-context.ts",
+      "apps/web/lib/server/celestial/orchestrator.ts",
+      "apps/web/lib/server/compliance-msa.ts",
+      "apps/web/lib/server/compliance-tax.ts",
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/customer-notification-prefs.ts",
+      "apps/web/lib/server/db-health.ts",
+      "apps/web/lib/server/demand-planning.ts",
+      "apps/web/lib/server/dispatch.ts",
+      "apps/web/lib/server/drop-ship.ts",
+      "apps/web/lib/server/edi.ts",
+      "apps/web/lib/server/feature-flags.ts",
+      "apps/web/lib/server/inventory-lots.ts",
+      "apps/web/lib/server/inventory-serials.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/invoices.ts",
+      "apps/web/lib/server/ledger.ts",
+      "apps/web/lib/server/notification-provider-status.ts",
+      "apps/web/lib/server/notifications.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/order-shipments.ts",
+      "apps/web/lib/server/order-templates.ts",
+      "apps/web/lib/server/orders.ts",
+      "apps/web/lib/server/payment-idempotency.ts",
+      "apps/web/lib/server/payments.ts",
+      "apps/web/lib/server/pos-receipt.ts",
+      "apps/web/lib/server/pos.ts",
+      "apps/web/lib/server/pricing.ts",
+      "apps/web/lib/server/purchasing.ts",
+      "apps/web/lib/server/quotes.ts",
+      "apps/web/lib/server/saved-payment-methods.ts",
+      "apps/web/lib/server/search.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/tenant-tax.ts",
+      "apps/web/lib/server/tenant.ts",
+      "apps/web/lib/server/users.ts",
+      "apps/web/lib/server/wave-picking.ts",
+      "apps/web/lib/server/webhooks.ts",
+      "apps/web/lib/server/wms-cycle-count.ts",
+      "apps/web/lib/server/wms-fulfillment.ts",
+      "apps/web/lib/server/wms-labor.ts",
+      "apps/web/lib/server/wms-putaway.ts",
+      "apps/web/lib/server/wms-receiving.ts"
+    ],
+    "apps/web/lib/server/notification-triggers.ts": [
+      "apps/web/lib/server/crm.ts",
+      "apps/web/lib/server/customer-notification-prefs.ts",
+      "apps/web/lib/server/notifications.ts"
+    ],
+    "apps/web/lib/server/notifications.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/notification-provider.ts"
+    ],
+    "apps/web/lib/server/operations-gl.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/order-orchestration.ts": [
+      "apps/web/lib/server/backorders.ts",
+      "apps/web/lib/server/credit-limit.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/drop-ship.ts",
+      "apps/web/lib/server/inventory.ts",
+      "apps/web/lib/server/order-payment-sync.ts",
+      "apps/web/lib/server/order-status.ts",
+      "apps/web/lib/server/payments.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/wms-fulfillment.ts"
+    ],
+    "apps/web/lib/server/order-payment-sync.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/order-saga.ts": [
+      "apps/web/lib/server/order-orchestration.ts"
+    ],
+    "apps/web/lib/server/order-shipments.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/order-templates.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/orders.ts": [
+      "apps/web/lib/server/compliance-tax.ts",
+      "apps/web/lib/server/credit-limit.ts",
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/invoices.ts",
+      "apps/web/lib/server/notification-triggers.ts",
+      "apps/web/lib/server/order-orchestration.ts",
+      "apps/web/lib/server/pricing.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/tenant-tax.ts"
+    ],
+    "apps/web/lib/server/payment-idempotency.ts": [
+      "apps/web/lib/server/db.ts"
+    ],
+    "apps/web/lib/server/payments.ts": [
+      "apps/web/lib/server/db.ts",
+      "apps/web/lib/server/order-payment-sync.ts",
+      "apps/web/lib/server/session.ts",
+      "apps/web/lib/server/stripe.ts"
+    ],
+    "apps/web/lib/server/permissions.ts": [
+      "apps/web/lib/server/session.ts"
+    ],
+    "apps/web/lib/server/pick-bin-resolver.ts": [
+      "apps/web/lib/server/db.ts"
+    ]
+  },
+  "neighborMap": {
+    "apps/web/lib/server/dispatch-order.ts": [
+      {
+        "path": "apps/web/lib/server/tier2.test.ts",
+        "batchIndex": 4,
+        "symbols": []
+      }
+    ],
+    "apps/web/lib/server/dispatch.ts": [
+      {
+        "path": "apps/web/lib/server/crm.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "LEAD_KANBAN_STATUSES",
+          "listCustomers",
+          "listCustomersPaged",
+          "getCustomer",
+          "findCustomerByExternalRef",
+          "findCustomerByEmail",
+          "createCustomer",
+          "importCustomers",
+          "patchCustomer",
+          "patchCustomerProfile",
+          "listLeads",
+          "getLead",
+          "createLead",
+          "importLeads",
+          "patchLead",
+          "convertLead",
+          "listActivities",
+          "createActivity"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/drop-ship.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/purchasing.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listPurchaseOrders",
+          "getPurchaseOrder",
+          "createPurchaseOrder",
+          "submitPurchaseOrder",
+          "cancelPurchaseOrder",
+          "receiveGoods",
+          "updatePurchaseOrderLandedCosts",
+          "getPurchaseOrderLandedCostPreview",
+          "recordPurchaseOrderPayment",
+          "listSuppliers",
+          "getSupplier",
+          "createSupplier",
+          "updateSupplier"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/edi.ts": [
+      {
+        "path": "apps/web/lib/server/crm.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "LEAD_KANBAN_STATUSES",
+          "listCustomers",
+          "listCustomersPaged",
+          "getCustomer",
+          "findCustomerByExternalRef",
+          "findCustomerByEmail",
+          "createCustomer",
+          "importCustomers",
+          "patchCustomer",
+          "patchCustomerProfile",
+          "listLeads",
+          "getLead",
+          "createLead",
+          "importLeads",
+          "patchLead",
+          "convertLead",
+          "listActivities",
+          "createActivity"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/feature-flags.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/celestial/orchestrator.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "getCelestialModelInfo",
+          "chat",
+          "chatStream",
+          "listCelestialConversations",
+          "getCelestialConversation"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/pos.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listPosRegisters",
+          "createPosRegister",
+          "createPosOrder"
+        ]
+      }
+    ],
+    "apps/web/lib/server/inventory-lots.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/backorders.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "reserveLineWithBackorder",
+          "listOpenBackorders",
+          "fillBackordersOnReceipt"
+        ]
+      }
+    ],
+    "apps/web/lib/server/inventory-serials.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/inventory.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/backorders.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "reserveLineWithBackorder",
+          "listOpenBackorders",
+          "fillBackordersOnReceipt"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/celestial/tools.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "runTools",
+          "formatToolResultsForPrompt"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/demand-planning.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "computeSkuUsage",
+          "getSkuDemandPlan",
+          "listDemandPlans"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/po-receiving.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "getPurchaseOrderForReceiving",
+          "assertPoOpenForReceiving",
+          "validateAndApplyPoLineReceipts",
+          "refreshPurchaseOrderStatus",
+          "postInventoryForPoReceipts",
+          "syncPurchaseOrderFromSkuReceipts",
+          "openPoLinesForReceiving",
+          "receivePurchaseOrderGoods",
+          "recordPoPayment"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/quotes.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listQuotes",
+          "getQuote",
+          "createQuote",
+          "requestQuoteApproval",
+          "approveQuote",
+          "rejectQuote",
+          "submitQuote",
+          "listQuoteCounterOffers",
+          "createQuoteCounterOffer",
+          "acceptQuoteCounterOffer"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-cycle-count.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listCycleCounts",
+          "createCycleCount",
+          "getCycleCount",
+          "importCycleLineCounts",
+          "updateCycleLineCountedQty",
+          "submitCycleCountForApproval",
+          "approveCycleCount"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-putaway.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "suggestPutawayBin",
+          "createPutawayTaskFromReceiving",
+          "listPutawayTasks",
+          "confirmPutawayLine"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-receiving.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listReceivingSessions",
+          "startReceivingSession",
+          "resolveDefaultWarehouseId",
+          "scanReceivingItem",
+          "getReceivingSession",
+          "completeReceivingSession",
+          "importReceivingItems"
+        ]
+      }
+    ],
+    "apps/web/lib/server/invoice-gl.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      }
+    ],
+    "apps/web/lib/server/invoices.ts": [
+      {
+        "path": "apps/web/lib/server/crm.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "LEAD_KANBAN_STATUSES",
+          "listCustomers",
+          "listCustomersPaged",
+          "getCustomer",
+          "findCustomerByExternalRef",
+          "findCustomerByEmail",
+          "createCustomer",
+          "importCustomers",
+          "patchCustomer",
+          "patchCustomerProfile",
+          "listLeads",
+          "getLead",
+          "createLead",
+          "importLeads",
+          "patchLead",
+          "convertLead",
+          "listActivities",
+          "createActivity"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/invoice-status.ts",
+        "batchIndex": 25,
+        "symbols": [
+          "invoiceBalance",
+          "deriveInvoiceStatus",
+          "formatInvoiceNumber",
+          "formatCreditMemoNumber",
+          "toStoredInvoiceStatus"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/celestial/tools.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "runTools",
+          "formatToolResultsForPrompt"
+        ]
+      }
+    ],
+    "apps/web/lib/server/ledger.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/native-router.ts": [
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/celestial/orchestrator.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "getCelestialModelInfo",
+          "chat",
+          "chatStream",
+          "listCelestialConversations",
+          "getCelestialConversation"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/crm.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "LEAD_KANBAN_STATUSES",
+          "listCustomers",
+          "listCustomersPaged",
+          "getCustomer",
+          "findCustomerByExternalRef",
+          "findCustomerByEmail",
+          "createCustomer",
+          "importCustomers",
+          "patchCustomer",
+          "patchCustomerProfile",
+          "listLeads",
+          "getLead",
+          "createLead",
+          "importLeads",
+          "patchLead",
+          "convertLead",
+          "listActivities",
+          "createActivity"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/buyer-context.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "PORTAL_BUYER_ROLES",
+          "isPortalBuyer",
+          "isAdminStaff",
+          "resolvePortalCustomerId",
+          "requirePortalCustomerId",
+          "getAuthProfile"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/quotes.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listQuotes",
+          "getQuote",
+          "createQuote",
+          "requestQuoteApproval",
+          "approveQuote",
+          "rejectQuote",
+          "submitQuote",
+          "listQuoteCounterOffers",
+          "createQuoteCounterOffer",
+          "acceptQuoteCounterOffer"
+        ]
+      },
+      {
+        "path": "apps/web/server/api-router.ts",
+        "batchIndex": 9,
+        "symbols": [
+          "handleApiRequest"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/backorders.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "reserveLineWithBackorder",
+          "listOpenBackorders",
+          "fillBackordersOnReceipt"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/compliance-tax.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "taxSummary",
+          "computeSalesTax",
+          "computeOrderTax",
+          "recordTax"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/pos.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listPosRegisters",
+          "createPosRegister",
+          "createPosOrder"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-fulfillment.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "derivePickLineStatus",
+          "createFulfillmentTask",
+          "cancelFulfillmentByOrder",
+          "ensureFulfillmentForLines",
+          "getFulfillmentTask",
+          "listFulfillmentTasks",
+          "confirmPickLine",
+          "confirmAllPickLines",
+          "assignFulfillmentTask",
+          "markFulfillmentPacked",
+          "getFulfillmentTaskRaw",
+          "markFulfillmentDispatched"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/ap-bills.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "computeThreeWayMatch",
+          "runThreeWayMatch",
+          "listVendorBills",
+          "getVendorBill",
+          "createBillFromPurchaseOrder",
+          "recordBillPayment"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/purchasing.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listPurchaseOrders",
+          "getPurchaseOrder",
+          "createPurchaseOrder",
+          "submitPurchaseOrder",
+          "cancelPurchaseOrder",
+          "receiveGoods",
+          "updatePurchaseOrderLandedCosts",
+          "getPurchaseOrderLandedCostPreview",
+          "recordPurchaseOrderPayment",
+          "listSuppliers",
+          "getSupplier",
+          "createSupplier",
+          "updateSupplier"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-cycle-count.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listCycleCounts",
+          "createCycleCount",
+          "getCycleCount",
+          "importCycleLineCounts",
+          "updateCycleLineCountedQty",
+          "submitCycleCountForApproval",
+          "approveCycleCount"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-putaway.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "suggestPutawayBin",
+          "createPutawayTaskFromReceiving",
+          "listPutawayTasks",
+          "confirmPutawayLine"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-receiving.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listReceivingSessions",
+          "startReceivingSession",
+          "resolveDefaultWarehouseId",
+          "scanReceivingItem",
+          "getReceivingSession",
+          "completeReceivingSession",
+          "importReceivingItems"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/audit-log.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "auditLog",
+          "listAuditEvents"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/compliance-msa.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "listReports",
+          "getReport",
+          "getConfig",
+          "upsertConfig",
+          "importTransactions",
+          "generateReportForTenant",
+          "uploadReportToStorage",
+          "submitReportEdi",
+          "runMsaAutomationCron"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/customer-notification-prefs.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "DEFAULT_CUSTOMER_NOTIFICATION_PREFS",
+          "getCustomerNotificationPrefs",
+          "patchCustomerNotificationPrefs",
+          "shouldSendCustomerNotification"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/demand-planning.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "computeSkuUsage",
+          "getSkuDemandPlan",
+          "listDemandPlans"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/pricing.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listCustomerPrices",
+          "upsertCustomerPrice",
+          "deleteCustomerPrice",
+          "resolvePricesForCustomer",
+          "resolveUnitPrice",
+          "assertOrderLinePrices",
+          "enrichSkusWithCustomerPrices",
+          "listVolumePriceBreaks",
+          "upsertVolumePriceBreak"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/tenant-tax.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "getTenantSalesTaxRate",
+          "getTenantTaxSettings",
+          "updateTenantSalesTaxRate"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wave-picking.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listPickWaves",
+          "createPickWave",
+          "startPickWave",
+          "completePickWave",
+          "getPickWaveDetail"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/analytics.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "SNAPSHOT_SYNC_DAYS",
+          "syncTodaySnapshotFromOrders",
+          "syncRecentSnapshotsFromOrders",
+          "listSnapshots",
+          "dashboardKpis",
+          "upsertSnapshot",
+          "syncSnapshotsFromOrders"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/bank-recon.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "listBankAccounts",
+          "createBankAccount",
+          "importStatementLines",
+          "listUnreconciledLines",
+          "reconcileStatementLine",
+          "getReconciliationSummary"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/barcode-labels.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "buildSkuLabelHtml"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/bin-locations.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "listBinLocations",
+          "createBinLocation",
+          "deleteBinLocation"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/pos-receipt.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "buildPosReceiptHtml"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/saved-payment-methods.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listSavedPaymentMethods",
+          "savePaymentMethod",
+          "deleteSavedPaymentMethod",
+          "setDefaultPaymentMethod"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/search.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "globalSearch"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/tenant.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "findTenantById",
+          "patchTenant",
+          "updateTenantPlan",
+          "seedOnboardingSteps",
+          "patchOnboardingStep",
+          "listPendingInvites",
+          "createInvite",
+          "revokeInvite"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/users.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listUsers",
+          "deactivateUser",
+          "updateUser"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/webhooks.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "assertSafeWebhookUrl",
+          "signWebhookPayload",
+          "listWebhooks",
+          "createWebhook",
+          "deleteWebhook",
+          "testWebhook"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-labor.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "recordLaborEvent",
+          "getLaborMetrics"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/db-health.ts",
+        "batchIndex": 9,
+        "symbols": [
+          "getDatabaseProvider",
+          "checkDatabaseConnections"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/notification-provider-status.ts",
+        "batchIndex": 25,
+        "symbols": [
+          "getNotificationProviderStatus"
+        ]
+      }
+    ],
+    "apps/web/lib/server/notification-triggers.ts": [
+      {
+        "path": "apps/web/lib/server/crm.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "LEAD_KANBAN_STATUSES",
+          "listCustomers",
+          "listCustomersPaged",
+          "getCustomer",
+          "findCustomerByExternalRef",
+          "findCustomerByEmail",
+          "createCustomer",
+          "importCustomers",
+          "patchCustomer",
+          "patchCustomerProfile",
+          "listLeads",
+          "getLead",
+          "createLead",
+          "importLeads",
+          "patchLead",
+          "convertLead",
+          "listActivities",
+          "createActivity"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/customer-notification-prefs.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "DEFAULT_CUSTOMER_NOTIFICATION_PREFS",
+          "getCustomerNotificationPrefs",
+          "patchCustomerNotificationPrefs",
+          "shouldSendCustomerNotification"
+        ]
+      }
+    ],
+    "apps/web/lib/server/notifications.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/notification-provider.ts",
+        "batchIndex": 13,
+        "symbols": [
+          "deliverNotification"
+        ]
+      }
+    ],
+    "apps/web/lib/server/operations-gl.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/ap-bills.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "computeThreeWayMatch",
+          "runThreeWayMatch",
+          "listVendorBills",
+          "getVendorBill",
+          "createBillFromPurchaseOrder",
+          "recordBillPayment"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/tier8.test.ts",
+        "batchIndex": 4,
+        "symbols": []
+      }
+    ],
+    "apps/web/lib/server/order-orchestration.ts": [
+      {
+        "path": "apps/web/lib/server/backorders.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "reserveLineWithBackorder",
+          "listOpenBackorders",
+          "fillBackordersOnReceipt"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/credit-limit.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "assertCreditAvailable",
+          "applyCreditUsed",
+          "releaseCreditUsed",
+          "netTermsExposure"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/order-status.ts",
+        "batchIndex": 12,
+        "symbols": [
+          "canTransitionOrderStatus",
+          "fulfillmentTaskStatusToOrderStatus"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-fulfillment.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "derivePickLineStatus",
+          "createFulfillmentTask",
+          "cancelFulfillmentByOrder",
+          "ensureFulfillmentForLines",
+          "getFulfillmentTask",
+          "listFulfillmentTasks",
+          "confirmPickLine",
+          "confirmAllPickLines",
+          "assignFulfillmentTask",
+          "markFulfillmentPacked",
+          "getFulfillmentTaskRaw",
+          "markFulfillmentDispatched"
+        ]
+      }
+    ],
+    "apps/web/lib/server/order-payment-sync.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      }
+    ],
+    "apps/web/lib/server/order-shipments.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/order-templates.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/orders.ts": [
+      {
+        "path": "apps/web/lib/server/compliance-tax.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "taxSummary",
+          "computeSalesTax",
+          "computeOrderTax",
+          "recordTax"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/credit-limit.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "assertCreditAvailable",
+          "applyCreditUsed",
+          "releaseCreditUsed",
+          "netTermsExposure"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/pricing.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listCustomerPrices",
+          "upsertCustomerPrice",
+          "deleteCustomerPrice",
+          "resolvePricesForCustomer",
+          "resolveUnitPrice",
+          "assertOrderLinePrices",
+          "enrichSkusWithCustomerPrices",
+          "listVolumePriceBreaks",
+          "upsertVolumePriceBreak"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/tenant-tax.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "getTenantSalesTaxRate",
+          "getTenantTaxSettings",
+          "updateTenantSalesTaxRate"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/celestial/tools.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "runTools",
+          "formatToolResultsForPrompt"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/pos.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listPosRegisters",
+          "createPosRegister",
+          "createPosOrder"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/quotes.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listQuotes",
+          "getQuote",
+          "createQuote",
+          "requestQuoteApproval",
+          "approveQuote",
+          "rejectQuote",
+          "submitQuote",
+          "listQuoteCounterOffers",
+          "createQuoteCounterOffer",
+          "acceptQuoteCounterOffer"
+        ]
+      }
+    ],
+    "apps/web/lib/server/payment-idempotency.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      }
+    ],
+    "apps/web/lib/server/payments.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/stripe.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "isWebhookSecretConfigured",
+          "authorizePayment",
+          "processAchPayment",
+          "capturePayment",
+          "voidPayment",
+          "refundPayment",
+          "verifyStripeWebhook"
+        ]
+      }
+    ],
+    "apps/web/lib/server/permissions.ts": [
+      {
+        "path": "apps/web/lib/server/session.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "invalidateUserSessionCache",
+          "getSession",
+          "requireSession",
+          "ApiError",
+          "ADMIN_ROLES",
+          "OPS_ROLES",
+          "DRIVER_ROLES",
+          "assertRole",
+          "requireRole",
+          "toJsonError"
+        ]
+      }
+    ],
+    "apps/web/lib/server/pick-bin-resolver.ts": [
+      {
+        "path": "apps/web/lib/server/db.ts",
+        "batchIndex": 2,
+        "symbols": [
+          "authDb",
+          "tenantDb",
+          "inventoryDb",
+          "orderDb",
+          "crmDb",
+          "storefrontDb",
+          "wmsDb",
+          "dispatchDb",
+          "purchasingDb",
+          "paymentDb",
+          "complianceDb",
+          "notificationDb",
+          "ledgerDb",
+          "analyticsDb"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wave-picking.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "listPickWaves",
+          "createPickWave",
+          "startPickWave",
+          "completePickWave",
+          "getPickWaveDetail"
+        ]
+      },
+      {
+        "path": "apps/web/lib/server/wms-fulfillment.ts",
+        "batchIndex": 4,
+        "symbols": [
+          "derivePickLineStatus",
+          "createFulfillmentTask",
+          "cancelFulfillmentByOrder",
+          "ensureFulfillmentForLines",
+          "getFulfillmentTask",
+          "listFulfillmentTasks",
+          "confirmPickLine",
+          "confirmAllPickLines",
+          "assignFulfillmentTask",
+          "markFulfillmentPacked",
+          "getFulfillmentTaskRaw",
+          "markFulfillmentDispatched"
+        ]
+      }
+    ]
+  }
+}

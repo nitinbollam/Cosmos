@@ -4,7 +4,7 @@ import { CelestialChat } from '@/components/celestial/celestial-chat'
 
 export function ShopLayout() {
   return (
-    <div className="cosmos-shop">
+    <div className="pleros-shop" style={{ paddingBottom: '5rem' }}>
       <ShopHeader />
       <Outlet />
       <CelestialChat surface="shop" />

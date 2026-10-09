@@ -7,22 +7,31 @@ import { Readable } from 'node:stream'
 const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 
 function msaRootDir(): string {
-  const dataDir = process.env.COSMOS_DATA_DIR ?? '.data'
+  const dataDir = process.env.PLEROS_DATA_DIR ?? '.data'
   const root = path.join(WEB_ROOT, dataDir, 'msa')
   mkdirSync(root, { recursive: true })
   return root
 }
 
+function safeMsaPath(relativePath: string): string {
+  const root = path.resolve(msaRootDir())
+  const resolved = path.resolve(root, relativePath)
+  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+    throw new Error(`Path traversal detected: ${relativePath}`)
+  }
+  return resolved
+}
+
 /** Persist MULTICAT file locally under `.data/msa/`. */
 export async function persistMsaFile(relativePath: string, content: string): Promise<string> {
-  const full = path.join(msaRootDir(), relativePath)
+  const full = safeMsaPath(relativePath)
   mkdirSync(path.dirname(full), { recursive: true })
   await pipeline(Readable.from([content]), createWriteStream(full, { encoding: 'utf8' }))
   return full
 }
 
 export function readMsaFile(relativePath: string): string {
-  const full = path.join(msaRootDir(), relativePath)
+  const full = safeMsaPath(relativePath)
   if (!existsSync(full)) throw new Error(`MSA file not found: ${relativePath}`)
   return readFileSync(full, 'utf8')
 }

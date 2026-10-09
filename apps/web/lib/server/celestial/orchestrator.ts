@@ -2,8 +2,14 @@ import { auditLog } from '../audit-log'
 import { getAuthProfile, isPortalBuyer, requirePortalCustomerId } from '../buyer-context'
 import { assertFeature } from '../feature-flags'
 import { ApiError, type SessionUser } from '../session'
-import { appendMessage, getOrCreateConversation, touchConversation } from './conversations'
-import { detectIntent } from './intent'
+import {
+  appendMessage,
+  getConversation,
+  getOrCreateConversation,
+  listConversations,
+  touchConversation,
+} from './conversations'
+import { detectIntent, isPlainLanguagePreferred } from './intent'
 import { completeChat, getCelestialModelInfo, streamChat, type ChatMessage } from './llm'
 import { buildContextPrompt, buildSystemPrompt } from './prompts'
 import { formatDocContext, retrievePlatformDocs } from './retrieval'
@@ -25,10 +31,10 @@ function buildContextBlock(
   const parts: string[] = []
 
   if (toolResults.some(toolResultHasData)) {
-    parts.push(`LIVE COSMOS DATA (use this in your answer):\n${composeFromToolResults(toolResults)}`)
+    parts.push(`LIVE PLEROS DATA (use this in your answer):\n${composeFromToolResults(toolResults)}`)
   } else if (toolResults.length > 0) {
     parts.push(
-      `LIVE COSMOS DATA (queries ran, no matching records):\n${formatToolResultsForPrompt(toolResults)}`,
+      `LIVE PLEROS DATA (queries ran, no matching records):\n${formatToolResultsForPrompt(toolResults)}`,
     )
   }
 
@@ -38,10 +44,15 @@ function buildContextBlock(
   return parts.join('\n\n')
 }
 
-function finalizeReply(message: string, reply: string, docs: ReturnType<typeof retrievePlatformDocs>): string {
+function finalizeReply(
+  message: string,
+  reply: string,
+  docs: ReturnType<typeof retrievePlatformDocs>,
+  plainLanguage = true,
+): string {
   const trimmed = reply.trim()
   if (trimmed) return trimmed
-  return buildDocFallbackReply(message, docs)
+  return buildDocFallbackReply(message, docs, plainLanguage)
 }
 
 export type CelestialChatInput = {
@@ -71,6 +82,7 @@ type PreparedChat = {
   toolsUsed: string[]
   docs: ReturnType<typeof retrievePlatformDocs>
   directReply: string | null
+  plainLanguage: boolean
 }
 
 async function prepareChat(session: SessionUser, input: CelestialChatInput): Promise<PreparedChat> {
@@ -97,7 +109,8 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     quoteId: input.context?.quoteId,
   })
 
-  const docs = retrievePlatformDocs(message)
+  const plainLanguage = isPlainLanguagePreferred(message)
+  const docs = retrievePlatformDocs(message, 6, plainLanguage)
   const toolResults = await runTools(intent.tools, {
     session,
     customerId,
@@ -116,9 +129,9 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
   const contextBlock = buildContextBlock(message, toolResults, docs, input.context?.page)
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: buildSystemPrompt(session, profile.customerName) },
+    { role: 'system', content: buildSystemPrompt(session, profile.customerName, plainLanguage) },
     ...history,
-    { role: 'system', content: buildContextPrompt(message, contextBlock) },
+    { role: 'system', content: buildContextPrompt(message, contextBlock, plainLanguage) },
     { role: 'user', content: message },
   ]
 
@@ -133,6 +146,7 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     toolsUsed: toolResults.map((t) => t.name),
     docs,
     directReply,
+    plainLanguage,
   }
 }
 
@@ -148,6 +162,7 @@ async function persistChatResult(
     provider,
     model,
     toolsUsed: prepared.toolsUsed,
+    links: prepared.links,
   })
   await touchConversation(prepared.conversationId)
 
@@ -163,13 +178,13 @@ async function persistChatResult(
 export async function chat(session: SessionUser, input: CelestialChatInput): Promise<CelestialChatResult> {
   const prepared = await prepareChat(session, input)
   if (prepared.directReply) {
-    await persistChatResult(session, prepared, prepared.directReply, 'cosmos', 'structured')
+    await persistChatResult(session, prepared, prepared.directReply, 'pleros', 'structured')
     return {
       conversationId: prepared.conversationId,
       reply: prepared.directReply,
       links: prepared.links,
       toolsUsed: prepared.toolsUsed,
-      provider: 'cosmos',
+      provider: 'pleros',
       model: 'structured',
     }
   }
@@ -179,12 +194,12 @@ export async function chat(session: SessionUser, input: CelestialChatInput): Pro
   let model: string
   try {
     const llm = await completeChat(prepared.messages)
-    reply = finalizeReply(prepared.message, llm.content, prepared.docs)
+    reply = finalizeReply(prepared.message, llm.content, prepared.docs, prepared.plainLanguage)
     provider = llm.provider
     model = llm.model
   } catch {
-    reply = buildDocFallbackReply(prepared.message, prepared.docs)
-    provider = 'cosmos'
+    reply = buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage)
+    provider = 'pleros'
     model = 'fallback'
   }
 
@@ -229,7 +244,7 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
 
       try {
         if (prepared.directReply) {
-          await streamText(prepared.directReply, 'cosmos', 'structured')
+          await streamText(prepared.directReply, 'pleros', 'structured')
           return
         }
 
@@ -247,11 +262,15 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
           const llm = result.value
           const streamed = fullContent.trim()
           if (!streamed) {
-            await streamText(buildDocFallbackReply(prepared.message, prepared.docs), 'cosmos', 'fallback')
+            await streamText(
+              buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
+              'pleros',
+              'fallback',
+            )
             return
           }
 
-          const reply = finalizeReply(prepared.message, streamed, prepared.docs)
+          const reply = finalizeReply(prepared.message, streamed, prepared.docs, prepared.plainLanguage)
           await persistChatResult(session, prepared, reply, llm.provider, llm.model)
           send('done', {
             conversationId: prepared.conversationId,
@@ -262,7 +281,11 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
           })
           controller.close()
         } catch {
-          await streamText(buildDocFallbackReply(prepared.message, prepared.docs), 'cosmos', 'fallback')
+          await streamText(
+            buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
+            'pleros',
+            'fallback',
+          )
         }
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Celestial stream failed'
@@ -277,6 +300,66 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
+}
+
+type MessageMetadata = {
+  provider?: string
+  model?: string
+  toolsUsed?: string[]
+  links?: Array<{ label: string; href: string }>
+}
+
+function formatMessageMeta(metadata: MessageMetadata | null | undefined): string | undefined {
+  if (!metadata?.provider) return undefined
+  const tools = metadata.toolsUsed?.length ? ` · ${metadata.toolsUsed.join(', ')}` : ''
+  return `${metadata.provider}/${metadata.model ?? 'unknown'}${tools}`
+}
+
+export async function listCelestialConversations(
+  session: SessionUser,
+  opts?: { surface?: 'shop' | 'admin'; limit?: number },
+) {
+  await assertFeature(session.tenantId, 'celestial')
+
+  const rows = await listConversations(session.tenantId, session.userId, {
+    limit: opts?.limit ?? 10,
+    surface: opts?.surface,
+  })
+
+  return {
+    items: rows.map((c) => ({
+      id: c.id,
+      surface: c.surface,
+      title: c.title,
+      updatedAt: c.updatedAt,
+      preview: c.messages[0]?.content?.slice(0, 160) ?? '',
+    })),
+  }
+}
+
+export async function getCelestialConversation(session: SessionUser, conversationId: string) {
+  await assertFeature(session.tenantId, 'celestial')
+
+  const conversation = await getConversation(session.tenantId, session.userId, conversationId)
+
+  return {
+    id: conversation.id,
+    surface: conversation.surface,
+    title: conversation.title,
+    updatedAt: conversation.updatedAt,
+    messages: conversation.messages.map((m) => {
+      const metadata = (m.metadata ?? {}) as MessageMetadata
+      return {
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        links: metadata.links,
+        meta: formatMessageMeta(metadata),
+        createdAt: m.createdAt,
+      }
+    }),
+  }
 }

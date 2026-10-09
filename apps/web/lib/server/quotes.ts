@@ -5,9 +5,9 @@ import * as crm from './crm'
 import * as inv from './inventory'
 import * as orders from './orders'
 
-export function listQuotes(tenantId: string, status?: string, opts?: { buyerCustomerId?: string }) {
+export async function listQuotes(tenantId: string, status?: string, opts?: { buyerCustomerId?: string }) {
   const st = status as QuoteStatus | undefined
-  return storefrontDb.b2BQuote.findMany({
+  const rows = await storefrontDb.b2BQuote.findMany({
     where: {
       tenantId,
       ...(st ? { status: st } : {}),
@@ -16,6 +16,19 @@ export function listQuotes(tenantId: string, status?: string, opts?: { buyerCust
     include: { lines: { orderBy: { lineNo: 'asc' } } },
     orderBy: { createdAt: 'desc' },
   })
+  const customerIds = [...new Set(rows.map((r) => r.customerRef))]
+  const { crmDb } = await import('./db')
+  const customers =
+    customerIds.length > 0
+      ? await crmDb.customer.findMany({ where: { tenantId, id: { in: customerIds } } })
+      : []
+  const custMap = new Map(customers.map((c) => [c.id, c.name]))
+
+  return rows.map((r) => ({
+    ...r,
+    customerName: custMap.get(r.customerRef) ?? r.customerRef,
+    quoteNumber: `Q-${r.id.slice(-8).toUpperCase()}`,
+  }))
 }
 
 export async function getQuote(tenantId: string, id: string, opts?: { buyerCustomerId?: string }) {
@@ -27,7 +40,13 @@ export async function getQuote(tenantId: string, id: string, opts?: { buyerCusto
   if (opts?.buyerCustomerId && row.customerRef !== opts.buyerCustomerId) {
     throw new ApiError(404, 'Quote not found')
   }
-  return row
+  const { crmDb } = await import('./db')
+  const cust = await crmDb.customer.findFirst({ where: { tenantId, id: row.customerRef } })
+  return {
+    ...row,
+    customerName: cust?.name ?? row.customerRef,
+    quoteNumber: `Q-${row.id.slice(-8).toUpperCase()}`,
+  }
 }
 
 export async function createQuote(

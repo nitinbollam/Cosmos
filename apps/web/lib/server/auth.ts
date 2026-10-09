@@ -1,59 +1,166 @@
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import bcrypt from 'bcrypt'
 import * as jose from 'jose'
-import { authDb as prisma } from './db'
+import { assertPasswordPolicy } from './auth-security'
+import { authDb as prisma, tenantDb } from './db'
 import { jwtRefreshSecret, jwtSecret } from './env'
+import { ApiError, invalidateAuthSessionCache, invalidateUserSessionCache } from './session'
 
 export type TokenPair = {
   accessToken: string
   refreshToken: string
   userId: string
   role: string
+  permissions: string[]
 }
 
-async function signPair(user: { id: string; email: string; role: string; tenantId: string }): Promise<TokenPair> {
+export type SessionMeta = {
+  userAgent?: string | null
+}
+
+/**
+ * How long a just-replaced refresh token keeps working. Two tabs that refresh at the same
+ * moment both present the same token; without this window the second would look like reuse.
+ */
+const ROTATION_GRACE_MS = 30_000
+
+type SignableUser = {
+  id: string
+  email: string
+  role: string
+  tenantId: string
+  permissions?: unknown
+}
+
+/**
+ * Issue an access/refresh pair bound to an AuthSession row (`sid`).
+ * Without `sessionId` a new session is created; with it the session's refresh token is rotated.
+ */
+async function signPair(user: SignableUser, opts: SessionMeta & { sessionId?: string } = {}): Promise<TokenPair> {
+  const rawPerms = user.permissions
+  const permissions: string[] = Array.isArray(rawPerms)
+    ? (rawPerms as string[])
+    : typeof rawPerms === 'string'
+      ? JSON.parse(rawPerms)
+      : []
+
+  const sid = opts.sessionId ?? randomUUID()
   const payload = {
     sub: user.id,
     email: user.email,
     role: user.role,
     tenantId: user.tenantId,
+    permissions,
+    sid,
   }
-  const accessTtl = process.env.JWT_ACCESS_TTL ?? '15m'
+  const accessTtl = process.env.JWT_ACCESS_TTL ?? '45m'
   const refreshTtl = process.env.JWT_REFRESH_TTL ?? '7d'
   const accessSecret = new TextEncoder().encode(jwtSecret())
   const refreshSecret = new TextEncoder().encode(jwtRefreshSecret())
 
   const [accessToken, refreshToken] = await Promise.all([
-    new jose.SignJWT(payload)
+    new jose.SignJWT({ ...payload, typ: 'access' })
       .setProtectedHeader({ alg: 'HS256' })
+      .setJti(randomUUID())
       .setExpirationTime(accessTtl)
       .sign(accessSecret),
-    new jose.SignJWT(payload)
+    new jose.SignJWT({ ...payload, typ: 'refresh' })
       .setProtectedHeader({ alg: 'HS256' })
+      .setJti(randomUUID())
       .setExpirationTime(refreshTtl)
       .sign(refreshSecret),
   ])
 
-  const refreshTokenHash = await bcrypt.hash(refreshToken, 10)
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { refreshTokenHash },
-  })
+  const refreshExp = jose.decodeJwt(refreshToken).exp
+  const expiresAt = new Date((refreshExp ?? Math.floor(Date.now() / 1000) + 7 * 24 * 3600) * 1000)
+  const refreshTokenHash = sha256(refreshToken)
+  const now = new Date()
 
-  return { accessToken, refreshToken, userId: user.id, role: user.role }
+  if (opts.sessionId) {
+    const current = await prisma.authSession.findUnique({ where: { id: sid } })
+    await prisma.authSession.update({
+      where: { id: sid },
+      data: {
+        refreshTokenHash,
+        prevTokenHash: current?.refreshTokenHash ?? null,
+        rotatedAt: now,
+        lastUsedAt: now,
+        expiresAt,
+      },
+    })
+  } else {
+    await prisma.authSession.create({
+      data: {
+        id: sid,
+        userId: user.id,
+        tenantId: user.tenantId,
+        refreshTokenHash,
+        userAgent: opts.userAgent?.slice(0, 300) ?? null,
+        expiresAt,
+      },
+    })
+  }
+
+  return { accessToken, refreshToken, userId: user.id, role: user.role, permissions }
 }
 
-export async function loginUser(email: string, password: string): Promise<TokenPair> {
+/** Revoke every session for a user, optionally keeping one (the caller's own). */
+export async function revokeAllUserSessions(userId: string, opts?: { exceptSessionId?: string }): Promise<void> {
+  await prisma.authSession.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+      ...(opts?.exceptSessionId ? { id: { not: opts.exceptSessionId } } : {}),
+    },
+    data: { revokedAt: new Date() },
+  })
+  // Legacy single-slot token (pre-AuthSession); harmless to clear every time.
+  await prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } }).catch(() => undefined)
+  invalidateUserSessionCache(userId)
+}
+
+/** Verify a refresh token's signature and return its claims, or throw 401. */
+export async function verifyRefreshToken(refreshToken: string): Promise<jose.JWTPayload> {
+  try {
+    const { payload } = await jose.jwtVerify(refreshToken, new TextEncoder().encode(jwtRefreshSecret()))
+    // An access token must never refresh. Tokens issued before `typ` existed have no claim and are allowed.
+    if (payload.typ === 'access') throw new Error('wrong token type')
+    if (typeof payload.sub !== 'string') throw new Error('missing sub')
+    return payload
+  } catch {
+    throw new ApiError(401, 'Access denied')
+  }
+}
+
+export async function loginUser(email: string, password: string, meta: SessionMeta = {}): Promise<TokenPair> {
   const user = await prisma.user.findFirst({
-    where: { email, isActive: true },
+    where: { email: email.trim().toLowerCase(), isActive: true },
   })
   if (!user) throw new Error('Invalid credentials')
   const ok = await bcrypt.compare(password, user.passwordHash)
   if (!ok) throw new Error('Invalid credentials')
+  // Only block accounts that were sent a verification link (new signups). Existing users
+  // without emailVerifiedAt are grandfathered until they change email.
+  if (!user.emailVerifiedAt && user.emailVerificationTokenHash) {
+    throw new ApiError(403, 'Please verify your email before signing in. Check your inbox or request a new link.')
+  }
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   })
-  return signPair(user)
+  return signPair(user, meta)
+}
+
+export type VerificationDelivery = {
+  userId: string
+  email: string
+  requiresVerification: true
+  /**
+   * Present only when email was not delivered via SendGrid (console/webhook fallback).
+   * Lets QA complete the production verify gate without an inbox; never returned for SendGrid.
+   */
+  verifyUrl?: string
+  delivery: 'sendgrid' | 'webhook' | 'console'
 }
 
 export async function registerUser(input: {
@@ -63,39 +170,315 @@ export async function registerUser(input: {
   firstName: string
   lastName: string
   role?: string
-}): Promise<TokenPair> {
+  permissions?: string[]
+  /** Invite accept and admin-created users skip the verification gate. */
+  emailVerified?: boolean
+  issueTokens?: boolean
+  sessionMeta?: SessionMeta
+}): Promise<TokenPair | VerificationDelivery> {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } })
   if (!tenant) throw new Error('Tenant does not exist')
+  const email = input.email.trim().toLowerCase()
   const existing = await prisma.user.findFirst({
-    where: { tenantId: input.tenantId, email: input.email },
+    where: { tenantId: input.tenantId, email },
   })
   if (existing) throw new Error('Email already registered for this tenant')
+  assertPasswordPolicy(input.password)
   const passwordHash = await bcrypt.hash(input.password, 12)
   const user = await prisma.user.create({
     data: {
       tenantId: input.tenantId,
-      email: input.email,
+      email,
       passwordHash,
       firstName: input.firstName,
       lastName: input.lastName,
       role: (input.role ?? 'STAFF') as 'STAFF',
-      permissions: [],
+      permissions: input.permissions ?? [],
+      ...(input.emailVerified ? { emailVerifiedAt: new Date() } : {}),
     },
   })
-  return signPair(user)
+
+  if (input.issueTokens === false || !input.emailVerified) {
+    if (!input.emailVerified) {
+      const delivery = await sendEmailVerification(user.id)
+      return {
+        userId: user.id,
+        email: user.email,
+        requiresVerification: true as const,
+        verifyUrl: delivery.verifyUrl,
+        delivery: delivery.provider,
+      }
+    }
+    return signPair(user, input.sessionMeta)
+  }
+  return signPair(user, input.sessionMeta)
 }
 
-export async function refreshUserTokens(userId: string, refreshToken: string): Promise<TokenPair> {
+/**
+ * Rotate a refresh token. The user comes from the token itself; `expectedUserId` is the
+ * optional legacy body field and must match when given.
+ */
+export async function refreshUserTokens(refreshToken: string, expectedUserId?: string): Promise<TokenPair> {
+  const payload = await verifyRefreshToken(refreshToken)
+  const userId = payload.sub as string
+  if (expectedUserId && expectedUserId !== userId) throw new ApiError(401, 'Access denied')
+
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user?.refreshTokenHash) throw new Error('Access denied')
-  const ok = await bcrypt.compare(refreshToken, user.refreshTokenHash)
-  if (!ok) throw new Error('Access denied')
-  return signPair(user)
+  if (!user || !user.isActive) throw new ApiError(401, 'Access denied')
+  if (typeof payload.tenantId === 'string' && payload.tenantId !== user.tenantId) {
+    throw new ApiError(401, 'Access denied')
+  }
+  if (!user.emailVerifiedAt && user.emailVerificationTokenHash) throw new ApiError(401, 'Access denied')
+
+  const tokenHash = sha256(refreshToken)
+  const sid = typeof payload.sid === 'string' ? payload.sid : null
+
+  if (!sid) {
+    // Token issued before AuthSession existed: accept once against the legacy column,
+    // then move the device onto a real session.
+    if (!user.refreshTokenHash) throw new ApiError(401, 'Access denied')
+    const ok = await bcrypt.compare(refreshToken, user.refreshTokenHash)
+    if (!ok) throw new ApiError(401, 'Access denied')
+    await prisma.user.update({ where: { id: user.id }, data: { refreshTokenHash: null } })
+    return signPair(user)
+  }
+
+  const session = await prisma.authSession.findUnique({ where: { id: sid } })
+  if (!session || session.userId !== user.id || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
+    throw new ApiError(401, 'Access denied')
+  }
+
+  const isCurrent = session.refreshTokenHash === tokenHash
+  const inGrace =
+    session.prevTokenHash === tokenHash &&
+    session.rotatedAt != null &&
+    Date.now() - session.rotatedAt.getTime() < ROTATION_GRACE_MS
+  if (!isCurrent && !inGrace) {
+    // A replaced token came back after the grace window: treat it as stolen and end the session.
+    await prisma.authSession.update({ where: { id: sid }, data: { revokedAt: new Date() } })
+    invalidateAuthSessionCache(sid)
+    throw new ApiError(401, 'Access denied')
+  }
+
+  return signPair(user, { sessionId: sid })
 }
 
-export async function logoutUser(userId: string): Promise<void> {
+/**
+ * End one device's session. Legacy tokens without `sid` clear the old single-slot column.
+ */
+export async function logoutUser(userId: string, sessionId?: string | null): Promise<void> {
+  if (sessionId) {
+    await prisma.authSession.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    })
+    invalidateAuthSessionCache(sessionId)
+    return
+  }
   await prisma.user.update({
     where: { id: userId },
     data: { refreshTokenHash: null },
   })
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+/** Joining a team requires a valid, unexpired invite token issued by a tenant admin. */
+export async function acceptInvite(input: {
+  token: string
+  password: string
+  firstName: string
+  lastName: string
+  sessionMeta?: SessionMeta
+}): Promise<TokenPair & { tenantId: string }> {
+  const invite = await tenantDb.tenantInvite.findUnique({ where: { token: input.token } })
+  if (!invite || invite.revokedAt || invite.acceptedAt) {
+    throw new ApiError(400, 'Invite is invalid or has already been used')
+  }
+  if (invite.expiresAt.getTime() < Date.now()) {
+    throw new ApiError(400, 'Invite has expired')
+  }
+
+  const result = await registerUser({
+    tenantId: invite.tenantId,
+    email: invite.email,
+    password: input.password,
+    firstName: input.firstName.trim(),
+    lastName: input.lastName.trim(),
+    role: invite.role,
+    emailVerified: true,
+    issueTokens: true,
+    sessionMeta: input.sessionMeta,
+  })
+  if ('requiresVerification' in result) {
+    throw new ApiError(500, 'Invite accept failed unexpectedly')
+  }
+
+  await tenantDb.tenantInvite.update({
+    where: { id: invite.id },
+    data: { acceptedAt: new Date() },
+  })
+
+  return { ...result, tenantId: invite.tenantId }
+}
+
+/** Never expose raw verify tokens in production API responses. */
+function mayExposeVerifyUrl(): boolean {
+  return process.env.NODE_ENV !== 'production'
+}
+
+function appPublicUrl(): string {
+  const configured = process.env.APP_URL?.trim()
+  if (configured) return configured.replace(/\/$/, '')
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[auth] APP_URL is not set — verification links will be wrong in production')
+  }
+  return 'http://localhost:4000'
+}
+
+export async function sendEmailVerification(
+  userId: string,
+): Promise<{ provider: 'sendgrid' | 'webhook' | 'console'; verifyUrl?: string }> {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user || user.emailVerifiedAt) return { provider: 'console' }
+
+  const token = randomBytes(32).toString('hex')
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      emailVerificationTokenHash: sha256(token),
+      emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  })
+
+  const verifyUrl = `${appPublicUrl()}/verify-email?token=${token}`
+  try {
+    const { deliverNotification } = await import('./notification-provider')
+    const result = await deliverNotification({
+      tenantId: user.tenantId,
+      channel: 'EMAIL',
+      recipient: user.email,
+      templateKey: 'auth.email_verify',
+      payload: { verifyUrl, firstName: user.firstName },
+    })
+    if (result.provider === 'sendgrid') return { provider: 'sendgrid' }
+    // Dev/QA only: surface the link when no real email provider is configured.
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      const provider = result.provider === 'webhook' ? 'webhook' : 'console'
+      return { provider, verifyUrl }
+    }
+    console.info(`[auth] verification email for ${user.email} delivered via ${result.provider} (link not exposed)`)
+    return { provider: result.provider === 'webhook' ? 'webhook' : 'console' }
+  } catch (err) {
+    console.error('[auth] failed to deliver verification email:', err)
+    if (mayExposeVerifyUrl()) {
+      console.info(`[auth] verification link for ${user.email}: ${verifyUrl}`)
+      return { provider: 'console', verifyUrl }
+    }
+    return { provider: 'console' }
+  }
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  const user = await prisma.user.findFirst({
+    where: { emailVerificationTokenHash: sha256(token), emailVerificationExpiresAt: { gt: new Date() } },
+  })
+  if (!user) throw new ApiError(400, 'Verification link is invalid or has expired')
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailVerifiedAt: new Date(),
+      emailVerificationTokenHash: null,
+      emailVerificationExpiresAt: null,
+    },
+  })
+}
+
+export async function resendEmailVerification(
+  email: string,
+): Promise<{ ok: true; verifyUrl?: string; delivery?: 'sendgrid' | 'webhook' | 'console' }> {
+  const user = await prisma.user.findFirst({
+    where: { email: email.trim().toLowerCase(), isActive: true, emailVerifiedAt: null },
+  })
+  if (!user) return { ok: true }
+  const delivery = await sendEmailVerification(user.id)
+  // verifyUrl is only present in non-production (see mayExposeVerifyUrl).
+  return {
+    ok: true,
+    ...(delivery.verifyUrl ? { verifyUrl: delivery.verifyUrl } : {}),
+    delivery: delivery.provider,
+  }
+}
+
+/** Reveals nothing about whether the email exists; delivery happens out of band. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const user = await prisma.user.findFirst({ where: { email: email.trim().toLowerCase(), isActive: true } })
+  if (!user) return
+
+  const token = randomBytes(32).toString('hex')
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetTokenHash: sha256(token),
+      passwordResetExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+    },
+  })
+
+  const resetUrl = `${appPublicUrl()}/reset-password?token=${token}`
+  try {
+    const { deliverNotification } = await import('./notification-provider')
+    await deliverNotification({
+      tenantId: user.tenantId,
+      channel: 'EMAIL',
+      recipient: user.email,
+      templateKey: 'auth.password_reset',
+      payload: { resetUrl, firstName: user.firstName },
+    })
+  } catch (err) {
+    console.error('[auth] failed to deliver password reset email:', err)
+  }
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  assertPasswordPolicy(newPassword)
+  const user = await prisma.user.findFirst({
+    where: { passwordResetTokenHash: sha256(token), passwordResetExpiresAt: { gt: new Date() } },
+  })
+  if (!user) throw new ApiError(400, 'Reset link is invalid or has expired')
+
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+    },
+  })
+  // Whoever had the old password may hold a session: end all of them.
+  await revokeAllUserSessions(user.id)
+}
+
+/** Ends every other device's session; the caller's own session (`currentSessionId`) stays signed in. */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+  currentSessionId?: string | null,
+): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user) throw new ApiError(404, 'User not found')
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!ok) throw new ApiError(401, 'Current password is incorrect')
+  assertPasswordPolicy(newPassword)
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  })
+  await revokeAllUserSessions(userId, { exceptSessionId: currentSessionId ?? undefined })
 }

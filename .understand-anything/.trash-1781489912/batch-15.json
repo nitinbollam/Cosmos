@@ -1,0 +1,23 @@
+{
+  "nodes": [
+    {
+      "id": "service:apps/web/Dockerfile",
+      "type": "service",
+      "name": "Dockerfile",
+      "filePath": "apps/web/Dockerfile",
+      "summary": "Three-stage multi-stage Docker build for the Cosmos ERP platform: installs dependencies, compiles the Vite+React client and generates Prisma types, then produces a minimal Node.js 20 Alpine production image running the Express server on port 4000 as a non-root user.",
+      "tags": ["containerization", "infrastructure", "deployment", "multi-stage-build"],
+      "complexity": "moderate",
+      "languageNotes": "Uses three named stages (deps, builder, runner) to keep the final image lean. The runner stage copies only compiled artifacts from the builder, then sets a non-root system user (cosmos) for security. Port 4000 is the single unified port for the Express+Prisma API and Vite static assets."
+    }
+  ],
+  "edges": [
+    {
+      "source": "service:apps/web/Dockerfile",
+      "target": "file:apps/client/server/index.ts",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+{
+  "batchIndex": 26,
+  "files": [
+    {
+      "path": "apps/web/prisma/storefront/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 96,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/tenant/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 177,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/prisma/wms/schema.prisma",
+      "language": "prisma",
+      "sizeLines": 282,
+      "fileCategory": "data"
+    },
+    {
+      "path": "apps/web/server/register-paths.mjs",
+      "language": "javascript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "apps/web/tailwind.config.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infra/docker/otel-config.yaml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "infra/docker/python-service.Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "infra/k8s/base/external-secrets/cluster-secret-store.yaml",
+      "language": "yaml",
+      "sizeLines": 14,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/examples/external-secret-redis.yaml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/examples/external-secret-storefront-database.yaml",
+      "language": "yaml",
+      "sizeLines": 24,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/overlays/production/kustomization.yaml",
+      "language": "yaml",
+      "sizeLines": 13,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/k8s/overlays/staging/kustomization.yaml",
+      "language": "yaml",
+      "sizeLines": 13,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/sql/init-databases.sql",
+      "language": "sql",
+      "sizeLines": 18,
+      "fileCategory": "data"
+    },
+    {
+      "path": "infra/terraform/environments/production/main.tf",
+      "language": "terraform",
+      "sizeLines": 51,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/environments/staging/main.tf",
+      "language": "terraform",
+      "sizeLines": 56,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/eks/main.tf",
+      "language": "terraform",
+      "sizeLines": 45,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/networking/main.tf",
+      "language": "terraform",
+      "sizeLines": 32,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/rds/main.tf",
+      "language": "terraform",
+      "sizeLines": 60,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/redis/main.tf",
+      "language": "terraform",
+      "sizeLines": 44,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "infra/terraform/modules/s3/main.tf",
+      "language": "terraform",
+      "sizeLines": 39,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "packages/analytics-engine/package.json",
+      "language": "json",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/analytics-engine/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/analytics-engine/tsconfig.json",
+      "language": "json",
+      "sizeLines": 8,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/types/package.json",
+      "language": "json",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/types/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "apps/web/prisma/storefront/schema.prisma": [],
+    "apps/web/prisma/tenant/schema.prisma": [],
+    "apps/web/prisma/wms/schema.prisma": [],
+    "apps/web/server/register-paths.mjs": [],
+    "apps/web/tailwind.config.ts": [],
+    "infra/docker/otel-config.yaml": [],
+    "infra/docker/python-service.Dockerfile": [],
+    "infra/k8s/base/external-secrets/cluster-secret-store.yaml": [],
+    "infra/k8s/examples/external-secret-redis.yaml": [],
+    "infra/k8s/examples/external-secret-storefront-database.yaml": [],
+    "infra/k8s/overlays/production/kustomization.yaml": [],
+    "infra/k8s/overlays/staging/kustomization.yaml": [],
+    "infra/sql/init-databases.sql": [],
+    "infra/terraform/environments/production/main.tf": [],
+    "infra/terraform/environments/staging/main.tf": [],
+    "infra/terraform/modules/eks/main.tf": [],
+    "infra/terraform/modules/networking/main.tf": [],
+    "infra/terraform/modules/rds/main.tf": [],
+    "infra/terraform/modules/redis/main.tf": [],
+    "infra/terraform/modules/s3/main.tf": [],
+    "packages/analytics-engine/package.json": [],
+    "packages/analytics-engine/src/index.ts": [],
+    "packages/analytics-engine/tsconfig.json": [],
+    "packages/types/package.json": [],
+    "packages/types/src/index.ts": []
+  },
+  "neighborMap": {}
+}

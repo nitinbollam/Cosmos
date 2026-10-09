@@ -54,9 +54,9 @@ export default function StorefrontInvoicesPage() {
   const rows = useMemo(() => data?.items ?? [], [data])
 
   return (
-    <main className="cosmos-shop-page-main">
+    <main className="pleros-shop-page-main">
       <h1 style={{ fontSize: 24, margin: 0, color: 'var(--c-heading)' }}>Invoices</h1>
-      <p className="cosmos-shop-muted" style={{ marginTop: 8, fontSize: 14 }}>
+      <p className="pleros-shop-muted" style={{ marginTop: 8, fontSize: 14 }}>
         Open balances and payment history for your account.
       </p>
 
@@ -73,23 +73,23 @@ export default function StorefrontInvoicesPage() {
         ))}
       </div>
 
-      {loading ? <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
+      {loading ? <p className="pleros-shop-muted" style={{ marginTop: 24 }}>Loading…</p> : null}
       {unauthorized ? (
-        <p className="cosmos-shop-error" style={{ marginTop: 24 }}>
+        <p className="pleros-shop-error" style={{ marginTop: 24 }}>
           Sign in to view invoices.{' '}
-          <Link to="/login" className="cosmos-shop-link-accent">
+          <Link to="/login" className="pleros-shop-link-accent">
             Login →
           </Link>
         </p>
       ) : null}
-      {err ? <p className="cosmos-shop-error" style={{ marginTop: 24 }}>{err}</p> : null}
+      {err ? <p className="pleros-shop-error" style={{ marginTop: 24 }}>{err}</p> : null}
 
       {!loading && rows.length === 0 && !unauthorized ? (
-        <p className="cosmos-shop-muted" style={{ marginTop: 24 }}>No invoices yet.</p>
+        <p className="pleros-shop-muted" style={{ marginTop: 24 }}>No invoices yet.</p>
       ) : null}
 
       {rows.length > 0 ? (
-        <table className="cosmos-shop-table" style={{ marginTop: 24 }}>
+        <table className="pleros-shop-table" style={{ marginTop: 24 }}>
           <thead>
             <tr>
               <th>Invoice</th>
@@ -104,7 +104,7 @@ export default function StorefrontInvoicesPage() {
             {rows.map((inv) => (
               <tr key={inv.id}>
                 <td>
-                  <Link to={`/invoices/${inv.id}`} className="cosmos-shop-link-accent">
+                  <Link to={`/invoices/${inv.id}`} className="pleros-shop-link-accent">
                     {inv.invoiceNumber}
                   </Link>
                 </td>

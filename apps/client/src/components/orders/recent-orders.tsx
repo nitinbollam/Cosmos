@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CardTitle } from '@cosmos/ui'
+import { CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
 
 type OrderRow = {
   id: string
@@ -26,7 +26,19 @@ function customerLabel(o: OrderRow): string {
   if (addr && typeof addr === 'object' && 'company' in addr && addr.company) {
     return String(addr.company)
   }
-  return `Customer …${o.customerId.slice(-6)}`
+  if (o.customerId.startsWith('cust_')) {
+    const clean = o.customerId.replace('cust_', '').replace(/_/g, ' ')
+    return clean.charAt(0).toUpperCase() + clean.slice(1)
+  }
+  return `Customer #${o.customerId.slice(-6).toUpperCase()}`
+}
+
+function formatOrderNumber(id: string): string {
+  if (!id) return ''
+  if (id.startsWith('seed_ord_')) {
+    return `ORD-${id.replace('seed_ord_', '').toUpperCase()}`
+  }
+  return `ORD-${id.slice(-6).toUpperCase()}`
 }
 
 export function RecentOrders() {
@@ -39,7 +51,7 @@ export function RecentOrders() {
   const rows = data?.items ?? []
 
   return (
-    <div className="cosmos-card">
+    <div className="pleros-card">
       <div className="flex items-center justify-between gap-4">
         <CardTitle>Recent orders</CardTitle>
         <button type="button" className="btn-ghost !py-1.5 !px-3 !text-xs" onClick={() => void refetch()}>
@@ -65,7 +77,7 @@ export function RecentOrders() {
         />
       ) : (
         <div className="mt-4 overflow-x-auto">
-          <table className="cosmos-table">
+          <table className="pleros-table">
             <thead>
               <tr>
                 <th>Order</th>
@@ -79,16 +91,16 @@ export function RecentOrders() {
             <tbody>
               {rows.map((o) => (
                 <tr key={o.id}>
-                  <td className="font-mono text-sm" style={{ color: 'var(--c-text-2)' }}>
-                    #{o.id.slice(-8)}
+                  <td className="font-mono text-sm font-semibold" style={{ color: 'var(--c-primary)' }}>
+                    #{formatOrderNumber(o.id)}
                   </td>
-                  <td>{customerLabel(o)}</td>
+                  <td className="font-medium">{customerLabel(o)}</td>
                   <td>
                     <StatusBadge status={o.status} />
                   </td>
-                  <td className="font-mono">${Number(o.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="font-mono font-medium">${Number(o.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="text-sm" style={{ color: 'var(--c-text-3)' }}>
-                    {new Date(o.createdAt).toLocaleString()}
+                    {new Date(o.createdAt).toLocaleDateString()}
                   </td>
                   <td>
                     <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="btn-ghost !py-1.5 !px-3 !text-xs">

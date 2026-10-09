@@ -8,7 +8,7 @@ terraform {
 variable "environment"        { type = string }
 variable "vpc_id"              { type = string }
 variable "private_subnet_ids" { type = list(string) }
-variable "db_name"             { type = string  default = "cosmos" }
+variable "db_name"             { type = string  default = "pleros" }
 variable "instance_class"      { type = string  default = "db.t3.medium" }
 variable "allocated_storage"   { type = number  default = 50 }
 
@@ -18,13 +18,13 @@ resource "random_password" "master" {
 }
 
 resource "aws_db_subnet_group" "this" {
-  name       = "cosmos-${var.environment}"
+  name       = "pleros-${var.environment}"
   subnet_ids = var.private_subnet_ids
   tags       = { Environment = var.environment }
 }
 
 resource "aws_security_group" "rds" {
-  name   = "cosmos-${var.environment}-rds"
+  name   = "pleros-${var.environment}-rds"
   vpc_id = var.vpc_id
 
   ingress {
@@ -36,14 +36,14 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "postgres" {
-  identifier              = "cosmos-${var.environment}"
+  identifier              = "pleros-${var.environment}"
   engine                  = "postgres"
   engine_version          = "16.3"
   instance_class          = var.instance_class
   allocated_storage       = var.allocated_storage
   max_allocated_storage   = var.allocated_storage * 5
   db_name                 = var.db_name
-  username                = "cosmos"
+  username                = "pleros"
   password                = random_password.master.result
   db_subnet_group_name    = aws_db_subnet_group.this.name
   vpc_security_group_ids  = [aws_security_group.rds.id]
@@ -53,7 +53,7 @@ resource "aws_db_instance" "postgres" {
   skip_final_snapshot     = var.environment != "production"
   storage_encrypted       = true
 
-  tags = { Environment = var.environment, Project = "cosmos" }
+  tags = { Environment = var.environment, Project = "pleros" }
 }
 
 output "endpoint"        { value = aws_db_instance.postgres.endpoint }

@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { jwtEmail } from '@/lib/jwt'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { getAccessToken } from '@/lib/auth-session'
 
 type NotificationRow = {
   id: string
@@ -33,8 +34,11 @@ function templateSummary(row: NotificationRow) {
   switch (row.templateKey) {
     case 'order.created':
       return `Order placed for $${String(p.total ?? '—')}.`
-    case 'order.shipped':
-      return `Order ${String(p.orderId ?? '').slice(-8)} is on its way.`
+    case 'order.shipped': {
+      const oid = String(p.orderId ?? '')
+      const code = oid.startsWith('seed_ord_') ? `ORD-${oid.replace('seed_ord_', '').toUpperCase()}` : `ORD-${oid.slice(-6).toUpperCase()}`
+      return `Order #${code} is on its way.`
+    }
     case 'invoice.issued':
       return `Invoice ${String(p.invoiceNumber ?? '—')} for $${String(p.total ?? '—')}${p.dueAt ? ` · due ${String(p.dueAt)}` : ''}.`
     case 'payment.received':
@@ -52,7 +56,7 @@ export default function BuyerNotificationsPage() {
   const [retryingId, setRetryingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('cosmos.accessToken') : null
+    const token = getAccessToken()
     const userEmail = jwtEmail(token)
     setEmail(userEmail)
     if (!userEmail) {
@@ -98,8 +102,8 @@ export default function BuyerNotificationsPage() {
 
   if (!email) {
     return (
-      <div className="cosmos-shop-page">
-        <h1 className="cosmos-shop-title">Notifications</h1>
+      <div className="pleros-shop-page">
+        <h1 className="pleros-shop-title">Notifications</h1>
         <EmptyState
           icon="🔔"
           title="Sign in to view notifications"
@@ -115,10 +119,10 @@ export default function BuyerNotificationsPage() {
   }
 
   return (
-    <div className="cosmos-shop-page max-w-3xl">
+    <div className="pleros-shop-page max-w-3xl">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
-          <h1 className="cosmos-shop-title">Notifications</h1>
+          <h1 className="pleros-shop-title">Notifications</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
             Messages sent to <span className="font-mono">{email}</span>
           </p>
@@ -147,10 +151,10 @@ export default function BuyerNotificationsPage() {
           {sorted.map((row) => {
             const summary = templateSummary(row)
             return (
-              <li key={row.id} className="cosmos-card p-4">
+              <li key={row.id} className="pleros-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="font-medium text-cosmos-white">{templateLabel(row.templateKey)}</p>
+                    <p className="font-medium text-pleros-white">{templateLabel(row.templateKey)}</p>
                     {summary ? (
                       <p className="text-sm mt-1" style={{ color: 'var(--c-text-2)' }}>
                         {summary}

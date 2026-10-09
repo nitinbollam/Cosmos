@@ -14,9 +14,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
-import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
 import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
 
 const KANBAN_COLUMNS = [
@@ -98,12 +98,6 @@ export default function CrmPage() {
     enabled: tab === 'leads',
   })
 
-  const customersQ = useQuery<CustomerRow[]>({
-    queryKey: ['customers'],
-    queryFn: () => api.get('/customers'),
-    enabled: tab === 'customers',
-  })
-
   const usersQ = useQuery<{ items: UserRow[] }>({
     queryKey: ['users', 'crm'],
     queryFn: () => api.get('/users?page=1&pageSize=200'),
@@ -120,7 +114,7 @@ export default function CrmPage() {
     <div className="p-6 space-y-6" style={{ fontFamily: 'var(--font-body)' }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
             CRM
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>Customers and pipeline — real-time from crm-service</p>
@@ -141,9 +135,6 @@ export default function CrmPage() {
 
       {tab === 'customers' && (
         <CustomersSection
-          customers={customersQ.data ?? []}
-          loading={customersQ.isLoading}
-          error={customersQ.isError}
           repById={repById}
           users={usersQ.data?.items ?? []}
           usersLoading={usersQ.isLoading}
@@ -164,10 +155,27 @@ export default function CrmPage() {
   )
 }
 
+const CUSTOMERS_PAGE_SIZE = 25
+
+function csvEscape(value: unknown): string {
+  const s = value == null ? '' : String(value)
+  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>): void {
+  const lines = [headers.join(','), ...rows.map((r) => r.map(csvEscape).join(','))]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+type CustomersPage = { items: CustomerRow[]; total: number; page: number; pageSize: number }
+
 function CustomersSection(props: {
-  customers: CustomerRow[]
-  loading: boolean
-  error: boolean
   repById: Map<string, UserRow>
   users: UserRow[]
   usersLoading: boolean
@@ -175,29 +183,60 @@ function CustomersSection(props: {
 }) {
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
+  const [page, setPage] = useState(1)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(search.trim().toLowerCase()), 300)
+    const t = setTimeout(() => {
+      setDebounced(search.trim())
+      setPage(1)
+    }, 300)
     return () => clearTimeout(t)
   }, [search])
 
-  const filtered = useMemo(() => {
-    if (!debounced) return props.customers
-    return props.customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(debounced) ||
-        (c.email?.toLowerCase().includes(debounced) ?? false) ||
-        (c.phone?.toLowerCase().includes(debounced) ?? false),
-    )
-  }, [props.customers, debounced])
+  const customersQ = useQuery<CustomersPage>({
+    queryKey: ['customers', page, debounced],
+    queryFn: () =>
+      api.get(
+        `/customers?page=${page}&pageSize=${CUSTOMERS_PAGE_SIZE}${debounced ? `&search=${encodeURIComponent(debounced)}` : ''}`,
+      ),
+    placeholderData: (prev) => prev,
+  })
+
+  const filtered = customersQ.data?.items ?? []
+  const total = customersQ.data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / CUSTOMERS_PAGE_SIZE))
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const all = await api.get<CustomerRow[]>('/customers')
+      downloadCsv(
+        `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Name', 'Email', 'Phone', 'Type', 'Credit limit', 'Credit used', 'Payment terms (days)', 'Sales rep'],
+        all.map((c) => [
+          c.name,
+          c.email ?? '',
+          c.phone ?? '',
+          c.customerKind ?? 'BUSINESS',
+          c.creditLimit ?? '',
+          c.creditUsed ?? '',
+          c.paymentTermsDays ?? '',
+          c.salesRepUserId ? (props.repById.get(c.salesRepUserId) ? userLabel(props.repById.get(c.salesRepUserId)!) : '') : '',
+        ]),
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <input
-          className="cosmos-input max-w-md"
+          className="pleros-input max-w-md"
           placeholder="Search company, email, phone…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -207,6 +246,9 @@ function CustomersSection(props: {
         </button>
         <button type="button" className="btn-ghost" onClick={() => setImportOpen((open) => !open)}>
           {importOpen ? 'Hide import' : 'Import CSV/Excel'}
+        </button>
+        <button type="button" className="btn-ghost" disabled={exporting} onClick={() => void exportCsv()}>
+          {exporting ? 'Exporting…' : 'Export CSV'}
         </button>
       </div>
 
@@ -258,15 +300,15 @@ function CustomersSection(props: {
         />
       ) : null}
 
-      <div className="cosmos-card overflow-x-auto">
-        {props.loading ? (
+      <div className="pleros-card overflow-x-auto">
+        {customersQ.isLoading ? (
           <div className="skeleton h-40 w-full" />
-        ) : props.error ? (
+        ) : customersQ.isError ? (
           <p style={{ color: 'var(--c-danger)' }}>Could not load customers.</p>
         ) : filtered.length === 0 ? (
           <EmptyState icon="🏢" title="No customers" description="Add a customer with the button above." />
         ) : (
-          <table className="cosmos-table">
+          <table className="pleros-table">
             <thead>
               <tr>
                 <th>Company</th>
@@ -332,6 +374,32 @@ function CustomersSection(props: {
           </table>
         )}
       </div>
+
+      {total > CUSTOMERS_PAGE_SIZE ? (
+        <div className="flex items-center justify-between gap-3 text-sm" style={{ color: 'var(--c-text-2)' }}>
+          <span>
+            Page {page} of {totalPages} · {total} customer{total === 1 ? '' : 's'}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-ghost !py-1 !px-3 !text-xs"
+              disabled={page <= 1 || customersQ.isFetching}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ← Prev
+            </button>
+            <button
+              type="button"
+              className="btn-ghost !py-1 !px-3 !text-xs"
+              disabled={page >= totalPages || customersQ.isFetching}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {drawerOpen && (
         <NewCustomerDrawer
@@ -418,7 +486,7 @@ function NewCustomerDrawer(props: {
         </h2>
         <label className="block text-xs mt-4" style={{ color: 'var(--c-text-3)' }}>Type</label>
         <select
-          className="cosmos-input mt-1"
+          className="pleros-input mt-1"
           value={customerKind}
           onChange={(e) => setCustomerKind(e.target.value as 'BUSINESS' | 'INDIVIDUAL')}
         >
@@ -429,27 +497,27 @@ function NewCustomerDrawer(props: {
         {customerKind === 'BUSINESS' ? (
           <>
             <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Company name *</label>
-            <input className="cosmos-input mt-1" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="pleros-input mt-1" value={name} onChange={(e) => setName(e.target.value)} />
           </>
         ) : (
           <div className="grid grid-cols-2 gap-2 mt-3">
             <div>
               <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>First name</label>
-              <input className="cosmos-input mt-1" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <input className="pleros-input mt-1" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
             </div>
             <div>
               <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>Last name</label>
-              <input className="cosmos-input mt-1" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              <input className="pleros-input mt-1" value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </div>
           </div>
         )}
 
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Email</label>
-        <input className="cosmos-input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="pleros-input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Phone</label>
-        <input className="cosmos-input mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <input className="pleros-input mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Tax ID</label>
-        <input className="cosmos-input mt-1" value={taxId} onChange={(e) => setTaxId(e.target.value)} />
+        <input className="pleros-input mt-1" value={taxId} onChange={(e) => setTaxId(e.target.value)} />
 
         <label className="flex items-center gap-2 mt-4 text-sm" style={{ color: 'var(--c-text)' }}>
           <input type="checkbox" checked={isTobacco} onChange={(e) => setIsTobacco(e.target.checked)} />
@@ -458,26 +526,26 @@ function NewCustomerDrawer(props: {
         {isTobacco ? (
           <>
             <label className="block text-xs mt-2" style={{ color: 'var(--c-text-3)' }}>License #</label>
-            <input className="cosmos-input mt-1" value={license} onChange={(e) => setLicense(e.target.value)} />
+            <input className="pleros-input mt-1" value={license} onChange={(e) => setLicense(e.target.value)} />
           </>
         ) : null}
 
         <div className="grid grid-cols-2 gap-2 mt-3">
           <div>
             <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>Credit limit</label>
-            <input className="cosmos-input mt-1" type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} />
+            <input className="pleros-input mt-1" type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} />
           </div>
           <div>
             <label className="block text-xs" style={{ color: 'var(--c-text-3)' }}>Credit used</label>
-            <input className="cosmos-input mt-1" type="number" value={creditUsed} onChange={(e) => setCreditUsed(e.target.value)} />
+            <input className="pleros-input mt-1" type="number" value={creditUsed} onChange={(e) => setCreditUsed(e.target.value)} />
           </div>
         </div>
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Payment terms (days, 0 = prepay)</label>
-        <input className="cosmos-input mt-1" type="number" value={terms} onChange={(e) => setTerms(e.target.value)} />
+        <input className="pleros-input mt-1" type="number" value={terms} onChange={(e) => setTerms(e.target.value)} />
 
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Sales rep</label>
         <select
-          className="cosmos-input mt-1"
+          className="pleros-input mt-1"
           value={salesRepUserId}
           onChange={(e) => setSalesRepUserId(e.target.value)}
           disabled={props.usersLoading}
@@ -489,11 +557,11 @@ function NewCustomerDrawer(props: {
         </select>
 
         <label className="block text-xs mt-4" style={{ color: 'var(--c-text-3)' }}>Primary address</label>
-        <input className="cosmos-input mt-1" placeholder="Line 1" value={addr1} onChange={(e) => setAddr1(e.target.value)} />
+        <input className="pleros-input mt-1" placeholder="Line 1" value={addr1} onChange={(e) => setAddr1(e.target.value)} />
         <div className="grid grid-cols-3 gap-2 mt-2">
-          <input className="cosmos-input" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
-          <input className="cosmos-input" placeholder="State" value={state} onChange={(e) => setState(e.target.value)} />
-          <input className="cosmos-input" placeholder="ZIP" value={zip} onChange={(e) => setZip(e.target.value)} />
+          <input className="pleros-input" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
+          <input className="pleros-input" placeholder="State" value={state} onChange={(e) => setState(e.target.value)} />
+          <input className="pleros-input" placeholder="ZIP" value={zip} onChange={(e) => setZip(e.target.value)} />
         </div>
 
         {create.error && <p className="text-sm mt-3" style={{ color: 'var(--c-danger)' }}>{errMsg(create.error)}</p>}
@@ -671,7 +739,7 @@ function LeadsKanbanSection(props: {
           </div>
           <DragOverlay>
             {activeDrag ? (
-              <div className="cosmos-card opacity-95 shadow-xl" style={{ width: 260 }}>
+              <div className="pleros-card opacity-95 shadow-xl" style={{ width: 260 }}>
                 <p className="font-semibold" style={{ color: 'var(--c-text)' }}>{activeDrag.companyName}</p>
                 <StatusBadge status={activeDrag.status} />
               </div>
@@ -762,7 +830,7 @@ function LeadKanbanCard({
         ref={setNodeRef}
         {...listeners}
         {...attributes}
-        className="cosmos-card cursor-grab active:cursor-grabbing"
+        className="pleros-card cursor-grab active:cursor-grabbing"
         style={{ ...style, padding: 12 }}
       >
         <p className="font-semibold text-sm leading-tight" style={{ color: 'var(--c-text)' }}>{lead.companyName}</p>
@@ -801,10 +869,10 @@ function LeadKanbanCard({
 
       {convertOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="cosmos-card max-w-sm w-full space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-sm w-full space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display font-bold" style={{ color: 'var(--c-heading)' }}>Convert lead</h3>
             <label className="text-xs" style={{ color: 'var(--c-text-3)' }}>Customer / account name</label>
-            <input className="cosmos-input" value={custName} onChange={(e) => setCustName(e.target.value)} />
+            <input className="pleros-input" value={custName} onChange={(e) => setCustName(e.target.value)} />
             {convert.error && <p className="text-sm" style={{ color: 'var(--c-danger)' }}>{errMsg(convert.error)}</p>}
             <div className="flex gap-2">
               <button type="button" className="btn-ghost flex-1" onClick={() => setConvertOpen(false)}>Cancel</button>
@@ -849,19 +917,19 @@ function NewLeadDrawer(props: { onClose: () => void; onSaved: () => void }) {
       <div className="w-full max-w-md border-l p-6 overflow-y-auto" style={{ background: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
         <h2 className="text-lg font-bold font-display" style={{ color: 'var(--c-heading)' }}>New lead</h2>
         <label className="block text-xs mt-4" style={{ color: 'var(--c-text-3)' }}>Company *</label>
-        <input className="cosmos-input mt-1" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+        <input className="pleros-input mt-1" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Contact name</label>
-        <input className="cosmos-input mt-1" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+        <input className="pleros-input mt-1" value={contactName} onChange={(e) => setContactName(e.target.value)} />
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Email</label>
-        <input className="cosmos-input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="pleros-input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Source</label>
-        <select className="cosmos-input mt-1" value={source} onChange={(e) => setSource(e.target.value)}>
+        <select className="pleros-input mt-1" value={source} onChange={(e) => setSource(e.target.value)}>
           {['WEB', 'REFERRAL', 'TRADE_SHOW', 'COLD_CALL', 'OTHER'].map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
         <label className="block text-xs mt-3" style={{ color: 'var(--c-text-3)' }}>Pipeline value</label>
-        <input className="cosmos-input mt-1" type="number" value={pipelineValue} onChange={(e) => setPipelineValue(e.target.value)} />
+        <input className="pleros-input mt-1" type="number" value={pipelineValue} onChange={(e) => setPipelineValue(e.target.value)} />
         {create.error && <p className="text-sm mt-3" style={{ color: 'var(--c-danger)' }}>{errMsg(create.error)}</p>}
         <div className="flex gap-2 mt-6">
           <button type="button" className="btn-ghost flex-1" onClick={props.onClose}>Cancel</button>

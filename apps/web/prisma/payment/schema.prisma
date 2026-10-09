@@ -82,6 +82,7 @@ model SavedPaymentMethod {
   tenantId              String
   customerId            String
   stripePaymentMethodId String
+  stripeConnectedAccountId String?
   brand                 String?
   last4                 String?
   expMonth              Int?

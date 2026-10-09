@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-/** Generate favicon PNGs from cosmos-mark.svg for apps/client/public. */
+/** Generate favicon PNGs from pleros-mark.svg for apps/client/public. */
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../apps/client/public')
-const markSvg = path.join(publicDir, 'cosmos-mark.svg')
+const markSvg = path.join(publicDir, 'pleros-mark.svg')
 
 if (!fs.existsSync(markSvg)) {
-  console.log('[favicon] skip — cosmos-mark.svg missing')
+  console.log('[favicon] skip — pleros-mark.svg missing')
   process.exit(0)
 }
 
@@ -36,7 +36,7 @@ function sips(size, out) {
 
 sips(32, path.join(publicDir, 'favicon-32.png'))
 sips(180, path.join(publicDir, 'apple-touch-icon.png'))
-sips(512, path.join(publicDir, 'cosmos-icon-512.png'))
+sips(512, path.join(publicDir, 'pleros-icon-512.png'))
 
 fs.rmSync(tmpDir, { recursive: true, force: true })
-console.log('[favicon] favicon-32.png, apple-touch-icon.png, cosmos-icon-512.png')
+console.log('[favicon] favicon-32.png, apple-touch-icon.png, pleros-icon-512.png')

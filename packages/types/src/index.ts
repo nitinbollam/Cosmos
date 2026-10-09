@@ -12,6 +12,7 @@ export type Role =
   | 'DRIVER'
   | 'ACCOUNTANT'
   | 'VIEWER'
+  | 'STAFF'
 
 export type Plan = 'STARTER' | 'GROWTH' | 'ENTERPRISE'
 
@@ -20,6 +21,7 @@ export interface JwtPayload {
   email: string
   role: Role
   tenantId: string
+  permissions?: string[]
   iat?: number
   exp?: number
 }
@@ -30,6 +32,18 @@ export interface AuthenticatedUser {
   role: Role
   tenantId: string
   permissions: string[]
+}
+
+export interface UserSummary {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role: Role
+  permissions: string[]
+  isActive: boolean
+  lastLoginAt?: string | null
+  createdAt: string
 }
 
 export interface PaginatedResult<T> {
@@ -48,6 +62,7 @@ export interface MoneyAmount {
 export type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
+  | 'BACKORDERED'
   | 'PROCESSING'
   | 'PACKED'
   | 'SHIPPED'
@@ -56,7 +71,16 @@ export type OrderStatus =
   | 'FAILED'
   | 'RETURNED'
 
-export type OrderChannel = 'POS' | 'B2B_PORTAL' | 'SALES_REP' | 'API'
+export type OrderChannel =
+  | 'POS'
+  | 'B2B_PORTAL'
+  | 'SALES_REP'
+  | 'API'
+  | 'EDI'
+  | 'SHOPIFY'
+  | 'EBAY'
+  | 'WALMART'
+  | 'AMAZON'
 
 export type PaymentMethod = 'CARD' | 'ACH' | 'CHECK' | 'CASH' | 'NET_TERMS'
 

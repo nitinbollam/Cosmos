@@ -1,11 +1,12 @@
 {
-  "name": "Cosmos",
-  "short_name": "Cosmos",
-  "description": "Cosmos ERP — admin, B2B shop, and mobile warehouse/delivery/sales",
+  "name": "Pleros Mobile",
+  "short_name": "Pleros",
+  "description": "Pleros field apps — warehouse, delivery, and sales",
   "start_url": "/m/warehouse",
+  "scope": "/m/",
   "display": "standalone",
-  "background_color": "#DEC0F1",
-  "theme_color": "#7161EF",
+  "background_color": "#09090B",
+  "theme_color": "#09090B",
   "orientation": "portrait-primary",
   "icons": [
     {
@@ -14,15 +15,41 @@
       "type": "image/png"
     },
     {
+      "src": "/pleros-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png"
     },
     {
-      "src": "/cosmos-icon-512.png",
+      "src": "/pleros-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Warehouse",
+      "short_name": "Warehouse",
+      "url": "/m/warehouse",
+      "icons": [{ "src": "/pleros-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Delivery",
+      "short_name": "Delivery",
+      "url": "/m/delivery",
+      "icons": [{ "src": "/pleros-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Sales",
+      "short_name": "Sales",
+      "url": "/m/sales",
+      "icons": [{ "src": "/pleros-icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

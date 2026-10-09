@@ -50,7 +50,17 @@ export type UpsertMsaConfigInput = {
   autoSubmit?: boolean
 }
 
+const DID_REGEX = /^[A-Za-z0-9_-]+$/
+
+function assertSafeDid(val: string, label: string) {
+  if (!DID_REGEX.test(val)) {
+    throw new ApiError(400, `Invalid ${label}: must contain only alphanumeric characters, dashes, or underscores`)
+  }
+}
+
 export async function upsertConfig(tenantId: string, dto: UpsertMsaConfigInput) {
+  assertSafeDid(dto.manufacturerDid, 'manufacturerDid')
+  if (dto.reporterDid) assertSafeDid(dto.reporterDid, 'reporterDid')
   let row = await complianceDb.mSATenant.findFirst({ where: { tenantId } })
   if (!row) {
     await complianceDb.mSATenant.create({

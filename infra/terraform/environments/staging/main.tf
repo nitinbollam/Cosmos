@@ -4,7 +4,7 @@ terraform {
     aws = { source = "hashicorp/aws", version = "~> 5.50" }
   }
   backend "s3" {
-    bucket = "cosmos-tfstate"
+    bucket = "pleros-tfstate"
     key    = "staging/terraform.tfstate"
     region = "us-east-1"
   }

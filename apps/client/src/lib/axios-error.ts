@@ -14,3 +14,8 @@ export function axiosErr(e: unknown): string {
 export function isUnauthorized(e: unknown): boolean {
   return axios.isAxiosError(e) && e.response?.status === 401
 }
+
+export function isEmailVerificationRequired(e: unknown): boolean {
+  if (!axios.isAxiosError(e) || e.response?.status !== 403) return false
+  return axiosErr(e).toLowerCase().includes('verify your email')
+}

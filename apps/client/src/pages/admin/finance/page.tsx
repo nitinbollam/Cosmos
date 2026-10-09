@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { Elements } from '@stripe/react-stripe-js'
 import {
   Area,
   AreaChart,
@@ -12,8 +13,63 @@ import {
 } from 'recharts'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/cosmos/status-badge'
-import { EmptyState } from '@/components/cosmos/empty-state'
+import { downloadCsv } from '@/lib/csv-download'
+import { StatusBadge } from '@/components/pleros/status-badge'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { AdminStripeCardForm } from '@/components/admin-stripe-card-form'
+import { useStripeConnect } from '@/lib/stripe-connect'
+import { ChartOfAccountsTab } from '@/pages/admin/finance/tabs/chart-of-accounts-tab'
+import { GeneralLedgerTab } from '@/pages/admin/finance/tabs/general-ledger-tab'
+import { IncomeStatementTab } from '@/pages/admin/finance/tabs/income-statement-tab'
+import { BalanceSheetTab } from '@/pages/admin/finance/tabs/balance-sheet-tab'
+
+type FinanceTab =
+  | 'invoices'
+  | 'bills'
+  | 'trial'
+  | 'cashflow'
+  | 'bank'
+  | 'fixed-assets'
+  | 'chart-of-accounts'
+  | 'general-ledger'
+  | 'income-statement'
+  | 'balance-sheet'
+
+const FINANCE_TAB_LABELS: Record<FinanceTab, string> = {
+  invoices: 'Invoices (AR)',
+  bills: 'Bills (AP)',
+  bank: 'Bank recon',
+  trial: 'Trial balance',
+  cashflow: 'Cash flow',
+  'fixed-assets': 'Fixed Assets',
+  'chart-of-accounts': 'Chart of accounts',
+  'general-ledger': 'General ledger',
+  'income-statement': 'Income statement',
+  'balance-sheet': 'Balance sheet',
+}
+
+const FINANCE_TABS: FinanceTab[] = [
+  'invoices',
+  'bills',
+  'bank',
+  'trial',
+  'cashflow',
+  'fixed-assets',
+  'chart-of-accounts',
+  'general-ledger',
+  'income-statement',
+  'balance-sheet',
+]
+
+const TABS_WITHOUT_GLOBAL_DATE_FILTER: FinanceTab[] = [
+  'trial',
+  'chart-of-accounts',
+  'general-ledger',
+  'income-statement',
+  'balance-sheet',
+]
+
+const stripePublishable = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
 
 type InvoiceRow = {
   id: string
@@ -30,7 +86,27 @@ type InvoiceRow = {
   order?: { status: string; paymentMethod: string }
 }
 
-type InvoiceList = { items: InvoiceRow[]; total: number }
+type InvoiceList = { items: InvoiceRow[]; total: number; page: number; pageSize: number; hasMore?: boolean }
+
+type ArSummary = {
+  invoiced: number
+  collected: number
+  outstanding: number
+  count: number
+  aging: { current: number; d30: number; d60: number; d90: number; d90p: number }
+}
+
+const INVOICES_PAGE_SIZE = 25
+const EXPORT_PAGE_SIZE = 100
+
+function invoiceListQuery(filter: string, page: number, pageSize: number): string {
+  const q = new URLSearchParams()
+  q.set('page', String(page))
+  q.set('pageSize', String(pageSize))
+  if (filter === 'ALL') q.set('excludeCancelled', '1')
+  else q.set('status', filter)
+  return q.toString()
+}
 
 type PoRow = {
   id: string
@@ -77,6 +153,7 @@ type CashflowBucket = {
 
 type CashflowResp = {
   tenant_id: string
+  method?: string
   weekly_net_baseline: number
   forecast: CashflowBucket[]
   warnings: string[]
@@ -92,6 +169,10 @@ type BankAccount = {
 type BankSummary = {
   accounts: BankAccount[]
   unreconciledCount: number
+  openingBalanceTotal?: number
+  closingBalanceTotal?: number
+  totalDebits?: number
+  totalCredits?: number
 }
 
 type BankLine = {
@@ -101,6 +182,29 @@ type BankLine = {
   amount: number | string
   reference?: string | null
   bankAccount?: { name: string }
+}
+
+type FixedAssetRow = {
+  id: string
+  assetCode: string
+  name: string
+  category: string
+  acquisitionDate: string
+  cost: number
+  salvageValue: number
+  usefulLifeMonths: number
+  depreciationMethod: string
+  accumulatedDepreciation: number
+  netBookValue: number
+  status: string
+}
+
+type FixedAssetSummaryRow = {
+  totalCost: number
+  totalAccumDeprec: number
+  totalNetBookValue: number
+  activeCount: number
+  totalCount: number
 }
 
 function money(n: number) {
@@ -130,11 +234,20 @@ function apStatus(po: PoRow): string {
 
 export default function FinancePage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'invoices' | 'bills' | 'trial' | 'cashflow' | 'bank'>('invoices')
+  const [tab, setTab] = useState<FinanceTab>('invoices')
   const [invFilter, setInvFilter] = useState('ALL')
   const [apFilter, setApFilter] = useState('ALL')
+  const [assetFilter, setAssetFilter] = useState('ALL')
+  const [createAssetOpen, setCreateAssetOpen] = useState(false)
+  const [disposeAssetTarget, setDisposeAssetTarget] = useState<FixedAssetRow | null>(null)
+  const [disposeProceeds, setDisposeProceeds] = useState('0')
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [quarter, setQuarter] = useState<number>(Math.ceil((new Date().getMonth() + 1) / 3))
+  const [trialPeriodType, setTrialPeriodType] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY'>('MONTHLY')
+  const [bankSubTab, setBankSubTab] = useState<'summary' | 'debits' | 'credits' | 'unreconciled'>('summary')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [cfHorizon, setCfHorizon] = useState<30 | 60 | 90>(30)
 
   const [payOrder, setPayOrder] = useState<InvoiceRow | null>(null)
@@ -142,64 +255,127 @@ export default function FinancePage() {
   const [matchBill, setMatchBill] = useState<BillRow | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState<'CASH' | 'CHECK' | 'ACH' | 'CARD'>('ACH')
+  const [invoicePage, setInvoicePage] = useState(1)
+  const [exportingInvoices, setExportingInvoices] = useState(false)
+  const [payUseStripe, setPayUseStripe] = useState(false)
+  const { stripePromise, chargesEnabled } = useStripeConnect(api.get.bind(api), 'finance-stripe')
 
-  const invoicesQ = useQuery({
-    queryKey: ['finance', 'invoices-ar'],
-    queryFn: () => api.get<InvoiceList>('/invoices?page=1&pageSize=200'),
+  const fixedAssetsQ = useQuery({
+    queryKey: ['finance', 'fixed-assets', assetFilter],
+    queryFn: () => api.get<FixedAssetRow[]>(`/fixed-assets${assetFilter !== 'ALL' ? `?status=${assetFilter}` : ''}`),
+    enabled: tab === 'fixed-assets',
+  })
+
+  const fixedAssetsSummaryQ = useQuery({
+    queryKey: ['finance', 'fixed-assets-summary'],
+    queryFn: () => api.get<FixedAssetSummaryRow>('/fixed-assets/summary'),
+    enabled: tab === 'fixed-assets',
+  })
+
+  const postDeprecMut = useMutation({
+    mutationFn: () => api.post<{ count: number; totalDepreciation: number }>('/fixed-assets/post-depreciation', {}),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets-summary'] })
+      window.alert(`Successfully posted monthly depreciation for ${data.count} active asset(s). Total expense: ${money(data.totalDepreciation)}`)
+    },
+  })
+
+  const disposeAssetMut = useMutation({
+    mutationFn: ({ id, proceeds }: { id: string; proceeds: number }) =>
+      api.post(`/fixed-assets/${encodeURIComponent(id)}/dispose`, { proceeds }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets-summary'] })
+      setDisposeAssetTarget(null)
+    },
+  })
+
+  const arSummaryQ = useQuery({
+    queryKey: ['finance', 'invoices-ar-summary'],
+    queryFn: () => api.get<ArSummary>('/invoices/ar-summary'),
     enabled: tab === 'invoices',
   })
 
+  const invoicesQ = useQuery({
+    queryKey: ['finance', 'invoices-ar', invoicePage, invFilter],
+    queryFn: () => api.get<InvoiceList>(`/invoices?${invoiceListQuery(invFilter, invoicePage, INVOICES_PAGE_SIZE)}`),
+    enabled: tab === 'invoices',
+    placeholderData: (prev) => prev,
+  })
+
   const billsQ = useQuery({
-    queryKey: ['finance', 'bills-ap'],
-    queryFn: () => api.get<BillRow[]>('/bills'),
+    queryKey: ['finance', 'bills-ap', startDate, endDate],
+    queryFn: () => {
+      const q = new URLSearchParams()
+      if (startDate) q.set('startDate', startDate)
+      if (endDate) q.set('endDate', endDate)
+      const qs = q.toString()
+      return api.get<BillRow[]>(`/bills${qs ? `?${qs}` : ''}`)
+    },
     enabled: tab === 'bills',
   })
 
   const bankSummaryQ = useQuery({
-    queryKey: ['finance', 'bank-summary'],
-    queryFn: () => api.get<BankSummary>('/bank-accounts?summary=true'),
+    queryKey: ['finance', 'bank-summary', startDate, endDate],
+    queryFn: () => {
+      const q = new URLSearchParams({ summary: 'true' })
+      if (startDate) q.set('startDate', startDate)
+      if (endDate) q.set('endDate', endDate)
+      return api.get<BankSummary>(`/bank-accounts?${q.toString()}`)
+    },
     enabled: tab === 'bank',
   })
 
   const bankLinesQ = useQuery({
-    queryKey: ['finance', 'bank-unreconciled'],
-    queryFn: () => api.get<BankLine[]>('/bank-accounts/unreconciled'),
+    queryKey: ['finance', 'bank-lines', bankSubTab, startDate, endDate],
+    queryFn: () => {
+      if (bankSubTab === 'unreconciled') return api.get<BankLine[]>('/bank-accounts/unreconciled')
+      const typeParam = bankSubTab === 'debits' ? 'DEBIT' : bankSubTab === 'credits' ? 'CREDIT' : 'ALL'
+      const q = new URLSearchParams({ type: typeParam })
+      if (startDate) q.set('startDate', startDate)
+      if (endDate) q.set('endDate', endDate)
+      return api.get<BankLine[]>(`/bank-accounts/lines?${q.toString()}`)
+    },
     enabled: tab === 'bank',
   })
 
   const trialQ = useQuery({
-    queryKey: ['finance', 'trial', year, month],
-    queryFn: () => api.get<TrialRow[]>(`/reports/trial-balance?year=${year}&month=${month}`),
+    queryKey: ['finance', 'trial', year, trialPeriodType, month, quarter],
+    queryFn: () =>
+      api.get<TrialRow[]>(
+        `/reports/trial-balance?year=${year}&periodType=${trialPeriodType}&month=${month}&quarter=${quarter}`,
+      ),
     enabled: tab === 'trial',
   })
 
-  type KpiSnap = { tenantId: string; date: string; revenue: string | number }
-  const snapsQ = useQuery({
-    queryKey: ['finance', 'kpi-snapshots'],
-    queryFn: () => api.get<KpiSnap[]>('/kpi/snapshots'),
+  type CashflowHistoryResp = {
+    tenantId: string
+    source: 'ar_ap' | 'revenue_proxy'
+    history: Array<{ period: string; inflow: number; outflow: number }>
+    warnings: string[]
+  }
+
+  const cashHistQ = useQuery({
+    queryKey: ['finance', 'cashflow-history'],
+    queryFn: () => api.get<CashflowHistoryResp>('/analytics/cashflow-history?weeks=16'),
     enabled: tab === 'cashflow',
   })
 
   const cashInput = useMemo(() => {
-    const rows = [...(snapsQ.data ?? [])].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    )
-    if (rows.length < 2) return null
-    const tail = rows.slice(-20)
-    const tenantId = tail[tail.length - 1]?.tenantId ?? 'tenant'
-    const history = tail.map((s) => {
-      const inflow = Number(s.revenue)
-      return { period: new Date(s.date).toISOString().slice(0, 10), inflow, outflow: Math.max(0, inflow * 0.55) }
-    })
+    const hist = cashHistQ.data?.history ?? []
+    const active = hist.filter((p) => p.inflow > 0 || p.outflow > 0)
+    if (active.length < 3) return null
     return {
-      tenant_id: tenantId,
-      history,
+      tenant_id: cashHistQ.data?.tenantId ?? 'tenant',
+      history: hist,
       horizon_weeks: Math.max(1, Math.ceil(cfHorizon / 7)),
+      seasonal_period: hist.length >= 8 ? 4 : null,
     }
-  }, [snapsQ.data, cfHorizon])
+  }, [cashHistQ.data, cfHorizon])
 
   const cashQ = useQuery({
-    queryKey: ['finance', 'cashflow', cfHorizon, (snapsQ.data ?? []).length],
+    queryKey: ['finance', 'cashflow', cfHorizon, cashHistQ.dataUpdatedAt],
     enabled: tab === 'cashflow' && !!cashInput,
     queryFn: async () => {
       const res = await fetch('/api/cashflow', {
@@ -213,48 +389,42 @@ export default function FinancePage() {
     },
   })
 
-  const aging = useMemo(() => {
-    const rows = invoicesQ.data?.items ?? []
-    const open = rows.filter((inv) => inv.balance > 0.01 && inv.order?.status !== 'CANCELLED')
-    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
-    const now = Date.now()
-    for (const inv of open) {
-      const days = (now - new Date(inv.issuedAt).getTime()) / (86400 * 1000)
-      const b = inv.balance
-      if (days <= 30) buckets.current += b
-      else if (days <= 60) buckets.d30 += b
-      else if (days <= 90) buckets.d60 += b
-      else if (days <= 120) buckets.d90 += b
-      else buckets.d90p += b
-    }
-    return buckets
-  }, [invoicesQ.data])
+  const aging = arSummaryQ.data?.aging ?? { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
+  const arSummary = arSummaryQ.data ?? { invoiced: 0, collected: 0, outstanding: 0, count: 0, aging }
 
-  const arSummary = useMemo(() => {
-    const rows = (invoicesQ.data?.items ?? []).filter((inv) => inv.order?.status !== 'CANCELLED')
-    let invoiced = 0
-    let collected = 0
-    for (const inv of rows) {
-      invoiced += Number(inv.totalAmount) + Number(inv.amountCredited ?? 0)
-      collected += Number(inv.amountPaid ?? 0)
-    }
-    return {
-      invoiced,
-      collected,
-      outstanding: rows.reduce((s, inv) => s + inv.balance, 0),
-      count: rows.length,
-    }
-  }, [invoicesQ.data])
+  const invoiceRows = invoicesQ.data?.items ?? []
+  const invoiceTotal = invoicesQ.data?.total ?? 0
+  const invoiceTotalPages = Math.max(1, Math.ceil(invoiceTotal / INVOICES_PAGE_SIZE))
 
-  const filteredInvoices = useMemo(() => {
-    const rows = invoicesQ.data?.items ?? []
-    return rows.filter((inv) => {
-      const st = inv.displayStatus
-      if (invFilter === 'ALL') return inv.order?.status !== 'CANCELLED'
-      if (invFilter === 'FAILED') return inv.order?.status === 'FAILED'
-      return st === invFilter
-    })
-  }, [invoicesQ.data, invFilter])
+  async function exportInvoicesCsv() {
+    setExportingInvoices(true)
+    try {
+      const all: InvoiceRow[] = []
+      let page = 1
+      while (true) {
+        const res = await api.get<InvoiceList>(`/invoices?${invoiceListQuery(invFilter, page, EXPORT_PAGE_SIZE)}`)
+        all.push(...res.items)
+        if (!res.hasMore || res.items.length === 0 || all.length >= res.total) break
+        page += 1
+      }
+      downloadCsv(
+        `invoices-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Invoice', 'Order', 'Customer', 'Issued', 'Total', 'Paid', 'Balance', 'Status'],
+        all.map((inv) => [
+          inv.invoiceNumber,
+          inv.orderId,
+          inv.customerId,
+          new Date(inv.issuedAt).toLocaleDateString(),
+          inv.totalAmount,
+          inv.amountPaid ?? 0,
+          inv.balance,
+          inv.displayStatus,
+        ]),
+      )
+    } finally {
+      setExportingInvoices(false)
+    }
+  }
 
   const filteredBills = useMemo(() => {
     const rows = billsQ.data ?? []
@@ -277,6 +447,7 @@ export default function FinancePage() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar-summary'] })
       setPayOrder(null)
       setPayAmount('')
     },
@@ -315,15 +486,11 @@ export default function FinancePage() {
 
   function exportTrialCsv() {
     const rows = trialQ.data ?? []
-    const head = ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net']
-    const lines = [head.join(','), ...rows.map((r) =>
-      [r.accountCode, `"${r.accountName.replace(/"/g, '""')}"`, r.type, r.debits, r.credits, r.netBalance].join(','))]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `cosmos-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    downloadCsv(
+      `pleros-trial-balance-${year}-${String(month).padStart(2, '0')}.csv`,
+      ['Account Code', 'Account Name', 'Type', 'Debits', 'Credits', 'Net'],
+      rows.map((r) => [r.accountCode, r.accountName, r.type, r.debits, r.credits, r.netBalance]),
+    )
   }
 
   const cfChart = useMemo(() => {
@@ -344,7 +511,7 @@ export default function FinancePage() {
   return (
     <div className="p-6 space-y-6" style={{ fontFamily: 'var(--font-body)' }}>
       <div>
-        <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
           Finance
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
@@ -353,25 +520,53 @@ export default function FinancePage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['invoices', 'bills', 'bank', 'trial', 'cashflow'] as const).map((id) => (
+        {FINANCE_TABS.map((id) => (
           <button
             key={id}
             type="button"
             className={tab === id ? 'btn-primary' : 'btn-ghost'}
             onClick={() => setTab(id)}
           >
-            {id === 'invoices'
-              ? 'Invoices (AR)'
-              : id === 'bills'
-                ? 'Bills (AP)'
-                : id === 'bank'
-                  ? 'Bank recon'
-                  : id === 'trial'
-                    ? 'Trial balance'
-                    : 'Cash flow'}
+            {FINANCE_TAB_LABELS[id]}
           </button>
         ))}
       </div>
+
+      {!TABS_WITHOUT_GLOBAL_DATE_FILTER.includes(tab) && (
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border border-pleros-border bg-pleros-surface-2/40 text-xs">
+          <span className="font-semibold text-pleros-white">Date Range Filter:</span>
+          <label className="flex items-center gap-1.5 text-pleros-muted">
+            From:
+            <input
+              type="date"
+              className="rounded bg-pleros-surface border border-pleros-border px-2 py-1 text-xs text-pleros-text"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-pleros-muted">
+            To:
+            <input
+              type="date"
+              className="rounded bg-pleros-surface border border-pleros-border px-2 py-1 text-xs text-pleros-text"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </label>
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              className="text-xs text-red-400 hover:underline ml-1"
+              onClick={() => {
+                setStartDate('')
+                setEndDate('')
+              }}
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+      )}
 
       {tab === 'invoices' && (
         <>
@@ -381,7 +576,7 @@ export default function FinancePage() {
               { label: 'Collected', v: arSummary.collected, hint: 'Payments received' },
               { label: 'Outstanding AR', v: arSummary.outstanding, hint: 'Unpaid balance' },
             ].map((c) => (
-              <div key={c.label} className="cosmos-card">
+              <div key={c.label} className="pleros-card">
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
                 <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{c.hint}</div>
@@ -399,26 +594,44 @@ export default function FinancePage() {
               { k: 'd90', label: '91–120 Days', v: aging.d90, color: 'var(--c-danger)' },
               { k: 'd90p', label: '120+ Days', v: aging.d90p, color: '#b91c1c' },
             ].map((c) => (
-              <div key={c.k} className="cosmos-card metric-accent" style={{ borderLeftColor: c.color }}>
+              <div key={c.k} className="pleros-card metric-accent" style={{ borderLeftColor: c.color }}>
                 <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{c.label}</div>
                 <div className="text-lg font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>{money(c.v)}</div>
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex flex-wrap gap-2">
             {['ALL', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'FAILED'].map((s) => (
-              <button key={s} type="button" className={invFilter === s ? 'btn-primary' : 'btn-ghost'} onClick={() => setInvFilter(s)}>
+              <button
+                key={s}
+                type="button"
+                className={invFilter === s ? 'btn-primary' : 'btn-ghost'}
+                onClick={() => {
+                  setInvFilter(s)
+                  setInvoicePage(1)
+                }}
+              >
                 {s}
               </button>
             ))}
+            </div>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={exportingInvoices}
+              onClick={() => void exportInvoicesCsv()}
+            >
+              {exportingInvoices ? 'Exporting…' : 'Export CSV'}
+            </button>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {invoicesQ.isLoading ? <div className="skeleton h-40 w-full" /> : invoicesQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>Could not load invoices</p>
-            ) : filteredInvoices.length === 0 ? (
+            ) : invoiceRows.length === 0 ? (
               <EmptyState icon="📄" title="No invoices" description="Invoices are issued when orders ship." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Invoice</th>
@@ -433,31 +646,64 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInvoices.map((inv) => (
-                    <tr key={inv.id}>
-                      <td className="font-mono text-xs">{inv.invoiceNumber}</td>
-                      <td className="font-mono text-xs">{inv.orderId.slice(0, 12)}…</td>
-                      <td>{inv.customerId.slice(0, 12)}…</td>
-                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(inv.issuedAt).toLocaleDateString()}</td>
-                      <td className="font-mono">{money(Number(inv.totalAmount))}</td>
-                      <td className="font-mono">{money(Number(inv.amountPaid ?? 0))}</td>
-                      <td className="font-mono">{money(inv.balance)}</td>
-                      <td><StatusBadge status={inv.displayStatus} /></td>
-                      <td className="space-x-2">
-                        {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && (
-                          <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
-                            setPayOrder(inv)
-                            setPayAmount(String(inv.balance.toFixed(2)))
-                          }}>Record payment</button>
-                        )}
-                        <Link to={adminPath(`/orders/${inv.orderId}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {invoiceRows.map((inv) => {
+                    const orderCode = inv.orderId.startsWith('seed_ord_')
+                      ? `ORD-${inv.orderId.replace('seed_ord_', '').toUpperCase()}`
+                      : `ORD-${inv.orderId.slice(-6).toUpperCase()}`
+                    const customerCode = inv.customerId.startsWith('cust_')
+                      ? `Customer #${inv.customerId.slice(-6).toUpperCase()}`
+                      : inv.customerId
+                    return (
+                      <tr key={inv.id}>
+                        <td className="font-mono text-xs font-semibold text-pleros-white">{inv.invoiceNumber}</td>
+                        <td className="font-mono text-xs text-pleros-primary">#{orderCode}</td>
+                        <td className="text-sm">{customerCode}</td>
+                        <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(inv.issuedAt).toLocaleDateString()}</td>
+                        <td className="font-mono font-medium">{money(Number(inv.totalAmount))}</td>
+                        <td className="font-mono">{money(Number(inv.amountPaid ?? 0))}</td>
+                        <td className="font-mono font-bold text-pleros-white">{money(inv.balance)}</td>
+                        <td><StatusBadge status={inv.displayStatus} /></td>
+                        <td className="space-x-2">
+                          {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && inv.order?.status !== 'FAILED' && (
+                            <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
+                              setPayOrder(inv)
+                              setPayAmount(String(inv.balance.toFixed(2)))
+                            }}>Record payment</button>
+                          )}
+                          <Link to={adminPath(`/orders/${inv.orderId}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
           </div>
+          {invoiceTotal > INVOICES_PAGE_SIZE ? (
+            <div className="flex items-center justify-between gap-3 text-sm" style={{ color: 'var(--c-text-2)' }}>
+              <span>
+                Page {invoicePage} of {invoiceTotalPages} · {invoiceTotal} invoice{invoiceTotal === 1 ? '' : 's'}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  disabled={invoicePage <= 1 || invoicesQ.isFetching}
+                  onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                >
+                  ← Prev
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !px-3 !text-xs"
+                  disabled={invoicePage >= invoiceTotalPages || invoicesQ.isFetching}
+                  onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
 
@@ -470,13 +716,13 @@ export default function FinancePage() {
               </button>
             ))}
           </div>
-          <div className="cosmos-card overflow-x-auto">
+          <div className="pleros-card overflow-x-auto">
             {billsQ.isLoading ? <div className="skeleton h-40 w-full" /> : billsQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>Could not load vendor bills</p>
             ) : filteredBills.length === 0 ? (
               <EmptyState icon="📥" title="No bills" description="Vendor bills are created when goods are received against POs." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Bill #</th>
@@ -504,15 +750,22 @@ export default function FinancePage() {
                       <td><StatusBadge status={bill.displayStatus} /></td>
                       <td>
                         {bill.purchaseOrderId ? (
-                          <button
-                            type="button"
-                            className="btn-ghost !py-0.5 !px-1.5 !text-xs"
-                            onClick={() => setMatchBill(bill)}
-                          >
-                            <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
-                          </button>
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              className="btn-ghost !py-0.5 !px-1.5 !text-xs text-left"
+                              onClick={() => setMatchBill(bill)}
+                            >
+                              <StatusBadge status={bill.matchStatus ?? 'PENDING'} />
+                            </button>
+                            {bill.matchStatus === 'EXCEPTION' && bill.matchNotes && (
+                              <span className="text-[10px] text-amber-400 max-w-[140px] truncate" title={bill.matchNotes}>
+                                ⚠️ {bill.matchNotes}
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-xs text-cosmos-text-3">—</span>
+                          <span className="text-xs text-pleros-text-3">—</span>
                         )}
                       </td>
                       <td className="space-x-2 whitespace-nowrap">
@@ -537,56 +790,102 @@ export default function FinancePage() {
 
       {tab === 'bank' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {(bankSummaryQ.data?.accounts ?? []).map((acct) => (
-              <div key={acct.id} className="cosmos-card">
-                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>{acct.name}</div>
-                <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
-                  {money(Number(acct.currentBalance))}
-                </div>
-                <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>{acct.accountNumber ?? '—'}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Opening Balance</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {money(bankSummaryQ.data?.openingBalanceTotal ?? 0)}
               </div>
-            ))}
-            <div className="cosmos-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
-              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled lines</div>
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400">Total Debits (+)</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-emerald-400">
+                {money(bankSummaryQ.data?.totalDebits ?? 0)}
+              </div>
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-amber-400">Total Credits (-)</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-amber-400">
+                {money(bankSummaryQ.data?.totalCredits ?? 0)}
+              </div>
+            </div>
+            <div className="pleros-card metric-accent" style={{ borderLeftColor: 'var(--c-warning)' }}>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Unreconciled items</div>
               <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
                 {bankSummaryQ.data?.unreconciledCount ?? 0}
               </div>
             </div>
           </div>
-          <div className="cosmos-card overflow-x-auto">
+
+          <PlaidConnectPanel accounts={bankSummaryQ.data?.accounts ?? []} />
+
+          <div className="flex gap-2 border-b border-pleros-border pb-2 text-xs">
+            {(['summary', 'debits', 'credits', 'unreconciled'] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                className={`px-3 py-1.5 rounded-md font-medium capitalize transition-colors ${
+                  bankSubTab === st
+                    ? 'bg-pleros-primary text-white'
+                    : 'text-pleros-muted hover:bg-pleros-surface-2'
+                }`}
+                onClick={() => setBankSubTab(st)}
+              >
+                {st === 'summary'
+                  ? 'All Transactions'
+                  : st === 'debits'
+                    ? 'Debit Transactions (+)'
+                    : st === 'credits'
+                      ? 'Credit Transactions (-)'
+                      : 'Unreconciled Items'}
+              </button>
+            ))}
+          </div>
+
+          <div className="pleros-card overflow-x-auto">
             {bankLinesQ.isLoading ? <div className="skeleton h-40 w-full" /> : (bankLinesQ.data ?? []).length === 0 ? (
-              <EmptyState icon="🏦" title="All caught up" description="No unreconciled bank statement lines." />
+              <EmptyState icon="🏦" title="No transactions" description="No statement lines match the selected sub-tab or date filter." />
             ) : (
-              <table className="cosmos-table">
+              <table className="pleros-table">
                 <thead>
                   <tr>
                     <th>Date</th>
                     <th>Account</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    <th>Type</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {(bankLinesQ.data ?? []).map((line) => (
-                    <tr key={line.id}>
-                      <td>{new Date(line.postedAt).toLocaleDateString()}</td>
-                      <td>{line.bankAccount?.name ?? '—'}</td>
-                      <td>{line.description}</td>
-                      <td className="font-mono">{money(Number(line.amount))}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn-primary !py-1 !px-2 !text-xs"
-                          disabled={reconcileMut.isPending}
-                          onClick={() => reconcileMut.mutate(line.id)}
-                        >
-                          Reconcile
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {(bankLinesQ.data ?? []).map((line) => {
+                    const amt = Number(line.amount)
+                    return (
+                      <tr key={line.id}>
+                        <td>{new Date(line.postedAt).toLocaleDateString()}</td>
+                        <td>{line.bankAccount?.name ?? '—'}</td>
+                        <td>{line.description}</td>
+                        <td className={`font-mono font-medium ${amt >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {money(amt)}
+                        </td>
+                        <td>
+                          <span className={`text-xs px-2 py-0.5 rounded font-mono ${amt >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                            {amt >= 0 ? 'DEBIT (+)' : 'CREDIT (-)'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-primary !py-1 !px-2 !text-xs"
+                            disabled={reconcileMut.isPending}
+                            onClick={() => reconcileMut.mutate(line.id)}
+                          >
+                            Reconcile
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
@@ -595,16 +894,43 @@ export default function FinancePage() {
       )}
 
       {tab === 'trial' && (
-        <div className="cosmos-card space-y-4">
+        <div className="pleros-card space-y-4">
           <div className="flex flex-wrap gap-3 items-center">
-            <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
-            <select className="cosmos-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
-              ))}
+            <label className="text-sm font-medium" style={{ color: 'var(--c-text-2)' }}>View Period:</label>
+            <select
+              className="pleros-input max-w-[130px]"
+              value={trialPeriodType}
+              onChange={(e) => setTrialPeriodType(e.target.value as 'MONTHLY' | 'QUARTERLY' | 'YEARLY')}
+            >
+              <option value="MONTHLY">Monthly</option>
+              <option value="QUARTERLY">Quarterly</option>
+              <option value="YEARLY">Yearly</option>
             </select>
+
+            {trialPeriodType === 'MONTHLY' && (
+              <>
+                <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Month</label>
+                <select className="pleros-input max-w-[120px]" value={month} onChange={(e) => setMonth(+e.target.value)}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {trialPeriodType === 'QUARTERLY' && (
+              <>
+                <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Quarter</label>
+                <select className="pleros-input max-w-[100px]" value={quarter} onChange={(e) => setQuarter(+e.target.value)}>
+                  {[1, 2, 3, 4].map((q) => (
+                    <option key={q} value={q}>Q{q}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
             <label className="text-sm" style={{ color: 'var(--c-text-2)' }}>Year</label>
-            <select className="cosmos-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
+            <select className="pleros-input max-w-[100px]" value={year} onChange={(e) => setYear(+e.target.value)}>
               {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <button type="button" className="btn-ghost" onClick={() => void trialQ.refetch()}>Load</button>
@@ -613,9 +939,9 @@ export default function FinancePage() {
           {trialQ.isLoading ? <div className="skeleton h-48 w-full" /> : trialQ.isError ? (
             <p style={{ color: 'var(--c-danger)' }}>Could not load trial balance</p>
           ) : (trialQ.data?.length ?? 0) === 0 ? (
-            <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this month to see balances." />
+            <EmptyState icon="📊" title="No posted journals" description="Post journal entries for this period to see balances." />
           ) : (
-            <table className="cosmos-table">
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>Code</th>
@@ -654,14 +980,32 @@ export default function FinancePage() {
               </button>
             ))}
           </div>
-          <div className="cosmos-card">
-            {!cashInput ? (
-              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Need KPI snapshots from analytics to run cashflow. Open dashboard once data exists.</p>
-            ) : cashQ.isLoading ? <div className="skeleton h-64 w-full" /> : cashQ.isError ? (
+          <div className="pleros-card">
+            {cashHistQ.isLoading || (!cashInput && cashHistQ.isFetching) ? (
+              <div className="skeleton h-64 w-full" />
+            ) : !cashInput ? (
+              <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
+                Need at least three weeks of AR/AP activity (or KPI revenue) to forecast cashflow.
+              </p>
+            ) : cashQ.isLoading ? (
+              <div className="skeleton h-64 w-full" />
+            ) : cashQ.isError ? (
               <p style={{ color: 'var(--c-danger)' }}>{cashQ.error instanceof Error ? cashQ.error.message : 'Error'}</p>
             ) : (
               <>
-                <p className="text-sm mb-4" style={{ color: 'var(--c-text-3)' }}>Weekly buckets from native EWMA forecast (no Python sidecar)</p>
+                <p className="text-sm mb-1" style={{ color: 'var(--c-text-3)' }}>
+                  Weekly EWMA forecast
+                  {cashQ.data?.method ? (
+                    <span className="font-mono text-xs ml-2" style={{ color: 'var(--c-accent)' }}>
+                      {cashQ.data.method}
+                    </span>
+                  ) : null}
+                  {cashHistQ.data?.source ? (
+                    <span className="text-xs ml-2">
+                      · source {cashHistQ.data.source === 'ar_ap' ? 'AR/AP collections' : 'revenue proxy'}
+                    </span>
+                  ) : null}
+                </p>
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={cfChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -689,8 +1033,12 @@ export default function FinancePage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                {(cashQ.data?.warnings?.length ?? 0) > 0 && (
-                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">{cashQ.data!.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                {[...(cashHistQ.data?.warnings ?? []), ...(cashQ.data?.warnings ?? [])].length > 0 && (
+                  <ul className="mt-4 text-xs text-amber-400 list-disc pl-5">
+                    {[...(cashHistQ.data?.warnings ?? []), ...(cashQ.data?.warnings ?? [])].map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
                 )}
               </>
             )}
@@ -698,27 +1046,190 @@ export default function FinancePage() {
         </div>
       )}
 
-      {(payOrder || payBill) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
-          <div className="cosmos-card max-w-md w-full space-y-4">
-            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Record payment</h3>
-            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
-            <input className="cosmos-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
-            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
-            <select className="cosmos-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
-              {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null) }}>Cancel</button>
+      {tab === 'chart-of-accounts' && <ChartOfAccountsTab />}
+
+      {tab === 'general-ledger' && <GeneralLedgerTab />}
+
+      {tab === 'income-statement' && <IncomeStatementTab />}
+
+      {tab === 'balance-sheet' && <BalanceSheetTab />}
+
+      {tab === 'fixed-assets' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Total Asset Cost</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {money(fixedAssetsSummaryQ.data?.totalCost ?? 0)}
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>
+                {fixedAssetsSummaryQ.data?.totalCount ?? 0} registered assets
+              </div>
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-amber-400">Accumulated Deprec.</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-amber-400">
+                {money(fixedAssetsSummaryQ.data?.totalAccumDeprec ?? 0)}
+              </div>
+            </div>
+            <div className="pleros-card metric-accent" style={{ borderLeftColor: 'var(--c-success)' }}>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Net Book Value</div>
+              <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
+                {money(fixedAssetsSummaryQ.data?.totalNetBookValue ?? 0)}
+              </div>
+            </div>
+            <div className="pleros-card">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400">Active Equipment</div>
+              <div className="text-xl font-mono font-semibold mt-2 text-emerald-400">
+                {fixedAssetsSummaryQ.data?.activeCount ?? 0}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {['ALL', 'ACTIVE', 'DISPOSED', 'FULLY_DEPRECIATED'].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={assetFilter === s ? 'btn-primary' : 'btn-ghost'}
+                  onClick={() => setAssetFilter(s)}
+                >
+                  {s.replace(/_/g, ' ')}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="btn-primary"
-                disabled={payOrderMut.isPending || payBillMut.isPending}
+                className="btn-primary flex items-center gap-1.5"
+                disabled={postDeprecMut.isPending}
                 onClick={() => {
-                  if (payOrder) void payOrderMut.mutate()
-                  else void payBillMut.mutate()
+                  if (window.confirm('Post monthly depreciation for all active equipment to General Ledger?')) {
+                    postDeprecMut.mutate()
+                  }
                 }}
-              >Submit</button>
+              >
+                <span>⚡</span> {postDeprecMut.isPending ? 'Posting…' : 'Post Monthly Depreciation'}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost border border-pleros-border"
+                onClick={() => setCreateAssetOpen(true)}
+              >
+                + Register Asset
+              </button>
+            </div>
+          </div>
+
+          <div className="pleros-card overflow-x-auto">
+            {fixedAssetsQ.isLoading ? (
+              <div className="skeleton h-40 w-full" />
+            ) : (fixedAssetsQ.data ?? []).length === 0 ? (
+              <EmptyState icon="🏗️" title="No fixed assets" description="Register equipment, vehicles, or machinery to track book value and depreciation." />
+            ) : (
+              <table className="pleros-table">
+                <thead>
+                  <tr>
+                    <th>Asset Code</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Acquisition</th>
+                    <th>Cost</th>
+                    <th>Useful Life</th>
+                    <th>Accum. Deprec.</th>
+                    <th>Net Book Value</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(fixedAssetsQ.data ?? []).map((asset) => (
+                    <tr key={asset.id}>
+                      <td className="font-mono text-xs font-semibold">{asset.assetCode}</td>
+                      <td>{asset.name}</td>
+                      <td><span className="text-xs px-2 py-0.5 rounded bg-pleros-surface-2">{asset.category}</span></td>
+                      <td className="text-sm" style={{ color: 'var(--c-text-2)' }}>{new Date(asset.acquisitionDate).toLocaleDateString()}</td>
+                      <td className="font-mono">{money(asset.cost)}</td>
+                      <td className="text-xs">{asset.usefulLifeMonths} mos ({Math.round(asset.usefulLifeMonths / 12)} yrs)</td>
+                      <td className="font-mono text-amber-400">{money(asset.accumulatedDepreciation)}</td>
+                      <td className="font-mono font-semibold text-emerald-400">{money(asset.netBookValue)}</td>
+                      <td><StatusBadge status={asset.status} /></td>
+                      <td className="space-x-2">
+                        {asset.status === 'ACTIVE' && (
+                          <button
+                            type="button"
+                            className="btn-ghost !py-1 !px-2 !text-xs text-amber-400"
+                            onClick={() => {
+                              setDisposeAssetTarget(asset)
+                              setDisposeProceeds(String(asset.salvageValue || 0))
+                            }}
+                          >
+                            Dispose
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(payOrder || payBill) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+          <div className="pleros-card max-w-md w-full space-y-4">
+            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>
+              {payOrder ? 'Receive payment' : 'Record payment'}
+            </h3>
+            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
+            <input className="pleros-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            {payOrder && stripePromise && chargesEnabled ? (
+              <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--c-text-2)' }}>
+                <input type="checkbox" checked={payUseStripe} onChange={(e) => setPayUseStripe(e.target.checked)} />
+                Charge card via Stripe
+              </label>
+            ) : payOrder && !chargesEnabled ? (
+              <p className="text-xs text-amber-400">Stripe Connect onboarding required for card collection.</p>
+            ) : null}
+            {!payUseStripe ? (
+              <>
+                <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Method</label>
+                <select className="pleros-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)}>
+                  {(['CASH', 'CHECK', 'ACH', 'CARD'] as const).map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </>
+            ) : payOrder && stripePromise ? (
+              <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>
+                <FinanceInvoiceStripePay
+                  invoiceId={payOrder.id}
+                  amount={parseFloat(payAmount) || payOrder.balance}
+                  onDone={() => {
+                    void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
+                    void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar-summary'] })
+                    setPayOrder(null)
+                    setPayAmount('')
+                    setPayUseStripe(false)
+                  }}
+                />
+              </Elements>
+            ) : null}
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null); setPayUseStripe(false) }}>Cancel</button>
+              {!payUseStripe ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={payOrderMut.isPending || payBillMut.isPending}
+                  onClick={() => {
+                    if (payOrder) void payOrderMut.mutate()
+                    else void payBillMut.mutate()
+                  }}
+                >Submit</button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -726,7 +1237,7 @@ export default function FinancePage() {
 
       {matchBill ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setMatchBill(null)}>
-          <div className="cosmos-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="pleros-card max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start gap-3">
               <div>
                 <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)', margin: 0 }}>3-way match</h3>
@@ -782,6 +1293,280 @@ export default function FinancePage() {
           </div>
         </div>
       ) : null}
+
+      {createAssetOpen && (
+        <CreateFixedAssetModal
+          onClose={() => setCreateAssetOpen(false)}
+          onCreated={() => {
+            setCreateAssetOpen(false)
+            void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets'] })
+            void qc.invalidateQueries({ queryKey: ['finance', 'fixed-assets-summary'] })
+          }}
+        />
+      )}
+
+      {disposeAssetTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+          <div className="pleros-card max-w-md w-full space-y-4">
+            <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Dispose Fixed Asset</h3>
+            <p className="text-xs text-pleros-muted">
+              {disposeAssetTarget.assetCode} — {disposeAssetTarget.name} (Current Net Book Value: {money(disposeAssetTarget.netBookValue)})
+            </p>
+            <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Disposal Proceeds ($)</label>
+            <input
+              type="number"
+              className="pleros-input"
+              value={disposeProceeds}
+              onChange={(e) => setDisposeProceeds(e.target.value)}
+              placeholder="0.00"
+            />
+            <p className="text-xs text-pleros-muted">
+              Gain / Loss preview: <span className={Number(disposeProceeds) - disposeAssetTarget.netBookValue >= 0 ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                {money(Number(disposeProceeds) - disposeAssetTarget.netBookValue)}
+              </span>
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn-ghost" onClick={() => setDisposeAssetTarget(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={disposeAssetMut.isPending}
+                onClick={() => disposeAssetMut.mutate({ id: disposeAssetTarget.id, proceeds: parseFloat(disposeProceeds) || 0 })}
+              >
+                {disposeAssetMut.isPending ? 'Processing…' : 'Confirm Disposal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CreateFixedAssetModal(props: { onClose: () => void; onCreated: () => void }) {
+  const [assetCode, setAssetCode] = useState('')
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('EQUIPMENT')
+  const [acquisitionDate, setAcquisitionDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [cost, setCost] = useState('')
+  const [salvageValue, setSalvageValue] = useState('0')
+  const [usefulLifeMonths, setUsefulLifeMonths] = useState('60')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    setError(null)
+    if (!assetCode.trim() || !name.trim() || !cost || parseFloat(cost) <= 0) {
+      setError('Please fill out Code, Name, and positive Cost.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.post('/fixed-assets', {
+        assetCode: assetCode.trim(),
+        name: name.trim(),
+        category,
+        acquisitionDate,
+        cost: parseFloat(cost),
+        salvageValue: parseFloat(salvageValue) || 0,
+        usefulLifeMonths: parseInt(usefulLifeMonths, 10) || 60,
+      })
+      props.onCreated()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to register asset')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+      <div className="pleros-card max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+        <h3 style={{ color: 'var(--c-heading)', fontFamily: 'var(--font-display)' }}>Register New Fixed Asset</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-pleros-muted">Asset Code</label>
+            <input className="pleros-input mt-1" value={assetCode} onChange={(e) => setAssetCode(e.target.value)} placeholder="EQ-001" />
+          </div>
+          <div>
+            <label className="block text-xs text-pleros-muted">Category</label>
+            <select className="pleros-input mt-1" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="EQUIPMENT">Equipment</option>
+              <option value="VEHICLES">Vehicles</option>
+              <option value="MACHINERY">Machinery</option>
+              <option value="BUILDINGS">Buildings</option>
+              <option value="FURNITURE">Furniture & Fixtures</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs text-pleros-muted">Asset Name / Description</label>
+          <input className="pleros-input mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="Forklift / Pallet Truck" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-pleros-muted">Acquisition Date</label>
+            <input type="date" className="pleros-input mt-1" value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-pleros-muted">Acquisition Cost ($)</label>
+            <input type="number" className="pleros-input mt-1" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="12000.00" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-pleros-muted">Useful Life (Months)</label>
+            <input type="number" className="pleros-input mt-1" value={usefulLifeMonths} onChange={(e) => setUsefulLifeMonths(e.target.value)} placeholder="60" />
+          </div>
+          <div>
+            <label className="block text-xs text-pleros-muted">Salvage Value ($)</label>
+            <input type="number" className="pleros-input mt-1" value={salvageValue} onChange={(e) => setSalvageValue(e.target.value)} placeholder="0.00" />
+          </div>
+        </div>
+        {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+        <div className="flex gap-2 justify-end mt-4">
+          <button type="button" className="btn-ghost" onClick={props.onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => void submit()}>
+            {busy ? 'Saving…' : 'Register Asset'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FinanceInvoiceStripePay({
+  invoiceId,
+  amount,
+  onDone,
+}: {
+  invoiceId: string
+  amount: number
+  onDone: () => void
+}) {
+  async function pay(paymentMethodId: string) {
+    const correlationId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    await api.post(
+      `/invoices/${encodeURIComponent(invoiceId)}/pay/stripe`,
+      { paymentMethodId, amount, correlationId },
+      { 'Idempotency-Key': correlationId },
+    )
+    onDone()
+  }
+
+  return <AdminStripeCardForm submitLabel={`Charge ${money(amount)}`} onSubmit={(r) => pay(r.paymentMethodId)} />
+}
+
+function loadPlaidScript(): Promise<void> {
+  if (typeof window !== 'undefined' && (window as unknown as { Plaid?: unknown }).Plaid) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src*="cdn.plaid.com"]')
+    if (existing) {
+      existing.addEventListener('load', () => resolve())
+      existing.addEventListener('error', () => reject(new Error('Failed to load Plaid Link')))
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Plaid Link script from CDN'))
+    document.head.appendChild(script)
+  })
+}
+
+function PlaidConnectPanel({ accounts }: { accounts: Array<{ id: string; name: string }> }) {
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function connectPlaid() {
+    if (!bankAccountId) {
+      setMsg('Select a bank account first.')
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    try {
+      await loadPlaidScript()
+      const { linkToken } = await api.post<{ linkToken: string }>(
+        `/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/link-token`,
+        {},
+      )
+      const Plaid = (window as unknown as { Plaid?: { create: (opts: unknown) => { open: () => void } } }).Plaid
+      if (!Plaid) {
+        setMsg('Plaid Link script could not be initialized.')
+        return
+      }
+      const handler = Plaid.create({
+        token: linkToken,
+        onSuccess: async (publicToken: string) => {
+          setBusy(true)
+          try {
+            await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/exchange`, { publicToken })
+            await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/sync`, {})
+            setMsg('Plaid connected and transactions synced.')
+          } catch (err: unknown) {
+            setMsg(err instanceof Error ? err.message : 'Exchange/sync failed')
+          } finally {
+            setBusy(false)
+          }
+        },
+        onExit: (err: { display_message?: string } | null) => {
+          if (err?.display_message) setMsg(err.display_message)
+        },
+      })
+      handler.open()
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Plaid connection failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function syncPlaid() {
+    if (!bankAccountId) {
+      setMsg('Select a bank account first.')
+      return
+    }
+    setBusy(true)
+    setMsg('Syncing transactions from Plaid…')
+    try {
+      await api.post(`/bank-accounts/${encodeURIComponent(bankAccountId)}/plaid/sync`, {})
+      setMsg('Transactions synced successfully.')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Sync failed. Verify account is connected to Plaid.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="pleros-card">
+      <div className="text-sm font-semibold text-pleros-white">Bank feeds (Plaid)</div>
+      <p className="text-xs text-pleros-muted mt-1">Connect a bank account for automatic transaction import. Manual CSV import remains available.</p>
+      <div className="flex flex-wrap gap-2 mt-3 items-center">
+        <select className="pleros-input !w-auto" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
+          <option value="">Select bank account</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn-primary" disabled={busy || !bankAccountId} onClick={() => void connectPlaid()}>
+          Connect with Plaid
+        </button>
+        <button type="button" className="btn-secondary" disabled={busy || !bankAccountId} onClick={() => void syncPlaid()}>
+          {busy ? 'Syncing…' : 'Sync transactions'}
+        </button>
+      </div>
+      {msg ? <p className="text-xs mt-2 text-pleros-muted">{msg}</p> : null}
     </div>
   )
 }

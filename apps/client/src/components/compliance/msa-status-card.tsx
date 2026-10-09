@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CardTitle } from '@cosmos/ui'
+import { CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
-import { StatusBadge } from '@/components/cosmos/status-badge'
+import { StatusBadge } from '@/components/pleros/status-badge'
 
 interface MSAReportRow {
   id: string

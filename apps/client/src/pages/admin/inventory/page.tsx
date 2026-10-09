@@ -3,10 +3,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { EmptyState } from '@/components/cosmos/empty-state'
-import { SpreadsheetImportPanel } from '@/components/cosmos/spreadsheet-import-panel'
-import { CosmosDialogModal, CosmosSheet } from '@/components/cosmos/radix-overlays'
+import { EmptyState } from '@/components/pleros/empty-state'
+import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
+import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
+import { ScanButton } from '@/components/scanner'
 
 type SkuRow = {
   id: string
@@ -75,6 +76,17 @@ function isNonBatchBatchId(batchId: string | null | undefined) {
   return batchId == null || batchId === ''
 }
 
+type DemandPlanRow = {
+  sku: { code: string; name: string }
+  warehouseId: string
+  avgDailyUsage: number
+  ewmaDailyUsage?: number
+  suggestedOrderQty: number
+  quantityAvailable: number
+  method: string
+  warnings?: string[]
+}
+
 export default function InventoryPage() {
   const qc = useQueryClient()
   const [searchInput, setSearchInput] = useState('')
@@ -96,10 +108,40 @@ export default function InventoryPage() {
   const [adjDelta, setAdjDelta] = useState(0)
   const [adjReason, setAdjReason] = useState('')
 
+  // Code of the SKU resolved by the last scan, so we can show its stock summary.
+  const [scannedCode, setScannedCode] = useState<string | null>(null)
+  const [scanErr, setScanErr] = useState<string | null>(null)
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
     return () => clearTimeout(t)
   }, [searchInput])
+
+  /**
+   * Resolve a scanned barcode to a SKU and filter the list to it.
+   *
+   * We search by the resolved SKU *code* rather than the raw barcode, because
+   * the list endpoint matches code and name — not barcode. The lookup endpoint
+   * does the barcode work (and handles GTIN-8/12/13/14 variants), so a label
+   * that reads 12 digits on one device and 13 on another still lands here.
+   */
+  const resolveScan = useCallback(
+    async (rawValue: string) => {
+      const value = rawValue.trim()
+      if (!value) return
+      setScanErr(null)
+      setScannedCode(null)
+      try {
+        const sku = await api.get<SkuRow>(`/skus/lookup/scan-value?value=${encodeURIComponent(value)}`)
+        setSearchInput(sku.code)
+        setScannedCode(sku.code)
+      } catch {
+        // 404 is the expected miss here: a real barcode with no SKU behind it.
+        setScanErr(`No SKU found for ${value}`)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     setPage(1)
@@ -113,6 +155,15 @@ export default function InventoryPage() {
   const warehousesQ = useQuery({
     queryKey: ['warehouses'],
     queryFn: () => api.get<WarehouseRow[]>('/warehouses'),
+  })
+
+  const demandQ = useQuery({
+    queryKey: ['inventory', 'demand-plan', warehouseId],
+    queryFn: () => {
+      const q = new URLSearchParams({ days: '30', limit: '15' })
+      if (warehouseId) q.set('warehouseId', warehouseId)
+      return api.get<DemandPlanRow[]>(`/inventory/demand-plan?${q.toString()}`)
+    },
   })
 
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
@@ -207,16 +258,23 @@ export default function InventoryPage() {
 
   const totalPages = Math.max(1, Math.ceil((skusQ.data?.total ?? 0) / pageSize))
 
+  // The scanned SKU's row, once the filtered list lands. listSkus already
+  // enriches rows with stock figures, so answering "how many do I have?" needs
+  // no extra request — we just read the row the scan filtered us down to.
+  const scannedRow = scannedCode
+    ? (skusQ.data?.items ?? []).find((s) => s.code === scannedCode)
+    : undefined
+
   const drawerOpen = drawer === 'new' || drawer === 'edit'
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-cosmos-white" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-2xl font-bold text-pleros-white" style={{ fontFamily: 'var(--font-display)' }}>
             Inventory
           </h1>
-          <p className="text-cosmos-text-3 text-sm mt-1">SKUs, stock positions, and adjustments</p>
+          <p className="text-pleros-text-3 text-sm mt-1">SKUs, stock positions, and adjustments</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-ghost" onClick={() => setImportOpen((open) => !open)}>
@@ -234,6 +292,56 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      {(demandQ.data ?? []).length > 0 ? (
+        <div className="pleros-card">
+          <h3 className="text-pleros-white font-semibold font-display mb-2">Demand-based replenishment</h3>
+          <p className="text-sm text-pleros-text-3 mb-3">
+            Suggested buy quantities from EWMA usage forecast and lead time (≈70-day lookback).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="pleros-table text-sm">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Available</th>
+                  <th>EWMA/day</th>
+                  <th>Avg/day</th>
+                  <th>Suggest buy</th>
+                  <th>Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(demandQ.data ?? []).map((row) => (
+                  <tr key={`${row.sku.code}-${row.warehouseId}`}>
+                    <td>
+                      <span className="font-mono text-pleros-accent">{row.sku.code}</span>
+                      <span className="text-pleros-text-3 ml-2">{row.sku.name}</span>
+                      {row.warnings?.[0] ? (
+                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--c-warning)' }}>
+                          {row.warnings[0]}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td>{row.quantityAvailable}</td>
+                    <td className="tabular-nums">{row.ewmaDailyUsage ?? row.avgDailyUsage}</td>
+                    <td className="tabular-nums text-pleros-text-3">{row.avgDailyUsage}</td>
+                    <td className="font-semibold text-pleros-white">{row.suggestedOrderQty}</td>
+                    <td>
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                        style={{ background: 'var(--c-surface-2)', color: 'var(--c-accent)' }}
+                      >
+                        {row.method.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {importOpen ? (
         <SpreadsheetImportPanel
@@ -272,19 +380,59 @@ export default function InventoryPage() {
         />
       ) : null}
 
-      <div className="cosmos-card flex flex-wrap gap-4 items-end">
+      <div className="pleros-card flex flex-wrap gap-4 items-end">
         <div className="min-w-[200px] flex-1">
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">Search</label>
-          <input
-            className="cosmos-input"
-            placeholder="Code or name"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
+          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Search</label>
+          <div className="flex items-center gap-2">
+            <input
+              className="pleros-input flex-1"
+              placeholder="Code or name"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+            <ScanButton onScan={(r) => void resolveScan(r.rawValue)} title="Scan to check stock" />
+          </div>
+          {scanErr && (
+            <p className="text-[11px] mt-1" style={{ color: 'var(--c-danger)' }}>
+              {scanErr}
+            </p>
+          )}
         </div>
+        {scannedRow && (
+          <div className="scan-stock-card">
+            <div className="scan-stock-id">
+              <span className="scan-stock-code">{scannedRow.code}</span>
+              <span className="scan-stock-name">{scannedRow.name}</span>
+            </div>
+            <div className="scan-stock-figures">
+              <div>
+                <span className="scan-stock-label">On hand</span>
+                <span className="scan-stock-value">{scannedRow.quantityOnHand ?? 0}</span>
+              </div>
+              <div>
+                <span className="scan-stock-label">Reserved</span>
+                <span className="scan-stock-value">{scannedRow.quantityReserved ?? 0}</span>
+              </div>
+              <div>
+                <span className="scan-stock-label">Available</span>
+                <span className="scan-stock-value strong">{scannedRow.quantityAvailable ?? 0}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="scan-stock-clear"
+              onClick={() => {
+                setScannedCode(null)
+                setSearchInput('')
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
         <div>
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">Category</label>
-          <select className="cosmos-input w-[200px]" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Category</label>
+          <select className="pleros-input w-[200px]" value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">All</option>
             {(categoriesQ.data ?? []).map((c) => (
               <option key={c} value={c}>
@@ -294,8 +442,8 @@ export default function InventoryPage() {
           </select>
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-cosmos-text-3">Warehouse</label>
-          <select className="cosmos-input w-[220px]" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Warehouse</label>
+          <select className="pleros-input w-[220px]" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
             <option value="">All (totals)</option>
             {(warehousesQ.data ?? []).map((w) => (
               <option key={w.id} value={w.id}>
@@ -306,11 +454,11 @@ export default function InventoryPage() {
         </div>
         <label className="flex items-center gap-2 cursor-pointer pb-2">
           <input type="checkbox" checked={inStockOnly} onChange={(e) => setInStockOnly(e.target.checked)} />
-          <span className="text-sm text-cosmos-text">In stock only</span>
+          <span className="text-sm text-pleros-text">In stock only</span>
         </label>
       </div>
 
-      <div className="cosmos-card overflow-x-auto">
+      <div className="pleros-card overflow-x-auto">
         {skusQ.isLoading ? (
           <div className="py-8 space-y-2">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -334,7 +482,7 @@ export default function InventoryPage() {
           />
         ) : (
           <>
-            <table className="cosmos-table">
+            <table className="pleros-table">
               <thead>
                 <tr>
                   <th>SKU code</th>
@@ -353,12 +501,12 @@ export default function InventoryPage() {
                 {(skusQ.data?.items ?? []).map((s) => (
                   <tr key={s.id} className={s.isActive === false ? 'opacity-50' : ''}>
                     <td className="font-mono text-xs">
-                      <Link to={adminPath(`/inventory/${encodeURIComponent(s.id)}`)} className="text-cosmos-accent hover:underline">
+                      <Link to={adminPath(`/inventory/${encodeURIComponent(s.id)}`)} className="text-pleros-accent hover:underline">
                         {s.code}
                       </Link>
                     </td>
                     <td className="max-w-[200px] truncate">{s.name}</td>
-                    <td className="text-cosmos-text-2 text-sm">{s.category}</td>
+                    <td className="text-pleros-text-2 text-sm">{s.category}</td>
                     <td>{s.quantityOnHand ?? 0}</td>
                     <td>{s.quantityReserved ?? 0}</td>
                     <td>{s.quantityAvailable ?? 0}</td>
@@ -392,7 +540,7 @@ export default function InventoryPage() {
               </tbody>
             </table>
             <div className="flex items-center justify-between mt-4 pt-4 border-t" style={{ borderColor: 'var(--c-border)' }}>
-              <p className="text-sm text-cosmos-text-3">
+              <p className="text-sm text-pleros-text-3">
                 Page {page} of {totalPages} · {(skusQ.data?.total ?? 0).toLocaleString()} SKUs
               </p>
               <div className="flex gap-2">
@@ -418,7 +566,7 @@ export default function InventoryPage() {
         )}
       </div>
 
-      <CosmosSheet
+      <PlerosSheet
         open={drawerOpen}
         onOpenChange={(o) => {
           if (!o) {
@@ -443,9 +591,9 @@ export default function InventoryPage() {
           }}
           onSave={saveMut.mutate}
         />
-      </CosmosSheet>
+      </PlerosSheet>
 
-      <CosmosDialogModal
+      <PlerosDialogModal
         open={!!historySkuId}
         onOpenChange={(o) => {
           if (!o) setHistorySkuId(null)
@@ -465,7 +613,7 @@ export default function InventoryPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="cosmos-table text-sm">
+            <table className="pleros-table text-sm">
               <thead>
                 <tr>
                   <th>When</th>
@@ -483,33 +631,33 @@ export default function InventoryPage() {
               <tbody>
                 {(ledgerQ.data ?? []).map((e) => (
                   <tr key={e.id}>
-                    <td className="text-cosmos-text-3 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString()}</td>
-                    <td className="font-mono text-xs">{whMap.get(e.warehouseId) ?? e.warehouseId.slice(-8)}</td>
+                    <td className="text-pleros-text-3 whitespace-nowrap">{new Date(e.occurredAt).toLocaleString()}</td>
+                    <td className="font-mono text-xs">{whMap.get(e.warehouseId) ?? 'Warehouse'}</td>
                     <td className="font-mono text-xs">{e.locationId ?? '—'}</td>
                     <td className="font-mono text-xs">{e.batchId || '—'}</td>
-                    <td className="font-mono text-xs">{e.eventType}</td>
-                    <td className="font-mono" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
+                    <td className="font-mono text-xs font-medium">{e.eventType}</td>
+                    <td className="font-mono font-semibold" style={{ color: e.quantityDelta >= 0 ? 'var(--c-success)' : 'var(--c-danger)' }}>
                       {e.quantityDelta >= 0 ? '+' : ''}
                       {e.quantityDelta}
                     </td>
                     <td className="font-mono">{e.quantityAfter}</td>
-                    <td className="font-mono text-xs">{Number(e.unitCost ?? 0).toFixed(4)}</td>
-                    <td className="font-mono text-xs max-w-[120px] truncate" title={`${e.referenceType ?? ''} ${e.referenceId ?? ''}`}>
-                      {e.referenceType ?? '—'} {e.referenceId ? e.referenceId.slice(0, 8) : ''}
+                    <td className="font-mono text-xs">${Number(e.unitCost ?? 0).toFixed(2)}</td>
+                    <td className="font-mono text-xs max-w-[140px] truncate" title={`${e.referenceType ?? ''} ${e.referenceId ?? ''}`}>
+                      {e.referenceType ?? '—'} {e.referenceId ? `#${e.referenceId.slice(-6).toUpperCase()}` : ''}
                     </td>
-                    <td className="font-mono text-xs">{e.performedBy.slice(-8)}</td>
+                    <td className="text-xs text-pleros-text-2">{e.performedBy.startsWith('usr_') ? `User #${e.performedBy.slice(-4).toUpperCase()}` : e.performedBy}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {(ledgerQ.data ?? []).length === 0 && (
-              <p className="text-sm text-cosmos-text-3 py-8 text-center">No ledger entries yet.</p>
+              <p className="text-sm text-pleros-text-3 py-8 text-center">No ledger entries yet.</p>
             )}
           </div>
         )}
-      </CosmosDialogModal>
+      </PlerosDialogModal>
 
-      <CosmosDialogModal
+      <PlerosDialogModal
         open={!!adjustOpen}
         onOpenChange={(o) => {
           if (!o) setAdjustOpen(null)
@@ -534,11 +682,11 @@ export default function InventoryPage() {
       >
         {adjustOpen && (
           <>
-            <p className="text-sm text-cosmos-text-3 mb-4 font-mono">
+            <p className="text-sm text-pleros-text-3 mb-4 font-mono">
               {adjustOpen.code} · {adjustOpen.name}
             </p>
-            <label className="block text-sm mb-1 text-cosmos-text-2">Warehouse</label>
-            <select className="cosmos-input mb-3" value={adjWarehouse} onChange={(e) => setAdjWarehouse(e.target.value)}>
+            <label className="block text-sm mb-1 text-pleros-text-2">Warehouse</label>
+            <select className="pleros-input mb-3" value={adjWarehouse} onChange={(e) => setAdjWarehouse(e.target.value)}>
               <option value="">Select…</option>
               {(warehousesQ.data ?? []).map((w) => (
                 <option key={w.id} value={w.id}>
@@ -546,23 +694,23 @@ export default function InventoryPage() {
                 </option>
               ))}
             </select>
-            <label className="block text-sm mb-1 text-cosmos-text-2">Quantity delta (+/-)</label>
+            <label className="block text-sm mb-1 text-pleros-text-2">Quantity delta (+/-)</label>
             <input
               type="number"
-              className="cosmos-input mb-3"
+              className="pleros-input mb-3"
               value={adjDelta || ''}
               onChange={(e) => setAdjDelta(parseInt(e.target.value, 10) || 0)}
             />
-            <label className="block text-sm mb-1 text-cosmos-text-2">Reason</label>
+            <label className="block text-sm mb-1 text-pleros-text-2">Reason</label>
             <input
-              className="cosmos-input"
+              className="pleros-input"
               value={adjReason}
               onChange={(e) => setAdjReason(e.target.value)}
               placeholder="Required — cycle count, damage, …"
             />
           </>
         )}
-      </CosmosDialogModal>
+      </PlerosDialogModal>
     </div>
   )
 }
@@ -596,10 +744,14 @@ function SkuDrawer({
   const [cat, setCat] = useState('')
   const [sub, setSub] = useState('')
   const [barcode, setBarcode] = useState('')
+  // The SKU that already owns this barcode, if any. Null means it is free.
+  const [barcodeOwner, setBarcodeOwner] = useState<SkuRow | null>(null)
   const [uom, setUom] = useState('EACH')
   const [weight, setWeight] = useState('')
   const [isTobacco, setIsTobacco] = useState(false)
   const [isRegulated, setIsRegulated] = useState(false)
+  const [ageRestricted, setAgeRestricted] = useState(false)
+  const [minimumAge, setMinimumAge] = useState('21')
   const [manufacturerId, setManufacturerId] = useState('')
   const [manufacturerDid, setManufacturerDid] = useState('')
   const [excise, setExcise] = useState('')
@@ -611,6 +763,43 @@ function SkuDrawer({
   const [defWh, setDefWh] = useState('')
   const [defLoc, setDefLoc] = useState('')
   const [isActive, setIsActive] = useState(true)
+
+  /**
+   * Warn when the barcode is already assigned to another SKU.
+   *
+   * The check runs server-side via /skus/lookup/scan-value, because the list
+   * response carries no barcode field — a client-side scan of the loaded page
+   * would report "no duplicate" simply because it cannot see one, which is worse
+   * than no check at all. The endpoint also normalises GTIN-8/12/13/14, so a
+   * label stored as 12 digits is still caught when scanned as 13.
+   *
+   * Debounced so typing a barcode by hand doesn't fire a request per keystroke.
+   */
+  useEffect(() => {
+    const value = barcode.trim()
+    if (!value) {
+      setBarcodeOwner(null)
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(() => {
+      api
+        .get<SkuRow>(`/skus/lookup/scan-value?value=${encodeURIComponent(value)}`)
+        .then((sku) => {
+          if (cancelled) return
+          // Editing a SKU must not flag its own barcode as a clash.
+          setBarcodeOwner(sku && sku.id !== editId ? sku : null)
+        })
+        .catch(() => {
+          // 404 is the good case here: nothing owns this barcode yet.
+          if (!cancelled) setBarcodeOwner(null)
+        })
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [barcode, editId])
 
   const applyLevelsForWarehouse = useCallback(
     (wh: string, levels: StockLevelRow[] | undefined) => {
@@ -646,6 +835,8 @@ function SkuDrawer({
     setWeight(initial.weightGrams != null ? String(initial.weightGrams) : '')
     setIsTobacco(Boolean(initial.isTobacco))
     setIsRegulated(Boolean(initial.isRegulated))
+    setAgeRestricted(Boolean(initial.ageRestricted ?? initial.isTobacco))
+    setMinimumAge(initial.minimumAge != null ? String(initial.minimumAge) : initial.isTobacco ? '21' : '21')
     setManufacturerId(String(initial.manufacturerId ?? ''))
     setManufacturerDid(String(initial.manufacturerDid ?? ''))
     setExcise(String(initial.exciseTaxCategory ?? ''))
@@ -682,6 +873,8 @@ function SkuDrawer({
     setWeight('')
     setIsTobacco(false)
     setIsRegulated(false)
+    setAgeRestricted(false)
+    setMinimumAge('21')
     setManufacturerId('')
     setManufacturerDid('')
     setExcise('')
@@ -710,6 +903,8 @@ function SkuDrawer({
       unitOfMeasure: uom,
       isTobacco,
       isRegulated,
+      ageRestricted: ageRestricted || isTobacco,
+      minimumAge: ageRestricted || isTobacco ? Number(minimumAge) || 21 : null,
     }
     if (description.trim()) body.description = description.trim()
     if (sub.trim()) body.subcategory = sub.trim()
@@ -789,72 +984,120 @@ function SkuDrawer({
       ) : (
         <>
           {error && <p className="text-sm mb-3 text-red-400">{error}</p>}
-          <label className="text-xs text-cosmos-text-3">Code *</label>
-          <input className="cosmos-input mb-3" value={code} onChange={(e) => setCode(e.target.value)} />
-          <label className="text-xs text-cosmos-text-3">Name *</label>
-          <input className="cosmos-input mb-3" value={name} onChange={(e) => setName(e.target.value)} />
-          <label className="text-xs text-cosmos-text-3">Description</label>
-          <textarea className="cosmos-input mb-3 min-h-[72px]" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <label className="text-xs text-cosmos-text-3">Category *</label>
-          <input className="cosmos-input mb-3" value={cat} onChange={(e) => setCat(e.target.value)} placeholder="e.g. Beverages" />
-          <label className="text-xs text-cosmos-text-3">Subcategory</label>
-          <input className="cosmos-input mb-3" value={sub} onChange={(e) => setSub(e.target.value)} />
-          <label className="text-xs text-cosmos-text-3">Barcode</label>
-          <input className="cosmos-input mb-3" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-          <label className="text-xs text-cosmos-text-3">Unit of measure</label>
-          <select className="cosmos-input mb-3" value={uom} onChange={(e) => setUom(e.target.value)}>
+          <label className="text-xs text-pleros-text-3">Code *</label>
+          <input className="pleros-input mb-3" value={code} onChange={(e) => setCode(e.target.value)} />
+          <label className="text-xs text-pleros-text-3">Name *</label>
+          <input className="pleros-input mb-3" value={name} onChange={(e) => setName(e.target.value)} />
+          <label className="text-xs text-pleros-text-3">Description</label>
+          <textarea className="pleros-input mb-3 min-h-[72px]" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <label className="text-xs text-pleros-text-3">Category *</label>
+          <input className="pleros-input mb-3" value={cat} onChange={(e) => setCat(e.target.value)} placeholder="e.g. Beverages" />
+          <label className="text-xs text-pleros-text-3">Subcategory</label>
+          <input className="pleros-input mb-3" value={sub} onChange={(e) => setSub(e.target.value)} />
+          <label className="text-xs text-pleros-text-3">Barcode</label>
+          <div className="flex items-center gap-2">
+            <input
+              className="pleros-input flex-1"
+              placeholder="Scan or type the product barcode"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+            />
+            <ScanButton onScan={(r) => setBarcode(r.rawValue)} title="Scan product barcode" />
+          </div>
+          {barcodeOwner ? (
+            <p className="text-[11px] mt-1 mb-3" style={{ color: 'var(--c-warning)' }}>
+              Already assigned to {barcodeOwner.code} — {barcodeOwner.name}
+            </p>
+          ) : (
+            <div className="mb-3" />
+          )}
+          <label className="text-xs text-pleros-text-3">Unit of measure</label>
+          <select className="pleros-input mb-3" value={uom} onChange={(e) => setUom(e.target.value)}>
             {UOM_OPTIONS.map((u) => (
               <option key={u} value={u}>
                 {u}
               </option>
             ))}
           </select>
-          <label className="text-xs text-cosmos-text-3">Weight (grams)</label>
-          <input className="cosmos-input mb-3" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          <label className="text-xs text-pleros-text-3">Weight (grams)</label>
+          <input className="pleros-input mb-3" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
 
           <label className="flex items-center gap-2 mb-2 cursor-pointer">
-            <input type="checkbox" checked={isTobacco} onChange={(e) => setIsTobacco(e.target.checked)} />
-            <span className="text-sm text-cosmos-text">Is tobacco</span>
+            <input
+              type="checkbox"
+              checked={isTobacco}
+              onChange={(e) => {
+                const on = e.target.checked
+                setIsTobacco(on)
+                if (on) {
+                  setAgeRestricted(true)
+                  setIsRegulated(true)
+                  if (!minimumAge.trim()) setMinimumAge('21')
+                }
+              }}
+            />
+            <span className="text-sm text-pleros-text">Is tobacco</span>
           </label>
-          <label className="flex items-center gap-2 mb-3 cursor-pointer">
+          <label className="flex items-center gap-2 mb-2 cursor-pointer">
             <input type="checkbox" checked={isRegulated} onChange={(e) => setIsRegulated(e.target.checked)} />
-            <span className="text-sm text-cosmos-text">Regulated product</span>
+            <span className="text-sm text-pleros-text">Regulated product</span>
           </label>
+          <label className="flex items-center gap-2 mb-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={ageRestricted || isTobacco}
+              onChange={(e) => setAgeRestricted(e.target.checked)}
+            />
+            <span className="text-sm text-pleros-text">Age restricted</span>
+          </label>
+          {(ageRestricted || isTobacco) && (
+            <>
+              <label className="text-xs text-pleros-text-3">Minimum age</label>
+              <input
+                className="pleros-input mb-3 w-32"
+                type="number"
+                min={18}
+                max={99}
+                value={minimumAge}
+                onChange={(e) => setMinimumAge(e.target.value)}
+              />
+            </>
+          )}
 
           {isTobacco && (
             <>
-              <label className="text-xs text-cosmos-text-3">Manufacturer ID</label>
-              <input className="cosmos-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
-              <label className="text-xs text-cosmos-text-3">Manufacturer DID</label>
-              <input className="cosmos-input mb-3 font-mono text-sm" value={manufacturerDid} onChange={(e) => setManufacturerDid(e.target.value)} />
-              <label className="text-xs text-cosmos-text-3">Excise tax category</label>
-              <input className="cosmos-input mb-3" value={excise} onChange={(e) => setExcise(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Manufacturer ID</label>
+              <input className="pleros-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Manufacturer DID</label>
+              <input className="pleros-input mb-3 font-mono text-sm" value={manufacturerDid} onChange={(e) => setManufacturerDid(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Excise tax category</label>
+              <input className="pleros-input mb-3" value={excise} onChange={(e) => setExcise(e.target.value)} />
             </>
           )}
 
           {!isTobacco && (
             <>
-              <label className="text-xs text-cosmos-text-3">Manufacturer ID (optional)</label>
-              <input className="cosmos-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Manufacturer ID (optional)</label>
+              <input className="pleros-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
             </>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-cosmos-text-3">Cost</label>
-              <input className="cosmos-input" type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Cost</label>
+              <input className="pleros-input" type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs text-cosmos-text-3">Sell price</label>
-              <input className="cosmos-input" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Sell price</label>
+              <input className="pleros-input" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
           </div>
-          <label className="text-xs text-cosmos-text-3 mt-3 block">Min price</label>
-          <input className="cosmos-input mb-3" type="number" step="0.01" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+          <label className="text-xs text-pleros-text-3 mt-3 block">Min price</label>
+          <input className="pleros-input mb-3" type="number" step="0.01" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
 
-          <p className="text-sm text-cosmos-text-2 mt-4 mb-2">Default stocking (non-batch row)</p>
-          <label className="text-xs text-cosmos-text-3">Warehouse</label>
-          <select className="cosmos-input mb-3" value={defWh} onChange={(e) => onWarehouseSelect(e.target.value)}>
+          <p className="text-sm text-pleros-text-2 mt-4 mb-2">Default stocking (non-batch row)</p>
+          <label className="text-xs text-pleros-text-3">Warehouse</label>
+          <select className="pleros-input mb-3" value={defWh} onChange={(e) => onWarehouseSelect(e.target.value)}>
             <option value="">—</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
@@ -862,23 +1105,23 @@ function SkuDrawer({
               </option>
             ))}
           </select>
-          <label className="text-xs text-cosmos-text-3">Location label</label>
-          <input className="cosmos-input mb-3" value={defLoc} onChange={(e) => setDefLoc(e.target.value)} />
+          <label className="text-xs text-pleros-text-3">Location label</label>
+          <input className="pleros-input mb-3" value={defLoc} onChange={(e) => setDefLoc(e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-cosmos-text-3">Reorder point</label>
-              <input className="cosmos-input" type="number" value={reorderPt} onChange={(e) => setReorderPt(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Reorder point</label>
+              <input className="pleros-input" type="number" value={reorderPt} onChange={(e) => setReorderPt(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs text-cosmos-text-3">Reorder qty</label>
-              <input className="cosmos-input" type="number" value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} />
+              <label className="text-xs text-pleros-text-3">Reorder qty</label>
+              <input className="pleros-input" type="number" value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} />
             </div>
           </div>
 
           {mode === 'edit' && (
             <label className="flex items-center gap-2 mt-4 cursor-pointer">
               <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-              <span className="text-sm text-cosmos-text">Active</span>
+              <span className="text-sm text-pleros-text">Active</span>
             </label>
           )}
 
