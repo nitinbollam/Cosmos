@@ -1,6 +1,9 @@
 import { crmDb, inventoryDb, orderDb, tenantDb } from './db'
 import { auditLog } from './audit-log'
 import { ApiError } from './session'
+import { effectiveRestricted, type RestrictedSkuInfo } from './age-restriction-rule'
+
+export type { RestrictedSkuInfo }
 
 export type AgeVerificationPolicy = {
   enabled: boolean
@@ -97,31 +100,6 @@ export async function updateAgeVerificationPolicy(
     data: { settings: { ...settings, ageVerification: next } },
   })
   return next
-}
-
-export type RestrictedSkuInfo = {
-  id: string
-  code: string
-  name: string
-  isTobacco: boolean
-  ageRestricted: boolean
-  minimumAge: number
-}
-
-function effectiveRestricted(
-  sku: { id: string; code: string; name: string; isTobacco: boolean; ageRestricted: boolean; minimumAge: number | null },
-  policyMinAge: number,
-): RestrictedSkuInfo | null {
-  const restricted = Boolean(sku.ageRestricted || sku.isTobacco)
-  if (!restricted) return null
-  return {
-    id: sku.id,
-    code: sku.code,
-    name: sku.name,
-    isTobacco: sku.isTobacco,
-    ageRestricted: sku.ageRestricted || sku.isTobacco,
-    minimumAge: sku.minimumAge && sku.minimumAge > 0 ? sku.minimumAge : policyMinAge,
-  }
 }
 
 export async function loadRestrictedSkusForLines(

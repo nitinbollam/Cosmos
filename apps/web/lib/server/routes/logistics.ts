@@ -1,5 +1,6 @@
 import * as orders from '../orders'
 import * as dispatch from '../dispatch'
+import { RouteStatus } from '@/generated/prisma-dispatch'
 import * as purchasing from '../purchasing'
 import * as edi from '../edi'
 import { ApiError, requireSession, requirePermission, assertPermission, assertNotBuyer } from './common'
@@ -25,14 +26,22 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
     )
   }
   if (seg.length === 1 && method === 'GET') {
-    return Response.json(await dispatch.listRoutes(session.tenantId, url.searchParams.get('date') ?? undefined))
+    // ?status=ASSIGNED,IN_PROGRESS — the driver app's active list. Unknown values are ignored.
+    const statuses = (url.searchParams.get('status') ?? '')
+      .split(',')
+      .map((x) => x.trim().toUpperCase())
+      .filter((x): x is RouteStatus => (Object.values(RouteStatus) as string[]).includes(x))
+    return Response.json(await dispatch.listRoutes(session.tenantId, url.searchParams.get('date') ?? undefined, statuses))
   }
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as Parameters<typeof dispatch.createRoute>[1]
     return Response.json(await dispatch.createRoute(session.tenantId, body), { status: 201 })
   }
   if (seg.length === 2 && method === 'GET') {
-    return Response.json(await dispatch.getRoute(session.tenantId, seg[1]))
+    return Response.json(await dispatch.getRouteDetail(session.tenantId, seg[1]))
+  }
+  if (seg.length === 3 && seg[2] === 'driver' && method === 'DELETE') {
+    return Response.json(await dispatch.unassignRouteDriver(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'driver' && method === 'PATCH') {
     const body = (await req.json()) as { driverId?: string }
@@ -57,8 +66,10 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
     )
   }
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'failed' && method === 'POST') {
-    const body = (await req.json()) as { reason?: string }
-    return Response.json(await dispatch.markStopFailed(session.tenantId, seg[1], seg[3], body.reason))
+    const body = (await req.json()) as { reason?: unknown }
+    return Response.json(
+      await dispatch.markStopFailed(session.tenantId, seg[1], seg[3], body.reason, { userId: session.userId }),
+    )
   }
   throw new ApiError(404, 'Route route not found')
 }
