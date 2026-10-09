@@ -11,6 +11,16 @@ export function axiosErr(e: unknown): string {
   return 'Request failed'
 }
 
+/** True only for a real 404, so lookups can tell "nothing there" from "couldn't check". */
+export function isNotFound(e: unknown): boolean {
+  return axios.isAxiosError(e) && e.response?.status === 404
+}
+
+/** True for a 403: the user lacks the permission, so retrying won't help. */
+export function isForbidden(e: unknown): boolean {
+  return axios.isAxiosError(e) && e.response?.status === 403
+}
+
 export function isUnauthorized(e: unknown): boolean {
   return axios.isAxiosError(e) && e.response?.status === 401
 }

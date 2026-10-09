@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api-mobile'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
@@ -14,12 +14,22 @@ const BarcodeScannerSheet = lazy(() =>
   })),
 )
 
+type ScanStatus = 'sent' | 'queued' | 'error'
+
 type ScanEntry = {
+  id: number
   code: string
-  status: 'sent' | 'queued' | 'error'
+  status: ScanStatus
   source: string
   detail?: string
 }
+
+/**
+ * Only the latest scans are listed. A large receipt runs to hundreds of scans on
+ * a low-end warehouse phone, and older rows are history, not feedback; the
+ * session totals below still count every one.
+ */
+const RECENT_LIMIT = 50
 
 export default function ReceivingMobilePage() {
   const [poId, setPoId] = useState('')
@@ -28,6 +38,13 @@ export default function ReceivingMobilePage() {
   const [msg, setMsg] = useState<string | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [recent, setRecent] = useState<ScanEntry[]>([])
+  const [totals, setTotals] = useState<Record<ScanStatus, number>>({ sent: 0, queued: 0, error: 0 })
+  const nextId = useRef(0)
+
+  const record = useCallback((entry: Omit<ScanEntry, 'id'>) => {
+    setRecent((prev) => [{ ...entry, id: nextId.current++ }, ...prev].slice(0, RECENT_LIMIT))
+    setTotals((prev) => ({ ...prev, [entry.status]: prev[entry.status] + 1 }))
+  }, [])
 
   async function startSession() {
     setMsg(null)
@@ -59,22 +76,22 @@ export default function ReceivingMobilePage() {
 
       if (!navigator.onLine) {
         enqueueAction('receiving_scan', { sessionId, code: value })
-        setRecent((prev) => [{ code: value, status: 'queued', source }, ...prev])
+        record({ code: value, status: 'queued', source })
         setMsg('Scan queued offline')
         return
       }
 
       try {
         await api.post(`/wms/receiving/sessions/${sessionId}/scan`, { code: value, quantity: 1 })
-        setRecent((prev) => [{ code: value, status: 'sent', source }, ...prev])
+        record({ code: value, status: 'sent', source })
         setMsg('Scanned')
       } catch (e) {
         const detail = axiosErr(e)
-        setRecent((prev) => [{ code: value, status: 'error', source, detail }, ...prev])
+        record({ code: value, status: 'error', source, detail })
         setMsg(detail)
       }
     },
-    [sessionId],
+    [sessionId, record],
   )
 
   async function scanLine() {
@@ -89,11 +106,20 @@ export default function ReceivingMobilePage() {
     [submitCode],
   )
 
+  const totalScans = totals.sent + totals.queued + totals.error
+  const sessionSummary = [
+    `${totalScans} scans`,
+    totals.queued ? `${totals.queued} queued` : null,
+    totals.error ? `${totals.error} failed` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   const recentList = recent.length > 0 && (
     <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0', display: 'grid', gap: 8 }}>
-      {recent.map((r, i) => (
+      {recent.map((r) => (
         <li
-          key={`${r.code}-${i}`}
+          key={r.id}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -141,7 +167,11 @@ export default function ReceivingMobilePage() {
         </Suspense>
         <div className="split-body">
           <p style={{ fontSize: 13, opacity: 0.8, margin: 0 }}>
-            Session #{sessionId.slice(-8).toUpperCase()} · {recent.length} scans
+            Session #{sessionId.slice(-8).toUpperCase()} · {sessionSummary}
+          </p>
+          <p style={{ fontSize: 12, opacity: 0.7, margin: '4px 0 0' }}>
+            A label counts once while it stays in view. To receive another unit with the same barcode,
+            move the label out of view for a moment, then scan it again.
           </p>
           {msg && <p style={{ marginTop: 8, fontSize: 13 }}>{msg}</p>}
           {recentList}

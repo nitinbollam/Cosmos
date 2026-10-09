@@ -34,6 +34,44 @@ describe('ScanDeduper', () => {
     assert.equal(deduper.accept('SKU-123'), true)
   })
 
+  it('accepts a label held in view only once', () => {
+    let now = 0
+    const deduper = new ScanDeduper(1500, () => now)
+
+    assert.equal(deduper.accept('SKU-123'), true)
+    // The camera keeps decoding it every 180 ms for 6 s: never accepted again.
+    for (now = 180; now <= 6000; now += 180) {
+      assert.equal(deduper.accept('SKU-123'), false, `re-accepted at ${now} ms`)
+    }
+  })
+
+  it('re-arms once the label has been out of view for the window', () => {
+    let now = 0
+    const deduper = new ScanDeduper(1500, () => now)
+
+    assert.equal(deduper.accept('SKU-123'), true)
+    now = 900
+    assert.equal(deduper.accept('SKU-123'), false) // still in view
+    // Unseen from 900 ms, back at 2000 ms (1100 ms away): not yet.
+    now = 2000
+    assert.equal(deduper.accept('SKU-123'), false)
+    // Unseen from 2000 ms, back at 3600 ms (1600 ms away): accepted.
+    now = 3600
+    assert.equal(deduper.accept('SKU-123'), true)
+  })
+
+  it('tracks two labels in view independently', () => {
+    let now = 0
+    const deduper = new ScanDeduper(1500, () => now)
+
+    assert.equal(deduper.accept('A'), true)
+    assert.equal(deduper.accept('B'), true)
+    // Decodes alternate between the two labels; neither re-arms the other.
+    for (now = 180; now <= 4000; now += 180) {
+      assert.equal(deduper.accept(now % 360 === 0 ? 'A' : 'B'), false)
+    }
+  })
+
   it('reset() clears dedup history immediately', () => {
     let now = 1000
     const deduper = new ScanDeduper(1500, () => now)

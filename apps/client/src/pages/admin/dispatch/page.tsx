@@ -16,11 +16,15 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { FailStopForm } from '@/components/pod/FailStopForm'
+import { StopOutcomeDetails, type StopOutcomePod } from '@/components/pod/StopOutcomeDetails'
+import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
 import { api } from '@/lib/api-admin'
+import { isForbidden } from '@/lib/axios-error'
 import { useQueryParams } from '@/lib/use-query-params'
 
 type RouteStop = {
@@ -28,6 +32,10 @@ type RouteStop = {
   sequence: number
   status: string
   address: unknown
+  pod?: StopOutcomePod | null
+  items?: StopItem[]
+  ageRestricted?: boolean
+  minimumAge?: number | null
 }
 
 type DeliveryRoute = {
@@ -182,7 +190,6 @@ function DispatchDashboard() {
   const [selectedDate, setSelectedDate] = useState(() => toYmd(new Date()))
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(routeFromUrl)
   const [createOpen, setCreateOpen] = useState(false)
-  const [podForStop, setPodForStop] = useState<RouteStop | null>(null)
 
   useEffect(() => {
     if (routeFromUrl && routeFromUrl !== selectedRouteId) setSelectedRouteId(routeFromUrl)
@@ -202,11 +209,17 @@ function DispatchDashboard() {
   const routes = useQuery<DeliveryRoute[]>({
     queryKey: ['dispatch-routes', selectedDate],
     queryFn: () => api.get(`/routes?date=${encodeURIComponent(selectedDate)}`),
+    // Keep the route cards current while any route is still being worked
+    // (drivers deliver and fail stops from the mobile app).
+    refetchInterval: (q) =>
+      (q.state.data ?? []).some((r) => r.status !== 'COMPLETED' && r.status !== 'CANCELLED') ? 15_000 : false,
   })
 
   const users = useQuery<{ items: UserRow[] }>({
     queryKey: ['users', 'dispatch'],
     queryFn: () => api.get('/users?pageSize=200'),
+    // A role without users.read (e.g. DRIVER) gets 403; don't retry it for seconds.
+    retry: (count, e) => !isForbidden(e) && count < 3,
   })
 
   const routeDetail = useQuery<DeliveryRoute>({
@@ -243,10 +256,20 @@ function DispatchDashboard() {
 
   const assign = useMutation({
     mutationFn: ({ routeId, driverId }: { routeId: string; driverId: string }) =>
-      api.patch(`/routes/${encodeURIComponent(routeId)}/driver`, { driverId }),
-    onSuccess: () => {
+      api.patch<DeliveryRoute>(`/routes/${encodeURIComponent(routeId)}/driver`, { driverId }),
+    onSuccess: (route, v) => {
+      // The response is the route as just written (now ASSIGNED); a re-read can lag behind it.
+      qc.setQueryData(['dispatch-route', v.routeId], route)
       void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
-      void qc.invalidateQueries({ queryKey: ['dispatch-route', selectedRouteId] })
+    },
+  })
+
+  // Undo an assignment: the driver comes off and the route goes back to PLANNED.
+  const unassign = useMutation({
+    mutationFn: (routeId: string) => api.delete<DeliveryRoute>(`/routes/${encodeURIComponent(routeId)}/driver`),
+    onSuccess: (route, routeId) => {
+      qc.setQueryData(['dispatch-route', routeId], route)
+      void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
     },
   })
 
@@ -273,21 +296,41 @@ function DispatchDashboard() {
   })
 
   const markFailed = useMutation({
-    mutationFn: ({ routeId, stopId, reason }: { routeId: string; stopId: string; reason?: string }) =>
-      api.post(`/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/failed`, {
-        reason: reason || undefined,
+    mutationFn: ({ routeId, stopId, reason }: { routeId: string; stopId: string; reason: string }) =>
+      api.post<DeliveryRoute>(`/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/failed`, {
+        reason,
       }),
-    onSuccess: (_d, v) => {
-      void qc.invalidateQueries({ queryKey: ['dispatch-route', v.routeId] })
+    onSuccess: (route, v) => {
+      // The response is the route as just written; a re-read can lag behind it.
+      qc.setQueryData(['dispatch-route', v.routeId], route)
       void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
     },
   })
 
+  const nameFor = useCallback(
+    (userId: string) => {
+      const u = (users.data?.items ?? []).find((x) => x.id === userId)
+      return u ? userLabel(u) : null
+    },
+    [users.data?.items],
+  )
+
   const selected = routeDetail.data
+
+  // When the open route changes (a stop delivered or failed, the route completed),
+  // refresh the cards too so the list never contradicts the panel.
+  const selectedId = selected?.id
+  const selectedStatus = selected?.status
+  const selectedStopsDone = selected?.stops?.filter((s) => s.status === 'DELIVERED' || s.status === 'FAILED').length
+  useEffect(() => {
+    if (!selectedId) return
+    void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
+  }, [qc, selectedId, selectedStatus, selectedStopsDone])
   const driverLabel = useMemo(() => {
     if (!selected?.driverId) return null
     const u = (users.data?.items ?? []).find((x) => x.id === selected.driverId)
-    return u ? userLabel(u) : selected.driverId
+    // The user list needs users.read; without it, say "Assigned" rather than show a raw id.
+    return u ? userLabel(u) : 'Assigned'
   }, [selected?.driverId, users.data?.items])
 
   const mapEmbedUrl = useMemo(() => (selected ? routeMapEmbedUrl(selected) : ''), [selected])
@@ -361,10 +404,12 @@ function DispatchDashboard() {
             />
           ) : (
             <ul className="space-y-2">
-              {(routes.data ?? []).map((r) => {
+              {(routes.data ?? []).map((listed) => {
+                // The open route's card uses the panel's (fresher) data, so the two always agree.
+                const r = selected && selected.id === listed.id ? { ...listed, ...selected } : listed
                 const isSelected = selectedRouteId === r.id
                 const rDriver = users.data?.items?.find((u) => u.id === r.driverId)
-                const dName = rDriver ? userLabel(rDriver) : 'Unassigned'
+                const dName = rDriver ? userLabel(rDriver) : r.driverId ? 'Assigned' : 'Unassigned'
                 const completedStops = r.stops?.filter((s) => s.status === 'DELIVERED').length ?? 0
 
                 return (
@@ -430,6 +475,12 @@ function DispatchDashboard() {
                   <span className="text-xs font-mono px-2 py-0.5 rounded bg-pleros-surface-2 text-pleros-muted border border-pleros-border">
                     #{formatRouteCode(selected.id)}
                   </span>
+                  <Link
+                    to={`/admin/dispatch/${encodeURIComponent(selected.id)}`}
+                    className="text-xs text-pleros-primary hover:underline"
+                  >
+                    Open route page →
+                  </Link>
                 </div>
 
                 <div className="flex items-center gap-3 mt-1 text-xs text-pleros-muted">
@@ -497,14 +548,22 @@ function DispatchDashboard() {
                   </button>
                 </div>
 
-                {/* Driver Assignment Select */}
-                <AssignDriverSelect
-                  disabled={
-                    assign.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'
-                  }
-                  users={(users.data?.items ?? []) as UserRow[]}
-                  onAssign={(driverId) => assign.mutate({ routeId: selected.id, driverId })}
-                />
+                {/* Driver Assignment Select (needs the user list, i.e. users.read) */}
+                {users.isError ? (
+                  <span className="text-xs text-pleros-muted">No permission to assign drivers</span>
+                ) : (
+                  <AssignDriverSelect
+                    disabled={
+                      assign.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'
+                    }
+                    users={(users.data?.items ?? []) as UserRow[]}
+                    onAssign={(driverId) => assign.mutate({ routeId: selected.id, driverId })}
+                    assigned={!!selected.driverId}
+                    unassignBlockedReason={unassignBlockedReason(selected)}
+                    unassignPending={unassign.isPending}
+                    onUnassign={() => unassign.mutate(selected.id)}
+                  />
+                )}
               </div>
             </div>
 
@@ -602,9 +661,9 @@ function DispatchDashboard() {
                     {errMsg(reorderStops.error)}
                   </div>
                 )}
-                {assign.error && (
+                {(assign.error || unassign.error) && (
                   <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-                    {errMsg(assign.error)}
+                    {errMsg(assign.error ?? unassign.error)}
                   </div>
                 )}
 
@@ -616,12 +675,8 @@ function DispatchDashboard() {
                     selected.status === 'CANCELLED'
                   }
                   onReorder={(stopIds) => reorderStops.mutate({ routeId: selected.id, stopIds })}
-                  onPod={(s) => setPodForStop(s)}
-                  onFailed={(s) => {
-                    const reason = window.prompt('Failure reason (e.g. business closed, customer absent)') ?? undefined
-                    markFailed.mutate({ routeId: selected.id, stopId: s.id, reason: reason || undefined })
-                  }}
-                  failPending={markFailed.isPending}
+                  onFailed={(s, reason) => markFailed.mutateAsync({ routeId: selected.id, stopId: s.id, reason })}
+                  nameFor={nameFor}
                 />
 
                 {markFailed.error && (
@@ -647,26 +702,27 @@ function DispatchDashboard() {
         />
       )}
 
-      {podForStop && selectedRouteId && (
-        <PodModal
-          routeId={selectedRouteId}
-          stop={podForStop}
-          onClose={() => setPodForStop(null)}
-          onDone={() => {
-            setPodForStop(null)
-            void qc.invalidateQueries({ queryKey: ['dispatch-route', selectedRouteId] })
-            void qc.invalidateQueries({ queryKey: ['dispatch-routes', selectedDate] })
-          }}
-        />
-      )}
     </div>
   )
+}
+
+/** Mirrors the server rule: a route can go back to PLANNED only before any stop has an outcome. */
+function unassignBlockedReason(route: DeliveryRoute): string | null {
+  if (route.status === 'COMPLETED' || route.status === 'CANCELLED') return `Route is ${route.status.toLowerCase()}`
+  if (route.stops?.some((s) => s.status === 'DELIVERED' || s.status === 'FAILED')) {
+    return 'Stops already delivered or failed; assign another driver instead'
+  }
+  return null
 }
 
 function AssignDriverSelect(props: {
   disabled: boolean
   users: UserRow[]
   onAssign: (driverId: string) => void
+  assigned: boolean
+  unassignBlockedReason: string | null
+  unassignPending: boolean
+  onUnassign: () => void
 }) {
   const [v, setV] = useState('')
   return (
@@ -695,6 +751,17 @@ function AssignDriverSelect(props: {
       >
         Set
       </button>
+      {props.assigned && (
+        <button
+          type="button"
+          disabled={props.unassignPending || !!props.unassignBlockedReason}
+          title={props.unassignBlockedReason ?? 'Remove the driver and move the route back to Planned'}
+          className="px-3 py-1.5 rounded-lg border border-pleros-border text-xs font-semibold text-pleros-muted hover:text-amber-400 hover:border-amber-400/40 disabled:opacity-40 transition-colors"
+          onClick={props.onUnassign}
+        >
+          {props.unassignPending ? 'Unassigning…' : 'Unassign'}
+        </button>
+      )}
     </div>
   )
 }
@@ -702,10 +769,13 @@ function AssignDriverSelect(props: {
 function SortableStopRow(props: {
   stop: RouteStop
   disabled: boolean
-  onPod: () => void
-  onFailed: () => void
-  failPending: boolean
+  onFailed: (reason: string) => Promise<unknown>
+  nameFor: (userId: string) => string | null
 }) {
+  // Delivered/failed stops can be expanded to show their outcome; open stops can
+  // show the "mark failed" form.
+  const [showDetails, setShowDetails] = useState(false)
+  const [failing, setFailing] = useState(false)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: props.stop.id,
     disabled: props.disabled,
@@ -763,37 +833,75 @@ function SortableStopRow(props: {
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-pleros-white">Stop #{props.stop.sequence}</span>
             <StatusBadge status={props.stop.status} />
+            {props.stop.ageRestricted && <AgeTag minimumAge={props.stop.minimumAge ?? null} label="" />}
           </div>
           <div className="text-sm font-medium text-pleros-text mt-0.5 truncate flex items-center gap-1.5" title={formatAddress(props.stop.address)}>
             <span>📍</span>
             <span>{formatAddress(props.stop.address)}</span>
           </div>
+          {isFailed && (
+            <div className="text-xs text-red-400 mt-0.5 truncate" title={props.stop.pod?.failure?.reason}>
+              Failed: {props.stop.pod?.failure?.reason ?? 'no reason recorded'}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* Actions. Proof of delivery (photo + signature) is mandatory and is captured
+          by the driver in the mobile app, so staff can't mark a stop delivered here.
+          A stop with an outcome (delivered or failed) has nothing left to act on. */}
       <div className="flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          disabled={isDelivered}
-          className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
-            isDelivered
-              ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
-              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm'
-          }`}
-          onClick={props.onPod}
-        >
-          {isDelivered ? '✓ Delivered (POD)' : 'Capture POD'}
-        </button>
-        <button
-          type="button"
-          disabled={isFailed || props.failPending}
-          className="text-xs px-2.5 py-1.5 rounded-lg border border-pleros-border text-pleros-muted hover:text-red-400 hover:border-red-400/40 transition-colors disabled:opacity-30"
-          onClick={props.onFailed}
-        >
-          Failed
-        </button>
+        {isDelivered || isFailed ? (
+          <button
+            type="button"
+            aria-expanded={showDetails}
+            onClick={() => setShowDetails((v) => !v)}
+            className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+              isDelivered
+                ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                : 'border border-red-500/30 text-red-400 hover:bg-red-500/10'
+            }`}
+          >
+            {isDelivered ? '✓ Delivered (POD)' : 'Failed'} · {showDetails ? 'Hide' : 'View'}
+          </button>
+        ) : (
+          <>
+            <span className="text-xs text-pleros-muted">Awaiting driver POD</span>
+            {!failing && (
+              <button
+                type="button"
+                className="text-xs px-2.5 py-1.5 rounded-lg border border-pleros-border text-pleros-muted hover:text-red-400 hover:border-red-400/40 transition-colors"
+                onClick={() => setFailing(true)}
+              >
+                Failed
+              </button>
+            )}
+          </>
+        )}
       </div>
+
+      {/* What is being delivered here, full width so it stays readable in narrow panes. */}
+      {!!props.stop.items?.length && (
+        <div className="basis-full pl-12">
+          <StopItems items={props.stop.items} />
+        </div>
+      )}
+      {showDetails && (isDelivered || isFailed) && (
+        <div className="basis-full pt-3 border-t border-pleros-border/60">
+          <StopOutcomeDetails status={props.stop.status} pod={props.stop.pod} nameFor={props.nameFor} />
+        </div>
+      )}
+      {failing && !isDelivered && !isFailed && (
+        <div className="basis-full">
+          <FailStopForm
+            onSubmit={async (reason) => {
+              await props.onFailed(reason)
+              setFailing(false)
+            }}
+            onCancel={() => setFailing(false)}
+          />
+        </div>
+      )}
     </li>
   )
 }
@@ -802,9 +910,8 @@ function StopsSortableSection(props: {
   route: DeliveryRoute
   disabled: boolean
   onReorder: (stopIds: string[]) => void
-  onPod: (s: RouteStop) => void
-  onFailed: (s: RouteStop) => void
-  failPending: boolean
+  onFailed: (s: RouteStop, reason: string) => Promise<unknown>
+  nameFor: (userId: string) => string | null
 }) {
   const stops = props.route.stops ?? []
   const sensors = useSensors(
@@ -840,138 +947,13 @@ function StopsSortableSection(props: {
               key={s.id}
               stop={s}
               disabled={props.disabled}
-              onPod={() => props.onPod(s)}
-              onFailed={() => props.onFailed(s)}
-              failPending={props.failPending}
+              onFailed={(reason) => props.onFailed(s, reason)}
+              nameFor={props.nameFor}
             />
           ))}
         </ul>
       </SortableContext>
     </DndContext>
-  )
-}
-
-function PodModal(props: {
-  routeId: string
-  stop: RouteStop
-  onClose: () => void
-  onDone: () => void
-}) {
-  const [recipient, setRecipient] = useState('')
-  const [notes, setNotes] = useState('')
-  const [signature, setSignature] = useState('')
-  const [ageConfirmed, setAgeConfirmed] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit() {
-    setError(null)
-    setBusy(true)
-    try {
-      await api.post(
-        `/routes/${encodeURIComponent(props.routeId)}/stops/${encodeURIComponent(props.stop.id)}/delivered`,
-        {
-          recipientName: recipient.trim() || undefined,
-          notes: notes.trim() || undefined,
-          signature: signature.trim() || undefined,
-          ageConfirmed,
-        },
-      )
-      props.onDone()
-    } catch (e) {
-      setError(errMsg(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <button type="button" className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close" onClick={props.onClose} />
-      <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-pleros-surface border border-pleros-border p-6 shadow-2xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-pleros-white">Proof of Delivery (POD)</h2>
-          <button
-            type="button"
-            onClick={props.onClose}
-            className="text-pleros-muted hover:text-pleros-white text-lg leading-none"
-          >
-            ✕
-          </button>
-        </div>
-
-        <p className="text-xs text-pleros-muted">
-          Stop #{props.stop.sequence} · {formatAddress(props.stop.address)}
-        </p>
-
-        <div>
-          <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
-            Recipient Name
-          </label>
-          <input
-            className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text focus:outline-none focus:border-pleros-primary"
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-            placeholder="e.g. Alex Smith"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
-            Delivery Notes
-          </label>
-          <textarea
-            className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text min-h-[72px] focus:outline-none focus:border-pleros-primary"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Condition, dock location, gate code, etc."
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
-            Signature / Reference
-          </label>
-          <input
-            className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text focus:outline-none focus:border-pleros-primary"
-            value={signature}
-            onChange={(e) => setSignature(e.target.value)}
-            placeholder="Signed in person or reference ID"
-          />
-        </div>
-
-        <label className="flex items-start gap-2.5 text-xs text-pleros-text cursor-pointer p-3 rounded-lg bg-pleros-surface-2 border border-pleros-border">
-          <input
-            type="checkbox"
-            className="mt-0.5 accent-pleros-primary"
-            checked={ageConfirmed}
-            onChange={(e) => setAgeConfirmed(e.target.checked)}
-          />
-          <span>Recipient age verified (required for regulated products)</span>
-        </label>
-
-        {error && <p className="text-red-400 text-xs">{error}</p>}
-
-        <div className="flex gap-2.5 pt-2">
-          <button
-            type="button"
-            className="flex-1 h-10 rounded-lg border border-pleros-border text-pleros-text hover:bg-pleros-surface-2 text-sm font-semibold transition-colors"
-            onClick={props.onClose}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            className="flex-1 h-10 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-sm transition-colors disabled:opacity-40"
-            onClick={() => void submit()}
-          >
-            {busy ? 'Recording POD…' : '✓ Mark Delivered'}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 

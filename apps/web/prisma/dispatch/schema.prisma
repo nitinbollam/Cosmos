@@ -10,6 +10,8 @@ datasource db {
 
 enum RouteStatus {
   PLANNED
+  /// A driver is assigned but has not delivered or failed any stop yet.
+  ASSIGNED
   IN_PROGRESS
   COMPLETED
   CANCELLED
