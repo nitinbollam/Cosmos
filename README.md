@@ -161,6 +161,16 @@ Checkout and invoice card pay use `import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY`,
 
 ---
 
+### User management
+
+| Where | Who | What |
+|-------|-----|------|
+| **Settings → Users** | Company admins (own company only) | Invite people, change roles and module permissions, deactivate/reactivate, reset a password (temporary password shown once), email a reset link, mark email verified, sign someone out everywhere, see last login and active sessions. Super admin rows are read-only. |
+| **`npm run users -- <command>`** | Anyone with server access | Manage any user in any company — locally, or inside the deployed container (Railway: `railway ssh`, then `npm run users -- list`). The **only** place super admins can be created or changed. `npm run users -- help` lists commands. |
+| **First admin / recovery** | Railway variables | Set `PLEROS_BOOTSTRAP_ADMIN_EMAIL` and `PLEROS_BOOTSTRAP_ADMIN_PASSWORD` and deploy once: creates a platform super admin (or resets its password if it exists). Remove both variables afterwards. |
+
+Every account action is recorded in the audit log (`ops.user.*`).
+
 ## Related docs
 
 | Doc | Purpose |

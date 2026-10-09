@@ -3,7 +3,7 @@
  * Production start: push Prisma schemas then boot the API server.
  * Set PLEROS_SKIP_DB_MIGRATE=1 to skip (e.g. local dev with pre-migrated DB).
  */
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DB_BY_SCHEMA, databaseUrlForSchema, envKeyForSchema } from './db-urls.mjs'
@@ -27,6 +27,24 @@ if (process.env.PLEROS_SKIP_DB_MIGRATE !== '1') {
   } catch (err) {
     console.error('[start] db:migrate failed:', err)
     if (process.env.NODE_ENV === 'production') process.exit(1)
+  }
+}
+
+// First admin / account recovery on a hosted database: set PLEROS_BOOTSTRAP_ADMIN_EMAIL and
+// PLEROS_BOOTSTRAP_ADMIN_PASSWORD, deploy once, sign in, then remove both variables. Creates a
+// platform SUPER_ADMIN, or resets that admin's password if it already exists.
+const bootstrapEmail = process.env.PLEROS_BOOTSTRAP_ADMIN_EMAIL?.trim()
+if (bootstrapEmail && process.env.PLEROS_BOOTSTRAP_ADMIN_PASSWORD?.trim()) {
+  try {
+    console.log(`[start] bootstrapping super admin ${bootstrapEmail} (remove PLEROS_BOOTSTRAP_ADMIN_* after this deploy)…`)
+    // Invoked directly rather than through npm so the command line (and env) is never echoed.
+    execFileSync(
+      process.execPath,
+      ['--import', './apps/web/server/register-paths.mjs', '--import', 'tsx', 'scripts/users.ts', 'bootstrap', '--email', bootstrapEmail],
+      { cwd: ROOT, stdio: 'inherit' },
+    )
+  } catch (err) {
+    console.error('[start] super admin bootstrap failed:', err instanceof Error ? err.message : err)
   }
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
+import { getSessionUser } from '@/lib/auth-session'
 import { PlerosDialogModal } from '@/components/pleros/radix-overlays'
 import { UserRow, UsersPage, InviteRow, INVITE_ROLES, errMsg } from '../types'
 
@@ -33,6 +34,8 @@ export function UsersTab() {
   const [linkCopied, setLinkCopied] = useState(false)
   const [permsUser, setPermsUser] = useState<UserRow | null>(null)
   const [selectedPerms, setSelectedPerms] = useState<string[]>([])
+  const [accountNotice, setAccountNotice] = useState<{ text: string; password?: string } | null>(null)
+  const myUserId = getSessionUser()?.sub
 
   const usersQ = useQuery<UsersPage>({
     queryKey: ['users', 'settings'],
@@ -88,6 +91,27 @@ export function UsersTab() {
     },
   })
 
+  // Account recovery for a team member (super admins excluded — they're managed from the server CLI).
+  const accountMut = useMutation({
+    mutationFn: ({ user, action }: { user: UserRow; action: 'reset-password' | 'reset-link' | 'revoke-sessions' | 'reactivate' | 'verify-email' }) =>
+      api.post<{ temporaryPassword?: string }>(`/users/${encodeURIComponent(user.id)}/${action}`, {}),
+    onSuccess: (data, { user, action }) => {
+      void qc.invalidateQueries({ queryKey: ['users'] })
+      const text: Record<typeof action, string> = {
+        'reset-password': `New temporary password for ${user.email}. They have been signed out everywhere and should change it after signing in.`,
+        'reset-link': `Password-reset link sent to ${user.email}.`,
+        'revoke-sessions': `${user.email} has been signed out on every device.`,
+        reactivate: `${user.email} can sign in again.`,
+        'verify-email': `${user.email} is marked as verified.`,
+      }
+      setAccountNotice({ text: text[action], password: data?.temporaryPassword })
+    },
+  })
+
+  const confirmAccount = (user: UserRow, action: 'reset-password' | 'revoke-sessions', message: string) => {
+    if (window.confirm(message)) accountMut.mutate({ user, action })
+  }
+
   const openPermsModal = (u: UserRow) => {
     setPermsUser(u)
     setSelectedPerms(u.permissions ?? [])
@@ -123,6 +147,21 @@ export function UsersTab() {
         </button>
       </div>
 
+      {accountNotice ? (
+        <div className="pleros-card space-y-2" style={{ borderColor: 'var(--c-accent)' }} role="status">
+          <p className="text-sm text-pleros-white">{accountNotice.text}</p>
+          {accountNotice.password ? (
+            <p className="text-sm">
+              Temporary password (shown once):{' '}
+              <code className="font-mono text-pleros-accent select-all">{accountNotice.password}</code>
+            </p>
+          ) : null}
+          <button type="button" className="btn-ghost !py-1 !px-3 !text-xs" onClick={() => setAccountNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <div className="pleros-card overflow-x-auto">
         {usersQ.isLoading ? (
           <div className="skeleton h-32 w-full" />
@@ -137,12 +176,17 @@ export function UsersTab() {
                 <th>Role</th>
                 <th>Permissions</th>
                 <th>Status</th>
+                <th>Last login</th>
+                <th>Sessions</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {(usersQ.data?.items ?? []).map((u) => {
                 const customPermCount = u.permissions?.length ?? 0
+                const isSuperAdmin = u.role === 'SUPER_ADMIN'
+                const isMe = u.id === myUserId
+                const busy = accountMut.isPending && accountMut.variables?.user.id === u.id
                 return (
                   <tr key={u.id} className={u.isActive ? '' : 'opacity-50'}>
                     <td>
@@ -150,7 +194,7 @@ export function UsersTab() {
                     </td>
                     <td className="font-mono text-xs">{u.email}</td>
                     <td className="text-sm text-pleros-text-2">
-                      {u.isActive ? (
+                      {u.isActive && !isSuperAdmin ? (
                         <select
                           className="pleros-input !py-1 !px-2 !text-xs w-auto"
                           value={u.role}
@@ -181,10 +225,30 @@ export function UsersTab() {
                         <span className="text-pleros-text-3">Role default</span>
                       )}
                     </td>
-                    <td className="text-sm">{u.isActive ? 'Active' : 'Inactive'}</td>
+                    <td className="text-sm">
+                      {u.isActive ? 'Active' : 'Inactive'}
+                      {u.emailVerified === false ? (
+                        <div className="text-xs text-amber-400">Email not verified</div>
+                      ) : null}
+                    </td>
+                    <td className="text-xs text-pleros-text-3">
+                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : '—'}
+                    </td>
+                    <td className="text-sm">{u.activeSessions ?? 0}</td>
                     <td className="text-right">
-                      {u.isActive && (
-                        <div className="flex items-center justify-end gap-2">
+                      {isSuperAdmin ? (
+                        <span className="text-xs text-pleros-text-3">Managed via CLI</span>
+                      ) : !u.isActive ? (
+                        <button
+                          type="button"
+                          className="btn-ghost !py-1 !px-2 !text-xs text-pleros-text-2 hover:text-pleros-white"
+                          disabled={busy}
+                          onClick={() => accountMut.mutate({ user: u, action: 'reactivate' })}
+                        >
+                          Reactivate
+                        </button>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <button
                             type="button"
                             className="btn-ghost !py-1 !px-2 !text-xs text-pleros-text-2 hover:text-pleros-white"
@@ -192,9 +256,57 @@ export function UsersTab() {
                           >
                             Permissions
                           </button>
+                          {!isMe ? (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-ghost !py-1 !px-2 !text-xs text-pleros-text-2 hover:text-pleros-white"
+                                disabled={busy}
+                                onClick={() =>
+                                  confirmAccount(
+                                    u,
+                                    'reset-password',
+                                    `Set a new temporary password for ${u.email}? They will be signed out everywhere.`,
+                                  )
+                                }
+                              >
+                                Reset password
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-ghost !py-1 !px-2 !text-xs text-pleros-text-2 hover:text-pleros-white"
+                                disabled={busy}
+                                onClick={() => accountMut.mutate({ user: u, action: 'reset-link' })}
+                              >
+                                Email reset link
+                              </button>
+                              {u.emailVerified === false ? (
+                                <button
+                                  type="button"
+                                  className="btn-ghost !py-1 !px-2 !text-xs text-pleros-text-2 hover:text-pleros-white"
+                                  disabled={busy}
+                                  onClick={() => accountMut.mutate({ user: u, action: 'verify-email' })}
+                                >
+                                  Mark verified
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="btn-ghost !py-1 !px-2 !text-xs text-pleros-text-2 hover:text-pleros-white"
+                                disabled={busy || !u.activeSessions}
+                                onClick={() =>
+                                  confirmAccount(u, 'revoke-sessions', `Sign ${u.email} out on every device?`)
+                                }
+                              >
+                                Sign out everywhere
+                              </button>
+                            </>
+                          ) : null}
                           <button
                             type="button"
                             className="btn-ghost !py-1 !px-2 !text-xs text-red-400 hover:text-red-300"
+                            disabled={isMe}
+                            title={isMe ? 'You cannot deactivate your own account' : undefined}
                             onClick={() => setDeactivateUser(u)}
                           >
                             Deactivate
@@ -209,6 +321,7 @@ export function UsersTab() {
           </table>
         )}
         {roleMut.error ? <p className="text-red-400 text-xs mt-2">{errMsg(roleMut.error)}</p> : null}
+        {accountMut.error ? <p className="text-red-400 text-xs mt-2">{errMsg(accountMut.error)}</p> : null}
       </div>
 
       {inviteLink ? (
