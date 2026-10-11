@@ -14,6 +14,7 @@ const STATUS: Record<string, { bg: string; text: string }> = {
   SUBMISSION_FAILED: { bg: 'var(--c-danger-soft)', text: 'var(--c-danger)' },
   SEE_COMPLIANCE: { bg: 'var(--c-accent-dim)', text: 'var(--c-primary)' },
   OPEN: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
+  ASSIGNED: { bg: 'var(--c-accent-dim)', text: 'var(--c-primary)' },
   IN_PROGRESS: { bg: 'var(--c-warning-soft)', text: 'var(--c-warning)' },
   COMPLETED: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
   WON: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },

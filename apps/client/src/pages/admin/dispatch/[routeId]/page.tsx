@@ -4,23 +4,21 @@ import { useParams } from 'react-router-dom'
 import { useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
+import { isForbidden } from '@/lib/axios-error'
 import { StatusBadge } from '@/components/pleros/status-badge'
-import { PodPhoto } from '@/components/pod/PodPhoto'
-import { PodSignature } from '@/components/pod/PodSignature'
-
-type StopPod = {
-  photoUrl?: string | null
-  signatureDataUrl?: string | null
-  deliveredAt?: string | null
-  recipientName?: string | null
-}
+import { FailStopForm } from '@/components/pod/FailStopForm'
+import { StopOutcomeDetails, type StopOutcomePod } from '@/components/pod/StopOutcomeDetails'
+import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
 
 type RouteStop = {
   id: string
   sequence: number
   status: string
   address: unknown
-  pod?: StopPod | null
+  pod?: StopOutcomePod | null
+  items?: StopItem[]
+  ageRestricted?: boolean
+  minimumAge?: number | null
 }
 type DeliveryRoute = {
   id: string
@@ -75,34 +73,60 @@ export default function DispatchRouteDetailPage() {
   const users = useQuery<{ items: UserRow[] }>({
     queryKey: ['users', 'dispatch-detail'],
     queryFn: () => api.get('/users?pageSize=200'),
+    // A role without users.read gets 403; retrying won't change that.
+    retry: (count, e) => !isForbidden(e) && count < 3,
   })
 
+  const nameFor = (userId: string) => {
+    const u = (users.data?.items ?? []).find((x) => x.id === userId)
+    return u ? userLabel(u) : null
+  }
+
   const assign = useMutation({
-    mutationFn: () => api.patch(`/routes/${encodeURIComponent(routeId)}/driver`, { driverId }),
-    onSuccess: () => {
+    mutationFn: () => api.patch<DeliveryRoute>(`/routes/${encodeURIComponent(routeId)}/driver`, { driverId }),
+    onSuccess: (updated) => {
       setDriverId('')
-      void qc.invalidateQueries({ queryKey: ['dispatch-route', routeId] })
+      // The response is the route as just written (now ASSIGNED); a re-read can lag behind it.
+      qc.setQueryData(['dispatch-route', routeId], updated)
       void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
     },
   })
 
-  const markDelivered = useMutation({
-    mutationFn: (stopId: string) =>
-      api.post(`/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/delivered`, {}),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['dispatch-route', routeId] }),
+  const [failingStopId, setFailingStopId] = useState<string | null>(null)
+
+  // Undo an assignment: the driver comes off and the route goes back to PLANNED.
+  const unassign = useMutation({
+    mutationFn: () => api.delete<DeliveryRoute>(`/routes/${encodeURIComponent(routeId)}/driver`),
+    onSuccess: (updated) => {
+      qc.setQueryData(['dispatch-route', routeId], updated)
+      void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
+    },
   })
 
   const markFailed = useMutation({
-    mutationFn: ({ stopId, reason }: { stopId: string; reason?: string }) =>
-      api.post(`/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/failed`, {
-        reason: reason || undefined,
+    mutationFn: ({ stopId, reason }: { stopId: string; reason: string }) =>
+      api.post<DeliveryRoute>(`/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/failed`, {
+        reason,
       }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['dispatch-route', routeId] }),
+    onSuccess: (updated) => {
+      // The response is the route as just written; a re-read can lag behind it.
+      qc.setQueryData(['dispatch-route', routeId], updated)
+      void qc.invalidateQueries({ queryKey: ['dispatch-routes'] })
+      setFailingStopId(null)
+    },
   })
 
   if (!routeId) return null
 
   const r = route.data
+  // Mirrors the server rule: back to PLANNED only before any stop has an outcome.
+  const unassignBlocked = !r
+    ? null
+    : r.status === 'COMPLETED' || r.status === 'CANCELLED'
+      ? `Route is ${r.status.toLowerCase()}`
+      : r.stops.some((s) => s.status === 'DELIVERED' || s.status === 'FAILED')
+        ? 'Stops already delivered or failed; assign another driver instead of unassigning'
+        : null
 
   return (
     <div className="p-6 space-y-6">
@@ -124,7 +148,7 @@ export default function DispatchRouteDetailPage() {
                 <StatusBadge status={r.status} />
                 {r.driverId && (
                   <span className="text-xs text-pleros-muted">
-                    Driver: <span className="font-mono text-pleros-text">{r.driverId}</span>
+                    Driver: <span className="text-pleros-text">{nameFor(r.driverId) ?? 'Assigned'}</span>
                   </span>
                 )}
               </div>
@@ -134,7 +158,7 @@ export default function DispatchRouteDetailPage() {
           <Card>
             <CardTitle>Assign driver</CardTitle>
             <p className="text-xs text-pleros-muted mt-1">
-              Requires tenant admin. Sets route to in progress.
+              Sets the route to Assigned; it becomes In progress when the driver delivers or fails the first stop.
             </p>
             <div className="mt-4 flex flex-wrap gap-2 max-w-xl">
               <select
@@ -158,14 +182,29 @@ export default function DispatchRouteDetailPage() {
               >
                 {assign.isPending ? 'Saving…' : 'Assign'}
               </button>
+              {r.driverId && (
+                <button
+                  type="button"
+                  disabled={unassign.isPending || !!unassignBlocked}
+                  title={unassignBlocked ?? 'Remove the driver and move the route back to Planned'}
+                  onClick={() => unassign.mutate()}
+                  className="h-10 px-4 rounded-md border border-pleros-border text-pleros-text text-sm disabled:opacity-40"
+                >
+                  {unassign.isPending ? 'Unassigning…' : 'Unassign'}
+                </button>
+              )}
             </div>
-            {assign.error && <p className="text-red-400 text-xs mt-2">{errMsg(assign.error)}</p>}
+            {unassignBlocked && r.driverId && <p className="text-xs text-pleros-muted mt-2">{unassignBlocked}</p>}
+            {(assign.error || unassign.error) && (
+              <p className="text-red-400 text-xs mt-2">{errMsg(assign.error ?? unassign.error)}</p>
+            )}
           </Card>
 
           <Card>
             <CardTitle>Stops</CardTitle>
             <p className="text-xs text-pleros-muted mt-1">
-              Mark delivered/failed for testing; drivers use `/m/delivery` POD in the field.
+              Stops are marked delivered from the driver app (`/m/delivery`), which requires a photo
+              and the recipient's signature. Staff can mark a stop failed here.
             </p>
             <div className="mt-4 overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -182,64 +221,49 @@ export default function DispatchRouteDetailPage() {
                   {r.stops.map((s) => (
                     <tr key={s.id} className="border-b border-pleros-border/60">
                       <td className="py-2 pr-4 text-pleros-muted">{s.sequence}</td>
-                      <td className="py-2 pr-4 text-pleros-text max-w-xs truncate" title={formatAddress(s.address)}>
-                        {formatAddress(s.address)}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <StatusBadge status={s.status} />
+                      <td className="py-2 pr-4 text-pleros-text max-w-xs align-top">
+                        <div className="truncate" title={formatAddress(s.address)}>
+                          {formatAddress(s.address)}
+                        </div>
+                        <StopItems items={s.items} />
                       </td>
                       <td className="py-2 pr-4 align-top">
-                        {s.pod?.photoUrl || s.pod?.signatureDataUrl ? (
-                          <div className="flex flex-col gap-2">
-                            <PodPhoto
-                              src={s.pod.photoUrl}
-                              caption={
-                                s.pod.recipientName
-                                  ? `Received by ${s.pod.recipientName}`
-                                  : undefined
-                              }
-                            />
-                            <PodSignature src={s.pod.signatureDataUrl} />
-                          </div>
-                        ) : s.status === 'DELIVERED' ? (
-                          <span className="text-xs text-pleros-muted">No proof captured</span>
+                        <div className="flex flex-col items-start gap-1">
+                          <StatusBadge status={s.status} />
+                          {s.ageRestricted && <AgeTag minimumAge={s.minimumAge ?? null} label="" />}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-4 align-top">
+                        {s.status === 'DELIVERED' || s.status === 'FAILED' ? (
+                          <StopOutcomeDetails status={s.status} pod={s.pod} nameFor={nameFor} />
                         ) : (
                           <span className="text-xs text-pleros-muted">—</span>
                         )}
                       </td>
                       <td className="py-2">
-                        <div className="flex flex-wrap gap-1">
-                          <button
-                            type="button"
-                            disabled={s.status === 'DELIVERED' || markDelivered.isPending}
-                            className="text-xs px-2 py-1 rounded border border-pleros-border text-pleros-text disabled:opacity-40"
-                            onClick={() => markDelivered.mutate(s.id)}
-                          >
-                            Delivered
-                          </button>
-                          <button
-                            type="button"
-                            disabled={s.status === 'FAILED' || markFailed.isPending}
-                            className="text-xs px-2 py-1 rounded border border-pleros-border text-pleros-muted disabled:opacity-40"
-                            onClick={() => {
-                              const reason = window.prompt('Failure reason (optional)') ?? undefined
-                              markFailed.mutate({ stopId: s.id, reason: reason || undefined })
-                            }}
-                          >
-                            Failed
-                          </button>
-                        </div>
+                        {/* Only a stop still waiting for an outcome can be marked failed. */}
+                        {s.status !== 'FAILED' && s.status !== 'DELIVERED' &&
+                          (failingStopId === s.id ? (
+                            <FailStopForm
+                              onSubmit={(reason) => markFailed.mutateAsync({ stopId: s.id, reason })}
+                              onCancel={() => setFailingStopId(null)}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded border border-pleros-border text-pleros-muted"
+                              onClick={() => setFailingStopId(s.id)}
+                            >
+                              Failed
+                            </button>
+                          ))}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {(markDelivered.error || markFailed.error) && (
-              <p className="text-red-400 text-xs mt-2">
-                {errMsg(markDelivered.error ?? markFailed.error)}
-              </p>
-            )}
+            {markFailed.error && <p className="text-red-400 text-xs mt-2">{errMsg(markFailed.error)}</p>}
           </Card>
         </>
       )}

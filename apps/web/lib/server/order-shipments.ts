@@ -142,52 +142,19 @@ export async function getOrderTracking(tenantId: string, orderId: string, opts?:
 
   const shipments = await listOrderShipments(tenantId, orderId)
   const { dispatchDb } = await import('./db')
-  const { orderIdFromStopAddress } = await import('./dispatch-order')
+  const { findOrderDelivery } = await import('./order-delivery-tracking')
 
+  // The order id lives inside each stop's address JSON, so candidates are narrowed
+  // by time rather than by a join: a route that carries this order can't predate it.
+  // Every status is kept, COMPLETED included (see findOrderDelivery).
   const routes = await dispatchDb.deliveryRoute.findMany({
-    where: { tenantId, status: { in: ['PLANNED', 'IN_PROGRESS'] } },
+    where: { tenantId, status: { not: 'CANCELLED' }, createdAt: { gte: order.createdAt } },
     include: { stops: { orderBy: { sequence: 'asc' } } },
-    orderBy: { scheduledFor: 'asc' },
-    take: 20,
+    orderBy: { createdAt: 'desc' },
+    take: 50,
   })
 
-  let delivery: {
-    routeId: string
-    routeStatus: string
-    stopStatus: string
-    stopSequence: number
-    eta: Date | null
-    podPhotoUrl: string | null
-  } | null = null
-
-  for (const route of routes) {
-    const stop = route.stops.find((s) => orderIdFromStopAddress(s.address) === orderId)
-    if (stop) {
-      const eta = route.scheduledFor
-        ? new Date(route.scheduledFor.getTime() + (stop.sequence - 1) * 45 * 60 * 1000)
-        : null
-      // Proof-of-delivery photo, exposed so the customer can see their own
-      // delivery. `pod` is an opaque JSON column, so read it defensively rather
-      // than trusting a shape. Only the photo is surfaced — notes and age
-      // confirmation stay internal to staff.
-      const podRecord =
-        stop.pod && typeof stop.pod === 'object' && !Array.isArray(stop.pod)
-          ? (stop.pod as Record<string, unknown>)
-          : null
-      const rawPhoto = podRecord?.photoUrl
-      const podPhotoUrl = typeof rawPhoto === 'string' && rawPhoto ? rawPhoto : null
-
-      delivery = {
-        routeId: route.id,
-        routeStatus: route.status,
-        stopStatus: stop.status,
-        stopSequence: stop.sequence,
-        eta,
-        podPhotoUrl,
-      }
-      break
-    }
-  }
+  const delivery = findOrderDelivery(routes, orderId)
 
   return { orderStatus: order.status, shipments, delivery }
 }

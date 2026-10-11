@@ -8,6 +8,7 @@ import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-p
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
 import { ScanButton } from '@/components/scanner'
+import { isNotFound } from '@/lib/axios-error'
 
 type SkuRow = {
   id: string
@@ -111,6 +112,8 @@ export default function InventoryPage() {
   // Code of the SKU resolved by the last scan, so we can show its stock summary.
   const [scannedCode, setScannedCode] = useState<string | null>(null)
   const [scanErr, setScanErr] = useState<string | null>(null)
+  // Set when a scan had to drop list filters to show the scanned SKU.
+  const [scanNote, setScanNote] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
@@ -130,17 +133,27 @@ export default function InventoryPage() {
       const value = rawValue.trim()
       if (!value) return
       setScanErr(null)
+      setScanNote(null)
       setScannedCode(null)
       try {
         const sku = await api.get<SkuRow>(`/skus/lookup/scan-value?value=${encodeURIComponent(value)}`)
+        // A scan asks "what do I have of this?", so it must not be hidden by a
+        // category or in-stock filter left over from browsing: an out-of-stock
+        // SKU is exactly the answer someone scanning wants to see.
+        if (category || inStockOnly) {
+          setCategory('')
+          setInStockOnly(false)
+          setScanNote('Category and in-stock filters cleared to show the scanned SKU.')
+        }
         setSearchInput(sku.code)
         setScannedCode(sku.code)
-      } catch {
-        // 404 is the expected miss here: a real barcode with no SKU behind it.
-        setScanErr(`No SKU found for ${value}`)
+      } catch (e) {
+        // A 404 is the expected miss: a real barcode with no SKU behind it.
+        // Anything else means the lookup itself failed, which is not the same answer.
+        setScanErr(isNotFound(e) ? `No SKU found for ${value}` : `Couldn't look up ${value}. Try again.`)
       }
     },
-    [],
+    [category, inStockOnly],
   )
 
   useEffect(() => {
@@ -264,6 +277,10 @@ export default function InventoryPage() {
   const scannedRow = scannedCode
     ? (skusQ.data?.items ?? []).find((s) => s.code === scannedCode)
     : undefined
+  // The warehouse filter stays on a scan (it scopes the stock figures), so say so
+  // when it is what keeps the scanned SKU out of the list instead of going quiet.
+  const scannedMissing =
+    !!scannedCode && !scannedRow && !skusQ.isFetching && debouncedSearch === scannedCode
 
   const drawerOpen = drawer === 'new' || drawer === 'edit'
 
@@ -397,6 +414,16 @@ export default function InventoryPage() {
               {scanErr}
             </p>
           )}
+          {scanNote && scannedCode && (
+            <p className="text-[11px] mt-1 text-pleros-text-3">{scanNote}</p>
+          )}
+          {scannedMissing && (
+            <p className="text-[11px] mt-1" style={{ color: 'var(--c-warning)' }}>
+              {warehouseId
+                ? `${scannedCode} has no stock record in the selected warehouse.`
+                : `${scannedCode} isn't in the current list.`}
+            </p>
+          )}
         </div>
         {scannedRow && (
           <div className="scan-stock-card">
@@ -423,6 +450,7 @@ export default function InventoryPage() {
               className="scan-stock-clear"
               onClick={() => {
                 setScannedCode(null)
+                setScanNote(null)
                 setSearchInput('')
               }}
             >
@@ -746,6 +774,9 @@ function SkuDrawer({
   const [barcode, setBarcode] = useState('')
   // The SKU that already owns this barcode, if any. Null means it is free.
   const [barcodeOwner, setBarcodeOwner] = useState<SkuRow | null>(null)
+  // True when the duplicate check itself failed, which is not the same as "free".
+  const [barcodeCheckFailed, setBarcodeCheckFailed] = useState(false)
+  const [barcodeCheckRun, setBarcodeCheckRun] = useState(0)
   const [uom, setUom] = useState('EACH')
   const [weight, setWeight] = useState('')
   const [isTobacco, setIsTobacco] = useState(false)
@@ -777,6 +808,7 @@ function SkuDrawer({
    */
   useEffect(() => {
     const value = barcode.trim()
+    setBarcodeCheckFailed(false)
     if (!value) {
       setBarcodeOwner(null)
       return
@@ -790,16 +822,19 @@ function SkuDrawer({
           // Editing a SKU must not flag its own barcode as a clash.
           setBarcodeOwner(sku && sku.id !== editId ? sku : null)
         })
-        .catch(() => {
-          // 404 is the good case here: nothing owns this barcode yet.
-          if (!cancelled) setBarcodeOwner(null)
+        .catch((e) => {
+          if (cancelled) return
+          setBarcodeOwner(null)
+          // Only a 404 means nothing owns this barcode. A network or server error
+          // means we don't know, and must not read as "free".
+          if (!isNotFound(e)) setBarcodeCheckFailed(true)
         })
     }, 400)
     return () => {
       cancelled = true
       clearTimeout(t)
     }
-  }, [barcode, editId])
+  }, [barcode, editId, barcodeCheckRun])
 
   const applyLevelsForWarehouse = useCallback(
     (wh: string, levels: StockLevelRow[] | undefined) => {
@@ -1007,6 +1042,13 @@ function SkuDrawer({
           {barcodeOwner ? (
             <p className="text-[11px] mt-1 mb-3" style={{ color: 'var(--c-warning)' }}>
               Already assigned to {barcodeOwner.code} — {barcodeOwner.name}
+            </p>
+          ) : barcodeCheckFailed ? (
+            <p className="text-[11px] mt-1 mb-3" style={{ color: 'var(--c-danger)' }}>
+              Couldn't check whether this barcode is already in use.{' '}
+              <button type="button" className="underline" onClick={() => setBarcodeCheckRun((n) => n + 1)}>
+                Retry
+              </button>
             </p>
           ) : (
             <div className="mb-3" />

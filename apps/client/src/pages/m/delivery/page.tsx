@@ -19,7 +19,8 @@ export default function DeliveryMobilePage() {
   const load = useCallback(async () => {
     setErr(null)
     try {
-      const data = await api.get<Route[]>('/routes?status=IN_PROGRESS')
+      // Active = assigned (not started yet) or in progress.
+      const data = await api.get<Route[]>('/routes?status=ASSIGNED,IN_PROGRESS')
       setRoutes(Array.isArray(data) ? data : [])
     } catch (e) {
       if (!navigator.onLine) {
@@ -63,7 +64,7 @@ export default function DeliveryMobilePage() {
         >
           <strong>Route {r.id.slice(-8)}</strong>
           <p style={{ margin: '6px 0 0', fontSize: 13, opacity: 0.7 }}>
-            {r.status} · {(r.stops ?? []).length} stops
+            {r.status === 'ASSIGNED' ? 'Assigned · not started' : r.status.replace(/_/g, ' ')} · {(r.stops ?? []).length} stops
           </p>
         </Link>
       ))}

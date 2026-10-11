@@ -1,13 +1,18 @@
 import { Prisma, RouteStatus, StopStatus } from '@/generated/prisma-dispatch'
 import { dispatchDb } from './db'
 import { orderIdFromStopAddress } from './dispatch-order'
+import { podEvidenceProblem } from './pod-evidence'
+import { statusAfterAssign, statusAfterOutcome, unassignDriverProblem } from './route-assignment'
+import { buildStopItems, NO_ITEMS } from './route-stop-items'
+import { failureReasonProblem, normalizeFailureReason, podForDelivery, podWithFailure } from './stop-outcome'
 import * as crm from './crm'
 import * as orderOrchestration from './order-orchestration'
-import { orderDb } from './db'
+import { inventoryDb, orderDb } from './db'
+import { getAgeVerificationPolicy } from './compliance-age'
 import { ApiError } from './session'
 
-export function listRoutes(tenantId: string, date?: string) {
-  const where: Prisma.DeliveryRouteWhereInput = { tenantId }
+export function listRoutes(tenantId: string, date?: string, statuses?: RouteStatus[]) {
+  const where: Prisma.DeliveryRouteWhereInput = { tenantId, ...(statuses?.length ? { status: { in: statuses } } : {}) }
   if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const start = new Date(`${date}T00:00:00.000Z`)
     const end = new Date(`${date}T23:59:59.999Z`)
@@ -21,6 +26,41 @@ export function listRoutes(tenantId: string, date?: string) {
     include: { stops: { orderBy: { sequence: 'asc' } } },
     orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'desc' }],
   })
+}
+
+/**
+ * A route with what is being delivered at each stop (product code, name, quantity and
+ * the age check), for the driver app and the dispatch screens. Stops not linked to an
+ * order get an empty list. Two lookups for the whole route, whatever its size.
+ */
+export async function getRouteDetail(tenantId: string, id: string) {
+  const route = await getRoute(tenantId, id)
+  const orderIds = [...new Set(route.stops.map((s) => orderIdFromStopAddress(s.address)).filter((x): x is string => !!x))]
+  if (orderIds.length === 0) return { ...route, stops: route.stops.map((s) => ({ ...s, ...NO_ITEMS })) }
+
+  const orders = await orderDb.order.findMany({
+    where: { tenantId, id: { in: orderIds } },
+    select: { id: true, lineItems: { select: { skuId: true, quantity: true } } },
+  })
+  const skuIds = [...new Set(orders.flatMap((o) => o.lineItems.map((l) => l.skuId)))]
+  const [skus, policy] = await Promise.all([
+    inventoryDb.sKU.findMany({
+      where: { tenantId, id: { in: skuIds } },
+      select: { id: true, code: true, name: true, isTobacco: true, ageRestricted: true, minimumAge: true },
+    }),
+    getAgeVerificationPolicy(tenantId),
+  ])
+  const skuMap = new Map(skus.map((s) => [s.id, s]))
+  const linesByOrder = new Map(orders.map((o) => [o.id, o.lineItems]))
+
+  return {
+    ...route,
+    stops: route.stops.map((s) => {
+      const orderId = orderIdFromStopAddress(s.address)
+      const lines = orderId ? linesByOrder.get(orderId) : undefined
+      return { ...s, ...(lines ? buildStopItems(lines, skuMap, policy) : NO_ITEMS) }
+    }),
+  }
 }
 
 export async function getRoute(tenantId: string, id: string) {
@@ -131,14 +171,35 @@ export async function assignRouteDriver(tenantId: string, id: string, driverId: 
   if (route.status === RouteStatus.CANCELLED || route.status === RouteStatus.COMPLETED) {
     throw new ApiError(400, 'Route is not assignable')
   }
-  return dispatchDb.deliveryRoute.update({
+  await dispatchDb.deliveryRoute.update({
+    where: { id },
+    // ASSIGNED until the driver delivers or fails a stop; a route already under way stays IN_PROGRESS.
+    data: { driverId, status: statusAfterAssign(route.status) as RouteStatus },
+  })
+  return getRouteDetail(tenantId, id)
+}
+
+/**
+ * Take the driver off a route and send it back to PLANNED, undoing the assignment.
+ * Refused once any stop has an outcome (see `unassignDriverProblem`).
+ */
+export async function unassignRouteDriver(tenantId: string, id: string) {
+  const route = await getRoute(tenantId, id)
+  const problem = unassignDriverProblem(route)
+  if (problem) throw new ApiError(problem.status, problem.message)
+  if (!route.driverId && route.status === RouteStatus.PLANNED) return getRouteDetail(tenantId, id)
+  await dispatchDb.deliveryRoute.update({
     where: { id },
     data: {
-      driverId,
-      status: RouteStatus.IN_PROGRESS,
+      driverId: null,
+      status: RouteStatus.PLANNED,
+      // The last known position belonged to the driver who is no longer on the route.
+      lastKnownLat: null,
+      lastKnownLng: null,
+      lastKnownAt: null,
     },
-    include: { stops: { orderBy: { sequence: 'asc' } } },
   })
+  return getRouteDetail(tenantId, id)
 }
 
 export async function recordDriverLocation(
@@ -292,6 +353,13 @@ export async function markStopDelivered(
   await getRoute(tenantId, routeId)
   const stop = await dispatchDb.routeStop.findFirst({ where: { id: stopId, routeId } })
   if (!stop) throw new ApiError(404, 'Stop not found')
+  // Proof of delivery is evidence: a repeat submit (double tap, stale screen) must
+  // not replace it, least of all with an empty photo and signature.
+  if (stop.status === StopStatus.DELIVERED) {
+    throw new ApiError(409, 'Stop is already delivered; proof of delivery cannot be replaced')
+  }
+  const podProblem = podEvidenceProblem(pod)
+  if (podProblem) throw new ApiError(400, podProblem)
 
   const orderId = orderIdFromStopAddress(stop.address)
   if (orderId) {
@@ -303,7 +371,8 @@ export async function markStopDelivered(
     where: { id: stopId },
     data: {
       status: StopStatus.DELIVERED,
-      ...(pod ? { pod: pod as never } : {}),
+      // A failure recorded on an earlier attempt stays on the stop.
+      pod: podForDelivery(stop.pod, pod) as never,
     },
   })
 
@@ -311,25 +380,54 @@ export async function markStopDelivered(
     await orderOrchestration.onDeliveryStopDelivered(tenantId, orderId).catch(() => undefined)
   }
 
-  const stops = await dispatchDb.routeStop.findMany({ where: { routeId } })
-  const allDelivered = stops.every((s) => s.status === StopStatus.DELIVERED)
-  if (allDelivered) {
-    await dispatchDb.deliveryRoute.update({
-      where: { id: routeId },
-      data: { status: RouteStatus.COMPLETED },
-    })
-  }
-  return getRoute(tenantId, routeId)
+  await updateRouteAfterOutcome(routeId)
+  return getRouteDetail(tenantId, routeId)
 }
 
-export async function markStopFailed(tenantId: string, routeId: string, stopId: string, _reason?: string) {
+export async function markStopFailed(
+  tenantId: string,
+  routeId: string,
+  stopId: string,
+  reason?: unknown,
+  opts?: { userId?: string },
+) {
   await getRoute(tenantId, routeId)
   const stop = await dispatchDb.routeStop.findFirst({ where: { id: stopId, routeId } })
   if (!stop) throw new ApiError(404, 'Stop not found')
+  // A delivered stop has its proof of delivery on record; flipping it to failed
+  // would hide that evidence and contradict the order's delivered status.
+  if (stop.status === StopStatus.DELIVERED) {
+    throw new ApiError(409, 'Stop is already delivered and cannot be marked failed')
+  }
+  // Keep the first recorded reason rather than overwrite it.
+  if (stop.status === StopStatus.FAILED) {
+    throw new ApiError(409, 'Stop is already marked failed')
+  }
+  const reasonProblem = failureReasonProblem(reason)
+  if (reasonProblem) throw new ApiError(400, reasonProblem)
 
   await dispatchDb.routeStop.update({
     where: { id: stopId },
-    data: { status: StopStatus.FAILED },
+    data: {
+      status: StopStatus.FAILED,
+      pod: podWithFailure(stop.pod, {
+        reason: normalizeFailureReason(reason)!,
+        failedAt: new Date().toISOString(),
+        ...(opts?.userId ? { failedBy: opts.userId } : {}),
+      }) as never,
+    },
   })
-  return getRoute(tenantId, routeId)
+
+  await updateRouteAfterOutcome(routeId)
+  return getRouteDetail(tenantId, routeId)
+}
+
+/** After a stop gets an outcome: an ASSIGNED route starts (IN_PROGRESS); once every stop has one, COMPLETED. */
+async function updateRouteAfterOutcome(routeId: string) {
+  const route = await dispatchDb.deliveryRoute.findUnique({ where: { id: routeId }, include: { stops: true } })
+  if (!route) return
+  const next = statusAfterOutcome(route.status, route.stops.map((s) => s.status))
+  if (next !== route.status) {
+    await dispatchDb.deliveryRoute.update({ where: { id: routeId }, data: { status: next as RouteStatus } })
+  }
 }
