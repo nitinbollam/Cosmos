@@ -322,3 +322,9 @@ What shipped, and where it differs from the plan above.
 - CORS is suffix-restricted and auth uses bearer tokens, not cookies
 - Celestial requires a customer record for buyers and scopes every tool by tenant and customer
 
+
+## External security review findings
+
+| # | Bug | Fix | Verified |
+|---|-----|-----|----------|
+| 11 | **Buyers could read other customers' order templates.** `GET /order-templates` took the customer from the `customerRef` query parameter before the buyer's own customer. A buyer who knew another customer's ID could list that customer's template names, SKUs and quantities (same tenant only). Staff routes only checked for a signed-in user, so a driver could create or delete any customer's templates. | Buyers always get their own customer from their login, and `customerRef` is ignored for them. Staff need `orders.read` to list and `orders.write` to create or delete, the same rights as orders. | `order-templates-access.test.ts`: fails on the old code, passes now |

@@ -241,7 +241,10 @@ export async function routeOrderTemplates(method: string, seg: string[], req: Re
   const session = await requireSession(req)
   const buyerCustomerId = isPortalBuyer(session.role) ? await requirePortalCustomerId(session) : undefined
   const buyerOpts = buyerCustomerId ? { buyerCustomerId } : undefined
-  const customerRef = new URL(req.url).searchParams.get('customerRef') ?? buyerCustomerId
+  // Staff work on any customer's templates with the same rights as orders. A buyer only ever
+  // gets their own: the customer comes from their login, never from the request.
+  if (!buyerCustomerId) assertPermission(session, method === 'GET' ? 'orders.read' : 'orders.write')
+  const customerRef = buyerCustomerId ?? new URL(req.url).searchParams.get('customerRef')
 
   if (seg.length === 1 && method === 'GET') {
     if (!customerRef) throw new ApiError(400, 'customerRef required')
