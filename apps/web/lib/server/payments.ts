@@ -472,7 +472,11 @@ export async function refund(
     }
   }
 
-  await recordRefund(tenantId, refundAmount, intent.orderId, correlationId)
+  // The money has moved. A bookkeeping failure must not turn into an error: the client would retry
+  // and, with the refund already recorded on the payment, a retry is a second real refund.
+  await recordRefund(tenantId, refundAmount, intent.orderId, correlationId).catch((err) =>
+    console.error(`[payments] refund of ${refundAmount} on payment ${intent.id} went through but the ledger write failed:`, err),
+  )
   return {
     paymentIntentId: intent.id,
     refundedAmount: Number(refundedAfter),
@@ -527,6 +531,9 @@ async function applyPlatformStripeEvent(event: ReturnType<typeof stripe.verifySt
         await recordPaymentReceived(intent.tenantId, Number(intent.amount), intent.orderId, `stripe-${event.id}`)
         await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
         await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
+        // A confirm arriving after this finds the payment captured and stops, so refresh the invoice here.
+        const { syncInvoiceFromOrder } = await import('./invoices')
+        await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
       }
       break
     }
