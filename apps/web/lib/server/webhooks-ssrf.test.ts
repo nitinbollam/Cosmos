@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { createServer, type AddressInfo } from 'node:net'
 import test from 'node:test'
-import { assertSafeWebhookUrl, deliverWebhook, guardedLookup, isBlockedAddress, type ResolveHost } from './webhooks'
+import { guardedLookup, isBlockedAddress, type ResolveHost } from './safe-outbound'
+import { assertSafeWebhookUrl, deliverWebhook } from './webhooks'
 
 const PUBLIC = { address: '93.184.216.34', family: 4 }
 const always =
