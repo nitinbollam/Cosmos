@@ -198,7 +198,8 @@ export async function routeWebhooks(method: string, seg: string[], req: Request)
   if (seg[1] === 'stripe' && seg[2] === 'connect' && method === 'POST') {
     const sig = req.headers.get('stripe-signature') ?? ''
     const raw = Buffer.from(await req.arrayBuffer())
-    const result = stripeConnect.handleStripeConnectWebhook(raw, sig)
+    const result = await stripeConnect.handleStripeConnectWebhook(raw, sig)
+    if (!result.received) return Response.json(result, { status: 400 })
     return Response.json(result)
   }
   if (seg[1] === 'shopify' && seg[2] === 'orders' && method === 'POST') {

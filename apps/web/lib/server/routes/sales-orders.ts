@@ -133,7 +133,7 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
   }
   if (seg.length === 4 && seg[2] === 'payments' && method === 'POST') {
     assertRole(session, ADMIN_ROLES)
-    requireIdempotencyKey(req)
+    const key = requireIdempotencyKey(req)
     const body = (await req.json()) as {
       paymentMethodId?: string
       amount?: number
@@ -142,13 +142,21 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
     }
     const order = await orders.findOrderById(session.tenantId, seg[1])
     const action = seg[3]
+    // Each payment action runs once per Idempotency-Key: a retry gets the first result instead of
+    // charging, refunding or capturing again.
+    const once = async (work: () => Promise<unknown>) => {
+      const { runOnce } = await import('../payment-idempotency')
+      const result = await runOnce(session.tenantId, `payment:order:${seg[1]}:${action}:${session.userId}:${key}`, 200, work)
+      return Response.json(result.body, { status: result.status })
+    }
     if (action === 'stripe') {
       if (!body.paymentMethodId || !body.correlationId) {
         throw new ApiError(400, 'paymentMethodId and correlationId required')
       }
-      return Response.json(
-        await orderPaymentAdmin.collectOrderCardPayment(session.tenantId, seg[1], {
-          paymentMethodId: body.paymentMethodId,
+      const paymentMethodId = body.paymentMethodId
+      return once(() =>
+        orderPaymentAdmin.collectOrderCardPayment(session.tenantId, seg[1], {
+          paymentMethodId,
           amount: body.amount,
           correlationId: body.correlationId,
           customerId: body.customerId ?? order.customerId,
@@ -158,18 +166,18 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
     if (action === 'confirm-stripe') {
       const piId = (body as { paymentIntentId?: string }).paymentIntentId
       if (!piId) throw new ApiError(400, 'paymentIntentId required')
-      return Response.json(await orderPaymentAdmin.completeOrderCardCollection(session.tenantId, seg[1], piId))
+      return once(() => orderPaymentAdmin.completeOrderCardCollection(session.tenantId, seg[1], piId))
     }
     if (action === 'refund') {
-      return Response.json(
-        await orderPaymentAdmin.refundOrderPayment(session.tenantId, seg[1], body.correlationId, body.amount),
+      return once(() =>
+        orderPaymentAdmin.refundOrderPayment(session.tenantId, seg[1], body.correlationId, body.amount),
       )
     }
     if (action === 'capture') {
-      return Response.json(await orderPaymentAdmin.captureOrderPayment(session.tenantId, seg[1], body.correlationId))
+      return once(() => orderPaymentAdmin.captureOrderPayment(session.tenantId, seg[1], body.correlationId))
     }
     if (action === 'void') {
-      return Response.json(await orderPaymentAdmin.voidOrderPayment(session.tenantId, seg[1], body.correlationId))
+      return once(() => orderPaymentAdmin.voidOrderPayment(session.tenantId, seg[1], body.correlationId))
     }
     throw new ApiError(404, 'Order payment action not found')
   }
@@ -278,23 +286,14 @@ export async function placeOrderOnce(
   if (!header) return Response.json(await create(), { status: 201 })
   if (header.length > 200) throw new ApiError(400, 'Idempotency-Key is too long')
 
-  const idem = await import('../payment-idempotency')
-  const key = `order:${session.userId}:${header}`
-  const previous = await idem.getIdempotentResponse(session.tenantId, key)
-  if (previous && previous.status !== idem.IDEMPOTENCY_IN_PROGRESS) {
-    return Response.json(previous.body, { status: previous.status })
-  }
-  if (previous || !(await idem.reserveIdempotencyKey(session.tenantId, key))) {
-    throw new ApiError(409, 'This order is already being placed — check your orders before trying again')
-  }
-  try {
-    // JSON round-trip: the stored copy must be plain JSON (Decimals, Dates) like the response.
-    const body = JSON.parse(JSON.stringify(await create()))
-    await idem.setIdempotentResponse(key, session.tenantId, 201, body)
-    return Response.json(body, { status: 201 })
-  } catch (e) {
-    await idem.releaseIdempotencyKey(session.tenantId, key)
-    throw e
-  }
+  const { runOnce } = await import('../payment-idempotency')
+  const result = await runOnce(
+    session.tenantId,
+    `order:${session.userId}:${header}`,
+    201,
+    create,
+    'This order is already being placed — check your orders before trying again',
+  )
+  return Response.json(result.body, { status: result.status })
 }
 

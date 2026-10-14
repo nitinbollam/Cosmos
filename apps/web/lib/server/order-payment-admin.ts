@@ -203,6 +203,12 @@ export async function completeOrderCardCollection(
   })
   if (!intent?.stripeIntentId) throw new ApiError(400, 'No Stripe payment linked')
 
+  // Only a still-open payment can be completed. Stripe keeps reporting a refunded payment as
+  // "succeeded", so completing it again would reset it to captured and count the money twice.
+  if (intent.status !== 'PENDING' && intent.status !== 'FAILED') {
+    return { paymentIntentId: intent.id, stripeIntentId: intent.stripeIntentId, status: intent.status }
+  }
+
   const connectCtx = await requireStripeConnectContext(tenantId)
   const retrieved = await stripe.retrievePaymentIntent(connectCtx, intent.stripeIntentId)
   if (retrieved.status !== 'succeeded') {
@@ -210,14 +216,19 @@ export async function completeOrderCardCollection(
   }
 
   const collectAmount = Number(intent.amount)
-  const updated = await paymentDb.paymentIntent.update({
-    where: { id: intent.id },
+  const moved = await paymentDb.paymentIntent.updateMany({
+    where: { id: intent.id, status: intent.status },
     data: {
       status: 'CAPTURED',
       capturedAmount: new Prisma.Decimal(collectAmount),
       failureReason: null,
     },
   })
+  if (moved.count !== 1) {
+    const current = await paymentDb.paymentIntent.findFirst({ where: { id: intent.id } })
+    return { paymentIntentId: intent.id, stripeIntentId: intent.stripeIntentId, status: current?.status ?? intent.status }
+  }
+  const updated = { id: intent.id, status: 'CAPTURED' as const }
 
   await linkPaymentIntent(tenantId, orderId, updated.id)
   await applyCapturedPayment(tenantId, orderId, collectAmount)

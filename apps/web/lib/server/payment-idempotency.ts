@@ -1,4 +1,5 @@
 import { paymentDb } from './db'
+import { ApiError } from './session'
 
 const TTL_MS = 86_400_000 // 24 hours
 
@@ -65,4 +66,30 @@ export async function reserveIdempotencyKey(tenantId: string, key: string): Prom
 /** Drop a claim whose work failed, so the client can retry with the same key. */
 export async function releaseIdempotencyKey(tenantId: string, key: string): Promise<void> {
   await paymentDb.paymentIdempotency.delete({ where: { id: scopedKey(tenantId, key) } }).catch(() => undefined)
+}
+
+/**
+ * Run `work` at most once per tenant + key and return its stored result. A duplicate that arrives
+ * while the first is still running gets 409 (`busyMessage`); one that arrives afterwards gets the
+ * original result. A failure frees the key so the client can retry with it.
+ */
+export async function runOnce(
+  tenantId: string,
+  key: string,
+  status: number,
+  work: () => Promise<unknown>,
+  busyMessage = 'This request is already being processed',
+): Promise<{ status: number; body: unknown }> {
+  const previous = await getIdempotentResponse(tenantId, key)
+  if (previous && previous.status !== IDEMPOTENCY_IN_PROGRESS) return previous
+  if (previous || !(await reserveIdempotencyKey(tenantId, key))) throw new ApiError(409, busyMessage)
+  try {
+    // JSON round-trip: the stored copy must be plain JSON (Decimals, Dates) like the response.
+    const body = JSON.parse(JSON.stringify(await work()))
+    await setIdempotentResponse(key, tenantId, status, body)
+    return { status, body }
+  } catch (e) {
+    await releaseIdempotencyKey(tenantId, key)
+    throw e
+  }
 }

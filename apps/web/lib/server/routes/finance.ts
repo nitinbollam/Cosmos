@@ -81,7 +81,16 @@ export async function routeInvoices(method: string, seg: string[], req: Request)
     }
     const body = (await req.json()) as { paymentMethodId: string; amount?: number; correlationId: string }
     if (!body.paymentMethodId || !body.correlationId) throw new ApiError(400, 'paymentMethodId and correlationId required')
-    return Response.json(await invoices.payInvoiceWithStripe(session.tenantId, seg[1], body, buyerOpts))
+    // A retry of the same payment (same Idempotency-Key, or same correlationId) gets the first
+    // result instead of charging the card again.
+    const key = req.headers.get('idempotency-key')?.trim() || body.correlationId
+    const result = await paymentIdempotency.runOnce(
+      session.tenantId,
+      `payment:invoice:${seg[1]}:${session.userId}:${key}`,
+      200,
+      () => invoices.payInvoiceWithStripe(session.tenantId, seg[1], body, buyerOpts),
+    )
+    return Response.json(result.body, { status: result.status })
   }
   throw new ApiError(404, 'Invoice route not found')
 }
@@ -151,10 +160,20 @@ export async function routePayments(method: string, seg: string[], req: Request)
     return Response.json(await stripeConnect.createConnectAccountLink(session.tenantId, 'account_update'))
   }
 
-  if (seg.length === 2 && seg[1] === 'authorize' && method === 'POST') {
+  // Payment mutations run at most once per Idempotency-Key: a retry gets the first result, and a
+  // duplicate sent while the first is still running gets 409 instead of moving money again.
+  const once = async (action: string, work: () => Promise<unknown>) => {
     const key = requireIdempotencyKey(req)
-    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
-    if (cached) return Response.json(cached.body, { status: cached.status })
+    const result = await paymentIdempotency.runOnce(
+      session.tenantId,
+      `payment:${action}:${session.userId}:${key}`,
+      200,
+      work,
+    )
+    return Response.json(result.body, { status: result.status })
+  }
+
+  if (seg.length === 2 && seg[1] === 'authorize' && method === 'POST') {
     const body = (await req.json()) as payments.AuthorizeInput
     // Buyers can authorize payment only against their own orders.
     if (isPortalBuyer(session.role)) {
@@ -162,17 +181,14 @@ export async function routePayments(method: string, seg: string[], req: Request)
       const order = await orders.findOrderById(session.tenantId, body.orderId, { buyerCustomerId })
       if (order.customerId !== buyerCustomerId) throw new ApiError(403, 'Forbidden')
     }
-    const result = await payments.authorize(session.tenantId, body)
-    await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
-    return Response.json(result)
+    return once('authorize', () => payments.authorize(session.tenantId, body))
   }
 
   if (seg.length === 2 && seg[1] === 'confirm' && method === 'POST') {
-    requireIdempotencyKey(req)
     const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
     const buyerCustomerId = isPortalBuyer(session.role) ? await requirePortalCustomerId(session) : undefined
-    return Response.json(
-      await payments.completeCardAuthorization(session.tenantId, body.paymentIntentId, body.correlationId, {
+    return once('confirm', () =>
+      payments.completeCardAuthorization(session.tenantId, body.paymentIntentId, body.correlationId, {
         buyerCustomerId,
       }),
     )
@@ -182,31 +198,18 @@ export async function routePayments(method: string, seg: string[], req: Request)
   assertPermission(session, 'finance.write')
 
   if (seg.length === 2 && seg[1] === 'capture' && method === 'POST') {
-    const key = requireIdempotencyKey(req)
-    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
-    if (cached) return Response.json(cached.body, { status: cached.status })
     const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
-    const result = await payments.capture(session.tenantId, body.paymentIntentId, body.correlationId)
-    await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
-    return Response.json(result)
+    return once('capture', () => payments.capture(session.tenantId, body.paymentIntentId, body.correlationId))
   }
   if (seg.length === 2 && seg[1] === 'void' && method === 'POST') {
-    const key = requireIdempotencyKey(req)
-    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
-    if (cached) return Response.json(cached.body, { status: cached.status })
     const body = (await req.json()) as { paymentIntentId: string; correlationId: string }
-    const result = await payments.voidIntent(session.tenantId, body.paymentIntentId, body.correlationId)
-    await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
-    return Response.json(result)
+    return once('void', () => payments.voidIntent(session.tenantId, body.paymentIntentId, body.correlationId))
   }
   if (seg.length === 2 && seg[1] === 'refund' && method === 'POST') {
-    const key = requireIdempotencyKey(req)
-    const cached = await paymentIdempotency.getIdempotentResponse(session.tenantId, key)
-    if (cached) return Response.json(cached.body, { status: cached.status })
     const body = (await req.json()) as { paymentIntentId: string; correlationId: string; amount?: number }
-    const result = await payments.refund(session.tenantId, body.paymentIntentId, body.amount, body.correlationId)
-    await paymentIdempotency.setIdempotentResponse(key, session.tenantId, 200, result)
-    return Response.json(result)
+    return once('refund', () =>
+      payments.refund(session.tenantId, body.paymentIntentId, body.amount, body.correlationId),
+    )
   }
 
   throw new ApiError(404, 'Payment route not found')
