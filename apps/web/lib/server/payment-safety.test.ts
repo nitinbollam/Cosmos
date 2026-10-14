@@ -207,3 +207,75 @@ test('the Connect webhook rejects a bad signature and skips a redelivered event'
     else process.env.STRIPE_SECRET_KEY = prevKey
   }
 })
+
+test('a card collection captured by Stripe\'s webhook before its completion is booked exactly once', async () => {
+  const { orderDb, ledgerDb, tenantDb } = await import('./db')
+  const { createChartAccount } = await import('./ledger')
+  const { AccountType } = await import('@/generated/prisma-ledger')
+  const { completeOrderCardCollection } = await import('./order-payment-admin')
+
+  const t = `t-${randomUUID()}`
+  const account = `acct_${randomUUID().slice(0, 12)}`
+  const stripeIntentId = `pi_${randomUUID()}`
+  await tenantDb.tenantOrganization.create({
+    data: { id: t, slug: `race-${t.slice(-8)}`, displayName: 'Race', settings: {}, metadata: {}, stripeConnectedAccountId: account },
+  })
+  await createChartAccount(t, { code: '1000', name: 'Cash', type: AccountType.ASSET })
+  await createChartAccount(t, { code: '1200', name: 'AR', type: AccountType.ASSET })
+  const order = await orderDb.order.create({
+    data: { tenantId: t, customerId: 'c-1', channel: 'B2B_PORTAL', totalAmount: 100, paymentMethod: 'CARD' },
+  })
+  await orderDb.invoice.create({
+    data: { tenantId: t, orderId: order.id, invoiceNumber: 'INV-RACE', customerId: 'c-1', subtotal: 100, taxAmount: 0, totalAmount: 100 },
+  })
+  const intent = await paymentDb.paymentIntent.create({
+    data: {
+      tenantId: t, orderId: order.id, amount: new Prisma.Decimal(100), paymentMethod: 'CARD', customerId: 'c-1',
+      correlationId: randomUUID(), metadata: { source: 'admin_collect' }, status: 'PENDING', stripeIntentId,
+      failureReason: 'requires_action',
+    },
+  })
+  const arJournals = () =>
+    ledgerDb.journalEntry.count({ where: { tenantId: t, description: { startsWith: 'AR payment' } } })
+
+  const prevSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET
+  const prevKey = process.env.STRIPE_SECRET_KEY
+  process.env.STRIPE_CONNECT_WEBHOOK_SECRET = 'whsec_test_connect'
+  process.env.STRIPE_SECRET_KEY ||= 'sk_test_placeholder'
+  try {
+    const e = event('payment_intent.succeeded')
+    const payload = JSON.stringify({
+      id: e.id, object: 'event', type: e.type, account,
+      data: { object: { id: stripeIntentId, object: 'payment_intent', status: 'succeeded' } },
+    })
+    const res = await handleApiRequest(
+      new Request('http://localhost/api/v1/webhooks/stripe/connect', {
+        method: 'POST',
+        headers: { 'stripe-signature': Stripe.webhooks.generateTestHeaderString({ payload, secret: 'whsec_test_connect' }) },
+        body: payload,
+      }),
+    )
+    assert.equal(res.status, 200)
+    assert.equal((await paymentDb.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } })).status, 'CAPTURED')
+    assert.equal(Number((await orderDb.order.findUniqueOrThrow({ where: { id: order.id } })).amountPaid), 100)
+    assert.equal(await arJournals(), 1)
+
+    // The admin's 3DS completion arrives second: it finds the payment captured and books nothing more.
+    const done = await completeOrderCardCollection(t, order.id, intent.id)
+    assert.equal(done.status, 'CAPTURED')
+    assert.equal(await arJournals(), 1)
+    assert.equal(Number((await orderDb.order.findUniqueOrThrow({ where: { id: order.id } })).amountPaid), 100)
+  } finally {
+    if (prevSecret === undefined) delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET
+    else process.env.STRIPE_CONNECT_WEBHOOK_SECRET = prevSecret
+    if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
+    else process.env.STRIPE_SECRET_KEY = prevKey
+    await paymentDb.paymentIntent.deleteMany({ where: { tenantId: t } })
+    await ledgerDb.journalLine.deleteMany({ where: { entry: { tenantId: t } } }).catch(() => undefined)
+    await ledgerDb.journalEntry.deleteMany({ where: { tenantId: t } }).catch(() => undefined)
+    await ledgerDb.chartAccount.deleteMany({ where: { tenantId: t } }).catch(() => undefined)
+    await orderDb.invoice.deleteMany({ where: { tenantId: t } }).catch(() => undefined)
+    await orderDb.order.deleteMany({ where: { tenantId: t } }).catch(() => undefined)
+    await tenantDb.tenantOrganization.delete({ where: { id: t } }).catch(() => undefined)
+  }
+})

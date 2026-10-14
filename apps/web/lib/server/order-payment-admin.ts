@@ -101,6 +101,36 @@ function orderCollectableBalance(order: { totalAmount: unknown; amountPaid: unkn
   return amount
 }
 
+/** Card collections (admin "collect payment" and invoice pay) are marked with this source. */
+export const CARD_COLLECTION_SOURCE = 'admin_collect'
+
+export function isCardCollection(metadata: unknown): boolean {
+  return (metadata as { source?: unknown } | null)?.source === CARD_COLLECTION_SOURCE
+}
+
+/**
+ * Bookkeeping for a captured card collection: link it to the order, count it as paid, refresh
+ * the invoice and post the AR payment journal. Run only by whichever path moved the payment to
+ * CAPTURED (the immediate charge, the 3DS completion, or Stripe's webhook). Those moves are
+ * conditional, so this runs once even when the webhook and the completion race.
+ */
+export async function settleCollectedCardPayment(
+  tenantId: string,
+  orderId: string,
+  paymentIntentId: string,
+  amount: number,
+) {
+  await linkPaymentIntent(tenantId, orderId, paymentIntentId)
+  await applyCapturedPayment(tenantId, orderId, amount)
+  await syncInvoiceFromOrder(tenantId, orderId).catch(() => undefined)
+  const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
+  if (invoice) {
+    const { postArPaymentJournal } = await import('./operations-gl')
+    await postArPaymentJournal(tenantId, invoice.id, amount).catch(() => undefined)
+  }
+  return invoice
+}
+
 export async function collectOrderCardPayment(
   tenantId: string,
   orderId: string,
@@ -123,7 +153,7 @@ export async function collectOrderCardPayment(
       customerId: body.customerId,
       correlationId: body.correlationId,
       status: 'PENDING',
-      metadata: { source: 'admin_collect' },
+      metadata: { source: CARD_COLLECTION_SOURCE },
     },
   })
 
@@ -167,14 +197,8 @@ export async function collectOrderCardPayment(
     },
   })
 
-  await linkPaymentIntent(tenantId, orderId, updated.id)
-  await applyCapturedPayment(tenantId, orderId, collectAmount)
-  await syncInvoiceFromOrder(tenantId, orderId).catch(() => undefined)
-
-  const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
+  const invoice = await settleCollectedCardPayment(tenantId, orderId, updated.id, collectAmount)
   if (invoice) {
-    const { postArPaymentJournal } = await import('./operations-gl')
-    await postArPaymentJournal(tenantId, invoice.id, collectAmount).catch(() => undefined)
     const { notifyPaymentReceived } = await import('./notification-triggers')
     void notifyPaymentReceived(tenantId, orderId, order.customerId, collectAmount, invoice.invoiceNumber).catch(
       () => undefined,
@@ -225,22 +249,13 @@ export async function completeOrderCardCollection(
     },
   })
   if (moved.count !== 1) {
+    // Stripe's webhook (or another completion) captured it first and did the bookkeeping.
     const current = await paymentDb.paymentIntent.findFirst({ where: { id: intent.id } })
     return { paymentIntentId: intent.id, stripeIntentId: intent.stripeIntentId, status: current?.status ?? intent.status }
   }
-  const updated = { id: intent.id, status: 'CAPTURED' as const }
 
-  await linkPaymentIntent(tenantId, orderId, updated.id)
-  await applyCapturedPayment(tenantId, orderId, collectAmount)
-  await syncInvoiceFromOrder(tenantId, orderId).catch(() => undefined)
-
-  const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
-  if (invoice) {
-    const { postArPaymentJournal } = await import('./operations-gl')
-    await postArPaymentJournal(tenantId, invoice.id, collectAmount).catch(() => undefined)
-  }
-
-  return { paymentIntentId: updated.id, stripeIntentId: intent.stripeIntentId, status: updated.status }
+  await settleCollectedCardPayment(tenantId, orderId, intent.id, collectAmount)
+  return { paymentIntentId: intent.id, stripeIntentId: intent.stripeIntentId, status: 'CAPTURED' as const }
 }
 
 export async function refundOrderPayment(

@@ -173,6 +173,8 @@ export async function postToPublicUrl(
         })
         res.on('end', finish)
         res.on('error', fail)
+        // A connection the far end closes early still settles, with what arrived.
+        res.on('close', finish)
       },
     )
     req.on('error', fail)

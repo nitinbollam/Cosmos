@@ -269,6 +269,8 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
             onClick={() => {
               setMode(mode === 'refund' ? 'none' : 'refund')
               setRefundAmount(String(refundable))
+              // Opening the form starts a new refund; retries inside it reuse one key.
+              refundKey.reset()
             }}
           >
             Refund to card

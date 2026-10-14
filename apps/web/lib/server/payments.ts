@@ -158,6 +158,24 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
   }
 }
 
+/**
+ * Follow-up for whoever just moved a payment to CAPTURED (confirm or Stripe's webhook, never
+ * both). A card collection gets its full bookkeeping, including the AR journal its own
+ * completion would otherwise have posted; other payments are linked, counted as paid and their
+ * invoice refreshed.
+ */
+async function settleCapture(intent: { id: string; tenantId: string; orderId: string; amount: Prisma.Decimal; metadata: unknown }) {
+  const admin = await import('./order-payment-admin')
+  if (admin.isCardCollection(intent.metadata)) {
+    await admin.settleCollectedCardPayment(intent.tenantId, intent.orderId, intent.id, Number(intent.amount))
+    return
+  }
+  await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
+  await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
+  const { syncInvoiceFromOrder } = await import('./invoices')
+  await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
+}
+
 const SETTLED_STATUSES: readonly string[] = ['CAPTURED', 'REFUNDED', 'VOIDED']
 
 /**
@@ -218,12 +236,10 @@ export async function completeCardAuthorization(
     return unchanged(current?.status ?? intent.status)
   }
 
-  await linkPaymentIntent(tenantId, intent.orderId, intent.id)
-
   if (isAlreadySucceeded) {
-    await applyCapturedPayment(tenantId, intent.orderId, Number(intent.amount))
-    const { syncInvoiceFromOrder } = await import('./invoices')
-    await syncInvoiceFromOrder(tenantId, intent.orderId).catch(() => undefined)
+    await settleCapture(intent)
+  } else {
+    await linkPaymentIntent(tenantId, intent.orderId, intent.id)
   }
 
   // Fulfillment starts at the first authorization; AUTHORIZED → CAPTURED here only settles money.
@@ -611,7 +627,7 @@ async function syncStripeWebhookEvent(event: import('stripe').Stripe.Event, _ten
         where: { id: intent.id, status: intent.status },
         data: { status: 'CAPTURED', capturedAmount: intent.amount },
       })
-      if (moved.count === 1) await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
+      if (moved.count === 1) await settleCapture(intent)
     }
   } else if (event.type === 'payment_intent.payment_failed' && open) {
     const obj = event.data.object as import('stripe').Stripe.PaymentIntent
