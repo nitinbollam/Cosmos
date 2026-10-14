@@ -163,9 +163,12 @@ export function signWebhookPayload(secret: string, body: string): string {
   return createHmac('sha256', secret).update(body).digest('hex')
 }
 
-function webhookSigningSecret(tenantId: string): string {
-  const base = process.env.WEBHOOK_SIGNING_SECRET?.trim() || 'pleros-webhook-signing'
-  return `${base}:${tenantId}`
+export function webhookSigningSecret(tenantId: string): string {
+  const base = process.env.WEBHOOK_SIGNING_SECRET?.trim()
+  if (base) return `${base}:${tenantId}`
+  // The development fallback is in the source, so a signature made with it proves nothing.
+  if (process.env.NODE_ENV === 'production') throw new Error('WEBHOOK_SIGNING_SECRET is not configured')
+  return `pleros-webhook-signing:${tenantId}`
 }
 
 function toApiShape(row: {
