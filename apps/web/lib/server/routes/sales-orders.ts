@@ -27,6 +27,9 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
 
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as orders.CreateOrderInput
+    // The checkout sends an Idempotency-Key; honour it so a retry after a timeout returns the
+    // order already placed instead of creating (and charging) a second one.
+    const placeOnce = (create: () => Promise<unknown>) => placeOrderOnce(req, session, create)
     // Portal buyers cannot spoof POS channel or supply staff age attestation to
     // skip the licensed-customer gate for tobacco / age-restricted SKUs.
     if (buyerCustomerId) {
@@ -35,22 +38,20 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
         channel: 'B2B_PORTAL',
         ageAttestation: undefined,
       }
-      const order = await orders.createOrder(session.tenantId, safeBody, {
-        ...buyerOpts,
-        userId: session.userId,
-      })
-      return Response.json(order, { status: 201 })
+      return placeOnce(() =>
+        orders.createOrder(session.tenantId, safeBody, {
+          ...buyerOpts,
+          userId: session.userId,
+        }),
+      )
     }
     // Counter sales must go through /pos/orders so register + attestation rules apply.
     if (String(body.channel ?? '').toUpperCase() === 'POS') {
       throw new ApiError(400, 'POS sales must use POST /pos/orders')
     }
-    const order = await orders.createOrder(
-      session.tenantId,
-      { ...body, ageAttestation: undefined },
-      { ...buyerOpts, userId: session.userId },
+    return placeOnce(() =>
+      orders.createOrder(session.tenantId, { ...body, ageAttestation: undefined }, { ...buyerOpts, userId: session.userId }),
     )
-    return Response.json(order, { status: 201 })
   }
   if (seg.length === 2 && seg[1] === 'backorders' && method === 'GET') {
     return Response.json(await backorders.listOpenBackorders(session.tenantId, +(url.searchParams.get('limit') ?? 50)))
@@ -132,7 +133,7 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
   }
   if (seg.length === 4 && seg[2] === 'payments' && method === 'POST') {
     assertRole(session, ADMIN_ROLES)
-    requireIdempotencyKey(req)
+    const key = requireIdempotencyKey(req)
     const body = (await req.json()) as {
       paymentMethodId?: string
       amount?: number
@@ -141,13 +142,21 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
     }
     const order = await orders.findOrderById(session.tenantId, seg[1])
     const action = seg[3]
+    // Each payment action runs once per Idempotency-Key: a retry gets the first result instead of
+    // charging, refunding or capturing again.
+    const once = async (work: () => Promise<unknown>) => {
+      const { runOnce } = await import('../payment-idempotency')
+      const result = await runOnce(session.tenantId, `payment:order:${seg[1]}:${action}:${session.userId}:${key}`, 200, work)
+      return Response.json(result.body, { status: result.status })
+    }
     if (action === 'stripe') {
       if (!body.paymentMethodId || !body.correlationId) {
         throw new ApiError(400, 'paymentMethodId and correlationId required')
       }
-      return Response.json(
-        await orderPaymentAdmin.collectOrderCardPayment(session.tenantId, seg[1], {
-          paymentMethodId: body.paymentMethodId,
+      const paymentMethodId = body.paymentMethodId
+      return once(() =>
+        orderPaymentAdmin.collectOrderCardPayment(session.tenantId, seg[1], {
+          paymentMethodId,
           amount: body.amount,
           correlationId: body.correlationId,
           customerId: body.customerId ?? order.customerId,
@@ -157,18 +166,18 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
     if (action === 'confirm-stripe') {
       const piId = (body as { paymentIntentId?: string }).paymentIntentId
       if (!piId) throw new ApiError(400, 'paymentIntentId required')
-      return Response.json(await orderPaymentAdmin.completeOrderCardCollection(session.tenantId, seg[1], piId))
+      return once(() => orderPaymentAdmin.completeOrderCardCollection(session.tenantId, seg[1], piId))
     }
     if (action === 'refund') {
-      return Response.json(
-        await orderPaymentAdmin.refundOrderPayment(session.tenantId, seg[1], body.correlationId, body.amount),
+      return once(() =>
+        orderPaymentAdmin.refundOrderPayment(session.tenantId, seg[1], body.correlationId, body.amount),
       )
     }
     if (action === 'capture') {
-      return Response.json(await orderPaymentAdmin.captureOrderPayment(session.tenantId, seg[1], body.correlationId))
+      return once(() => orderPaymentAdmin.captureOrderPayment(session.tenantId, seg[1], body.correlationId))
     }
     if (action === 'void') {
-      return Response.json(await orderPaymentAdmin.voidOrderPayment(session.tenantId, seg[1], body.correlationId))
+      return once(() => orderPaymentAdmin.voidOrderPayment(session.tenantId, seg[1], body.correlationId))
     }
     throw new ApiError(404, 'Order payment action not found')
   }
@@ -240,7 +249,10 @@ export async function routeOrderTemplates(method: string, seg: string[], req: Re
   const session = await requireSession(req)
   const buyerCustomerId = isPortalBuyer(session.role) ? await requirePortalCustomerId(session) : undefined
   const buyerOpts = buyerCustomerId ? { buyerCustomerId } : undefined
-  const customerRef = new URL(req.url).searchParams.get('customerRef') ?? buyerCustomerId
+  // Staff work on any customer's templates with the same rights as orders. A buyer only ever
+  // gets their own: the customer comes from their login, never from the request.
+  if (!buyerCustomerId) assertPermission(session, method === 'GET' ? 'orders.read' : 'orders.write')
+  const customerRef = buyerCustomerId ?? new URL(req.url).searchParams.get('customerRef')
 
   if (seg.length === 1 && method === 'GET') {
     if (!customerRef) throw new ApiError(400, 'customerRef required')
@@ -259,3 +271,29 @@ export async function routeOrderTemplates(method: string, seg: string[], req: Re
   }
   throw new ApiError(404, 'Order template route not found')
 }
+
+/**
+ * Run `create` at most once per (user, Idempotency-Key). Without a key the request behaves as
+ * before. A duplicate that arrives while the first is still running gets 409; one that arrives
+ * afterwards gets the original response.
+ */
+export async function placeOrderOnce(
+  req: Request,
+  session: { tenantId: string; userId: string },
+  create: () => Promise<unknown>,
+): Promise<Response> {
+  const header = req.headers.get('idempotency-key')?.trim()
+  if (!header) return Response.json(await create(), { status: 201 })
+  if (header.length > 200) throw new ApiError(400, 'Idempotency-Key is too long')
+
+  const { runOnce } = await import('../payment-idempotency')
+  const result = await runOnce(
+    session.tenantId,
+    `order:${session.userId}:${header}`,
+    201,
+    create,
+    'This order is already being placed — check your orders before trying again',
+  )
+  return Response.json(result.body, { status: result.status })
+}
+

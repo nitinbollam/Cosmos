@@ -9,6 +9,7 @@ import {
 } from './tenant-stripe-connect'
 import * as stripe from './stripe'
 import { syncConnectPaymentIntentEvent } from './payments'
+import { processStripeEventOnce } from './stripe-webhook-events'
 
 function stripeClient(): Stripe {
   return stripe.getStripeClient()
@@ -96,15 +97,24 @@ export async function startConnectOnboarding(tenantId: string, email?: string | 
   return createConnectAccountLink(tenantId, 'account_onboarding')
 }
 
-export function handleStripeConnectWebhook(rawBody: Buffer, signature: string) {
+/**
+ * Verify, then process before answering, once per event. Answering first (as before) meant a
+ * failure or restart mid-way lost the event, because Stripe had already been told it arrived.
+ * A processing failure now answers 500 so Stripe retries it.
+ */
+export async function handleStripeConnectWebhook(rawBody: Buffer, signature: string) {
+  let event: Stripe.Event
   try {
-    const event = verifyConnectWebhook(rawBody, signature)
-    void dispatchConnectWebhookEvent(event).catch((err) => {
-      console.error('[stripe connect webhook]', event.type, err)
-    })
-    return { received: true, type: event.type, account: event.account ?? null }
+    event = verifyConnectWebhook(rawBody, signature)
   } catch {
-    return { received: false }
+    return { received: false as const }
+  }
+  const outcome = await processStripeEventOnce(event, () => dispatchConnectWebhookEvent(event))
+  return {
+    received: true as const,
+    type: event.type,
+    account: event.account ?? null,
+    ...(outcome === 'duplicate' ? { duplicate: true } : {}),
   }
 }
 

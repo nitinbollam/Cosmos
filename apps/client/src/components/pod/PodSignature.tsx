@@ -1,4 +1,5 @@
 import './photo-capture.css'
+import { safeImageSrc } from './safe-image'
 
 type PodSignatureProps = {
   src?: string | null
@@ -15,7 +16,8 @@ type PodSignatureProps = {
  * Renders nothing when there is no signature, so deliveries recorded before
  * this shipped display cleanly rather than showing a broken image.
  */
-export function PodSignature({ src, caption = 'Signed by recipient' }: PodSignatureProps) {
+export function PodSignature({ src: rawSrc, caption = 'Signed by recipient' }: PodSignatureProps) {
+  const src = safeImageSrc(rawSrc)
   if (!src) return null
 
   return (

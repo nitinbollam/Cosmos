@@ -77,6 +77,15 @@ enum AccountType {
   EXPENSE
 }
 
+/// Stripe webhook events claimed for processing. A redelivered event is handled once; a row
+/// with no processedAt is still being handled (or was abandoned by a crash, see claimedAt).
+model StripeWebhookEvent {
+  id          String    @id
+  type        String
+  claimedAt   DateTime  @default(now())
+  processedAt DateTime?
+}
+
 model SavedPaymentMethod {
   id                    String   @id @default(cuid())
   tenantId              String

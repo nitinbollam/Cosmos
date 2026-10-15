@@ -133,7 +133,14 @@ export async function listPendingInvites(tenantId: string) {
   return rows.map(({ token: _token, ...rest }) => rest)
 }
 
-export async function createInvite(tenantId: string, input: { email: string; role?: string }) {
+export async function createInvite(
+  tenantId: string,
+  input: { email: string; role?: string },
+  inviterRole = 'TENANT_ADMIN',
+) {
+  const role = input.role ?? 'STAFF'
+  const { assertGrantableRole } = await import('./users')
+  assertGrantableRole(role, inviterRole)
   const org = await ensureExists(tenantId)
   const email = input.email.trim().toLowerCase()
   const pending = await tenantDb.tenantInvite.findFirst({
@@ -146,7 +153,7 @@ export async function createInvite(tenantId: string, input: { email: string; rol
     data: {
       tenantId,
       email,
-      role: input.role ?? 'STAFF',
+      role,
       token,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },

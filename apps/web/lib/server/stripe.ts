@@ -241,10 +241,15 @@ export async function processAchPayment(
   }
 }
 
+/**
+ * `idempotencyKey` (on capture, void and refund) makes a retried call return Stripe's first
+ * result instead of acting twice, e.g. when the response was lost after Stripe had acted.
+ */
 export async function capturePayment(
   ctx: StripeConnectContext,
   paymentIntentId: string,
   amount?: number,
+  idempotencyKey?: string,
 ): Promise<CaptureResult> {
   try {
     const stripe = stripeClient()
@@ -253,7 +258,7 @@ export async function capturePayment(
       {
         ...(amount != null ? { amount_to_capture: Math.round(amount * 100) } : {}),
       },
-      stripeAccountOpts(ctx),
+      { ...stripeAccountOpts(ctx), ...(idempotencyKey ? { idempotencyKey } : {}) },
     )
     return { success: true, paymentIntentId: intent.id, status: intent.status }
   } catch (error) {
@@ -261,15 +266,24 @@ export async function capturePayment(
   }
 }
 
-export async function voidPayment(ctx: StripeConnectContext, paymentIntentId: string): Promise<void> {
+export async function voidPayment(
+  ctx: StripeConnectContext,
+  paymentIntentId: string,
+  idempotencyKey?: string,
+): Promise<void> {
   const stripe = stripeClient()
-  await stripe.paymentIntents.cancel(paymentIntentId, stripeAccountOpts(ctx))
+  await stripe.paymentIntents.cancel(
+    paymentIntentId,
+    {},
+    { ...stripeAccountOpts(ctx), ...(idempotencyKey ? { idempotencyKey } : {}) },
+  )
 }
 
 export async function refundPayment(
   ctx: StripeConnectContext,
   paymentIntentId: string,
   amount?: number,
+  idempotencyKey?: string,
 ): Promise<RefundResult> {
   try {
     const stripe = stripeClient()
@@ -278,7 +292,7 @@ export async function refundPayment(
         payment_intent: paymentIntentId,
         ...(amount != null ? { amount: Math.round(amount * 100) } : {}),
       },
-      stripeAccountOpts(ctx),
+      { ...stripeAccountOpts(ctx), ...(idempotencyKey ? { idempotencyKey } : {}) },
     )
     return { success: true, refundId: refund.id }
   } catch (error) {

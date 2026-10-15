@@ -1,4 +1,5 @@
 import { orderIdFromStopAddress } from './dispatch-order'
+import { isSafePodImage } from './pod-validation'
 
 /** The slice of a delivery route that order tracking needs. */
 export type TrackingRoute = {
@@ -65,7 +66,8 @@ export function findOrderDelivery(routes: TrackingRoute[], orderId: string): Ord
       stopSequence: stop.sequence,
       eta,
       deliveredAt: stop.status === 'DELIVERED' ? nonEmptyString(pod?.deliveredAt) : null,
-      podPhotoUrl: nonEmptyString(pod?.photoUrl),
+      // Rows saved before POD validation existed could hold anything; only expose real images.
+      podPhotoUrl: isSafePodImage(pod?.photoUrl) ? (pod!.photoUrl as string) : null,
     }
   }
   return null

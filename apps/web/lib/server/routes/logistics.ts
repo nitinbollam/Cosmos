@@ -62,7 +62,13 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'delivered' && method === 'POST') {
     const body = (await req.json()) as Record<string, unknown>
     return Response.json(
-      await dispatch.markStopDelivered(session.tenantId, seg[1], seg[3], body, { userId: session.userId }),
+      await dispatch.markStopDelivered(
+        session.tenantId,
+        seg[1],
+        seg[3],
+        (await import('../pod-validation')).sanitizeProofOfDelivery(body ?? {}),
+        { userId: session.userId },
+      ),
     )
   }
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'failed' && method === 'POST') {
@@ -85,7 +91,9 @@ export async function routeDispatchMobile(method: string, seg: string[], req: Re
     const body = (await req.json()) as Record<string, unknown>
     const routeId = String(body.routeId ?? '')
     if (!routeId.trim()) throw new ApiError(400, 'routeId is required in body')
-    const { routeId: _r, stopId: _s, ...pod } = body
+    // Only known, validated POD fields are stored; images must be real raster images.
+    const { sanitizeProofOfDelivery } = await import('../pod-validation')
+    const pod = sanitizeProofOfDelivery(body)
     return Response.json(
       await dispatch.markStopDelivered(session.tenantId, routeId, seg[2], pod, { userId: session.userId }),
     )

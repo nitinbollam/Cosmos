@@ -43,7 +43,7 @@ export async function earnPointsForDeliveredOrder(tenantId: string, orderId: str
 }
 
 export async function redeemPoints(tenantId: string, customerId: string, points: number) {
-  if (points <= 0) throw new ApiError(400, 'Points must be positive')
+  if (!Number.isInteger(points) || points <= 0) throw new ApiError(400, 'Points must be a positive whole number')
   const account = await getOrCreateLoyaltyAccount(tenantId, customerId)
   if (account.pointsBalance < points) throw new ApiError(400, 'Insufficient loyalty points')
 
@@ -54,6 +54,13 @@ export async function redeemPoints(tenantId: string, customerId: string, points:
   const code = `LOY-${randomBytes(4).toString('hex').toUpperCase()}`
 
   await tenantDb.$transaction(async (tx) => {
+    // Deduct only if the points are still there: two redemptions at once would otherwise both
+    // pass the balance check above, drive the balance negative and mint two discount codes.
+    const deducted = await tx.loyaltyAccount.updateMany({
+      where: { id: account.id, pointsBalance: { gte: points } },
+      data: { pointsBalance: { decrement: points } },
+    })
+    if (deducted.count !== 1) throw new ApiError(400, 'Insufficient loyalty points')
     await tx.loyaltyTransaction.create({
       data: {
         accountId: account.id,
@@ -61,10 +68,6 @@ export async function redeemPoints(tenantId: string, customerId: string, points:
         points: -points,
         reason: `Redeemed for discount ${code}`,
       },
-    })
-    await tx.loyaltyAccount.update({
-      where: { id: account.id },
-      data: { pointsBalance: { decrement: points } },
     })
   })
 

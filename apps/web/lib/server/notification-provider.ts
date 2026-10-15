@@ -195,6 +195,14 @@ export async function deliverNotification(
     return sendViaWebhook(input, subject, body)
   }
 
+  // Printing the message is a development convenience only. Bodies carry password-reset, invite
+  // and verification links, so in production anyone who can read the logs could use them. With no
+  // real provider there, refuse instead: callers record the failure, and nothing secret is logged.
+  if (process.env.NODE_ENV === 'production') {
+    console.error(`[notification] no ${input.channel} provider configured; ${input.templateKey} not sent`)
+    throw new Error(`No ${input.channel} provider configured`)
+  }
+
   const line = `[notification] ${input.channel} → ${input.recipient} | ${input.templateKey}`
   console.log(line)
   console.log(`  subject: ${subject}`)

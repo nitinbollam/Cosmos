@@ -7,6 +7,7 @@ import { resolveStripeCustomerId } from './stripe-customer-sync'
 import { applyCapturedPayment, defersFulfillmentUntilPayment, linkPaymentIntent } from './order-payment-sync'
 import { requireStripeConnectContext, findTenantIdByConnectedAccount } from './tenant-stripe-connect'
 import { isConnectWebhookSecretConfigured } from './stripe-connect'
+import { processStripeEventOnce } from './stripe-webhook-events'
 
 export type AuthorizeInput = {
   orderId: string
@@ -157,6 +158,38 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
   }
 }
 
+/**
+ * Follow-up for whoever just moved a payment to CAPTURED (confirm or Stripe's webhook, never
+ * both). A card collection gets its full bookkeeping, including the AR journal its own
+ * completion would otherwise have posted; other payments are linked, counted as paid and their
+ * invoice refreshed.
+ */
+async function settleCapture(intent: { id: string; tenantId: string; orderId: string; amount: Prisma.Decimal; metadata: unknown }) {
+  const admin = await import('./order-payment-admin')
+  if (admin.isCardCollection(intent.metadata)) {
+    await admin.settleCollectedCardPayment(intent.tenantId, intent.orderId, intent.id, Number(intent.amount))
+    return
+  }
+  await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
+  await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
+  const { syncInvoiceFromOrder } = await import('./invoices')
+  await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
+}
+
+const SETTLED_STATUSES: readonly string[] = ['CAPTURED', 'REFUNDED', 'VOIDED']
+
+/**
+ * Where a confirm may move a payment, given Stripe's status for it; null means nothing to do.
+ * Confirm only moves forward: Stripe keeps reporting a refunded payment as "succeeded", so a
+ * repeat call on a captured, refunded or voided payment must not reset it or count it again.
+ */
+export function confirmTransition(current: string, stripeStatus: string): 'AUTHORIZED' | 'CAPTURED' | null {
+  if (SETTLED_STATUSES.includes(current)) return null
+  if (stripeStatus === 'succeeded') return 'CAPTURED'
+  if (stripeStatus === 'requires_capture') return current === 'AUTHORIZED' ? null : 'AUTHORIZED'
+  return null
+}
+
 /** Complete a card payment after client-side 3DS (confirmCardPayment). */
 export async function completeCardAuthorization(
   tenantId: string,
@@ -170,6 +203,8 @@ export async function completeCardAuthorization(
     throw new ApiError(403, 'Forbidden')
   }
   if (!intent.stripeIntentId) throw new ApiError(400, 'No Stripe payment linked')
+  const unchanged = (status: string) => ({ paymentIntentId: intent.id, stripeIntentId: intent.stripeIntentId, status })
+  if (SETTLED_STATUSES.includes(intent.status)) return unchanged(intent.status)
 
   const order = await orderDb.order.findFirst({ where: { id: intent.orderId, tenantId } })
   if (!order) throw new ApiError(404, 'Order not found')
@@ -183,27 +218,32 @@ export async function completeCardAuthorization(
     throw new ApiError(400, `Cannot complete payment in status ${retrieved.status}`)
   }
 
-  const isAlreadySucceeded = retrieved.status === 'succeeded'
-  const nextStatus = isAlreadySucceeded ? 'CAPTURED' : 'AUTHORIZED'
+  const nextStatus = confirmTransition(intent.status, retrieved.status)
+  if (!nextStatus) return unchanged(intent.status)
+  const isAlreadySucceeded = nextStatus === 'CAPTURED'
 
-  const updated = await paymentDb.paymentIntent.update({
-    where: { id: intent.id },
+  const claimed = await paymentDb.paymentIntent.updateMany({
+    where: { id: intent.id, tenantId, status: intent.status },
     data: {
       status: nextStatus,
       capturedAmount: isAlreadySucceeded ? intent.amount : intent.capturedAmount,
       failureReason: null,
     },
   })
-
-  await linkPaymentIntent(tenantId, intent.orderId, updated.id)
-
-  if (isAlreadySucceeded) {
-    await applyCapturedPayment(tenantId, intent.orderId, Number(intent.amount))
-    const { syncInvoiceFromOrder } = await import('./invoices')
-    await syncInvoiceFromOrder(tenantId, intent.orderId).catch(() => undefined)
+  if (claimed.count !== 1) {
+    // Another confirm, or Stripe's webhook, moved it first and did the follow-up work.
+    const current = await paymentDb.paymentIntent.findFirst({ where: { id: intent.id } })
+    return unchanged(current?.status ?? intent.status)
   }
 
-  if (defersFulfillmentUntilPayment(order.paymentMethod)) {
+  if (isAlreadySucceeded) {
+    await settleCapture(intent)
+  } else {
+    await linkPaymentIntent(tenantId, intent.orderId, intent.id)
+  }
+
+  // Fulfillment starts at the first authorization; AUTHORIZED → CAPTURED here only settles money.
+  if (intent.status !== 'AUTHORIZED' && defersFulfillmentUntilPayment(order.paymentMethod)) {
     const { runOrderFulfillmentPipeline } = await import('./order-orchestration')
     const notifyTriggers = await import('./notification-triggers')
     void runOrderFulfillmentPipeline(intent.orderId, tenantId, correlationId).catch(() => undefined)
@@ -212,11 +252,7 @@ export async function completeCardAuthorization(
       .catch(() => undefined)
   }
 
-  return {
-    paymentIntentId: updated.id,
-    stripeIntentId: intent.stripeIntentId,
-    status: updated.status,
-  }
+  return unchanged(nextStatus)
 }
 
 /**
@@ -308,6 +344,17 @@ async function recordRefund(tenantId: string, amount: number, orderId: string, c
   )
 }
 
+const PAYMENT_CHANGED = 'This payment changed while you were working on it. Reload and try again.'
+
+const toCents = (n: number) => Math.round(n * 100)
+
+/**
+ * Each money-moving step below first claims its status change with a conditional update, so a
+ * second request for the same payment (double-click, retry, a second tab) finds it already
+ * changed and stops with 409 instead of moving money again. If Stripe then fails, the claim is
+ * undone, but only if nothing else has changed the payment since. The Stripe idempotency keys
+ * are built from the payment's own state, so a retry after a lost response can't act twice.
+ */
 export async function capture(tenantId: string, paymentIntentId: string, correlationId: string) {
   const intent = await paymentDb.paymentIntent.findFirst({ where: { id: paymentIntentId, tenantId } })
   if (!intent) throw new ApiError(404, 'Payment intent not found')
@@ -315,35 +362,61 @@ export async function capture(tenantId: string, paymentIntentId: string, correla
     throw new ApiError(400, `Cannot capture status ${intent.status}`)
   }
 
-  if (intent.stripeIntentId) {
-    const connectCtx = await requireStripeConnectContext(tenantId)
-    const r = await stripe.capturePayment(connectCtx, intent.stripeIntentId)
-    if (!r.success) throw new ApiError(400, r.error ?? 'Capture failed')
-  }
-
-  const updated = await paymentDb.paymentIntent.update({
-    where: { id: paymentIntentId },
+  const claimed = await paymentDb.paymentIntent.updateMany({
+    where: { id: intent.id, tenantId, status: 'AUTHORIZED' },
     data: { status: 'CAPTURED', capturedAmount: intent.amount },
   })
+  if (claimed.count !== 1) throw new ApiError(409, PAYMENT_CHANGED)
+
+  if (intent.stripeIntentId) {
+    try {
+      const connectCtx = await requireStripeConnectContext(tenantId)
+      const r = await stripe.capturePayment(connectCtx, intent.stripeIntentId, undefined, `capture:${intent.id}`)
+      if (!r.success) throw new ApiError(400, r.error ?? 'Capture failed')
+    } catch (e) {
+      await paymentDb.paymentIntent.updateMany({
+        where: { id: intent.id, status: 'CAPTURED', capturedAmount: intent.amount },
+        data: { status: 'AUTHORIZED', capturedAmount: intent.capturedAmount },
+      })
+      throw e
+    }
+  }
 
   await recordPaymentReceived(tenantId, Number(intent.amount), intent.orderId, correlationId)
   await applyCapturedPayment(tenantId, intent.orderId, Number(intent.amount))
   await linkPaymentIntent(tenantId, intent.orderId, paymentIntentId)
-  return { paymentIntentId: updated.id, status: updated.status }
+  return { paymentIntentId: intent.id, status: 'CAPTURED' as const }
 }
+
+const VOIDABLE = ['PENDING', 'AUTHORIZED', 'FAILED'] as const
 
 export async function voidIntent(tenantId: string, paymentIntentId: string, _correlationId: string) {
   const intent = await paymentDb.paymentIntent.findFirst({ where: { id: paymentIntentId, tenantId } })
   if (!intent) throw new ApiError(404, 'Payment intent not found')
-  if (intent.stripeIntentId) {
-    const connectCtx = await requireStripeConnectContext(tenantId)
-    await stripe.voidPayment(connectCtx, intent.stripeIntentId)
+  // Captured money is returned with a refund; voiding it would only hide it from the books.
+  if (!(VOIDABLE as readonly string[]).includes(intent.status)) {
+    throw new ApiError(400, `Cannot void status ${intent.status}`)
   }
-  const updated = await paymentDb.paymentIntent.update({
-    where: { id: paymentIntentId },
+
+  const claimed = await paymentDb.paymentIntent.updateMany({
+    where: { id: intent.id, tenantId, status: intent.status },
     data: { status: 'VOIDED' },
   })
-  return { paymentIntentId: updated.id, status: updated.status }
+  if (claimed.count !== 1) throw new ApiError(409, PAYMENT_CHANGED)
+
+  if (intent.stripeIntentId) {
+    try {
+      const connectCtx = await requireStripeConnectContext(tenantId)
+      await stripe.voidPayment(connectCtx, intent.stripeIntentId, `void:${intent.id}`)
+    } catch (e) {
+      await paymentDb.paymentIntent.updateMany({
+        where: { id: intent.id, status: 'VOIDED' },
+        data: { status: intent.status },
+      })
+      throw e
+    }
+  }
+  return { paymentIntentId: intent.id, status: 'VOIDED' as const }
 }
 
 export async function refund(
@@ -358,29 +431,56 @@ export async function refund(
     throw new ApiError(400, `Cannot refund status ${intent.status}`)
   }
 
-  if (intent.stripeIntentId) {
-    const connectCtx = await requireStripeConnectContext(tenantId)
-    const r = await stripe.refundPayment(connectCtx, intent.stripeIntentId, amount)
-    if (!r.success) throw new ApiError(400, r.error ?? 'Refund failed')
+  const capturedCents = toCents(Number(intent.capturedAmount ?? intent.amount))
+  const refundedBeforeCents = toCents(Number(intent.refundedAmount ?? 0))
+  // No amount means "the rest", not the original total (which over-refunds after a partial refund).
+  const refundCents = amount == null ? capturedCents - refundedBeforeCents : toCents(amount)
+  if (!Number.isFinite(refundCents) || refundCents <= 0) {
+    throw new ApiError(400, 'Refund amount must be greater than zero')
   }
+  if (refundedBeforeCents + refundCents > capturedCents) {
+    throw new ApiError(400, 'Refund exceeds the amount captured on this payment')
+  }
+  const refundAmount = refundCents / 100
+  const refundedAfter = new Prisma.Decimal((refundedBeforeCents + refundCents) / 100)
 
-  const refundAmount = amount ?? Number(intent.amount)
-  const updated = await paymentDb.paymentIntent.update({
-    where: { id: paymentIntentId },
+  const claimed = await paymentDb.paymentIntent.updateMany({
+    where: { id: intent.id, tenantId, status: 'CAPTURED', refundedAmount: intent.refundedAmount },
     data: {
-      refundedAmount: { increment: new Prisma.Decimal(refundAmount) },
-      status:
-        Number(intent.refundedAmount) + refundAmount >= Number(intent.capturedAmount ?? intent.amount) - 0.001
-          ? 'REFUNDED'
-          : 'CAPTURED',
+      refundedAmount: refundedAfter,
+      status: refundedBeforeCents + refundCents >= capturedCents ? 'REFUNDED' : 'CAPTURED',
     },
   })
+  if (claimed.count !== 1) throw new ApiError(409, PAYMENT_CHANGED)
 
-  await recordRefund(tenantId, refundAmount, intent.orderId, correlationId)
+  if (intent.stripeIntentId) {
+    try {
+      const connectCtx = await requireStripeConnectContext(tenantId)
+      const r = await stripe.refundPayment(
+        connectCtx,
+        intent.stripeIntentId,
+        refundAmount,
+        `refund:${intent.id}:${refundedBeforeCents}:${refundCents}`,
+      )
+      if (!r.success) throw new ApiError(400, r.error ?? 'Refund failed')
+    } catch (e) {
+      await paymentDb.paymentIntent.updateMany({
+        where: { id: intent.id, refundedAmount: refundedAfter },
+        data: { refundedAmount: intent.refundedAmount, status: 'CAPTURED' },
+      })
+      throw e
+    }
+  }
+
+  // The money has moved. A bookkeeping failure must not turn into an error: the client would retry
+  // and, with the refund already recorded on the payment, a retry is a second real refund.
+  await recordRefund(tenantId, refundAmount, intent.orderId, correlationId).catch((err) =>
+    console.error(`[payments] refund of ${refundAmount} on payment ${intent.id} went through but the ledger write failed:`, err),
+  )
   return {
-    paymentIntentId: updated.id,
-    refundedAmount: Number(updated.refundedAmount),
-    status: updated.status,
+    paymentIntentId: intent.id,
+    refundedAmount: Number(refundedAfter),
+    status: refundedBeforeCents + refundCents >= capturedCents ? ('REFUNDED' as const) : ('CAPTURED' as const),
   }
 }
 
@@ -404,80 +504,86 @@ export async function handleStripeWebhook(rawBody: Buffer, signature: string) {
     return { received: false as const }
   }
 
-  try {
-    const { handleBillingWebhookEvent } = await import('./billing')
-    if (await handleBillingWebhookEvent(event)) {
-      return { received: true as const, type: event.type }
-    }
+  // Processed before answering, once per event: a failure answers 500 so Stripe retries it, and a
+  // redelivery of an event already handled is skipped.
+  const outcome = await processStripeEventOnce(event, () => applyPlatformStripeEvent(event))
+  return { received: true as const, type: event.type, ...(outcome === 'duplicate' ? { duplicate: true } : {}) }
+}
 
-    switch (event.type) {
-      case 'payment_intent.succeeded': {
-        const pi = event.data.object as { id: string }
-        const intent = await paymentDb.paymentIntent.findFirst({
-          where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
-        })
-        if (intent) {
-          await paymentDb.paymentIntent.update({
-            where: { id: intent.id },
+async function applyPlatformStripeEvent(event: ReturnType<typeof stripe.verifyStripeWebhook>) {
+  const { handleBillingWebhookEvent } = await import('./billing')
+  if (await handleBillingWebhookEvent(event)) return
+
+  switch (event.type) {
+    case 'payment_intent.succeeded': {
+      const pi = event.data.object as { id: string }
+      const intent = await paymentDb.paymentIntent.findFirst({
+        where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
+      })
+      // Conditional, so a capture already recorded by our own capture() or confirm isn't recorded twice.
+      const moved = intent
+        ? await paymentDb.paymentIntent.updateMany({
+            where: { id: intent.id, status: intent.status },
             data: { status: 'CAPTURED', capturedAmount: intent.amount },
           })
-          await recordPaymentReceived(intent.tenantId, Number(intent.amount), intent.orderId, `stripe-${event.id}`)
-          await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
-          await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
-        }
-        break
+        : { count: 0 }
+      if (intent && moved.count === 1) {
+        await recordPaymentReceived(intent.tenantId, Number(intent.amount), intent.orderId, `stripe-${event.id}`)
+        await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
+        await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
+        // A confirm arriving after this finds the payment captured and stops, so refresh the invoice here.
+        const { syncInvoiceFromOrder } = await import('./invoices')
+        await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
       }
-      case 'payment_intent.payment_failed': {
-        const pi = event.data.object as { id: string; last_payment_error?: { message?: string } }
-        await paymentDb.paymentIntent.updateMany({
-          where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
-          data: { status: 'FAILED', failureReason: pi.last_payment_error?.message ?? 'Payment failed' },
+      break
+    }
+    case 'payment_intent.payment_failed': {
+      const pi = event.data.object as { id: string; last_payment_error?: { message?: string } }
+      await paymentDb.paymentIntent.updateMany({
+        where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
+        data: { status: 'FAILED', failureReason: pi.last_payment_error?.message ?? 'Payment failed' },
+      })
+      break
+    }
+    case 'payment_intent.canceled': {
+      const pi = event.data.object as { id: string }
+      await paymentDb.paymentIntent.updateMany({
+        where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
+        data: { status: 'VOIDED' },
+      })
+      break
+    }
+    case 'charge.refunded': {
+      const charge = event.data.object as { payment_intent?: string | null; amount_refunded?: number }
+      const stripeIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
+      if (stripeIntentId) {
+        const intent = await paymentDb.paymentIntent.findFirst({
+          where: { stripeIntentId, status: { in: ['CAPTURED', 'REFUNDED'] } },
         })
-        break
-      }
-      case 'payment_intent.canceled': {
-        const pi = event.data.object as { id: string }
-        await paymentDb.paymentIntent.updateMany({
-          where: { stripeIntentId: pi.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
-          data: { status: 'VOIDED' },
-        })
-        break
-      }
-      case 'charge.refunded': {
-        const charge = event.data.object as { payment_intent?: string | null; amount_refunded?: number }
-        const stripeIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
-        if (stripeIntentId) {
-          const intent = await paymentDb.paymentIntent.findFirst({
-            where: { stripeIntentId, status: { in: ['CAPTURED', 'REFUNDED'] } },
-          })
-          if (intent) {
-            const refundedTotal = (charge.amount_refunded ?? 0) / 100
-            const alreadyRecorded = Number(intent.refundedAmount ?? 0)
-            const delta = +(refundedTotal - alreadyRecorded).toFixed(2)
-            if (delta > 0.009) {
-              await paymentDb.paymentIntent.update({
-                where: { id: intent.id },
-                data: {
-                  refundedAmount: new Prisma.Decimal(refundedTotal),
-                  status: refundedTotal >= Number(intent.amount) ? 'REFUNDED' : 'CAPTURED',
-                },
-              })
-              await recordRefund(intent.tenantId, delta, intent.orderId, `stripe-${event.id}`)
-            }
+        if (intent) {
+          const refundedTotal = (charge.amount_refunded ?? 0) / 100
+          const alreadyRecorded = Number(intent.refundedAmount ?? 0)
+          const delta = +(refundedTotal - alreadyRecorded).toFixed(2)
+          if (delta > 0.009) {
+            // Compare-and-set: if a refund from Pleros lands at the same moment, fail so Stripe
+            // retries this event against the new total instead of recording the refund twice.
+            const moved = await paymentDb.paymentIntent.updateMany({
+              where: { id: intent.id, refundedAmount: intent.refundedAmount },
+              data: {
+                refundedAmount: new Prisma.Decimal(refundedTotal),
+                status: refundedTotal >= Number(intent.amount) ? 'REFUNDED' : 'CAPTURED',
+              },
+            })
+            if (moved.count !== 1) throw new Error(`refund total changed for payment ${intent.id}`)
+            await recordRefund(intent.tenantId, delta, intent.orderId, `stripe-${event.id}`)
           }
         }
-        break
       }
-      default:
-        break
+      break
     }
-  } catch (err) {
-    console.error(`[stripe] webhook processing failed for event ${event.id} (${event.type}):`, err)
-    // Return received so Stripe does not retry forever on poison events; the
-    // failure is logged for investigation.
+    default:
+      break
   }
-
-  return { received: true as const, type: event.type }
 }
 
 /** Connect webhook payment_intent.* → sync Cosmos payment records (resolve tenant via event.account). */
@@ -518,25 +624,31 @@ async function syncStripeWebhookEvent(event: import('stripe').Stripe.Event, _ten
     return
   }
 
+  // Every change is conditional on the status just read: events can arrive late or out of order
+  // (a "failed" after a later success), and our own capture/confirm may have moved it already.
+  const open = intent.status === 'PENDING' || intent.status === 'AUTHORIZED'
   if (event.type === 'payment_intent.succeeded') {
     const obj = event.data.object as import('stripe').Stripe.PaymentIntent
-    if (obj.status === 'succeeded' && intent.status === 'PENDING') {
-      await paymentDb.paymentIntent.update({
-        where: { id: intent.id },
+    if (obj.status === 'succeeded' && open) {
+      const moved = await paymentDb.paymentIntent.updateMany({
+        where: { id: intent.id, status: intent.status },
         data: { status: 'CAPTURED', capturedAmount: intent.amount },
       })
-      await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount))
+      if (moved.count === 1) await settleCapture(intent)
     }
-  } else if (event.type === 'payment_intent.payment_failed') {
+  } else if (event.type === 'payment_intent.payment_failed' && open) {
     const obj = event.data.object as import('stripe').Stripe.PaymentIntent
-    await paymentDb.paymentIntent.update({
-      where: { id: intent.id },
+    await paymentDb.paymentIntent.updateMany({
+      where: { id: intent.id, status: intent.status },
       data: {
         status: 'FAILED',
         failureReason: obj.last_payment_error?.message ?? 'Payment failed',
       },
     })
-  } else if (event.type === 'payment_intent.canceled' && intent.status === 'AUTHORIZED') {
-    await paymentDb.paymentIntent.update({ where: { id: intent.id }, data: { status: 'VOIDED' } })
+  } else if (event.type === 'payment_intent.canceled' && open) {
+    await paymentDb.paymentIntent.updateMany({
+      where: { id: intent.id, status: intent.status },
+      data: { status: 'VOIDED' },
+    })
   }
 }

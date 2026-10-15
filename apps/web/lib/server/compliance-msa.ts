@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { endOfWeek, format, startOfWeek, subWeeks } from 'date-fns'
 import { complianceDb } from './db'
 import { readMsaFile, uploadMsaReport } from './msa-storage'
+import { assertPublicHttpsUrl, postToPublicUrl, type ResolveHost } from './safe-outbound'
 import { ApiError } from './session'
 
 interface MulticatRecord {
@@ -58,9 +59,11 @@ function assertSafeDid(val: string, label: string) {
   }
 }
 
-export async function upsertConfig(tenantId: string, dto: UpsertMsaConfigInput) {
+export async function upsertConfig(tenantId: string, dto: UpsertMsaConfigInput, resolve?: ResolveHost) {
   assertSafeDid(dto.manufacturerDid, 'manufacturerDid')
   if (dto.reporterDid) assertSafeDid(dto.reporterDid, 'reporterDid')
+  // The server posts reports to this URL and shows the reply, so it must be a public endpoint.
+  if (dto.ediEndpoint?.trim()) await assertPublicHttpsUrl(dto.ediEndpoint.trim(), 'EDI endpoint', resolve)
   let row = await complianceDb.mSATenant.findFirst({ where: { tenantId } })
   if (!row) {
     await complianceDb.mSATenant.create({
@@ -270,7 +273,7 @@ export async function uploadReportToStorage(tenantId: string, reportId: string) 
   return { reportId, ...result }
 }
 
-export async function submitReportEdi(tenantId: string, reportId: string) {
+export async function submitReportEdi(tenantId: string, reportId: string, resolve?: ResolveHost) {
   const report = await getReport(tenantId, reportId)
   const config = await complianceDb.mSAManufacturerDid.findFirst({
     where: { manufacturerDid: report.manufacturerDid, msaTenant: { tenantId } },
@@ -282,17 +285,22 @@ export async function submitReportEdi(tenantId: string, reportId: string) {
   const content = readMsaFile(report.filePath)
 
   try {
-    const res = await fetch(config.ediEndpoint, {
-      method: 'POST',
-      headers: {
+    // Checked again at send time: endpoints saved before this check existed, or DNS that changed.
+    const url = await assertPublicHttpsUrl(config.ediEndpoint, 'EDI endpoint', resolve)
+    const res = await postToPublicUrl(
+      url,
+      {
         'Content-Type': 'text/plain',
         'X-MSA-Reporter-DID': report.reporterDid,
         'X-MSA-Manufacturer-DID': report.manufacturerDid,
       },
-      body: content,
-    })
-    const confirmation = res.headers.get('x-confirmation-id') ?? (await res.text()).slice(0, 200)
-    if (!res.ok) throw new Error(`EDI returned ${res.status}`)
+      content,
+      30_000,
+      resolve,
+    )
+    const confirmationHeader = res.headers['x-confirmation-id']
+    const confirmation = (typeof confirmationHeader === 'string' ? confirmationHeader : res.text).slice(0, 200)
+    if (res.status < 200 || res.status >= 300) throw new Error(`EDI returned ${res.status}`)
 
     await complianceDb.mSAReport.update({
       where: { id: reportId },

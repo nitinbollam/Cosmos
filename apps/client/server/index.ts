@@ -8,6 +8,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientRoot = path.resolve(__dirname, '..')
 const webRoot = path.resolve(clientRoot, '../web')
 const port = Number(process.env.PORT ?? 4000)
+/** Upper bound for any API request body (bytes). */
+const MAX_API_BODY_BYTES = 10 * 1024 * 1024
 const isProd = process.env.NODE_ENV === 'production'
 
 function loadEnv() {
@@ -95,9 +97,24 @@ async function main() {
 
     try {
       const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`
+      // Uploads (receipts, listing photos) are ≤5 MB files sent as base64; nothing legitimate is
+      // bigger than this, and without a cap one request can exhaust the server's memory.
+      const declared = Number(req.headers['content-length'] ?? 0)
+      if (declared > MAX_API_BODY_BYTES) {
+        res.status(413).json({ message: 'Request body too large' })
+        return
+      }
       const chunks: Buffer[] = []
+      let received = 0
       for await (const chunk of req) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        received += buf.length
+        if (received > MAX_API_BODY_BYTES) {
+          res.status(413).json({ message: 'Request body too large' })
+          req.destroy()
+          return
+        }
+        chunks.push(buf)
       }
       const headers = new Headers()
       for (const [key, value] of Object.entries(req.headers)) {

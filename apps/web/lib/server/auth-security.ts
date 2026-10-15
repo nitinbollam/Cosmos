@@ -47,9 +47,21 @@ export function rateLimit(key: string, limit: number, windowMs: number): void {
   }
 }
 
+/**
+ * The caller's IP for rate limiting. `X-Forwarded-For` is "client, proxy1, proxy2…" and every
+ * entry before the ones our own proxies append is whatever the caller chose to send — so the
+ * first entry can't be trusted (a fresh fake IP per request would skip every per-IP limit).
+ * Read the entry our proxies appended instead: `TRUSTED_PROXY_HOPS` (default 1, e.g. Render's
+ * load balancer) counts back from the end.
+ */
 export function clientIp(req: Request): string {
   const fwd = req.headers.get('x-forwarded-for')
-  if (fwd) return fwd.split(',')[0]!.trim()
+  if (fwd) {
+    const hops = Math.max(1, Number.parseInt(process.env.TRUSTED_PROXY_HOPS ?? '1', 10) || 1)
+    const parts = fwd.split(',').map((p) => p.trim()).filter(Boolean)
+    const ip = parts[Math.max(0, parts.length - hops)]
+    if (ip) return ip
+  }
   return req.headers.get('x-real-ip')?.trim() || 'unknown'
 }
 

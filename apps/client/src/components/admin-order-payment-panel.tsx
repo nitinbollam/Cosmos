@@ -1,5 +1,5 @@
 import { Elements, useStripe } from '@stripe/react-stripe-js'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { AdminStripeCardForm, confirmStripeAction } from '@/components/admin-stripe-card-form'
@@ -11,6 +11,20 @@ function newCorrelationId() {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2)
+}
+
+/**
+ * One Idempotency-Key per attempt: a double-click or a retry after an error resends the same key,
+ * so the server runs the payment action once. A fresh key is used only after the action succeeds.
+ */
+function useAttemptKey() {
+  const ref = useRef<string | null>(null)
+  return {
+    get: () => (ref.current ??= newCorrelationId()),
+    reset: () => {
+      ref.current = null
+    },
+  }
 }
 
 type PaymentBlock = {
@@ -45,9 +59,10 @@ function StripeCollectInner({
   onErr: (msg: string) => void
 }) {
   const stripe = useStripe()
+  const attempt = useAttemptKey()
 
   async function runPayment(paymentMethodId: string) {
-    const correlationId = newCorrelationId()
+    const correlationId = attempt.get()
     try {
       const res = await api.post<{
         requiresAction?: boolean
@@ -58,6 +73,9 @@ function StripeCollectInner({
         { paymentMethodId, amount, correlationId, customerId },
         { 'Idempotency-Key': correlationId },
       )
+      // The server has answered, so the next submit (e.g. another card after a failed 3DS) is a
+      // new attempt. Only a request that never got an answer is resent with the same key.
+      attempt.reset()
       if (res.requiresAction && res.clientSecret && stripe) {
         const confirmed = await confirmStripeAction(stripe, res.clientSecret)
         if (!confirmed.ok) {
@@ -65,10 +83,11 @@ function StripeCollectInner({
           return
         }
         if (res.paymentIntentId) {
-          await api.post(`/orders/${encodeURIComponent(orderId)}/payments/confirm-stripe`, {
-            paymentIntentId: res.paymentIntentId,
-            correlationId: newCorrelationId(),
-          })
+          await api.post(
+            `/orders/${encodeURIComponent(orderId)}/payments/confirm-stripe`,
+            { paymentIntentId: res.paymentIntentId, correlationId },
+            { 'Idempotency-Key': `${correlationId}:confirm` },
+          )
         }
       }
       onDone()
@@ -98,9 +117,13 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
     void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
   }
 
+  const captureKey = useAttemptKey()
+  const voidKey = useAttemptKey()
+  const refundKey = useAttemptKey()
+
   const captureMut = useMutation({
     mutationFn: async () => {
-      const correlationId = newCorrelationId()
+      const correlationId = captureKey.get()
       await api.post(
         `/orders/${encodeURIComponent(orderId)}/payments/capture`,
         { correlationId },
@@ -108,6 +131,7 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
       )
     },
     onSuccess: () => {
+      captureKey.reset()
       invalidate()
       setErr(null)
     },
@@ -116,7 +140,7 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
 
   const voidMut = useMutation({
     mutationFn: async () => {
-      const correlationId = newCorrelationId()
+      const correlationId = voidKey.get()
       await api.post(
         `/orders/${encodeURIComponent(orderId)}/payments/void`,
         { correlationId },
@@ -124,6 +148,7 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
       )
     },
     onSuccess: () => {
+      voidKey.reset()
       invalidate()
       setErr(null)
     },
@@ -133,7 +158,7 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
   const refundMut = useMutation({
     mutationFn: async () => {
       const amount = refundAmount.trim() ? parseFloat(refundAmount) : undefined
-      const correlationId = newCorrelationId()
+      const correlationId = refundKey.get()
       await api.post(
         `/orders/${encodeURIComponent(orderId)}/payments/refund`,
         { correlationId, amount },
@@ -141,6 +166,7 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
       )
     },
     onSuccess: () => {
+      refundKey.reset()
       invalidate()
       setMode('none')
       setRefundAmount('')
@@ -243,6 +269,8 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
             onClick={() => {
               setMode(mode === 'refund' ? 'none' : 'refund')
               setRefundAmount(String(refundable))
+              // Opening the form starts a new refund; retries inside it reuse one key.
+              refundKey.reset()
             }}
           >
             Refund to card
