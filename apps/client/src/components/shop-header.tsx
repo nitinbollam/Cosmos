@@ -7,6 +7,7 @@ import { jwtEmail } from '@/lib/jwt'
 import { getAccessToken, signOut } from '@/lib/auth-session'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { getB2bTenantId } from '@/lib/session'
+import { useMarketplaceAccess } from '@/pages/marketplace/use-marketplace-access'
 
 export function ShopHeader() {
   const location = useLocation()
@@ -14,6 +15,7 @@ export function ShopHeader() {
   const [tenantLabel, setTenantLabel] = useState('Your business')
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
+  const marketplace = useMarketplaceAccess()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const refreshAuth = useCallback(() => {
@@ -73,9 +75,12 @@ export function ShopHeader() {
           <Link to="/catalog" className={navClass('/catalog')} onClick={() => setNavOpen(false)}>
             Catalog
           </Link>
-          <Link to="/marketplace" className={navClass('/marketplace')} onClick={() => setNavOpen(false)}>
-            Marketplace
-          </Link>
+          {/* Distributor-to-distributor trading: only accounts with marketplace access see it. */}
+          {marketplace.canBrowse ? (
+            <Link to="/marketplace" className={navClass('/marketplace')} onClick={() => setNavOpen(false)}>
+              Marketplace
+            </Link>
+          ) : null}
           <Link to="/orders" className={navClass('/orders')} onClick={() => setNavOpen(false)}>
             Orders
           </Link>
