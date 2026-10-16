@@ -8,8 +8,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientRoot = path.resolve(__dirname, '..')
 const webRoot = path.resolve(clientRoot, '../web')
 const port = Number(process.env.PORT ?? 4000)
-/** Upper bound for any API request body (bytes). */
-const MAX_API_BODY_BYTES = 10 * 1024 * 1024
 const isProd = process.env.NODE_ENV === 'production'
 
 function loadEnv() {
@@ -56,6 +54,7 @@ async function main() {
   loadEnv()
   await import('../../web/server/register-paths.mjs')
   const { handleApiRequest } = await import('../../web/server/api-router.ts')
+  const { maxRequestBodyBytes } = await import('../../web/lib/server/request-body-limit.ts')
   const { startBackgroundJobs } = await import('../../web/lib/server/background-jobs.ts')
   startBackgroundJobs()
 
@@ -97,11 +96,17 @@ async function main() {
 
     try {
       const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`
-      // Uploads (receipts, listing photos) are ≤5 MB files sent as base64; nothing legitimate is
-      // bigger than this, and without a cap one request can exhaust the server's memory.
+      // The body is read into memory before authentication, so its size is capped first: 2 MB,
+      // or 8 MB for the few routes that carry a file or bulk rows (request-body-limit.ts). Too
+      // large is refused on the declared size without reading, or as soon as it's exceeded.
+      const limit = maxRequestBodyBytes(req.method, req.path)
+      const tooLarge = () => {
+        res.setHeader('Connection', 'close')
+        res.status(413).json({ message: `Request body too large (limit ${Math.round(limit / 1024 / 1024)} MB)` })
+      }
       const declared = Number(req.headers['content-length'] ?? 0)
-      if (declared > MAX_API_BODY_BYTES) {
-        res.status(413).json({ message: 'Request body too large' })
+      if (declared > limit) {
+        tooLarge()
         return
       }
       const chunks: Buffer[] = []
@@ -109,8 +114,8 @@ async function main() {
       for await (const chunk of req) {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
         received += buf.length
-        if (received > MAX_API_BODY_BYTES) {
-          res.status(413).json({ message: 'Request body too large' })
+        if (received > limit) {
+          tooLarge()
           req.destroy()
           return
         }
