@@ -101,7 +101,49 @@ function renderNotification(input: NotificationDeliveryInput): { subject: string
   }
 }
 
-async function sendViaSendGrid(recipient: string, subject: string, body: string): Promise<void> {
+/** A file sent with an email: `content` is base64, as SendGrid expects. */
+export type EmailAttachment = { filename: string; type: string; content: string }
+
+/** Bigger files are left off (the email still links to the document); SendGrid allows 30 MB in all. */
+const MAX_ATTACHMENT_BYTES = 7 * 1024 * 1024
+
+/**
+ * Files that go with an email, built when it is sent (never stored with the notification, so a
+ * retry builds them again). If one can't be built the email still goes out without it — invoice
+ * emails link to the invoice anyway.
+ */
+async function emailAttachments(input: NotificationDeliveryInput): Promise<EmailAttachment[]> {
+  if (input.templateKey !== 'invoice.issued' || typeof input.payload.invoiceId !== 'string') return []
+  try {
+    const { getInvoice, getInvoicePdfDocument } = await import('./invoices')
+    // Only to the invoice's own customer: a notification can be sent to any address by hand
+    // (Notifications → Send), and that must not become a way to mail someone else's invoice out.
+    const invoice = await getInvoice(input.tenantId, input.payload.invoiceId)
+    const { getCustomer } = await import('./crm')
+    const customerEmail = (await getCustomer(input.tenantId, invoice.customerId)).email?.trim().toLowerCase()
+    if (!customerEmail || customerEmail !== input.recipient.trim().toLowerCase()) {
+      console.warn(`[notification] invoice ${invoice.invoiceNumber} not attached: recipient is not the invoice's customer`)
+      return []
+    }
+    const { pdf, invoiceNumber } = await getInvoicePdfDocument(input.tenantId, input.payload.invoiceId)
+    if (pdf.length > MAX_ATTACHMENT_BYTES) {
+      console.warn(`[notification] invoice ${invoiceNumber} PDF is ${pdf.length} bytes; sent without attachment`)
+      return []
+    }
+    const filename = `${invoiceNumber.replace(/[^\w.-]+/g, '_').slice(0, 64) || 'invoice'}.pdf`
+    return [{ filename, type: 'application/pdf', content: pdf.toString('base64') }]
+  } catch (err) {
+    console.error(`[notification] could not attach invoice PDF for ${String(input.payload.invoiceId)}:`, err)
+    return []
+  }
+}
+
+async function sendViaSendGrid(
+  recipient: string,
+  subject: string,
+  body: string,
+  attachments: EmailAttachment[] = [],
+): Promise<void> {
   const key = process.env.SENDGRID_API_KEY?.trim()
   if (!key) throw new Error('SENDGRID_API_KEY not configured')
   const from = process.env.SENDGRID_FROM_EMAIL?.trim() || 'noreply@pleros.local'
@@ -116,6 +158,9 @@ async function sendViaSendGrid(recipient: string, subject: string, body: string)
       from: { email: from, name: 'Pleros' },
       subject,
       content: [{ type: 'text/plain', value: body }],
+      ...(attachments.length > 0
+        ? { attachments: attachments.map((a) => ({ ...a, disposition: 'attachment' })) }
+        : {}),
     }),
   })
   if (!res.ok) {
@@ -150,6 +195,8 @@ async function sendViaWebhook(
   subject: string,
   body: string,
 ): Promise<NotificationDeliveryResult> {
+  // The relay sends the email, so it gets the same attachments SendGrid would.
+  const attachments = input.channel === 'EMAIL' ? await emailAttachments(input) : []
   const webhook = process.env.NOTIFICATION_WEBHOOK_URL?.trim()
   if (!webhook) throw new Error('NOTIFICATION_WEBHOOK_URL not configured')
   const res = await fetch(webhook, {
@@ -163,6 +210,7 @@ async function sendViaWebhook(
       subject,
       body,
       payload: input.payload,
+      ...(attachments.length > 0 ? { attachments } : {}),
       sentAt: new Date().toISOString(),
     }),
   })
@@ -180,8 +228,11 @@ export async function deliverNotification(
   const { subject, body } = renderNotification(input)
 
   if (input.channel === 'EMAIL' && process.env.SENDGRID_API_KEY?.trim()) {
-    await sendViaSendGrid(input.recipient, subject, body)
-    console.log(`[notification] sendgrid → ${input.recipient} | ${input.templateKey}`)
+    const attachments = await emailAttachments(input)
+    await sendViaSendGrid(input.recipient, subject, body, attachments)
+    console.log(
+      `[notification] sendgrid → ${input.recipient} | ${input.templateKey}${attachments.length ? ` | ${attachments.map((a) => a.filename).join(', ')}` : ''}`,
+    )
     return { provider: 'sendgrid', subject, body }
   }
 
@@ -207,5 +258,8 @@ export async function deliverNotification(
   console.log(line)
   console.log(`  subject: ${subject}`)
   console.log(`  body: ${body}`)
+  for (const a of input.channel === 'EMAIL' ? await emailAttachments(input) : []) {
+    console.log(`  attachment: ${a.filename} (${Math.round((a.content.length * 3) / 4 / 1024)} KB)`)
+  }
   return { provider: 'console', subject, body }
 }
