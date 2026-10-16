@@ -54,28 +54,11 @@ function InvoicePayPanel({
   balance: number
   onPaid: () => void
 }) {
-  const [mode, setMode] = useState<'CARD' | 'MANUAL'>('CARD')
   const [payAmount, setPayAmount] = useState(balance.toFixed(2))
-  const [payMethod, setPayMethod] = useState<'ACH' | 'CHECK' | 'CASH'>('ACH')
   const [cardPaymentMethodId, setCardPaymentMethodId] = useState<string | null>(null)
   const [payBusy, setPayBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { stripePromise, chargesEnabled, loading: stripeLoading } = useStripeConnect(api.get.bind(api), 'invoice-stripe')
-
-  async function payManual() {
-    const amount = Number.parseFloat(payAmount)
-    if (!Number.isFinite(amount) || amount <= 0) return
-    setPayBusy(true)
-    setErr(null)
-    try {
-      await api.post(`/invoices/${encodeURIComponent(invoiceId)}/payments`, { amount, method: payMethod })
-      onPaid()
-    } catch (e: unknown) {
-      setErr(axiosErr(e))
-    } finally {
-      setPayBusy(false)
-    }
-  }
 
   async function payStripe() {
     if (!cardPaymentMethodId) {
@@ -123,14 +106,7 @@ function InvoicePayPanel({
   return (
     <div className="pleros-card" style={{ marginTop: 16, padding: 16 }}>
       <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Pay invoice</h2>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <button type="button" className={mode === 'CARD' ? 'btn-primary' : 'btn-ghost'} onClick={() => setMode('CARD')}>
-          Card (Stripe)
-        </button>
-        <button type="button" className={mode === 'MANUAL' ? 'btn-primary' : 'btn-ghost'} onClick={() => setMode('MANUAL')}>
-          Record payment
-        </button>
-      </div>
+      {/* Card only: payments made outside the app (check, bank transfer) are recorded by the seller's finance team. */}
       <input
         className="pleros-input"
         type="number"
@@ -140,18 +116,7 @@ function InvoicePayPanel({
         onChange={(e) => setPayAmount(e.target.value)}
         style={{ maxWidth: 140, marginBottom: 12 }}
       />
-      {mode === 'MANUAL' ? (
-        <>
-          <select className="pleros-input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)} style={{ maxWidth: 160, marginBottom: 12 }}>
-            <option value="ACH">ACH</option>
-            <option value="CHECK">Check</option>
-            <option value="CASH">Cash</option>
-          </select>
-          <button type="button" className="btn-primary" disabled={payBusy} onClick={() => void payManual()}>
-            {payBusy ? 'Processing…' : 'Record payment'}
-          </button>
-        </>
-      ) : stripePromise && chargesEnabled ? (
+      {stripePromise && chargesEnabled ? (
         <Elements stripe={stripePromise} options={{ appearance: { theme: 'stripe' } }}>
           <StorefrontCardCapture onPaymentMethodId={setCardPaymentMethodId} />
           <button type="button" className="btn-primary" style={{ marginTop: 12 }} disabled={payBusy || !cardPaymentMethodId} onClick={() => void payStripe()}>

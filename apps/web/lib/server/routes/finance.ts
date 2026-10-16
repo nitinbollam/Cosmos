@@ -65,13 +65,13 @@ export async function routeInvoices(method: string, seg: string[], req: Request)
     })
   }
   if (seg.length === 3 && seg[2] === 'payments' && method === 'POST') {
+    // A manual payment records money received outside the app (cash, check, bank transfer): it
+    // marks the invoice paid without charging anyone, so only finance staff may enter one.
+    // Buyers pay their invoices by card (/pay/stripe).
+    if (isPortalBuyer(session.role)) throw new ApiError(403, 'Only finance staff can record a payment received outside the app. Pay by card instead.')
+    assertPermission(session, 'finance.write')
     const body = (await req.json()) as { amount: number; method: string; reference?: string }
-    if (isPortalBuyer(session.role)) {
-      /* buyer-scoped via getInvoice in recordInvoicePayment */
-    } else {
-      assertPermission(session, 'finance.write')
-    }
-    return Response.json(await invoices.recordInvoicePayment(session.tenantId, seg[1], body, buyerOpts))
+    return Response.json(await invoices.recordInvoicePayment(session.tenantId, seg[1], body))
   }
   if (seg.length === 4 && seg[2] === 'pay' && seg[3] === 'stripe' && method === 'POST') {
     if (isPortalBuyer(session.role)) {
@@ -175,8 +175,13 @@ export async function routePayments(method: string, seg: string[], req: Request)
 
   if (seg.length === 2 && seg[1] === 'authorize' && method === 'POST') {
     const body = (await req.json()) as payments.AuthorizeInput
-    // Buyers can authorize payment only against their own orders.
+    // Buyers can authorize payment only against their own orders, and only by card or ACH, which
+    // Stripe actually processes. A cash or check "authorization" moves no money, yet it is captured
+    // (and the order marked paid) when the order is packed, so only staff may record one.
     if (isPortalBuyer(session.role)) {
+      if (body.paymentMethod !== 'CARD' && body.paymentMethod !== 'ACH') {
+        throw new ApiError(403, 'Only finance staff can record a payment received outside the app. Pay by card instead.')
+      }
       const buyerCustomerId = await requirePortalCustomerId(session)
       const order = await orders.findOrderById(session.tenantId, body.orderId, { buyerCustomerId })
       if (order.customerId !== buyerCustomerId) throw new ApiError(403, 'Forbidden')
