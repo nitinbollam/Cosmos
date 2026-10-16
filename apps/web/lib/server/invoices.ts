@@ -99,6 +99,20 @@ export async function issueInvoiceForOrder(
       dueAt,
     )
     .catch(() => undefined)
+  const { emitDomainEvent } = await import('./domain-events')
+  void emitDomainEvent(
+    tenantId,
+    'finance.invoice_generated',
+    {
+      invoiceId: finalInvoice.id,
+      invoiceNumber: finalInvoice.invoiceNumber,
+      orderId: order.id,
+      customerId: order.customerId,
+      totalAmount,
+      dueAt: dueAt?.toISOString() ?? null,
+    },
+    { key: finalInvoice.id },
+  )
 
   if (order.channel === 'EDI') {
     void import('./edi')

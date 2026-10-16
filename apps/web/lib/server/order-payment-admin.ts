@@ -121,7 +121,7 @@ export async function settleCollectedCardPayment(
   amount: number,
 ) {
   await linkPaymentIntent(tenantId, orderId, paymentIntentId)
-  await applyCapturedPayment(tenantId, orderId, amount)
+  await applyCapturedPayment(tenantId, orderId, amount, { paymentIntentId })
   await syncInvoiceFromOrder(tenantId, orderId).catch(() => undefined)
   const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
   if (invoice) {

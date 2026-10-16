@@ -58,7 +58,7 @@ export async function routeFulfillment(method: string, seg: string[], req: Reque
     }
     if (seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
       const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
-      await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch((err) =>
+      await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId, seg[2]).catch((err) =>
         console.error(`[orders] pack side-effects failed for order ${result.orderId}:`, err),
       )
       return Response.json(result)
@@ -109,7 +109,7 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
     }
     if (seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
       const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
-      await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId).catch((err) =>
+      await orderOrchestration.onFulfillmentPacked(session.tenantId, result.orderId, seg[2]).catch((err) =>
         console.error(`[orders] pack side-effects failed for order ${result.orderId}:`, err),
       )
       return Response.json(result)

@@ -16,7 +16,17 @@ export async function linkPaymentIntent(tenantId: string, orderId: string, payme
   })
 }
 
-export async function applyCapturedPayment(tenantId: string, orderId: string, amount: number) {
+/**
+ * Count captured money as paid on the order (capped at its total) and emit the
+ * `finance.payment_captured` webhook. `source` identifies the payment: a payment intent (also the
+ * event's dedupe key) or a tender such as a gift card.
+ */
+export async function applyCapturedPayment(
+  tenantId: string,
+  orderId: string,
+  amount: number,
+  source: { paymentIntentId?: string; method?: string } = {},
+) {
   const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
   if (!order) return
   const total = new Prisma.Decimal(order.totalAmount)
@@ -26,4 +36,12 @@ export async function applyCapturedPayment(tenantId: string, orderId: string, am
     where: { id: orderId },
     data: { amountPaid: nextPaid },
   })
+  const { emitOrderEvent } = await import('./domain-events')
+  void emitOrderEvent(
+    tenantId,
+    'finance.payment_captured',
+    orderId,
+    { amount, paymentIntentId: source.paymentIntentId ?? null, method: source.method ?? null },
+    source.paymentIntentId ? { key: source.paymentIntentId } : {},
+  )
 }

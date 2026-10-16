@@ -690,6 +690,15 @@ export async function adjustStock(
       result.quantityAvailable,
       result.reorderPoint,
     ).catch(() => undefined)
+    // No dedupe key: a SKU can drop below its reorder point again after a restock.
+    const { emitDomainEvent } = await import('./domain-events')
+    void emitDomainEvent(tenantId, 'inventory.stock_level_low', {
+      skuId: dto.skuId,
+      skuCode: sku?.code ?? null,
+      warehouseId: dto.warehouseId,
+      quantityAvailable: result.quantityAvailable,
+      reorderPoint: result.reorderPoint,
+    })
   }
 
   queueSalesChannelPush(tenantId, dto.skuId)

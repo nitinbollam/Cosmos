@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { complianceDb, inventoryDb, orderDb, wmsDb, crmDb } from './db'
 import { ApiError } from './session'
-import { triggerWebhook } from './webhooks'
+import { emitDomainEvent } from './domain-events'
 
 export type InitiateRecallInput = {
   skuId: string
@@ -238,17 +238,22 @@ export async function initiateBatchRecall(
     })
   }
 
-  // Trigger compliance.batch_recalled webhook
-  void triggerWebhook(tenantId, 'compliance.batch_recalled', {
-    recallId: recall.id,
-    recallCode: recall.recallCode,
-    skuId: recall.skuId,
-    skuCode: sku.code,
-    batchNumber: recall.batchNumber,
-    reason: recall.reason,
-    severity: recall.severity,
-    recalledAt: recall.recalledAt.toISOString(),
-  }).catch(() => undefined)
+  // Webhook compliance.batch_recalled, once per recall.
+  void emitDomainEvent(
+    tenantId,
+    'compliance.batch_recalled',
+    {
+      recallId: recall.id,
+      recallCode: recall.recallCode,
+      skuId: recall.skuId,
+      skuCode: sku.code,
+      batchNumber: recall.batchNumber,
+      reason: recall.reason,
+      severity: recall.severity,
+      recalledAt: recall.recalledAt.toISOString(),
+    },
+    { key: recall.id },
+  )
 
   return getBatchRecallImpactReport(tenantId, recall.id)
 }

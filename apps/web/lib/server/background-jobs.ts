@@ -4,6 +4,8 @@
 
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000
 const SALES_CHANNEL_FLUSH_MS = 90 * 1000
+/** Webhook retries come due from a minute after a failure, so check often. */
+const WEBHOOK_RETRY_MS = 30 * 1000
 
 let started = false
 
@@ -60,10 +62,25 @@ export function startBackgroundJobs(): void {
     }
   }
 
+  const retryWebhooks = async () => {
+    try {
+      const { processDueWebhookDeliveries } = await import('./domain-events')
+      const res = await processDueWebhookDeliveries()
+      if (res.attempted > 0 || res.pruned > 0) {
+        console.log(`[jobs] webhooks: attempted ${res.attempted}, pruned ${res.pruned}`)
+      }
+    } catch (err) {
+      console.error('[jobs] webhook retry failed:', err)
+    }
+  }
+
   void sweep()
   void flushSalesChannels()
+  void retryWebhooks()
   const timer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS)
   timer.unref?.()
   const salesChannelTimer = setInterval(() => void flushSalesChannels(), SALES_CHANNEL_FLUSH_MS)
   salesChannelTimer.unref?.()
+  const webhookTimer = setInterval(() => void retryWebhooks(), WEBHOOK_RETRY_MS)
+  webhookTimer.unref?.()
 }
