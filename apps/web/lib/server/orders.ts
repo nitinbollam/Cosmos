@@ -16,6 +16,7 @@ import * as notifyTriggers from './notification-triggers'
 import { assertAgeComplianceForOrder, type PosAgeAttestation } from './compliance-age'
 import { defersFulfillmentUntilPayment } from './order-payment-sync'
 import { buildPaymentSummary, findPrimaryPaymentIntent } from './order-payment-admin'
+import { emitDomainEvent, emitOrderEvent } from './domain-events'
 
 async function enrichOrderWithPaymentDetails<
   T extends { id: string; paymentIntentId: string | null; totalAmount: unknown; amountPaid: unknown },
@@ -191,7 +192,7 @@ export async function createOrder(
     giftCardRedeemed = redeemRes.amountApplied
     if (giftCardRedeemed > 0) {
       const { applyCapturedPayment } = await import('./order-payment-sync')
-      await applyCapturedPayment(tenantId, order.id, giftCardRedeemed)
+      await applyCapturedPayment(tenantId, order.id, giftCardRedeemed, { method: 'GIFT_CARD' })
     }
   }
 
@@ -234,6 +235,7 @@ export async function createOrder(
       )
     }
     void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
+    void emitOrderEvent(tenantId, 'order.created', order.id, {}, { key: order.id })
   }
   return order
 }
@@ -396,6 +398,13 @@ export async function recordOrderPayment(
   if (order.paymentMethod === 'NET_TERMS') {
     await releaseCreditUsed(tenantId, order.customerId, Number(apply)).catch(() => undefined)
   }
+  // Manual payments (cash, check, ACH entered by staff) don't go through card capture.
+  void emitOrderEvent(tenantId, 'finance.payment_captured', id, {
+    amount: Number(apply),
+    paymentIntentId: null,
+    method: body.method,
+    reference: body.reference ?? null,
+  })
 
   await syncInvoiceFromOrder(tenantId, id).catch(() => undefined)
 
@@ -438,6 +447,7 @@ export async function resumeOrderAfterCreditApproval(tenantId: string, orderId: 
       order.customerId,
       Number(order.totalAmount),
     ).catch(() => undefined)
+    void emitOrderEvent(tenantId, 'order.created', orderId, {}, { key: orderId })
   }
   return orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { lineItems: true } })
 }

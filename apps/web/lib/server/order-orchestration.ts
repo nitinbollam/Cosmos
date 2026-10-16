@@ -8,13 +8,13 @@ import {
   releaseCreditUsed,
 } from './credit-limit'
 import * as inv from './inventory'
-import { applyCapturedPayment, linkPaymentIntent } from './order-payment-sync'
 import * as payments from './payments'
 import { canTransitionOrderStatus, fulfillmentTaskStatusToOrderStatus, type OrderStatus } from './order-status'
 import { ApiError } from './session'
 import * as wmsFulfillment from './wms-fulfillment'
 import * as backorders from './backorders'
 import * as dropShip from './drop-ship'
+import { emitDomainEvent, emitOrderEvent } from './domain-events'
 
 function parseCompletedSteps(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []
@@ -246,17 +246,26 @@ export async function tryCaptureAuthorizedPayment(tenantId: string, orderId: str
   const intent = await paymentDb.paymentIntent.findFirst({ where: { id: intentId, tenantId } })
   if (!intent || intent.status !== 'AUTHORIZED') return { captured: false as const }
 
+  // capture() already counts the payment on the order (and links it); applying it again here
+  // double-counted partial payments.
   await payments.capture(tenantId, intentId, correlationId)
-  await applyCapturedPayment(tenantId, orderId, Number(intent.amount))
-  await linkPaymentIntent(tenantId, orderId, intentId)
   return { captured: true as const, paymentIntentId: intentId }
 }
 
-export async function onFulfillmentPacked(tenantId: string, orderId: string) {
+/** The warehouse packed a fulfillment task: the order is fulfilled (webhook `order.fulfilled`). */
+export async function onFulfillmentPacked(tenantId: string, orderId: string, fulfillmentTaskId?: string) {
   await transitionOrderStatus(tenantId, orderId, 'PACKED')
   const correlationId = randomUUID()
   await tryCaptureAuthorizedPayment(tenantId, orderId, correlationId).catch((err) =>
     console.error(`[payments] capture at pack failed for order ${orderId}:`, err),
+  )
+  // Per task: a backordered remainder is packed (and fulfilled) again later.
+  void emitOrderEvent(
+    tenantId,
+    'order.fulfilled',
+    orderId,
+    { status: 'PACKED', fulfillmentTaskId: fulfillmentTaskId ?? null },
+    { key: fulfillmentTaskId ?? orderId },
   )
 }
 
@@ -293,7 +302,13 @@ export async function dispatchFulfillmentTask(tenantId: string, taskId: string) 
 
   const updated = await wmsFulfillment.markFulfillmentDispatched(tenantId, taskId)
 
-  await onFulfillmentDispatched(tenantId, task.orderId, shipped)
+  await onFulfillmentDispatched(tenantId, task.orderId, shipped, taskId)
+  void emitDomainEvent(
+    tenantId,
+    'wms.shipment_dispatched',
+    { fulfillmentTaskId: taskId, orderId: task.orderId, shipped },
+    { key: taskId },
+  )
 
   return { taskId: updated.taskId, orderId: task.orderId, status: updated.status, shipped }
 }
@@ -349,6 +364,8 @@ export async function onFulfillmentDispatched(
   tenantId: string,
   orderId: string,
   shipped?: Array<{ skuId: string; quantity: number }>,
+  /** The fulfillment task that shipped; an order with backorders ships more than once. */
+  fulfillmentTaskId?: string,
 ) {
   await transitionOrderStatus(tenantId, orderId, 'SHIPPED')
   const order = await orderDb.order.findFirst({
@@ -378,10 +395,18 @@ export async function onFulfillmentDispatched(
   void notifyOrderShipped(tenantId, orderId, order.customerId).catch(() => undefined)
   const { auditLog } = await import('./audit-log')
   void auditLog(tenantId, { action: 'order.shipped', entityType: 'Order', entityId: orderId }).catch(() => undefined)
+  void emitOrderEvent(
+    tenantId,
+    'order.shipped',
+    orderId,
+    { status: 'SHIPPED', fulfillmentTaskId: fulfillmentTaskId ?? null, shipped: billedLines },
+    { key: fulfillmentTaskId ?? orderId },
+  )
 }
 
 export async function onDeliveryStopDelivered(tenantId: string, orderId: string) {
   await transitionOrderStatus(tenantId, orderId, 'DELIVERED')
+  void emitOrderEvent(tenantId, 'order.delivered', orderId, { status: 'DELIVERED' }, { key: orderId })
   const { earnPointsForDeliveredOrder } = await import('./loyalty')
   void earnPointsForDeliveredOrder(tenantId, orderId).catch((err) =>
     console.error(`[loyalty] earn points failed for order ${orderId}:`, err),

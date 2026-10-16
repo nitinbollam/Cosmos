@@ -21,6 +21,55 @@ const COMMON_EVENTS = [
   { value: 'compliance.batch_recalled', label: 'Batch Recalled' },
 ]
 
+type WebhookDelivery = {
+  id: string
+  event: string
+  status: 'PENDING' | 'DELIVERED' | 'FAILED'
+  attempts: number
+  lastStatusCode: number | null
+  lastError: string | null
+  nextAttemptAt: string | null
+  createdAt: string
+}
+
+/** What the last sends of one webhook were, and why any failed. */
+function DeliveryLog({ subscriptionId }: { subscriptionId: string }) {
+  const q = useQuery<WebhookDelivery[]>({
+    queryKey: ['webhooks', subscriptionId, 'deliveries'],
+    queryFn: () => api.get<WebhookDelivery[]>(`/webhooks/${subscriptionId}/deliveries?limit=10`),
+    refetchInterval: 15_000,
+  })
+  if (q.isLoading) return <p className="text-xs mt-2" style={{ color: 'var(--c-text-3)' }}>Loading deliveries…</p>
+  if (q.isError) return <p className="text-xs mt-2" style={{ color: 'var(--c-danger)' }}>Could not load deliveries.</p>
+  const rows = q.data ?? []
+  if (rows.length === 0) {
+    return <p className="text-xs mt-2" style={{ color: 'var(--c-text-3)' }}>No events sent yet.</p>
+  }
+  return (
+    <ul className="mt-2 space-y-1">
+      {rows.map((d) => {
+        const color =
+          d.status === 'DELIVERED' ? 'var(--c-success)' : d.status === 'FAILED' ? 'var(--c-danger)' : 'var(--c-warning, #d97706)'
+        const label = d.status === 'DELIVERED' ? 'Delivered' : d.status === 'FAILED' ? 'Gave up' : 'Retrying'
+        return (
+          <li key={d.id} className="text-xs font-mono flex flex-wrap gap-x-3" style={{ color: 'var(--c-text-2)' }}>
+            <span style={{ color: 'var(--c-text-3)' }}>{new Date(d.createdAt).toLocaleString()}</span>
+            <span>{d.event}</span>
+            <span style={{ color }}>
+              {label}
+              {d.lastStatusCode ? ` · HTTP ${d.lastStatusCode}` : ''} · {d.attempts} attempt{d.attempts === 1 ? '' : 's'}
+            </span>
+            {d.status !== 'DELIVERED' && d.lastError ? <span style={{ color: 'var(--c-text-3)' }}>{d.lastError}</span> : null}
+            {d.status === 'PENDING' && d.nextAttemptAt ? (
+              <span style={{ color: 'var(--c-text-3)' }}>next try {new Date(d.nextAttemptAt).toLocaleTimeString()}</span>
+            ) : null}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 type WebhookSub = {
   id: string
   event: string
@@ -35,6 +84,7 @@ export function WebhookManager() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ event: '*', url: '', description: '' })
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; status?: number; error?: string }>>({})
+  const [openLog, setOpenLog] = useState<string | null>(null)
 
   const listQ = useQuery<WebhookSub[]>({
     queryKey: ['webhooks'],
@@ -89,6 +139,11 @@ export function WebhookManager() {
           In Workato, use your signing secret to verify each incoming request. Contact your administrator for the
           signing secret value.
         </p>
+        <p className="text-xs mt-2" style={{ color: 'var(--c-text-2)' }}>
+          Events are sent as they happen. If your endpoint doesn&apos;t answer with a 2xx, Pleros retries with backoff
+          for about a day, resending the same body; skip repeats by the body&apos;s{' '}
+          <code className="font-mono" style={{ color: 'var(--c-accent)' }}>id</code>.
+        </p>
       </div>
 
       <div className="pleros-card">
@@ -128,11 +183,22 @@ export function WebhookManager() {
                     >
                       {testResult[sub.id].success
                         ? `✓ Delivered (HTTP ${testResult[sub.id].status})`
-                        : `✗ Failed: ${testResult[sub.id].error ?? 'unknown error'}`}
+                        : `✗ Failed: ${
+                            testResult[sub.id].error ??
+                            (testResult[sub.id].status ? `HTTP ${testResult[sub.id].status}` : 'unknown error')
+                          }`}
                     </p>
                   )}
+                  {openLog === sub.id ? <DeliveryLog subscriptionId={sub.id} /> : null}
                 </div>
                 <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    className="btn-ghost !py-1 !px-3 !text-xs"
+                    onClick={() => setOpenLog((cur) => (cur === sub.id ? null : sub.id))}
+                  >
+                    {openLog === sub.id ? 'Hide deliveries' : 'Deliveries'}
+                  </button>
                   <button
                     type="button"
                     className="btn-ghost !py-1 !px-3 !text-xs"

@@ -263,6 +263,24 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
     },
   })
 
+  const { emitDomainEvent } = await import('./domain-events')
+  void emitDomainEvent(
+    tenantId,
+    'wms.receiving_completed',
+    {
+      receivingSessionId: sessionId,
+      status: nextStatus,
+      hasDiscrepancy,
+      warehouseId: session.warehouseId,
+      purchaseOrderId: session.poId ?? null,
+      items: session.items.map((it) => ({
+        skuId: it.skuId,
+        receivedQty: it.receivedQty,
+        damagedQty: it.damagedQty ?? 0,
+      })),
+    },
+    { key: sessionId },
+  )
   return { sessionId, status: nextStatus, hasDiscrepancy }
 }
 
