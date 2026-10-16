@@ -10,10 +10,21 @@ import { persistMarketplacePhoto, readMarketplaceUpload } from '../marketplace-u
 import { MARKETPLACE_ALLOWED_CATEGORIES } from '../marketplace-constants'
 import { getOrCreateMarketplaceProfile, toPublicProfile } from '../marketplace-profiles'
 import { assertFeature } from '../feature-flags'
-import { ApiError, requirePermission } from './common'
+import { ADMIN_ROLES, ApiError, requirePermission, type SessionUser } from './common'
 
 async function requireMarketplaceEnabled(tenantId: string) {
   await assertFeature(tenantId, 'marketplace')
+}
+
+/**
+ * Listing and inventory management (creating or removing listings, which reserve and release
+ * stock, and their photos) is for administrators only. Marketplace users who are not admins
+ * (managers, sales reps) can still browse and buy.
+ */
+function requireListingAdmin(session: SessionUser) {
+  if (!(ADMIN_ROLES as readonly string[]).includes(session.role)) {
+    throw new ApiError(403, 'Only administrators can manage marketplace listings and inventory')
+  }
 }
 
 export async function routeMarketplace(method: string, seg: string[], req: Request): Promise<Response> {
@@ -29,6 +40,7 @@ export async function routeMarketplace(method: string, seg: string[], req: Reque
   const url = new URL(req.url)
 
   if (seg[1] === 'uploads' && seg.length === 2 && method === 'POST') {
+    requireListingAdmin(session)
     await requireMarketplaceEnabled(session.tenantId)
     const body = (await req.json()) as { fileName: string; contentBase64: string; mimeType?: string }
     const urlPath = await persistMarketplacePhoto(session.tenantId, body)
@@ -98,11 +110,13 @@ export async function routeMarketplace(method: string, seg: string[], req: Reque
       const search = url.searchParams.get('search') ?? undefined
       const mine = url.searchParams.get('mine') === 'true'
       if (mine) {
+        requireListingAdmin(session)
         return Response.json(await listings.listSellerListings(session.tenantId))
       }
       return Response.json(await listings.listLiveListings({ category, search }))
     }
     if (seg.length === 2 && method === 'POST') {
+      requireListingAdmin(session)
       await requireMarketplaceEnabled(session.tenantId)
       const body = (await req.json()) as Parameters<typeof listings.createListing>[2]
       return Response.json(await listings.createListing(session.tenantId, session.userId, body), {
@@ -114,6 +128,7 @@ export async function routeMarketplace(method: string, seg: string[], req: Reque
       return Response.json(await listings.getPublicListing(seg[2]))
     }
     if (seg.length === 3 && method === 'DELETE') {
+      requireListingAdmin(session)
       await requireMarketplaceEnabled(session.tenantId)
       return Response.json(await listings.removeListing(session.tenantId, seg[2]))
     }

@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/pleros/status-badge'
 import { MarketplacePaySheet } from '@/components/marketplace-pay-sheet'
 import { axiosErr } from '@/lib/axios-error'
 import { MarketplaceNav } from '../marketplace-nav'
+import { useMarketplaceAccess } from '../use-marketplace-access'
 
 type Order = {
   id: string
@@ -23,6 +24,8 @@ type Order = {
 
 export default function MarketplaceOrdersPage() {
   const qc = useQueryClient()
+  // The storefront is for buying; sales (the seller side) live in the admin portal only.
+  const { isAdminPortal } = useMarketplaceAccess()
   const [activeTab, setActiveTab] = useState<'buyer' | 'seller'>('buyer')
   const [payOrderId, setPayOrderId] = useState<string | null>(null)
   const [rateOrderId, setRateOrderId] = useState<string | null>(null)
@@ -39,6 +42,7 @@ export default function MarketplaceOrdersPage() {
   const sellerQ = useQuery({
     queryKey: ['marketplace', 'orders', 'seller'],
     queryFn: () => api.get<Order[]>('/marketplace/orders?role=seller'),
+    enabled: isAdminPortal,
   })
 
   const rateMut = useMutation({
@@ -106,24 +110,26 @@ export default function MarketplaceOrdersPage() {
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('seller')}
-          className="px-4 py-2 rounded-xl text-sm font-semibold transition-all inline-flex items-center gap-2"
-          style={{
-            background: activeTab === 'seller' ? 'var(--c-primary-dim)' : 'var(--c-surface)',
-            color: activeTab === 'seller' ? 'var(--c-primary)' : 'var(--c-text-2)',
-            border: activeTab === 'seller' ? '1px solid var(--c-primary)' : '1px solid var(--c-border-card)',
-          }}
-        >
-          <span>🏷️ Sales (Seller)</span>
-          <span
-            className="text-xs px-2 py-0.5 rounded-full"
-            style={{ background: 'var(--c-surface-2)', color: 'var(--c-text)' }}
+        {isAdminPortal ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab('seller')}
+            className="px-4 py-2 rounded-xl text-sm font-semibold transition-all inline-flex items-center gap-2"
+            style={{
+              background: activeTab === 'seller' ? 'var(--c-primary-dim)' : 'var(--c-surface)',
+              color: activeTab === 'seller' ? 'var(--c-primary)' : 'var(--c-text-2)',
+              border: activeTab === 'seller' ? '1px solid var(--c-primary)' : '1px solid var(--c-border-card)',
+            }}
           >
-            {sellerQ.data?.length ?? 0}
-          </span>
-        </button>
+            <span>🏷️ Sales (Seller)</span>
+            <span
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{ background: 'var(--c-surface-2)', color: 'var(--c-text)' }}
+            >
+              {sellerQ.data?.length ?? 0}
+            </span>
+          </button>
+        ) : null}
       </div>
 
       {/* Modal / Dialog Overlays for Payments, Messaging, and Reviews */}
