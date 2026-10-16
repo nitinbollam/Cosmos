@@ -31,6 +31,8 @@ export async function routePush(method: string, seg: string[], req: Request): Pr
       tag: 'push.test',
     })
     if (result.devices === 0) throw new ApiError(400, 'No push devices registered for your account')
+    // This button is how a deploy is checked, so "nothing arrived" must not look like success.
+    if (result.sent === 0) throw new ApiError(502, 'The test notification was not delivered to any device. Check the server logs.')
     return Response.json(result)
   }
   throw new ApiError(404, 'Push route not found')

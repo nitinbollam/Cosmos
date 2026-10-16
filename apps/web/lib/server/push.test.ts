@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { createECDH, randomBytes, randomUUID } from 'node:crypto'
 import { after, afterEach, before, test } from 'node:test'
+import bcrypt from 'bcrypt'
 import webpush from 'web-push'
+import { handleApiRequest } from '../../server/api-router'
+import { loginUser } from './auth'
 import { portalUsersForCustomer, resolvePortalCustomerId } from './buyer-context'
 import { authDb, crmDb, notificationDb, tenantDb } from './db'
 import { notifyOrderShipped } from './notification-triggers'
@@ -47,6 +50,7 @@ async function user(tenant: string, email: string, role: string, isActive = true
   })
 }
 
+const signedIn: string[] = []
 let customerA = ''
 let customerB = ''
 
@@ -69,6 +73,7 @@ afterEach(() => usePushTransport(null))
 
 after(async () => {
   for (const key of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']) delete process.env[key]
+  await authDb.authSession.deleteMany({ where: { userId: { in: signedIn } } })
   await notificationDb.pushDevice.deleteMany({ where: { tenantId: { in: tenants } } })
   await notificationDb.notificationRequest.deleteMany({ where: { tenantId: { in: tenants } } })
   await crmDb.customer.deleteMany({ where: { tenantId: { in: tenants } } })
@@ -212,4 +217,28 @@ test('order shipped: no push when order updates are off, and no record for users
   } finally {
     await tenantDb.tenantOrganization.update({ where: { id: tenantId }, data: { settings: {} } })
   }
+})
+
+test('"Send a test" fails loudly when nothing was delivered', async () => {
+  const email = `test-btn-${randomUUID().slice(0, 6)}@example.test`
+  const u = await authDb.user.create({
+    data: {
+      tenantId, email, passwordHash: await bcrypt.hash('push-test-pass-1', 4), firstName: 'T', lastName: 'B',
+      role: 'STAFF', permissions: [], emailVerifiedAt: new Date(),
+    },
+  })
+  signedIn.push(u.id)
+  const token = (await loginUser(email, 'push-test-pass-1')).accessToken
+  await registerPushDevice(tenantId, u.id, { kind: 'webpush', endpoint: endpoint(), keys: browserKeys() })
+  const pressTest = () =>
+    handleApiRequest(new Request('http://localhost/api/v1/push/test', { method: 'POST', headers: { authorization: `Bearer ${token}` } }))
+
+  // The push service rejects (e.g. VAPID keys don't match): the button must not say "sent".
+  usePushTransport({ webPush: async () => 403, expo: async () => [] })
+  assert.equal((await pressTest()).status, 502)
+
+  usePushTransport(fakeTransport(201).transport)
+  const ok = await pressTest()
+  assert.equal(ok.status, 200)
+  assert.equal(((await ok.json()) as { sent: number }).sent, 1)
 })

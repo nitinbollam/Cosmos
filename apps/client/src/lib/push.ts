@@ -2,13 +2,19 @@
  * Browser push opt-in for the signed-in buyer. The subscription belongs to this browser (one per
  * site), so it is dropped whenever that buyer's data leaves the device (see wipeUserData).
  */
-import { api } from '@/lib/api'
+/** Loaded on use, so the sign-out helpers below work (and test) without the API client. */
+async function api() {
+  return (await import('@/lib/api')).api
+}
 
 export type PushStatus =
   /** This browser can't receive push. */
   | 'unsupported'
-  /** iPhone/iPad: push only works once the site is added to the Home Screen (iOS 16.4+). */
-  | 'needs-install'
+  /**
+   * iPhone/iPad in a browser tab. iOS only delivers web push to sites installed on the Home
+   * Screen, and the store has no installable manifest yet (the current one is the staff app's).
+   */
+  | 'ios-unavailable'
   /** The server has no push keys set up yet. */
   | 'not-configured'
   /** The user blocked notifications for this site in the browser. */
@@ -42,7 +48,7 @@ async function registration(): Promise<ServiceWorkerRegistration | null> {
 }
 
 async function publicKey(): Promise<string | null> {
-  const config = await api.get<{ webPushPublicKey: string | null }>('/push/config')
+  const config = await (await api()).get<{ webPushPublicKey: string | null }>('/push/config')
   return config.webPushPublicKey
 }
 
@@ -69,11 +75,11 @@ async function subscribe(reg: ServiceWorkerRegistration, key: string): Promise<P
 
 async function register(subscription: PushSubscription) {
   const { endpoint, keys } = subscription.toJSON()
-  await api.post('/push/devices', { kind: 'webpush', endpoint, keys })
+  await (await api()).post('/push/devices', { kind: 'webpush', endpoint, keys })
 }
 
 export async function getPushStatus(): Promise<PushStatus> {
-  if (!isSupported()) return isIosBrowserTab() ? 'needs-install' : 'unsupported'
+  if (!isSupported()) return isIosBrowserTab() ? 'ios-unavailable' : 'unsupported'
   if (!(await publicKey())) return 'not-configured'
   if (Notification.permission === 'denied') return 'denied'
   const reg = await registration()
@@ -83,7 +89,7 @@ export async function getPushStatus(): Promise<PushStatus> {
 
 /** Ask for permission and turn push on for this browser. Call only from a click. */
 export async function enablePush(): Promise<PushStatus> {
-  if (!isSupported()) return isIosBrowserTab() ? 'needs-install' : 'unsupported'
+  if (!isSupported()) return isIosBrowserTab() ? 'ios-unavailable' : 'unsupported'
   const key = await publicKey()
   if (!key) return 'not-configured'
   const permission = await Notification.requestPermission()
@@ -101,7 +107,7 @@ export async function disablePush(): Promise<void> {
   if (!subscription) return
   const endpoint = subscription.endpoint
   await subscription.unsubscribe()
-  await api.post('/push/devices/remove', { token: endpoint }).catch(() => undefined)
+  await (await api()).post('/push/devices/remove', { token: endpoint }).catch(() => undefined)
 }
 
 /**
@@ -119,7 +125,7 @@ export async function syncPushSubscription(): Promise<void> {
 }
 
 export async function sendTestPush(): Promise<void> {
-  await api.post('/push/test')
+  await (await api()).post('/push/test')
 }
 
 /**
@@ -135,4 +141,28 @@ export async function dropPushSubscription(): Promise<void> {
   } catch {
     /* nothing to drop */
   }
+}
+
+/**
+ * Sign-out: forget this browser's push subscription before the page goes away. The browser
+ * unsubscribes first (that alone stops delivery: the push service answers 410 from then on), then
+ * the server copy is removed with the still-valid token (raw fetch: the API client's 401 handling
+ * must not redirect mid sign-out). Bounded, so a slow network can't hold sign-out.
+ */
+export async function forgetPushOnSignOut(gatewayBaseUrl: string, accessToken: string | null): Promise<void> {
+  if (!isSupported()) return
+  const forget = async () => {
+    const subscription = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription()
+    if (!subscription) return
+    const endpoint = subscription.endpoint
+    await subscription.unsubscribe()
+    if (accessToken) {
+      await fetch(`${gatewayBaseUrl}/push/devices/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ token: endpoint }),
+      }).catch(() => undefined)
+    }
+  }
+  await Promise.race([forget().catch(() => undefined), new Promise((r) => setTimeout(r, 2000))])
 }

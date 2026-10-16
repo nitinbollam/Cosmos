@@ -11,8 +11,7 @@ import {
 
 const NOTE: Record<PushStatus, string> = {
   unsupported: "This browser can't show push notifications.",
-  'needs-install':
-    'On iPhone and iPad, add this site to your Home Screen (Share → Add to Home Screen), open it from there, then turn notifications on. Needs iOS 16.4 or later.',
+  'ios-unavailable': "Push notifications aren't available on iPhone and iPad yet. You'll still get emails.",
   'not-configured': 'Push notifications are not set up for this store yet.',
   denied: 'Notifications are blocked for this site. Allow them in your browser settings, then try again.',
   off: 'Get alerts like "your order shipped" on this device, even when the site is closed.',

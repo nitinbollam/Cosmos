@@ -65,9 +65,16 @@ async function pushToCustomer(
 }
 
 export async function notifyOrderShipped(tenantId: string, orderId: string, customerId: string) {
-  await pushToCustomer(tenantId, customerId, 'order.shipped', { orderId }, `order-shipped:${orderId}`).catch(
-    (err) => console.error(`[notification] order.shipped push failed for order ${orderId}:`, err),
-  )
+  // Side by side, so a slow push service never delays the email.
+  await Promise.all([
+    pushToCustomer(tenantId, customerId, 'order.shipped', { orderId }, `order-shipped:${orderId}`).catch((err) =>
+      console.error(`[notification] order.shipped push failed for order ${orderId}:`, err),
+    ),
+    emailOrderShipped(tenantId, orderId, customerId),
+  ])
+}
+
+async function emailOrderShipped(tenantId: string, orderId: string, customerId: string) {
   const contact = await customerContact(tenantId, customerId)
   if (!contact.email) return
   if (!(await shouldSendCustomerNotification(tenantId, customerId, 'order.shipped', NotificationChannel.EMAIL))) {
