@@ -101,6 +101,32 @@ function renderNotification(input: NotificationDeliveryInput): { subject: string
   }
 }
 
+/**
+ * Push copy: short, and safe on a lock screen (an order reference, never amounts). `url` is a
+ * same-origin path the notification opens.
+ */
+const PUSH_COPY: Record<
+  string,
+  (payload: Record<string, unknown>) => { title: string; body: string; url?: string; tag?: string }
+> = {
+  'order.shipped': (p) => {
+    const orderId = String(p.orderId ?? '')
+    return {
+      title: 'Your order has shipped',
+      body: `Order #${shortOrderRef(orderId)} is on its way.`,
+      url: `/orders/${encodeURIComponent(orderId)}`,
+      // One notification per order: a second shipment doesn't replace the first on screen.
+      tag: `order.shipped:${orderId}`,
+    }
+  },
+}
+
+function renderPush(input: NotificationDeliveryInput, subject: string) {
+  const fn = PUSH_COPY[input.templateKey]
+  if (fn) return { tag: input.templateKey, ...fn(input.payload) }
+  return { title: subject, body: '', tag: input.templateKey }
+}
+
 /** A file sent with an email: `content` is base64, as SendGrid expects. */
 export type EmailAttachment = { filename: string; type: string; content: string }
 
