@@ -7,6 +7,7 @@ import { getB2bCustomerId } from '@/lib/session'
 import { useCartStore } from '@/stores/cart.store'
 import { useStripeConnect } from '@/lib/stripe-connect'
 import { StorefrontCardCapture } from '@/components/checkout-card-capture'
+import { PushDeviceToggle } from '@/components/push-device-toggle'
 
 type CustomerProfile = {
   id: string
@@ -463,7 +464,7 @@ export default function AccountPage() {
           <div className="pleros-card" style={{ padding: 16 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 12px', color: 'var(--c-heading)' }}>Notification preferences</h2>
             <p className="pleros-shop-muted" style={{ fontSize: 13, marginBottom: 12 }}>
-              Control email and SMS alerts for orders and invoices. SMS requires a phone number on your profile.
+              Control email, SMS and push alerts for orders and invoices. SMS requires a phone number on your profile.
             </p>
             <div style={{ display: 'grid', gap: 10 }}>
               {(
@@ -484,6 +485,7 @@ export default function AccountPage() {
                 </label>
               ))}
             </div>
+            <PushDeviceToggle />
             {prefsSaved ? <p style={{ color: 'var(--c-success)', marginTop: 12, fontSize: 13 }}>Preferences saved.</p> : null}
             <button
               type="button"

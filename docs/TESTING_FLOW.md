@@ -151,7 +151,9 @@ The following table lists every variable present in `.env.example` (root). Purpo
 | `TWILIO_ACCOUNT_SID` | Twilio credential for SMS notifications. | No |
 | `TWILIO_AUTH_TOKEN` | Twilio credential. | No |
 | `TWILIO_FROM_NUMBER` | Twilio sending number. | No |
-| `EXPO_PUSH_ACCESS_TOKEN` | Access token for Expo push notifications (mobile PWA). | No |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push key pair (`npx web-push generate-vapid-keys`). Without them, browser push stays off ("not set up"). Changing them invalidates existing browser subscriptions. | No |
+| `VAPID_SUBJECT` | Web Push contact, a `mailto:` address or https URL. | With the VAPID keys |
+| `EXPO_PUSH_ACCESS_TOKEN` | Expo push access token, only needed if the Expo project enforces push security (a mobile app registering Expo tokens). | No |
 | `CELESTIAL_PROVIDER` | Selects the Celestial AI backend: `openrouter \| groq \| gemini \| ollama \| mock` (defaults to mock if no key is set). | No |
 | `CELESTIAL_MODEL` | Model name for the selected Celestial provider. | No |
 | `OPENROUTER_API_KEY` | Credential for the `openrouter` Celestial provider. | No |
@@ -229,7 +231,7 @@ Confirmed by grepping `apps/web/lib/server` for each vendor's name/SDK:
 | **SendGrid** | `apps/web/lib/server/notification-provider.ts`, `notification-provider-status.ts`, `auth.ts` | No locally — without `SENDGRID_API_KEY`, emails log to the console and signup/resend can return `verifyUrl` directly for QA. Effectively required before go-live. |
 | **Twilio** | `apps/web/lib/server/notification-provider.ts`, `notification-provider-status.ts` | No — SMS notifications are optional and only activate when Twilio credentials are set. |
 
-No references to an AWS SDK, S3 client, or Expo push SDK were found under `apps/web/lib/server` at the time of writing, despite `AWS_*` and `EXPO_PUSH_ACCESS_TOKEN` appearing in `.env.example` — treat those as reserved/future rather than active integrations to test against.
+No references to an AWS SDK or S3 client were found under `apps/web/lib/server` at the time of writing, despite `AWS_*` appearing in `.env.example` — treat those as reserved/future. Push (`push.ts`) sends Web Push through the `web-push` library and Expo through Expo's HTTP push API (no SDK).
 
 ---
 

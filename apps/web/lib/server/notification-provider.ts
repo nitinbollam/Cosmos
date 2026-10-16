@@ -9,7 +9,7 @@ export type NotificationDeliveryInput = {
 }
 
 export type NotificationDeliveryResult = {
-  provider: 'console' | 'webhook' | 'sendgrid' | 'twilio'
+  provider: 'console' | 'webhook' | 'sendgrid' | 'twilio' | 'push'
   subject: string
   body: string
 }
@@ -101,6 +101,32 @@ function renderNotification(input: NotificationDeliveryInput): { subject: string
   }
 }
 
+/**
+ * Push copy: short, and safe on a lock screen (an order reference, never amounts). `url` is a
+ * same-origin path the notification opens.
+ */
+const PUSH_COPY: Record<
+  string,
+  (payload: Record<string, unknown>) => { title: string; body: string; url?: string; tag?: string }
+> = {
+  'order.shipped': (p) => {
+    const orderId = String(p.orderId ?? '')
+    return {
+      title: 'Your order has shipped',
+      body: `Order #${shortOrderRef(orderId)} is on its way.`,
+      url: `/orders/${encodeURIComponent(orderId)}`,
+      // One notification per order: a second shipment doesn't replace the first on screen.
+      tag: `order.shipped:${orderId}`,
+    }
+  },
+}
+
+function renderPush(input: NotificationDeliveryInput, subject: string) {
+  const fn = PUSH_COPY[input.templateKey]
+  if (fn) return { tag: input.templateKey, ...fn(input.payload) }
+  return { title: subject, body: '', tag: input.templateKey }
+}
+
 async function sendViaSendGrid(recipient: string, subject: string, body: string): Promise<void> {
   const key = process.env.SENDGRID_API_KEY?.trim()
   if (!key) throw new Error('SENDGRID_API_KEY not configured')
@@ -178,6 +204,17 @@ export async function deliverNotification(
   input: NotificationDeliveryInput,
 ): Promise<NotificationDeliveryResult> {
   const { subject, body } = renderNotification(input)
+
+  // PUSH: the recipient is a user id, delivered to that user's registered devices.
+  if (input.channel === 'PUSH') {
+    const { sendPushToUser } = await import('./push')
+    const result = await sendPushToUser(input.tenantId, input.recipient, renderPush(input, subject))
+    if (result.sent === 0) {
+      throw new Error(result.devices === 0 ? 'No push devices registered' : 'Push was not delivered to any device')
+    }
+    console.log(`[notification] push → user ${input.recipient} (${result.sent} device(s)) | ${input.templateKey}`)
+    return { provider: 'push', subject, body }
+  }
 
   if (input.channel === 'EMAIL' && process.env.SENDGRID_API_KEY?.trim()) {
     await sendViaSendGrid(input.recipient, subject, body)

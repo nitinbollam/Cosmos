@@ -21,6 +21,7 @@ import {
 import { routeMsa, routeCompliance } from './routes/compliance'
 import { routeMarketplace } from './routes/marketplace'
 import { routePlerosOps } from './routes/pleros-ops'
+import { routePush } from './routes/push'
 import {
   routeNotifications,
   routeReports,
@@ -80,6 +81,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'tax') return await routeTax(m, seg, req)
     if (seg[0] === 'compliance') return await routeCompliance(m, seg, req)
     if (seg[0] === 'notifications') return await routeNotifications(m, seg, req)
+    if (seg[0] === 'push') return await routePush(m, seg, req)
     if (seg[0] === 'journal-entries') return await routeJournalEntries(m, seg, req)
     if (seg[0] === 'chart-accounts') return await routeChartAccounts(m, seg, req)
     if (seg[0] === 'financial-statements') return await routeFinancialStatements(m, seg, req)

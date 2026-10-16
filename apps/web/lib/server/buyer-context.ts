@@ -17,6 +17,32 @@ export async function resolvePortalCustomerId(tenantId: string, email: string): 
   return customer?.id ?? null
 }
 
+/**
+ * The portal users who sign in as this customer: active buyer accounts in the tenant whose email
+ * the portal resolves to this very customer (the same lookup as requirePortalCustomerId). Staff
+ * who share the email, or buyers whose email resolves to another customer, are left out.
+ */
+export async function portalUsersForCustomer(tenantId: string, customerId: string) {
+  let email: string | null | undefined
+  try {
+    email = (await crm.getCustomer(tenantId, customerId)).email?.trim()
+  } catch {
+    return []
+  }
+  if (!email) return []
+  const { authDb } = await import('./db')
+  const users = await authDb.user.findMany({
+    where: { tenantId, email: email.toLowerCase(), isActive: true },
+    select: { id: true, email: true, role: true },
+  })
+  const matches = []
+  for (const user of users) {
+    if (!isPortalBuyer(user.role)) continue
+    if ((await resolvePortalCustomerId(tenantId, user.email)) === customerId) matches.push(user)
+  }
+  return matches
+}
+
 export async function requirePortalCustomerId(session: SessionUser): Promise<string> {
   const customerId = await resolvePortalCustomerId(session.tenantId, session.email)
   if (!customerId) {

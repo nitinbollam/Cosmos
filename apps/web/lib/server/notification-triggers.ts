@@ -37,7 +37,37 @@ export async function notifyOrderCreated(
     .catch(() => undefined)
 }
 
+/**
+ * Push the alert to every portal user of the customer who has a device that can receive it.
+ * Users without one get no record at all, so a tenant without push set up logs no failures.
+ * One notification per user and event (`idempotencyKey`), however often the event fires.
+ */
+async function pushToCustomer(
+  tenantId: string,
+  customerId: string,
+  templateKey: string,
+  payload: Record<string, unknown>,
+  idempotencyKey: string,
+) {
+  if (!(await shouldSendCustomerNotification(tenantId, customerId, templateKey, NotificationChannel.PUSH))) return
+  const { portalUsersForCustomer } = await import('./buyer-context')
+  const { hasPushDevice } = await import('./push')
+  for (const user of await portalUsersForCustomer(tenantId, customerId)) {
+    if (!(await hasPushDevice(tenantId, user.id))) continue
+    await notifications
+      .send(
+        tenantId,
+        { channel: NotificationChannel.PUSH, recipient: user.id, templateKey, payload },
+        `${idempotencyKey}:push:${user.id}`,
+      )
+      .catch(() => undefined)
+  }
+}
+
 export async function notifyOrderShipped(tenantId: string, orderId: string, customerId: string) {
+  await pushToCustomer(tenantId, customerId, 'order.shipped', { orderId }, `order-shipped:${orderId}`).catch(
+    (err) => console.error(`[notification] order.shipped push failed for order ${orderId}:`, err),
+  )
   const contact = await customerContact(tenantId, customerId)
   if (!contact.email) return
   if (!(await shouldSendCustomerNotification(tenantId, customerId, 'order.shipped', NotificationChannel.EMAIL))) {

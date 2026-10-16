@@ -12,6 +12,12 @@ export type NotificationProviderStatus = {
   webhook: {
     configured: boolean
   }
+  push: {
+    /** Browser push needs VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT. */
+    webPushConfigured: boolean
+    /** Expo needs no setup; EXPO_PUSH_ACCESS_TOKEN only if the Expo project enforces it. */
+    expoAccessToken: boolean
+  }
   activeFallback: 'console' | 'webhook'
   setupNote: string
 }
@@ -38,8 +44,14 @@ export function getNotificationProviderStatus(): NotificationProviderStatus {
       fromNumberMasked: from ? `***${from.slice(-4)}` : null,
     },
     webhook: { configured: webhook },
+    push: {
+      webPushConfigured: Boolean(
+        process.env.VAPID_PUBLIC_KEY?.trim() && process.env.VAPID_PRIVATE_KEY?.trim() && process.env.VAPID_SUBJECT?.trim(),
+      ),
+      expoAccessToken: Boolean(process.env.EXPO_PUSH_ACCESS_TOKEN?.trim()),
+    },
     activeFallback: webhook ? 'webhook' : 'console',
     setupNote:
-      'Configure SENDGRID_API_KEY (+ SENDGRID_FROM_EMAIL) and APP_URL for production email. Without SendGrid, messages log to the server console. verifyUrl is only returned in non-production for QA.',
+      'Configure SENDGRID_API_KEY (+ SENDGRID_FROM_EMAIL) and APP_URL for production email; without a provider, production does not send email (development prints it to the console). For browser push, set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (npx web-push generate-vapid-keys) and VAPID_SUBJECT (mailto: address). verifyUrl is only returned in non-production for QA.',
   }
 }
