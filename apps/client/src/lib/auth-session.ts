@@ -278,6 +278,17 @@ export async function signOut(options?: { redirectTo?: string; surface?: Surface
     }
   }
 
+  if (surface === 'shop') {
+    // Push alerts are for this buyer only: drop the subscription before leaving, while the token
+    // still works. Bounded (including loading the code) so sign-out never hangs on it.
+    await Promise.race([
+      import('@/lib/push')
+        .then((push) => push.forgetPushOnSignOut(gatewayBaseUrl, getAccessToken(surface)))
+        .catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, 2500)),
+    ])
+  }
+
   if (getAccessToken(surface) || getRefreshToken(surface)) await revokeServerSession(surface)
 
   clearTokens(surface)

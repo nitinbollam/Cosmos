@@ -36,3 +36,23 @@ model NotificationRequest {
   @@index([tenantId])
   @@unique([tenantId, idempotencyKey])
 }
+
+/// A device that opted in to push alerts: a browser (Web Push) or a mobile app (Expo).
+/// Registering is the opt-in; signing out or a 404/410 from the push service removes it.
+model PushDevice {
+  id         String    @id @default(cuid())
+  tenantId   String
+  userId     String
+  /// "webpush" or "expo"
+  kind       String
+  /// Web Push: the subscription endpoint URL. Expo: the ExponentPushToken[...] string.
+  token      String    @unique
+  /// Web Push only: the browser's encryption keys.
+  p256dh     String?
+  auth       String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastSentAt DateTime?
+
+  @@index([tenantId, userId])
+}

@@ -248,7 +248,7 @@ export function IntegrationsTab() {
 
       <div className="pleros-card">
         <h3 className="text-pleros-white font-semibold font-display mb-3">Notification delivery</h3>
-        <p className="text-pleros-text-3 text-sm mb-4">Email, SMS, and webhook delivery status for your tenant.</p>
+        <p className="text-pleros-text-3 text-sm mb-4">Email, SMS, push, and webhook delivery status for your tenant.</p>
         {notifProvidersQ.isLoading ? (
           <div className="skeleton h-20 w-full" />
         ) : notifProvidersQ.isError ? (
@@ -281,6 +281,18 @@ export function IntegrationsTab() {
               </p>
               <p className="text-xs text-pleros-text-3 mt-1">
                 From: {notifProvidersQ.data?.sms.fromNumberMasked ?? '—'}
+              </p>
+            </div>
+            <div className="rounded-xl p-4 border" style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}>
+              <p className="text-sm text-pleros-white font-medium">Push</p>
+              <p className="text-xs text-pleros-text-3 mt-2">
+                Browser push:{' '}
+                <strong className={notifProvidersQ.data?.push?.webPushConfigured ? 'text-emerald-400' : 'text-amber-400'}>
+                  {notifProvidersQ.data?.push?.webPushConfigured ? 'configured' : 'not configured'}
+                </strong>
+              </p>
+              <p className="text-xs text-pleros-text-3 mt-1">
+                Mobile app (Expo): ready{notifProvidersQ.data?.push?.expoAccessToken ? ' · access token set' : ''}
               </p>
             </div>
           </div>
