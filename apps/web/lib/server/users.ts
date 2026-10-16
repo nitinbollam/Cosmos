@@ -1,5 +1,6 @@
 import { authDb } from './db'
-import { ApiError, invalidateUserSessionCache } from './session'
+import { ApiError, invalidateUserSessionCache, type SessionUser } from './session'
+import { hasPermission } from './permissions'
 import { revokeAllUserSessions } from './auth'
 
 export async function listUsers(tenantId: string, page = 1, pageSize = 20) {
@@ -54,10 +55,11 @@ function assertNotSuperAdmin(user: { role: string }) {
   }
 }
 
-export async function deactivateUser(tenantId: string, id: string) {
+export async function deactivateUser(tenantId: string, id: string, actorRole: string) {
   const user = await authDb.user.findFirst({ where: { id, tenantId } })
   if (!user) throw new ApiError(404, 'User not found')
   assertNotSuperAdmin(user)
+  assertCanManageUser(user.role, actorRole)
   const updated = await authDb.user.update({
     where: { id },
     data: { isActive: false },
@@ -91,7 +93,29 @@ export function assertGrantableRole(role: string, grantorRole: string) {
     throw new ApiError(400, `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`)
   }
   if (role === 'TENANT_ADMIN' && !TENANT_ADMIN_GRANTORS.includes(grantorRole)) {
-    throw new ApiError(403, 'Only an admin can grant the admin role')
+    throw new ApiError(403, 'Only an administrator can grant the Tenant Admin role')
+  }
+}
+
+/**
+ * Only administrators act on administrators: otherwise a manager with user rights could take an
+ * admin's account (reset its password, change its role or permissions) or lock the admin out.
+ */
+export function assertCanManageUser(targetRole: string, actorRole: string) {
+  if (targetRole === 'TENANT_ADMIN' && !TENANT_ADMIN_GRANTORS.includes(actorRole)) {
+    throw new ApiError(403, "Only an administrator can change an administrator's account")
+  }
+}
+
+/**
+ * Custom permissions are full access in all but name when they include `*` or a module wildcard,
+ * so a non-admin may only hand out permissions they hold themselves.
+ */
+function assertGrantablePermissions(permissions: string[], actor: SessionUser) {
+  if (TENANT_ADMIN_GRANTORS.includes(actor.role)) return
+  const notHeld = permissions.filter((p) => !hasPermission(actor, p))
+  if (notHeld.length > 0) {
+    throw new ApiError(403, `You can only grant permissions you have yourself (not: ${notHeld.join(', ')})`)
   }
 }
 
@@ -99,21 +123,22 @@ export async function updateUser(
   tenantId: string,
   id: string,
   patch: { role?: string; isActive?: boolean; permissions?: string[] },
-  performedBy: string,
-  performedByRole = 'TENANT_ADMIN',
+  actor: SessionUser,
 ) {
   const user = await authDb.user.findFirst({ where: { id, tenantId } })
   if (!user) throw new ApiError(404, 'User not found')
   assertNotSuperAdmin(user)
+  assertCanManageUser(user.role, actor.role)
 
-  if (patch.role !== undefined) assertGrantableRole(patch.role, performedByRole)
-  if (id === performedBy && patch.role !== undefined && user.role === 'TENANT_ADMIN' && patch.role !== 'TENANT_ADMIN') {
+  if (patch.role !== undefined) assertGrantableRole(patch.role, actor.role)
+  if (id === actor.userId && patch.role !== undefined && user.role === 'TENANT_ADMIN' && patch.role !== 'TENANT_ADMIN') {
     throw new ApiError(400, 'You cannot demote your own admin account')
   }
   if (patch.permissions !== undefined) {
     if (!Array.isArray(patch.permissions) || !patch.permissions.every((p) => typeof p === 'string')) {
       throw new ApiError(400, 'Permissions must be an array of strings')
     }
+    assertGrantablePermissions(patch.permissions, actor)
   }
 
   const updated = await authDb.user.update({

@@ -9,6 +9,7 @@
 import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcrypt'
 import { auditLog } from './audit-log'
+import { assertCanManageUser } from './users'
 import { revokeAllUserSessions, sendPasswordResetLink } from './auth'
 import { assertPasswordPolicy } from './auth-security'
 import { authDb, tenantDb } from './db'
@@ -31,7 +32,8 @@ export const ALL_ROLES = ['SUPER_ADMIN', ...TENANT_ROLES] as const
 /** Tenant that owns platform super admins created by the bootstrap. */
 export const PLATFORM_TENANT_SLUG = 'pleros-ops'
 
-export type Actor = { kind: 'tenant-admin'; userId: string; tenantId: string } | { kind: 'cli'; label: string }
+/** A signed-in user acting from Settings → Users (`role` decides what they may touch), or the server CLI. */
+export type Actor = { kind: 'tenant-admin'; userId: string; tenantId: string; role: string } | { kind: 'cli'; label: string }
 
 export type ManagedUser = {
   id: string
@@ -82,6 +84,8 @@ function assertCanManage(target: UserRecord, actor: Actor, opts: { allowSelf?: b
   if (target.role === 'SUPER_ADMIN') {
     throw new ApiError(403, 'Super admin accounts can only be changed from the server CLI')
   }
+  // Resetting an admin's password hands its account (and full access) to whoever reset it.
+  assertCanManageUser(target.role, actor.role)
   if (!opts.allowSelf && target.id === actor.userId) {
     throw new ApiError(400, 'You cannot change your own account here')
   }

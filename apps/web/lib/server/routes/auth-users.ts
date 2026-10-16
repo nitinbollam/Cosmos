@@ -113,17 +113,22 @@ export async function routeUsers(method: string, seg: string[], req: Request): P
   }
   if (seg.length === 2 && method === 'PATCH') {
     const body = (await req.json()) as { role?: string; isActive?: boolean; permissions?: string[] }
-    return Response.json(await users.updateUser(session.tenantId, seg[1], body, session.userId, session.role))
+    return Response.json(await users.updateUser(session.tenantId, seg[1], body, session))
   }
   if (seg.length === 2 && method === 'DELETE') {
     if (seg[1] === session.userId) throw new ApiError(400, 'You cannot deactivate your own account')
-    return Response.json(await users.deactivateUser(session.tenantId, seg[1]))
+    return Response.json(await users.deactivateUser(session.tenantId, seg[1], session.role))
   }
   // Account recovery for a company's own users. Same rules as the CLI, scoped to this company:
   // no acting on other companies' users, on super admins, or on yourself.
   if (seg.length === 3 && method === 'POST') {
     const userAdmin = await import('../user-admin')
-    const actor: import('../user-admin').Actor = { kind: 'tenant-admin', userId: session.userId, tenantId: session.tenantId }
+    const actor: import('../user-admin').Actor = {
+      kind: 'tenant-admin',
+      userId: session.userId,
+      tenantId: session.tenantId,
+      role: session.role,
+    }
     switch (seg[2]) {
       case 'reset-password':
         return Response.json(await userAdmin.setPassword(seg[1], undefined, actor))
