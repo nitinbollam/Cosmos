@@ -36,6 +36,11 @@ export function UsersTab() {
   const [selectedPerms, setSelectedPerms] = useState<string[]>([])
   const [accountNotice, setAccountNotice] = useState<{ text: string; password?: string } | null>(null)
   const myUserId = getSessionUser()?.sub
+  // Only administrators can make someone a Tenant Admin or change an admin's account; the server
+  // refuses it for anyone else, so don't offer it.
+  const myRole = getSessionUser()?.role
+  const iAmAdmin = myRole === 'SUPER_ADMIN' || myRole === 'TENANT_ADMIN'
+  const grantableRoles = iAmAdmin ? [...INVITE_ROLES] : INVITE_ROLES.filter((r) => r !== 'TENANT_ADMIN')
 
   const usersQ = useQuery<UsersPage>({
     queryKey: ['users', 'settings'],
@@ -198,13 +203,11 @@ export function UsersTab() {
                         <select
                           className="pleros-input !py-1 !px-2 !text-xs w-auto"
                           value={u.role}
-                          disabled={roleMut.isPending}
+                          disabled={roleMut.isPending || (!iAmAdmin && u.role === 'TENANT_ADMIN')}
+                          title={!iAmAdmin && u.role === 'TENANT_ADMIN' ? 'Only an administrator can change an administrator' : undefined}
                           onChange={(e) => roleMut.mutate({ id: u.id, role: e.target.value })}
                         >
-                          {(INVITE_ROLES.includes(u.role as (typeof INVITE_ROLES)[number])
-                            ? INVITE_ROLES
-                            : [u.role, ...INVITE_ROLES]
-                          ).map((r) => (
+                          {((grantableRoles as string[]).includes(u.role) ? grantableRoles : [u.role, ...grantableRoles]).map((r) => (
                             <option key={r} value={r}>
                               {r}
                             </option>
@@ -238,6 +241,8 @@ export function UsersTab() {
                     <td className="text-right">
                       {isSuperAdmin ? (
                         <span className="text-xs text-pleros-text-3">Managed via CLI</span>
+                      ) : !iAmAdmin && u.role === 'TENANT_ADMIN' ? (
+                        <span className="text-xs text-pleros-text-3">Managed by administrators</span>
                       ) : !u.isActive ? (
                         <button
                           type="button"
@@ -419,7 +424,7 @@ export function UsersTab() {
         <input className="pleros-input mb-3 mt-1" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
         <label className="text-xs text-pleros-text-3">Role</label>
         <select className="pleros-input mt-1" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
-          {INVITE_ROLES.map((r) => (
+          {grantableRoles.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
