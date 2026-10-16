@@ -320,7 +320,7 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **6.1 Notifications** | SendGrid/Twilio when env set; templates for order created/shipped, invoice issued, payment received, low stock; triggers in orders, invoices, dispatch, inventory |
+| **6.1 Notifications** | SendGrid/Twilio when env set; templates for order created/shipped, invoice issued, payment received, low stock; triggers in orders, invoices, dispatch, inventory. Push alerts (Web Push via VAPID, Expo for a mobile app): buyers turn them on per device under Account → Notification preferences; "order shipped" is pushed to the customer's devices (`push.ts`, `routes/push.ts`, `public/sw.js`) |
 | **6.2 Buyer invoices** | `/invoices`, `/invoices/:id` storefront pages; nav link; pay invoice (`POST /invoices/:id/payments`); invoice chip on order detail |
 | **6.3 Contract pricing** | `CustomerPrice` CRM model; admin CRM customer tab; catalog resolves buyer contract prices; checkout validates prices server-side |
 | **6.4 Reorder** | Reorder button on order list + detail → batch add to cart |

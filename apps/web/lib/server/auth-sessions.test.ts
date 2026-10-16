@@ -129,7 +129,7 @@ test('password reset ends every session; password change keeps the current one',
 test('deactivated users can neither use nor refresh their sessions', async () => {
   const user = await makeUser()
   const pair = await loginUser(user.email, PASSWORD)
-  await deactivateUser(tenantId, user.id)
+  await deactivateUser(tenantId, user.id, 'TENANT_ADMIN')
   assert.equal(await getSession(bearer(pair.accessToken)), null)
   await assert.rejects(refreshUserTokens(pair.refreshToken), { status: 401 })
 })

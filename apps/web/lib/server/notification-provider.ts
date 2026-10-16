@@ -9,7 +9,7 @@ export type NotificationDeliveryInput = {
 }
 
 export type NotificationDeliveryResult = {
-  provider: 'console' | 'webhook' | 'sendgrid' | 'twilio'
+  provider: 'console' | 'webhook' | 'sendgrid' | 'twilio' | 'push'
   subject: string
   body: string
 }
@@ -226,6 +226,17 @@ export async function deliverNotification(
   input: NotificationDeliveryInput,
 ): Promise<NotificationDeliveryResult> {
   const { subject, body } = renderNotification(input)
+
+  // PUSH: the recipient is a user id, delivered to that user's registered devices.
+  if (input.channel === 'PUSH') {
+    const { sendPushToUser } = await import('./push')
+    const result = await sendPushToUser(input.tenantId, input.recipient, renderPush(input, subject))
+    if (result.sent === 0) {
+      throw new Error(result.devices === 0 ? 'No push devices registered' : 'Push was not delivered to any device')
+    }
+    console.log(`[notification] push → user ${input.recipient} (${result.sent} device(s)) | ${input.templateKey}`)
+    return { provider: 'push', subject, body }
+  }
 
   if (input.channel === 'EMAIL' && process.env.SENDGRID_API_KEY?.trim()) {
     const attachments = await emailAttachments(input)

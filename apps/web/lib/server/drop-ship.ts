@@ -80,9 +80,10 @@ export async function markDropShipLinesShipped(
   const shipmentNo =
     (await orderDb.orderShipment.count({ where: { tenantId, orderId } })) + 1
 
+  const shipmentId = randomUUID()
   await orderDb.orderShipment.create({
     data: {
-      id: randomUUID(),
+      id: shipmentId,
       tenantId,
       orderId,
       shipmentNo,
@@ -100,6 +101,22 @@ export async function markDropShipLinesShipped(
   })
 
   await transitionOrderStatus(tenantId, orderId, 'SHIPPED')
+  // Drop-shipped by the supplier, so it doesn't pass through warehouse dispatch: one event per shipment.
+  const { emitOrderEvent } = await import('./domain-events')
+  void emitOrderEvent(
+    tenantId,
+    'order.shipped',
+    orderId,
+    {
+      status: 'SHIPPED',
+      shipmentId,
+      dropShip: true,
+      carrier: dto.carrier ?? 'DROP_SHIP',
+      trackingNumber: dto.trackingNumber ?? null,
+      shipped: dropLines.map((l) => ({ skuId: l.skuId, quantity: l.quantity })),
+    },
+    { key: shipmentId },
+  )
 
   // Bill exactly the drop-shipped lines (stock lines invoice at their own dispatch).
   const { invoiceShipmentForOrder } = await import('./invoices')

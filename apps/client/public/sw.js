@@ -136,6 +136,54 @@ self.addEventListener('message', (event) => {
   }
 })
 
+/** Push alerts from the server: { title, body, url?, tag? } (apps/web/lib/server/push.ts). */
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = { body: event.data ? event.data.text() : '' }
+  }
+  const title = typeof data.title === 'string' && data.title ? data.title : 'Pleros'
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: typeof data.body === 'string' ? data.body : '',
+      icon: '/pleros-icon-192.png',
+      badge: '/favicon-32.png',
+      tag: typeof data.tag === 'string' ? data.tag : undefined,
+      data: { url: typeof data.url === 'string' ? data.url : '/' },
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  event.waitUntil(openFromNotification(event.notification.data && event.notification.data.url))
+})
+
+/** Open the notification's link, only ever on this site (anything else opens the home page). */
+async function openFromNotification(raw) {
+  let target = new URL('/', self.location.origin)
+  try {
+    const url = new URL(raw || '/', self.location.origin)
+    if (url.origin === self.location.origin) target = url
+  } catch {
+    /* keep the home page */
+  }
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+  for (const client of windows) {
+    if (new URL(client.url).origin !== self.location.origin) continue
+    try {
+      await client.focus()
+      if ('navigate' in client) await client.navigate(target.href)
+      return
+    } catch {
+      break // a tab this worker can't steer: open a new one instead
+    }
+  }
+  await self.clients.openWindow(target.href)
+}
+
 async function clearApiCaches() {
   const keys = await caches.keys()
   await Promise.all(keys.filter((k) => k.startsWith(`${CACHE_API_PREFIX}:`)).map((k) => caches.delete(k)))

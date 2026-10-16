@@ -89,6 +89,31 @@ export async function deleteWebhook(tenantId: string, id: string) {
   const existing = await tenantDb.webhookSubscription.findFirst({ where: { id, tenantId } })
   if (!existing) throw new ApiError(404, 'Webhook subscription not found')
   await tenantDb.webhookSubscription.delete({ where: { id } })
+  // Its queued retries must not be sent, and its log goes with it.
+  await tenantDb.webhookDelivery.deleteMany({ where: { tenantId, subscriptionId: id } })
+}
+
+/** The most recent deliveries of one webhook, newest first — what was sent and how it went. */
+export async function listWebhookDeliveries(tenantId: string, subscriptionId: string, limit = 25) {
+  const existing = await tenantDb.webhookSubscription.findFirst({ where: { id: subscriptionId, tenantId } })
+  if (!existing) throw new ApiError(404, 'Webhook subscription not found')
+  const rows = await tenantDb.webhookDelivery.findMany({
+    where: { tenantId, subscriptionId },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(Math.max(limit, 1), 100),
+  })
+  return rows.map((r) => ({
+    id: r.id,
+    event: r.event,
+    status: r.status,
+    attempts: r.attempts,
+    lastStatusCode: r.lastStatusCode,
+    lastError: r.lastError,
+    nextAttemptAt: r.status === 'PENDING' ? r.nextAttemptAt.toISOString() : null,
+    deliveredAt: r.deliveredAt?.toISOString() ?? null,
+    createdAt: r.createdAt.toISOString(),
+    body: r.body,
+  }))
 }
 
 export async function testWebhook(tenantId: string, id: string) {
@@ -120,41 +145,5 @@ export async function testWebhook(tenantId: string, id: string) {
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
-}
-
-export async function triggerWebhook(tenantId: string, event: string, payload: Record<string, unknown>) {
-  const subs = await tenantDb.webhookSubscription.findMany({
-    where: { tenantId, event, active: true },
-  })
-  if (subs.length === 0) return { dispatched: 0 }
-
-  const body = JSON.stringify({
-    id: randomUUID(),
-    event,
-    tenantId,
-    timestamp: new Date().toISOString(),
-    data: payload,
-  })
-
-  let count = 0
-  for (const sub of subs) {
-    try {
-      const url = await assertSafeWebhookUrl(sub.url)
-      await deliverWebhook(
-        url,
-        {
-          'Content-Type': 'application/json',
-          'X-Pleros-Event': event,
-          'X-Pleros-Signature': signWebhookPayload(webhookSigningSecret(tenantId), body),
-        },
-        body,
-        5000,
-      )
-      count++
-    } catch {
-      // Ignore background dispatch errors
-    }
-  }
-  return { dispatched: count }
 }
 

@@ -6,6 +6,7 @@ import { AdminLayout } from '@/layouts/AdminLayout'
 import { MobileLayout } from '@/layouts/MobileLayout'
 import { OpsLayout } from '@/layouts/OpsLayout'
 import { RequireMarketplaceShop } from '@/components/auth/require-marketplace-shop'
+import { ListingAdminGate } from '@/pages/marketplace/listing-admin-gate'
 
 function AdminCustomersRedirect() {
   return <Navigate to="/admin/crm" replace />
@@ -27,6 +28,11 @@ function page(importFn: () => Promise<{ default: ComponentType }>) {
 
 function marketplaceShopPage(importFn: () => Promise<{ default: ComponentType }>) {
   return <RequireMarketplaceShop>{page(importFn)}</RequireMarketplaceShop>
+}
+
+/** Listing and inventory management pages: administrators only. */
+function listingAdminPage(importFn: () => Promise<{ default: ComponentType }>) {
+  return <ListingAdminGate>{page(importFn)}</ListingAdminGate>
 }
 
 const router = createBrowserRouter([
@@ -68,6 +74,10 @@ const router = createBrowserRouter([
           {
             path: '/marketplace/orders',
             element: marketplaceShopPage(() => import('@/pages/marketplace/orders/page')),
+          },
+          {
+            path: '/marketplace/payment-methods',
+            element: marketplaceShopPage(() => import('@/pages/marketplace/payment-methods/page')),
           },
           {
             path: '/marketplace/:id',
@@ -137,7 +147,7 @@ const router = createBrowserRouter([
           { path: 'marketplace', element: page(() => import('@/pages/marketplace/page')) },
           {
             path: 'marketplace/create',
-            element: page(() => import('@/pages/marketplace/create/page')),
+            element: listingAdminPage(() => import('@/pages/marketplace/create/page')),
           },
           {
             path: 'marketplace/orders',
@@ -145,7 +155,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'marketplace/my-listings',
-            element: page(() => import('@/pages/marketplace/my-listings/page')),
+            element: listingAdminPage(() => import('@/pages/marketplace/my-listings/page')),
           },
           {
             path: 'marketplace/payment-methods',

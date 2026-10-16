@@ -136,7 +136,8 @@ export async function listPendingInvites(tenantId: string) {
 export async function createInvite(
   tenantId: string,
   input: { email: string; role?: string },
-  inviterRole = 'TENANT_ADMIN',
+  /** The inviter's role: required, so a caller can never skip the check by leaving it out. */
+  inviterRole: string,
 ) {
   const role = input.role ?? 'STAFF'
   const { assertGrantableRole } = await import('./users')

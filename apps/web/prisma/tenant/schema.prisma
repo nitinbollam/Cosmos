@@ -76,6 +76,32 @@ model WebhookSubscription {
   @@index([tenantId])
 }
 
+/// One webhook send for one subscription: the first attempt happens right away, failures retry
+/// with backoff. The body is stored once and resent unchanged, so receivers can dedupe on its id.
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  tenantId       String
+  subscriptionId String
+  event          String
+  /// The business occurrence (e.g. order.shipped:<taskId>); each is delivered once per subscription.
+  eventKey       String?
+  /// The exact JSON body that is signed and sent on every attempt.
+  body           String
+  /// PENDING (to send or retry), DELIVERED, or FAILED (gave up, or the subscription went away)
+  status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  nextAttemptAt  DateTime  @default(now())
+  lastStatusCode Int?
+  lastError      String?
+  deliveredAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([subscriptionId, eventKey])
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, subscriptionId, createdAt])
+}
+
 enum TenantPlan {
   STARTER
   GROWTH

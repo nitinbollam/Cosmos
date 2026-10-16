@@ -55,6 +55,10 @@ export function wipeUserData(surface: Surface = currentSurface()) {
     clearB2bCart()
     clearB2bSession()
     useCelestialStore.setState({ shop: blankAssistant() })
+    // Push alerts belong to the buyer who turned them on; the next person here must not get them.
+    void import('@/lib/push')
+      .then((push) => push.dropPushSubscription())
+      .catch(() => undefined)
   } else if (surface === 'admin') {
     useCelestialStore.setState({ admin: blankAssistant() })
   }

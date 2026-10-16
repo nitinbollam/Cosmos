@@ -211,9 +211,13 @@ export async function routeWebhooks(method: string, seg: string[], req: Request)
     return new Response(null, { status: 200 })
   }
 
-  // Outbound webhook writes can exfiltrate data — keep admin-only protections.
+  // Outbound webhook writes can exfiltrate data — keep admin-only protections. The delivery log
+  // holds the payloads that were sent, so it is admin-only too.
+  const isDeliveryLog = seg.length === 3 && seg[2] === 'deliveries'
   const session =
-    method === 'GET' ? await requirePermission(req, 'settings.read') : await requireRole(req, ADMIN_ROLES)
+    method === 'GET' && !isDeliveryLog
+      ? await requirePermission(req, 'settings.read')
+      : await requireRole(req, ADMIN_ROLES)
 
   if (seg.length === 1 && method === 'GET') {
     return Response.json(await webhooks.listWebhooks(session.tenantId))
@@ -228,6 +232,10 @@ export async function routeWebhooks(method: string, seg: string[], req: Request)
   }
   if (seg.length === 3 && seg[2] === 'test' && method === 'POST') {
     return Response.json(await webhooks.testWebhook(session.tenantId, seg[1]))
+  }
+  if (isDeliveryLog && method === 'GET') {
+    const limit = Number(new URL(req.url).searchParams.get('limit') ?? '25')
+    return Response.json(await webhooks.listWebhookDeliveries(session.tenantId, seg[1], limit))
   }
   throw new ApiError(404, 'Webhook route not found')
 }

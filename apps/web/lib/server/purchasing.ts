@@ -52,7 +52,7 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
   const lineNos = new Set(dto.lines.map((l) => l.lineNo))
   if (lineNos.size !== dto.lines.length) throw new ApiError(400, 'Duplicate line numbers')
 
-  return purchasingDb.purchaseOrder.create({
+  const po = await purchasingDb.purchaseOrder.create({
     data: {
       tenantId,
       supplierId: dto.supplierId,
@@ -75,6 +75,21 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
     },
     include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
   })
+  const { emitDomainEvent } = await import('./domain-events')
+  void emitDomainEvent(
+    tenantId,
+    'purchasing.po_created',
+    {
+      purchaseOrderId: po.id,
+      number: po.number,
+      supplierId: po.supplierId,
+      supplierName: po.supplier.name,
+      status: po.status,
+      lines: po.lines.map((l) => ({ lineNo: l.lineNo, skuCode: l.skuCode, qtyOrdered: l.qtyOrdered })),
+    },
+    { key: po.id },
+  )
+  return po
 }
 
 export function computePurchaseOrderTotal(po: {

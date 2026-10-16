@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useMarketplaceAccess } from './use-marketplace-access'
 
 export type MarketplaceTab = {
   id: string
@@ -18,12 +19,13 @@ export function MarketplaceNav({
   actions?: React.ReactNode
 }) {
   const location = useLocation()
-  const isAdmin = location.pathname.startsWith('/admin')
+  const { isAdminPortal: isAdmin, canManageListings } = useMarketplaceAccess()
   const basePath = isAdmin ? '/admin/marketplace' : '/marketplace'
 
   const tabs: MarketplaceTab[] = [
     { id: 'browse', label: 'Browse', icon: '🏪', to: basePath },
-    ...(isAdmin
+    // Listing and inventory management: administrators in the admin portal only.
+    ...(canManageListings
       ? [
           { id: 'create', label: 'List Inventory', icon: '➕', to: '/admin/marketplace/create', adminOnly: true },
           { id: 'my-listings', label: 'My Listings', icon: '📦', to: '/admin/marketplace/my-listings', adminOnly: true },

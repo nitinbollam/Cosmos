@@ -164,7 +164,16 @@ export async function syncPurchaseOrderFromSkuReceipts(
     qtyReceived,
   }))
   if (receipts.length === 0) return po
-  return validateAndApplyPoLineReceipts(tenantId, poId, receipts)
+  const updated = await validateAndApplyPoLineReceipts(tenantId, poId, receipts)
+  // Scanner receiving (WMS sessions) lands here rather than in receivePurchaseOrderGoods.
+  const { emitDomainEvent } = await import('./domain-events')
+  void emitDomainEvent(tenantId, 'purchasing.po_received', {
+    purchaseOrderId: poId,
+    status: updated.status,
+    warehouseId: null,
+    received: receipts,
+  })
+  return updated
 }
 
 export async function openPoLinesForReceiving(tenantId: string, poId: string) {
@@ -239,6 +248,19 @@ export async function receivePurchaseOrderGoods(
     )
   }
 
+  // One event per receipt (no dedupe key): partial receipts against one PO are normal.
+  const received = dto.lines
+    .filter((l) => l.qtyReceived > 0)
+    .map((l) => ({ lineId: l.lineId, qtyReceived: l.qtyReceived }))
+  if (received.length > 0) {
+    const { emitDomainEvent } = await import('./domain-events')
+    void emitDomainEvent(tenantId, 'purchasing.po_received', {
+      purchaseOrderId: poId,
+      status: updatedPo.status,
+      warehouseId: warehouseId ?? null,
+      received,
+    })
+  }
   return { purchaseOrder: updatedPo, inventoryErrors }
 }
 

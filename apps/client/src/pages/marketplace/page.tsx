@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { MarketplaceNav } from './marketplace-nav'
+import { useMarketplaceAccess } from './use-marketplace-access'
 
 type Listing = {
   id: string
@@ -30,9 +31,8 @@ function formatEndsAt(endsAt: string | null | undefined): string | null {
 }
 
 export default function MarketplaceBrowsePage() {
-  const location = useLocation()
-  const isAdmin = location.pathname.startsWith('/admin')
-  const basePath = isAdmin ? '/admin/marketplace' : '/marketplace'
+  const { isAdminPortal, canManageListings } = useMarketplaceAccess()
+  const basePath = isAdminPortal ? '/admin/marketplace' : '/marketplace'
 
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
@@ -68,7 +68,7 @@ export default function MarketplaceBrowsePage() {
         title="Marketplace"
         subtitle="Browse wholesale inventory, surplus lots, and live auctions from verified Pleros distributors."
         actions={
-          isAdmin ? (
+          canManageListings ? (
             <Link
               to="/admin/marketplace/create"
               className="btn-primary !text-sm !py-2 !px-4 inline-flex items-center gap-1.5"
@@ -180,9 +180,13 @@ export default function MarketplaceBrowsePage() {
         <EmptyState
           icon="🏪"
           title="No live inventory found"
-          description="Check back soon for new surplus releases or list your own inventory to start trading."
+          description={
+            canManageListings
+              ? 'Check back soon for new surplus releases or list your own inventory to start trading.'
+              : 'Check back soon for new surplus releases.'
+          }
           action={
-            isAdmin ? (
+            canManageListings ? (
               <Link to="/admin/marketplace/create" className="btn-primary !text-sm mt-4 inline-block">
                 List Inventory ↗
               </Link>

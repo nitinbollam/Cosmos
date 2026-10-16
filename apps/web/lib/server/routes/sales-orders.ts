@@ -114,12 +114,10 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
     )
   }
   if (seg.length === 3 && seg[2] === 'payments' && method === 'POST') {
+    // Same rule as invoice payments: recording money received outside the app is staff work.
+    if (isPortalBuyer(session.role)) throw new ApiError(403, 'Only finance staff can record a payment received outside the app. Pay by card instead.')
+    assertPermission(session, 'orders.write')
     const body = (await req.json()) as { amount: number; method: string; reference?: string }
-    if (isPortalBuyer(session.role)) {
-      await orders.findOrderById(session.tenantId, seg[1], buyerOpts)
-    } else {
-      assertPermission(session, 'orders.write')
-    }
     return Response.json(await orders.recordOrderPayment(session.tenantId, seg[1], body))
   }
   if (seg.length === 4 && seg[2] === 'drop-ship' && seg[3] === 'ship' && method === 'POST') {

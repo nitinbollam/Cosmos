@@ -69,6 +69,7 @@ export type NotificationProviderStatus = {
   email: { provider: string; configured: boolean; fromEmail: string }
   sms: { provider: string; configured: boolean; fromNumberMasked: string | null }
   webhook: { configured: boolean }
+  push?: { webPushConfigured: boolean; expoAccessToken: boolean }
   activeFallback: string
   setupNote: string
 }

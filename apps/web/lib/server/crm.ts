@@ -76,8 +76,8 @@ export function findCustomerByEmail(tenantId: string, email: string) {
   })
 }
 
-export function createCustomer(tenantId: string, dto: Record<string, unknown>) {
-  return crmDb.customer.create({
+export async function createCustomer(tenantId: string, dto: Record<string, unknown>) {
+  const customer = await crmDb.customer.create({
     data: {
       tenantId,
       name: String(dto.name ?? ''),
@@ -100,6 +100,31 @@ export function createCustomer(tenantId: string, dto: Record<string, unknown>) {
       primaryZip: dto.primaryZip != null ? String(dto.primaryZip) : undefined,
     },
   })
+  emitCustomerCreated(tenantId, customer)
+  return customer
+}
+
+/** Webhook `crm.customer_created` (created directly, by import, or by converting a lead). */
+function emitCustomerCreated(
+  tenantId: string,
+  customer: { id: string; name: string; email: string | null; externalRef: string | null; customerKind: string },
+) {
+  void import('./domain-events')
+    .then(({ emitDomainEvent }) =>
+      emitDomainEvent(
+        tenantId,
+        'crm.customer_created',
+        {
+          customerId: customer.id,
+          name: customer.name,
+          email: customer.email,
+          externalRef: customer.externalRef,
+          customerKind: customer.customerKind,
+        },
+        { key: customer.id },
+      ),
+    )
+    .catch(() => undefined)
 }
 
 export async function importCustomers(tenantId: string, rows: Record<string, unknown>[]) {
@@ -257,7 +282,7 @@ export async function convertLead(tenantId: string, id: string, customerName: st
   const lead = await getLead(tenantId, id)
   if (lead.status === 'WON' || lead.status === 'LOST') throw new ApiError(400, 'Cannot convert a closed lead')
   if (lead.customerId) throw new ApiError(400, 'Lead already linked to a customer')
-  return crmDb.$transaction(async (tx) => {
+  const converted = await crmDb.$transaction(async (tx) => {
     const customer = await tx.customer.create({
       data: {
         tenantId,
@@ -272,6 +297,16 @@ export async function convertLead(tenantId: string, id: string, customerName: st
       include: { customer: true },
     })
   })
+  // After the transaction commits: a rolled-back conversion must not reach anyone's systems.
+  if (converted.customer) emitCustomerCreated(tenantId, converted.customer)
+  const { emitDomainEvent } = await import('./domain-events')
+  void emitDomainEvent(
+    tenantId,
+    'crm.lead_converted',
+    { leadId: converted.id, customerId: converted.customerId, customerName: converted.customer?.name ?? customerName },
+    { key: converted.id },
+  )
+  return converted
 }
 
 export function listActivities(tenantId: string, customerId?: string, leadId?: string) {
