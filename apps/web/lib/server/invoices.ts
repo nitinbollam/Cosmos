@@ -8,6 +8,13 @@ import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
 import { resolveFxRateAtCreation } from './exchange-rates'
 import { toBaseAmount, normalizeCurrency } from './fx-util'
+import {
+  allocateShipmentTax,
+  inferLegacyInvoiced,
+  lineSubtotal,
+  priceShipment,
+  type BillableLine,
+} from './invoice-pricing'
 
 function orderSubtotal(lineItems: Array<{ quantity: number; unitPrice: Prisma.Decimal }>): number {
   return lineItems.reduce((s, li) => s + li.quantity * Number(li.unitPrice), 0)
@@ -131,60 +138,100 @@ export async function issueInvoiceForOrder(
 export async function invoiceShipmentForOrder(
   tenantId: string,
   orderId: string,
-  shippedLines: Array<{ skuId: string; quantity: number }>,
+  shippedLines: Array<{ skuId: string; quantity: number; lineId?: string }>,
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
-    include: { lineItems: true, invoice: true },
+    include: { lineItems: { orderBy: { id: 'asc' } }, invoice: true },
   })
   if (!order) throw new ApiError(404, 'Order not found')
 
-  const priceBySku = new Map<string, number>()
-  for (const li of order.lineItems) {
-    if (!priceBySku.has(li.skuId)) priceBySku.set(li.skuId, Number(li.unitPrice))
+  let lines: BillableLine[] = order.lineItems.map((li) => ({
+    id: li.id,
+    skuId: li.skuId,
+    quantity: li.quantity,
+    quantityInvoiced: li.quantityInvoiced,
+    unitPrice: li.unitPrice,
+  }))
+  // Orders invoiced before per-line tracking existed: infer what was already billed.
+  if (order.invoice && lines.every((l) => l.quantityInvoiced === 0)) {
+    lines = inferLegacyInvoiced(lines, order.invoice.subtotal)
   }
 
-  const subtotal = +shippedLines
-    .reduce((s, l) => s + l.quantity * (priceBySku.get(l.skuId) ?? 0), 0)
-    .toFixed(2)
-  if (subtotal <= 0) return order.invoice ?? null
+  const { allocations, subtotal } = priceShipment(lines, shippedLines)
+  if (subtotal.lte(0)) return order.invoice ?? null
 
-  const orderSub = orderSubtotal(order.lineItems)
-  const taxRate = orderSub > 0 ? Number(order.taxAmount ?? 0) / orderSub : 0
-  const taxAmount = +(subtotal * taxRate).toFixed(2)
-  const totalAmount = +(subtotal + taxAmount).toFixed(2)
+  const orderSub = lineSubtotal(lines)
+  const invoicedSoFar = order.invoice?.subtotal ?? new Prisma.Decimal(0)
+  if (invoicedSoFar.add(subtotal).gt(orderSub)) {
+    console.error(`[invoices] shipment would exceed order subtotal for order ${orderId}`)
+    throw new ApiError(409, 'Invoice would exceed the order total')
+  }
+
+  const open = new Map(lines.map((l) => [l.id, l.quantity - l.quantityInvoiced]))
+  for (const a of allocations) open.set(a.lineId, (open.get(a.lineId) ?? 0) - a.quantity)
+  const completesOrder = [...open.values()].every((q) => q <= 0)
+
+  const taxAmount = allocateShipmentTax({
+    orderSubtotal: orderSub,
+    orderTax: order.taxAmount ?? new Prisma.Decimal(0),
+    invoicedTaxSoFar: order.invoice?.taxAmount ?? new Prisma.Decimal(0),
+    shipmentSubtotal: subtotal,
+    completesOrder,
+  })
+  const totalAmount = subtotal.add(taxAmount)
+
+  const markInvoiced = (tx: Prisma.TransactionClient) =>
+    Promise.all(
+      allocations.map((a) =>
+        tx.orderLineItem.update({ where: { id: a.lineId }, data: { quantityInvoiced: { increment: a.quantity } } }),
+      ),
+    )
 
   if (!order.invoice) {
-    return issueInvoiceForOrder(tenantId, orderId, { subtotal, taxAmount, totalAmount })
+    // Amounts are exact 2dp decimals; numbers appear only at the issueInvoiceForOrder boundary.
+    const invoice = await issueInvoiceForOrder(tenantId, orderId, {
+      subtotal: subtotal.toNumber(),
+      taxAmount: taxAmount.toNumber(),
+      totalAmount: totalAmount.toNumber(),
+    })
+    await orderDb.$transaction(async (tx) => {
+      await markInvoiced(tx)
+    })
+    return invoice
   }
 
   // Follow-up shipment: extend the existing invoice and post the delta to AR.
-  const newSubtotal = +(Number(order.invoice.subtotal) + subtotal).toFixed(2)
-  const newTax = +(Number(order.invoice.taxAmount) + taxAmount).toFixed(2)
-  const newTotal = +(Number(order.invoice.totalAmount) + totalAmount).toFixed(2)
-  const paidApplied = Math.min(Number(order.amountPaid ?? 0), newTotal)
+  const newSubtotal = order.invoice.subtotal.add(subtotal)
+  const newTax = order.invoice.taxAmount.add(taxAmount)
+  const newTotal = order.invoice.totalAmount.add(totalAmount)
+  const paidApplied = Prisma.Decimal.min(order.amountPaid ?? new Prisma.Decimal(0), newTotal)
 
-  const updated = await orderDb.invoice.update({
-    where: { id: order.invoice.id },
-    data: {
-      subtotal: new Prisma.Decimal(newSubtotal),
-      taxAmount: new Prisma.Decimal(newTax),
-      totalAmount: new Prisma.Decimal(newTotal),
-      amountPaid: new Prisma.Decimal(paidApplied),
-      status: toStoredInvoiceStatus(
-        deriveInvoiceStatus({
-          orderStatus: order.status,
-          totalAmount: newTotal,
-          amountPaid: paidApplied,
-          amountCredited: Number(order.invoice.amountCredited),
-          paymentMethod: order.paymentMethod,
-          issuedAt: order.invoice.issuedAt,
-        }),
-      ) as never,
-    },
+  const updated = await orderDb.$transaction(async (tx) => {
+    const inv = await tx.invoice.update({
+      where: { id: order.invoice!.id },
+      data: {
+        subtotal: newSubtotal,
+        taxAmount: newTax,
+        totalAmount: newTotal,
+        amountPaid: paidApplied,
+        status: toStoredInvoiceStatus(
+          deriveInvoiceStatus({
+            orderStatus: order.status,
+            totalAmount: newTotal.toNumber(),
+            amountPaid: paidApplied.toNumber(),
+            amountCredited: Number(order.invoice!.amountCredited),
+            paymentMethod: order.paymentMethod,
+            issuedAt: order.invoice!.issuedAt,
+          }),
+        ) as never,
+      },
+    })
+    await markInvoiced(tx)
+    return inv
   })
 
-  await postInvoiceJournal(tenantId, updated.id, totalAmount).catch((err) => {
+  await postInvoiceJournal(tenantId, updated.id, totalAmount.toNumber()).catch((err) => {
     console.error(`[gl] shipment invoice journal failed for invoice ${updated.id}:`, err)
     return null
   })
