@@ -234,3 +234,43 @@ model OrderShipment {
   @@index([tenantId, orderId])
   @@index([tenantId, status])
 }
+
+enum PostingJobKind {
+  INVOICE_JOURNAL
+  INVOICE_EXTENSION_JOURNAL
+  COGS_JOURNAL
+  COGS_REVERSAL_JOURNAL
+  CREDIT_MEMO_JOURNAL
+}
+
+enum PostingJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  DEAD
+}
+
+/// Transactional outbox for general-ledger postings. Written in the same transaction as the
+/// business change; a worker posts to the ledger database asynchronously with retries.
+model PostingJob {
+  id             String           @id @default(cuid())
+  tenantId       String
+  kind           PostingJobKind
+  sourceType     String
+  sourceId       String
+  variant        String           @default("")
+  dedupeKey      String           @unique
+  payload        Json
+  status         PostingJobStatus @default(PENDING)
+  attempts       Int              @default(0)
+  nextAttemptAt  DateTime         @default(now())
+  leaseUntil     DateTime?
+  lastError      String?
+  journalEntryId String?
+  createdAt      DateTime         @default(now())
+  doneAt         DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, status])
+  @@index([tenantId, sourceType, sourceId])
+}

@@ -386,11 +386,18 @@ export async function onFulfillmentDispatched(
     .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
     .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${orderId}:`, err))
 
-  const { computeOrderCogs, postCogsJournal } = await import('./operations-gl')
+  // Queued, not posted inline: a ledger outage must not block or roll back shipping.
+  const { computeOrderCogs } = await import('./operations-gl')
+  const { enqueuePostingJob } = await import('./posting-outbox')
   const cogs = await computeOrderCogs(tenantId, billedLines)
-  await postCogsJournal(tenantId, orderId, cogs).catch((err) =>
-    console.error(`[gl] COGS journal failed for order ${orderId}:`, err),
-  )
+  await enqueuePostingJob(orderDb, {
+    tenantId,
+    kind: 'COGS_JOURNAL',
+    sourceType: 'Order',
+    sourceId: orderId,
+    variant: fulfillmentTaskId ?? `ship:${randomUUID()}`,
+    amount: cogs.toFixed(2),
+  })
   const { notifyOrderShipped } = await import('./notification-triggers')
   void notifyOrderShipped(tenantId, orderId, order.customerId).catch(() => undefined)
   const { auditLog } = await import('./audit-log')
