@@ -254,7 +254,7 @@ export async function ensureListingForSku(
   skuId: string,
 ): Promise<void> {
   await salesChannelsDb.salesChannelListing.upsert({
-    where: { connectionId_skuId: { connectionId, skuId } },
+    where: { connectionId_skuId: { connectionId, skuId }, tenantId },
     create: { tenantId, connectionId, skuId, syncStatus: SalesChannelSyncStatus.PENDING },
     update: { syncStatus: SalesChannelSyncStatus.PENDING, lastError: null },
   })
