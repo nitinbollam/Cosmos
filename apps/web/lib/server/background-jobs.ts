@@ -24,6 +24,9 @@ export function startBackgroundJobs(): void {
       const { releaseExpiredReservations } = await import('./inventory')
       const { released } = await releaseExpiredReservations()
       if (released > 0) console.log(`[jobs] released ${released} expired stock reservation(s)`)
+      const { releaseReservationsOfDeadOrders } = await import('./reservation-safety-net')
+      const leaked = await releaseReservationsOfDeadOrders()
+      if (leaked.released > 0) console.log(`[jobs] released ${leaked.released} reservation(s) held by cancelled or failed orders`)
     } catch (err) {
       console.error('[jobs] reservation sweep failed:', err)
     }

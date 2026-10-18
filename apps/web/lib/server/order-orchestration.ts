@@ -124,7 +124,10 @@ export async function runOrderFulfillmentPipeline(
   const claim = await orderDb.orderSaga.updateMany({
     where: {
       id: sagaRow.id,
-      OR: [{ status: { not: 'RUNNING' } }, { updatedAt: { lt: new Date(Date.now() - SAGA_LEASE_MS) } }],
+      OR: [
+        { status: { notIn: ['RUNNING', 'COMPENSATING'] } },
+        { updatedAt: { lt: new Date(Date.now() - SAGA_LEASE_MS) } },
+      ],
     },
     data: { status: 'RUNNING', correlationId },
   })
@@ -577,54 +580,215 @@ export async function syncOrderFromFulfillmentTask(tenantId: string, taskId: str
   return transitionOrderStatus(tenantId, task.orderId, mapped)
 }
 
+type CancelState = {
+  /** Step name -> 'done' or 'failed: <message>'. */
+  steps: Record<string, string>
+  /** Refunds already taken off `order.amountPaid`, by payment intent. */
+  adjusted: Record<string, string>
+  complete?: boolean
+}
+
+const CANCEL_LOCK_STATUS = 'COMPENSATING'
+
+function readCancelState(compensations: unknown): CancelState {
+  const raw = (compensations as { cancel?: Partial<CancelState> } | null)?.cancel
+  return { steps: { ...(raw?.steps ?? {}) }, adjusted: { ...(raw?.adjusted ?? {}) }, complete: raw?.complete }
+}
+
+/**
+ * Cancel an order and undo everything it holds, or stop at the first step that fails and say which.
+ *
+ * Steps run in a fixed order: cancel the warehouse task, void or refund payments, release stock
+ * reservations, close backorders, release customer credit, then (last) mark the order CANCELLED.
+ * The order is not CANCELLED until every step has succeeded, so a failed cancel is simply called
+ * again: finished steps are skipped (progress is kept in the saga's `compensations.cancel`), and
+ * each step is safe to repeat on its own. A refund is taken off `amountPaid` before the money moves
+ * and recorded per payment, so a crash between the two cannot be double-counted or lost. Credit is
+ * released through `releaseOrderCredit`, exactly once.
+ *
+ * A saga lock (status COMPENSATING) keeps two cancels apart, and a claim on the order's open
+ * fulfillment tasks keeps a dispatch from running underneath a cancel (and the reverse): whichever
+ * starts second is told 409.
+ */
 export async function cancelOrderWithCompensation(tenantId: string, orderId: string, reason: string) {
   const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
   if (!order) throw new ApiError(404, 'Order not found')
-  if (order.status === 'CANCELLED' || order.status === 'DELIVERED') return order
+  if (order.status === 'DELIVERED') return order
 
-  // Compensate payments first: a cancel that can't unwind money must fail loudly.
-  const correlationId = randomUUID()
-  const intents = await paymentDb.paymentIntent.findMany({
-    where: { tenantId, orderId, status: { in: ['AUTHORIZED', 'CAPTURED'] } },
+  const saga0 = await ensureSaga(orderId, tenantId, randomUUID())
+  if (order.status === 'CANCELLED' && readCancelState(saga0.compensations).complete) return order
+  if (order.status !== 'CANCELLED' && !canTransitionOrderStatus(order.status as OrderStatus, 'CANCELLED')) {
+    throw new ApiError(400, `An order that is ${order.status} cannot be cancelled`)
+  }
+
+  const lock = await orderDb.orderSaga.updateMany({
+    where: {
+      id: saga0.id,
+      OR: [{ status: { not: CANCEL_LOCK_STATUS as never } }, { updatedAt: { lt: new Date(Date.now() - SAGA_LEASE_MS) } }],
+    },
+    data: { status: CANCEL_LOCK_STATUS as never },
   })
-  for (const intent of intents) {
-    if (intent.status === 'AUTHORIZED') {
-      await payments.voidIntent(tenantId, intent.id, correlationId)
-    } else {
-      const refundable = Number(intent.amount) - Number(intent.refundedAmount ?? 0)
-      if (refundable > 0.009) {
-        await payments.refund(tenantId, intent.id, refundable, correlationId)
-        await orderDb.order.update({
-          where: { id: orderId },
-          data: { amountPaid: { decrement: new Prisma.Decimal(refundable) } },
-        })
+  if (lock.count !== 1) throw new ApiError(409, 'This order is already being cancelled')
+  const restoreStatus = saga0.status === CANCEL_LOCK_STATUS ? 'FAILED' : saga0.status
+
+  const claimedAt = new Date()
+  let claimedTasks: string[] = []
+  try {
+    const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { id: saga0.id } })
+    const state = readCancelState(saga.compensations)
+    const persist = async () => {
+      const fresh = await orderDb.orderSaga.findUniqueOrThrow({ where: { id: saga.id } })
+      await orderDb.orderSaga.update({
+        where: { id: saga.id },
+        data: { compensations: { ...((fresh.compensations as object) ?? {}), cancel: state } },
+      })
+    }
+    const step = async (name: string, fn: () => Promise<void>) => {
+      if (state.steps[name] === 'done') return
+      try {
+        await fn()
+        state.steps[name] = 'done'
+        await persist()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        state.steps[name] = `failed: ${message}`.slice(0, 300)
+        await persist().catch(() => undefined)
+        console.error(`[orders] cancel of order ${orderId} stopped at step "${name}": ${message}`)
+        throw new ApiError(
+          502,
+          `Cancelling order stopped at step "${name}": ${message}. Nothing was lost; cancel the order again to continue from here.`,
+        )
       }
     }
+
+    // Stop a dispatch running underneath us: take the lease on every open task of this order.
+    const open = await wmsDb.fulfillmentTask.findMany({
+      where: { tenantId, orderId, status: { in: ['PENDING', 'PICKING', 'PACKED'] } },
+      select: { id: true },
+    })
+    if (open.length > 0) {
+      const won = await wmsDb.fulfillmentTask.updateMany({
+        where: {
+          tenantId,
+          id: { in: open.map((t) => t.id) },
+          OR: [{ dispatchClaimedAt: null }, { dispatchClaimedAt: { lt: new Date(claimedAt.getTime() - DISPATCH_LEASE_MS) } }],
+        },
+        data: { dispatchClaimedAt: claimedAt },
+      })
+      claimedTasks = open.map((t) => t.id)
+      if (won.count !== open.length) {
+        throw new ApiError(409, 'A shipment for this order is being dispatched right now. Try again in a moment.')
+      }
+    }
+
+    await step('fulfillment', async () => {
+      await wmsFulfillment.cancelFulfillmentByOrder(tenantId, orderId, 'cancel')
+    })
+
+    await step('payments', async () => {
+      const correlationId = randomUUID()
+      const intents = await paymentDb.paymentIntent.findMany({
+        where: { tenantId, orderId, status: { in: ['AUTHORIZED', 'CAPTURED'] } },
+      })
+      for (const intent of intents) {
+        if (intent.status === 'AUTHORIZED') {
+          await payments.voidIntent(tenantId, intent.id, correlationId)
+          continue
+        }
+        const captured = Number(intent.capturedAmount ?? intent.amount)
+        const refundable = +(captured - Number(intent.refundedAmount ?? 0)).toFixed(2)
+        if (refundable <= 0.009) continue
+        // Take it off amountPaid first, recorded against this payment, then move the money. A crash
+        // between the two leaves the books right and the refund still to do; a retry finishes it
+        // without taking the amount off twice.
+        if (!state.adjusted[intent.id]) {
+          await orderDb.$transaction(async (tx) => {
+            await tx.order.update({
+              where: { id: orderId },
+              data: { amountPaid: { decrement: new Prisma.Decimal(refundable) } },
+            })
+            state.adjusted[intent.id] = refundable.toFixed(2)
+            const fresh = await tx.orderSaga.findUniqueOrThrow({ where: { id: saga.id } })
+            await tx.orderSaga.update({
+              where: { id: saga.id },
+              data: { compensations: { ...((fresh.compensations as object) ?? {}), cancel: state } },
+            })
+          })
+        }
+        try {
+          await payments.refund(tenantId, intent.id, undefined, correlationId)
+        } catch (err) {
+          // The refund did not happen: put the amount back so the order is not understated.
+          const back = state.adjusted[intent.id]
+          delete state.adjusted[intent.id]
+          await orderDb
+            .$transaction(async (tx) => {
+              await tx.order.update({ where: { id: orderId }, data: { amountPaid: { increment: new Prisma.Decimal(back) } } })
+              const fresh = await tx.orderSaga.findUniqueOrThrow({ where: { id: saga.id } })
+              await tx.orderSaga.update({
+                where: { id: saga.id },
+                data: { compensations: { ...((fresh.compensations as object) ?? {}), cancel: state } },
+              })
+            })
+            .catch((e) => console.error(`[orders] could not restore amountPaid after failed refund on order ${orderId}:`, e))
+          throw err
+        }
+      }
+    })
+
+    await step('reservations', async () => {
+      await inv.releaseReservationsForOrder(tenantId, orderId)
+      const left = await inventoryActiveReservations(tenantId, orderId)
+      if (left > 0) throw new Error(`${left} reservation(s) are still active`)
+    })
+
+    await step('backorders', async () => {
+      await orderDb.backorderLine.updateMany({
+        where: { tenantId, orderId, status: { in: ['OPEN', 'PARTIAL'] } },
+        data: { status: 'CANCELLED' },
+      })
+    })
+
+    await step('credit', async () => {
+      if (order.paymentMethod !== 'NET_TERMS') return
+      const now = await orderDb.order.findUniqueOrThrow({ where: { id: orderId } })
+      const refunded = Object.values(state.adjusted).reduce((sum, v) => sum + Number(v), 0)
+      const paidBefore = Number(now.amountPaid ?? 0) + refunded
+      const exposure = netTermsExposure(Number(now.totalAmount), paidBefore)
+      await releaseOrderCredit(tenantId, order.customerId, orderId, exposure)
+    })
+
+    await step('voids', async () => {
+      // A hold taken after the first pass (a capture racing the cancel) must not survive.
+      const leftover = await paymentDb.paymentIntent.findMany({ where: { tenantId, orderId, status: 'AUTHORIZED' } })
+      for (const intent of leftover) await payments.voidIntent(tenantId, intent.id, randomUUID())
+    })
+
+    // Last: the order only becomes CANCELLED once everything above has been undone.
+    const fresh = await orderDb.order.findUniqueOrThrow({ where: { id: orderId } })
+    if (fresh.status !== 'CANCELLED') {
+      await transitionOrderStatus(tenantId, orderId, 'CANCELLED', { cancelledAt: new Date(), failureReason: reason })
+    }
+    state.complete = true
+    await persist()
+    await orderDb.orderSaga.update({ where: { id: saga.id }, data: { status: 'COMPLETED' } })
+    return orderDb.order.findFirstOrThrow({ where: { id: orderId, tenantId }, include: { lineItems: true, saga: true } })
+  } catch (err) {
+    // Release the lock so the next cancel attempt can run.
+    await orderDb.orderSaga
+      .updateMany({ where: { id: saga0.id, status: CANCEL_LOCK_STATUS as never }, data: { status: restoreStatus as never } })
+      .catch(() => undefined)
+    throw err
+  } finally {
+    if (claimedTasks.length > 0) {
+      await wmsDb.fulfillmentTask
+        .updateMany({ where: { tenantId, id: { in: claimedTasks }, dispatchClaimedAt: claimedAt }, data: { dispatchClaimedAt: null } })
+        .catch(() => undefined)
+    }
   }
+}
 
-  await wmsFulfillment.cancelFulfillmentByOrder(tenantId, orderId, 'cancel').catch(() => undefined)
-  await inv.releaseReservationsForOrder(tenantId, orderId).catch(() => undefined)
-
-  await orderDb.backorderLine.updateMany({
-    where: { tenantId, orderId, status: { in: ['OPEN', 'PARTIAL'] } },
-    data: { status: 'CANCELLED' },
-  })
-
-  if (order.paymentMethod === 'NET_TERMS') {
-    const exposure = netTermsExposure(Number(order.totalAmount), Number(order.amountPaid ?? 0))
-    await releaseCreditUsed(tenantId, order.customerId, exposure).catch(() => undefined)
-  }
-
-  const { voidAuthorizedPaymentsForOrder } = await import('./order-payment-admin')
-  await voidAuthorizedPaymentsForOrder(tenantId, orderId).catch(() => undefined)
-
-  return orderDb.order.update({
-    where: { id: orderId },
-    data: {
-      status: 'CANCELLED',
-      cancelledAt: new Date(),
-      failureReason: reason,
-    },
-    include: { lineItems: true, saga: true },
-  })
+async function inventoryActiveReservations(tenantId: string, orderId: string): Promise<number> {
+  const { inventoryDb } = await import('./db')
+  return inventoryDb.stockReservation.count({ where: { tenantId, orderId, status: 'ACTIVE' } })
 }
