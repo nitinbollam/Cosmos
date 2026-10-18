@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginAdmin } from './helpers/auth'
+import { loginAdmin, loginBuyer } from './helpers/auth'
 
 test.describe('Marketplace', () => {
   test('admin sidebar shows Marketplace and browse lists seeded peer listing', async ({ page }) => {
@@ -23,14 +23,15 @@ test.describe('Marketplace', () => {
     await page.goto('/admin/marketplace')
     await page.getByRole('link', { name: /Sticky Notes Bulk — peer listing/i }).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Sticky Notes Bulk')
-    await expect(page.getByText('Office Supplies')).toBeVisible()
+    await expect(page.getByText('Office Supplies').first()).toBeVisible()
   })
 
-  test('shop marketplace route is reachable when signed in', async ({ page }) => {
-    await loginAdmin(page)
+  test('shop marketplace route shows the access gate to a buyer whose tenant has no marketplace access', async ({ page }) => {
+    // The shop surface has its own session (buyer portal), separate from /admin.
+    await loginBuyer(page)
     await page.goto('/marketplace')
-    await expect(page.getByRole('heading', { name: 'Marketplace' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Marketplace' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Marketplace not available' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to the catalog' })).toBeVisible()
   })
 
   test('peer tenant can browse demo seller listing', async ({ page }) => {
