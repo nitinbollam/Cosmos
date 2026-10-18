@@ -52,7 +52,7 @@ export async function enqueuePostingJob(tx: OrderTx, input: EnqueueInput) {
   if (!(Number(input.amount) > 0)) return null
   const dedupeKey = postingDedupeKey(input)
   return tx.postingJob.upsert({
-    where: { dedupeKey },
+    where: { dedupeKey, tenantId: input.tenantId },
     update: {},
     create: {
       id: randomUUID(),
