@@ -3,7 +3,8 @@ import { jwtVerify } from 'jose'
 import {
   acceptInvite,
   changePassword,
-  loginUser,
+  completeTenantSelection,
+  startLogin,
   logoutUser,
   refreshUserTokens,
   requestPasswordReset,
@@ -104,14 +105,37 @@ async function routeApiRequest(req: Request): Promise<Response> {
     try {
       await rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
       await rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
-      return json(
-        await loginUser(body.email.trim(), body.password, sessionMeta(req), {
-          tenantRef: typeof body.tenant === 'string' ? body.tenant : undefined,
-        }),
-      )
+      const outcome = await startLogin(body.email.trim(), body.password, sessionMeta(req), {
+        tenantRef: typeof body.tenant === 'string' ? body.tenant : undefined,
+      })
+      // Same password, several companies: nothing is signed in yet, the person picks one.
+      if (outcome.kind === 'select') {
+        return json({ requiresTenantSelection: true, selectionToken: outcome.selectionToken, tenants: outcome.tenants })
+      }
+      return json(outcome.tokens)
     } catch (e) {
       if (e instanceof ApiError) return toJsonError(e)
       console.error('[auth] login failed:', e)
+      return json({ message: 'Internal server error' }, 500)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/login/select' && req.method === 'POST') {
+    let body: { selectionToken?: string; tenantId?: string }
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      return json({ message: 'Invalid JSON body' }, 400)
+    }
+    if (!body.selectionToken || !body.tenantId) {
+      return json({ message: 'selectionToken and tenantId required' }, 400)
+    }
+    try {
+      await rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
+      return json(await completeTenantSelection(body.selectionToken, body.tenantId, sessionMeta(req)))
+    } catch (e) {
+      if (e instanceof ApiError) return toJsonError(e)
+      console.error('[auth] tenant selection failed:', e)
       return json({ message: 'Internal server error' }, 500)
     }
   }
