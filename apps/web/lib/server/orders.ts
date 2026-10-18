@@ -10,7 +10,8 @@ import { OrderStatus } from '@/generated/prisma-order'
 import * as discounts from './discounts'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
-import { syncInvoiceFromOrder } from './invoices'
+import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
+import { enqueuePostingJob } from './posting-outbox'
 import { assertOrderLinePrices } from './pricing'
 import * as notifyTriggers from './notification-triggers'
 import { assertAgeComplianceForOrder, type PosAgeAttestation } from './compliance-age'
@@ -18,6 +19,7 @@ import { defersFulfillmentUntilPayment } from './order-payment-sync'
 import { buildPaymentSummary, findPrimaryPaymentIntent } from './order-payment-admin'
 import { emitDomainEvent, emitOrderEvent } from './domain-events'
 
+import { swallowed } from './fire-and-forget'
 async function enrichOrderWithPaymentDetails<
   T extends { id: string; paymentIntentId: string | null; totalAmount: unknown; amountPaid: unknown },
 >(tenantId: string, order: T) {
@@ -221,8 +223,7 @@ export async function createOrder(
 
   const isFullyPaid = giftCardRedeemed >= totalAmount - 0.005
   if (isFullyPaid) {
-    const { syncInvoiceFromOrder } = await import('./invoices')
-    await syncInvoiceFromOrder(tenantId, order.id).catch(() => undefined)
+    await syncInvoiceOrQueue(tenantId, order.id)
   }
 
   const shouldFulfillNow = !defersFulfillmentUntilPayment(dto.paymentMethod) || isFullyPaid
@@ -234,7 +235,7 @@ export async function createOrder(
         console.error(`[orders] fulfillment pipeline failed for order ${order.id}:`, err),
       )
     }
-    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
+    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(swallowed('orders.channel'))
     void emitOrderEvent(tenantId, 'order.created', order.id, {}, { key: order.id })
   }
   return order
@@ -396,7 +397,16 @@ export async function recordOrderPayment(
   })
 
   if (order.paymentMethod === 'NET_TERMS') {
-    await releaseCreditUsed(tenantId, order.customerId, Number(apply)).catch(() => undefined)
+    await attemptOrQueue(
+      {
+        tenantId,
+        kind: 'CREDIT_RELEASE',
+        sourceType: 'Order',
+        sourceId: id,
+        payload: { customerId: order.customerId, amount: apply.toString() },
+      },
+      () => releaseCreditUsed(tenantId, order.customerId, Number(apply)),
+    )
   }
   // Manual payments (cash, check, ACH entered by staff) don't go through card capture.
   void emitOrderEvent(tenantId, 'finance.payment_captured', id, {
@@ -406,12 +416,20 @@ export async function recordOrderPayment(
     reference: body.reference ?? null,
   })
 
-  await syncInvoiceFromOrder(tenantId, id).catch(() => undefined)
+  await syncInvoiceOrQueue(tenantId, id)
 
   const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId: id } })
   if (invoice) {
-    const { postArPaymentJournal } = await import('./operations-gl')
-    await postArPaymentJournal(tenantId, invoice.id, Number(apply)).catch(() => undefined)
+    // Queued with the payment's reference (or a fresh key), so the journal posts once and a ledger
+    // problem shows up as a failing job rather than a payment missing from the books.
+    await enqueuePostingJob(orderDb, {
+      tenantId,
+      kind: 'AR_PAYMENT_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoice.id,
+      variant: `manual:${body.reference?.trim() || randomUUID()}`,
+      amount: apply.toFixed(2),
+    })
     const { notifyPaymentReceived } = await import('./notification-triggers')
     void notifyPaymentReceived(tenantId, id, order.customerId, Number(apply), invoice.invoiceNumber).catch(
       () => undefined,
@@ -446,7 +464,7 @@ export async function resumeOrderAfterCreditApproval(tenantId: string, orderId: 
       orderId,
       order.customerId,
       Number(order.totalAmount),
-    ).catch(() => undefined)
+    ).catch(swallowed('orders.resumeOrderAfterCreditApproval'))
     void emitOrderEvent(tenantId, 'order.created', orderId, {}, { key: orderId })
   }
   return orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { lineItems: true } })
@@ -458,7 +476,7 @@ export async function getReorderLines(tenantId: string, orderId: string, opts?: 
   const skuIds = order.lineItems.map((li) => li.skuId)
   const prices = await resolvePricesForCustomer(tenantId, order.customerId, skuIds)
   const skus = await import('./inventory').then((m) =>
-    Promise.all(skuIds.map((id) => m.findSkuById(tenantId, id).catch(() => null))),
+    Promise.all(skuIds.map((id) => m.findSkuById(tenantId, id).catch((err) => { swallowed('orders.getReorderLines.sku', { tenantId, level: 'warn' })(err); return null }))),
   )
   const skuMap = new Map(skus.filter(Boolean).map((s) => [s!.id, s!]))
 

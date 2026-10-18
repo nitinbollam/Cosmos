@@ -3,6 +3,7 @@ import * as crm from './crm'
 import * as notifications from './notifications'
 import { shouldSendCustomerNotification } from './customer-notification-prefs'
 
+import { swallowed } from './fire-and-forget'
 async function customerContact(tenantId: string, customerId: string) {
   try {
     const customer = await crm.getCustomer(tenantId, customerId)
@@ -34,7 +35,7 @@ export async function notifyOrderCreated(
       },
       `order-created:${orderId}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.notifyOrderCreated'))
 }
 
 /**
@@ -60,7 +61,7 @@ async function pushToCustomer(
         { channel: NotificationChannel.PUSH, recipient: user.id, templateKey, payload },
         `${idempotencyKey}:push:${user.id}`,
       )
-      .catch(() => undefined)
+      .catch(swallowed('notification-triggers.pushToCustomer'))
   }
 }
 
@@ -91,7 +92,7 @@ async function emailOrderShipped(tenantId: string, orderId: string, customerId: 
       },
       `order-shipped:${orderId}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.emailOrderShipped'))
 }
 
 export async function notifyInvoiceIssued(
@@ -126,7 +127,7 @@ export async function notifyInvoiceIssued(
       },
       `invoice-issued:${invoiceId}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.notifyInvoiceIssued'))
 }
 
 export async function notifyPaymentReceived(
@@ -157,7 +158,7 @@ export async function notifyPaymentReceived(
       },
       `payment-received:${orderId}:${amount.toFixed(2)}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.notifyPaymentReceived'))
 }
 
 export async function notifyGiftCardIssued(
@@ -181,7 +182,7 @@ export async function notifyGiftCardIssued(
       },
       `gift-card-issued:${giftCardId}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.notifyGiftCardIssued'))
 }
 
 export async function notifySubscriptionOrderCreated(
@@ -203,7 +204,7 @@ export async function notifySubscriptionOrderCreated(
       },
       `subscription-order:${subscriptionId}:${orderId}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.notifySubscriptionOrderCreated'))
 }
 
 export async function notifySubscriptionPaymentFailed(
@@ -225,7 +226,7 @@ export async function notifySubscriptionPaymentFailed(
       },
       `subscription-failed:${subscriptionId}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.notifySubscriptionPaymentFailed'))
 }
 
 export async function notifyLowStock(
@@ -249,5 +250,5 @@ export async function notifyLowStock(
       },
       `low-stock:${skuId}:${qtyOnHand}`,
     )
-    .catch(() => undefined)
+    .catch(swallowed('notification-triggers.notifyLowStock'))
 }

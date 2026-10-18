@@ -8,8 +8,8 @@
  *
  * Patterns counted per file under apps/web/lib and apps/web/server (tests excluded):
  *   swallow            .catch(() => undefined|null|{}) and empty catch blocks      (always enforced)
- *   toFixed            .toFixed( outside money.ts                                  (reported; enforced with --money=strict)
- *   decimalFromNumber  new Decimal(<anything but a string literal or 0/1>)         (reported; enforced with --money=strict)
+ *   toFixed            .toFixed( outside money.ts                                  (no growth vs baseline; zero allowed with --money=strict)
+ *   decimalFromNumber  new Decimal(<anything but a string literal or 0/1>)         (no growth vs baseline; zero allowed with --money=strict)
  *
  * The baseline in scripts/code-health-baseline.json is the allow-list: existing sites are classified
  * in docs/SWALLOWED_ERRORS.md and are removed area by area. A new site on a line that carries
@@ -24,7 +24,7 @@ const root = process.env.CODE_HEALTH_ROOT ?? path.resolve(path.dirname(fileURLTo
 const baselinePath = path.join(root, 'scripts', 'code-health-baseline.json')
 const roots = [path.join(root, 'apps', 'web', 'lib'), path.join(root, 'apps', 'web', 'server')]
 const update = process.argv.includes('--update')
-const moneyStrict = process.argv.includes('--money=strict')
+const strict = process.argv.includes('--money=strict') // fail on ANY remaining money-pattern site, not just growth
 const SKIP = new Set(['money.ts', 'fire-and-forget.ts'])
 
 const PATTERNS = {
@@ -71,7 +71,7 @@ const baseline = fs.existsSync(baselinePath) ? JSON.parse(fs.readFileSync(baseli
 let failed = false
 let improved = false
 for (const name of Object.keys(PATTERNS)) {
-  const enforce = name === 'swallow' || moneyStrict
+  const enforce = true // baseline = allow-list: no pattern may grow in any file (money patterns included)
   const base = baseline[name] ?? {}
   let total = 0
   for (const [file, n] of Object.entries(found[name])) {
@@ -91,6 +91,10 @@ for (const name of Object.keys(PATTERNS)) {
     if ((found[name][file] ?? 0) < allowed) improved = true
   }
   console.log(`[code-health] ${name}: ${total} site(s) in ${Object.keys(found[name]).length} file(s)`)
+  if (strict && name !== 'swallow' && total > 0) {
+    console.error(`[code-health] --money=strict: ${total} ${name} site(s) remain; migrate to money.ts or annotate with // money-ok: <reason>`)
+    failed = true
+  }
 }
 if (failed) {
   console.error(

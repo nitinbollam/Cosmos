@@ -239,8 +239,14 @@ test('a card collection captured by Stripe\'s webhook before its completion is b
       failureReason: 'requires_action',
     },
   })
-  const arJournals = () =>
-    ledgerDb.journalEntry.count({ where: { tenantId: t, description: { startsWith: 'AR payment' } } })
+  // The AR payment journal is posted through the outbox: exactly one keyed job, and once the worker
+  // has run, exactly one entry.
+  const arJournals = async () => {
+    const { runPostingJobs } = await import('./posting-outbox')
+    assert.equal(await orderDb.postingJob.count({ where: { tenantId: t, kind: 'AR_PAYMENT_JOURNAL' } }), 1)
+    await runPostingJobs({ tenantId: t, now: new Date(Date.now() + 5_000) })
+    return ledgerDb.journalEntry.count({ where: { tenantId: t, description: { startsWith: 'AR payment' } } })
+  }
 
   const prevSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET
   const prevKey = process.env.STRIPE_SECRET_KEY

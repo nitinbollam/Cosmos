@@ -4,6 +4,7 @@ import type { Prisma as OrderPrisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import { ApiError } from './session'
 import { createJournalOnce, requireAccounts, requireSalesTaxPayable } from './ledger-posting'
+import { isWorkKind, runWork, type WorkKind } from './deferred-work'
 
 /**
  * Transactional outbox for general-ledger postings.
@@ -20,6 +21,9 @@ export type PostingJobKind =
   | 'COGS_JOURNAL'
   | 'COGS_REVERSAL_JOURNAL'
   | 'CREDIT_MEMO_JOURNAL'
+  | 'AR_PAYMENT_JOURNAL'
+  | 'AP_PAYMENT_JOURNAL'
+  | WorkKind
 
 export const MAX_POSTING_ATTEMPTS = 8
 /** Delay after failed attempt 1..5; later attempts reuse the last value. */
@@ -93,8 +97,16 @@ function taxOf(job: JobRow, total: Prisma.Decimal): Prisma.Decimal {
   return tax.gt(total) ? total : tax
 }
 
-/** Posts one job to the ledger. Throws on any failure; returns the journal entry id. */
-export async function postJob(job: JobRow): Promise<string> {
+/**
+ * Runs one job. Ledger kinds post to the ledger and return the journal entry id; work kinds
+ * (invoice sync, credit release and the like) redo a side effect that failed inline and return null.
+ * Throws on any failure so the worker retries.
+ */
+export async function postJob(job: JobRow): Promise<string | null> {
+  if (isWorkKind(job.kind)) {
+    await runWork({ tenantId: job.tenantId, kind: job.kind, sourceType: job.sourceType, sourceId: job.sourceId, payload: job.payload as Record<string, unknown> | undefined })
+    return null
+  }
   const amount = String((job.payload as { amount?: string })?.amount ?? '')
   if (!(Number(amount) > 0)) throw new Error(`Posting job ${job.id} has no positive amount`)
   const source = { sourceType: job.sourceType, sourceId: job.sourceId, variant: job.variant }
@@ -139,6 +151,20 @@ export async function postJob(job: JobRow): Promise<string> {
         `Credit memo ${short} — AR reversal`,
         lines.filter((l) => l.debit.gt(0) || l.credit.gt(0)),
       )
+    }
+    case 'AR_PAYMENT_JOURNAL': {
+      const a = await requireAccounts(job.tenantId, ['1000', '1200'])
+      return createJournalOnce(job.tenantId, source, `AR payment ${short}`, [
+        { accountId: a.get('1000')!.id, memo: 'Cash received', debit: dec(amount), credit: ZERO },
+        { accountId: a.get('1200')!.id, memo: 'Accounts receivable reduction', debit: ZERO, credit: dec(amount) },
+      ])
+    }
+    case 'AP_PAYMENT_JOURNAL': {
+      const a = await requireAccounts(job.tenantId, ['2100', '1000'])
+      return createJournalOnce(job.tenantId, source, `AP payment ${short}`, [
+        { accountId: a.get('2100')!.id, memo: 'Accounts payable reduction', debit: dec(amount), credit: ZERO },
+        { accountId: a.get('1000')!.id, memo: 'Cash paid', debit: ZERO, credit: dec(amount) },
+      ])
     }
     case 'COGS_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['5000', '1100'])
@@ -208,14 +234,14 @@ export async function runPostingJobs(opts: { now?: Date; limit?: number; tenantI
       await orderDb.$transaction(async (tx) => {
         await tx.postingJob.update({
           where: { id: candidate.id },
-          data: { status: 'DONE', journalEntryId, doneAt: new Date(), leaseUntil: null, lastError: null },
+          data: { status: 'DONE', journalEntryId: journalEntryId ?? undefined, doneAt: new Date(), leaseUntil: null, lastError: null },
         })
-        if (candidate.kind === 'INVOICE_JOURNAL') {
+        if (journalEntryId && candidate.kind === 'INVOICE_JOURNAL') {
           await tx.invoice.updateMany({
             where: { id: candidate.sourceId, tenantId: candidate.tenantId, journalEntryId: null },
             data: { journalEntryId },
           })
-        } else if (candidate.kind === 'CREDIT_MEMO_JOURNAL') {
+        } else if (journalEntryId && candidate.kind === 'CREDIT_MEMO_JOURNAL') {
           await tx.creditMemo.updateMany({
             where: { id: candidate.sourceId, tenantId: candidate.tenantId, journalEntryId: null },
             data: { journalEntryId },

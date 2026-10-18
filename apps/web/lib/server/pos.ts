@@ -7,6 +7,7 @@ import { ApiError } from './session'
 import { assertFeature } from './feature-flags'
 import { auditLog } from './audit-log'
 
+import { swallowed } from './fire-and-forget'
 export async function listPosRegisters(tenantId: string) {
   return tenantDb.posRegister.findMany({
     where: { tenantId, isActive: true },
@@ -290,7 +291,7 @@ export async function createPosOrder(
     entityId: order.id,
     userId,
     metadata: { registerId: dto.registerId, totalAmount, tenders: resolvedTenders },
-  }).catch(() => undefined)
+  }).catch(swallowed('pos.createPosOrder'))
 
   return { ...order, status: 'DELIVERED', totalAmount, taxAmount, tenders: resolvedTenders }
 }
@@ -357,7 +358,7 @@ export async function createPosReturn(
     entityId: order.id,
     userId,
     metadata: { refundMethod: dto.refundMethod, lines: dto.lines },
-  }).catch(() => undefined)
+  }).catch(swallowed('pos.createPosReturn'))
 
   return creditMemo
 }

@@ -3,10 +3,11 @@ import { Prisma } from '@/generated/prisma-inventory'
 import { inventoryDb } from './db'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 function queueSalesChannelPush(tenantId: string, skuId: string) {
   void import('./sales-channels/core')
     .then(({ queuePriceOrQuantityPush }) => queuePriceOrQuantityPush(tenantId, skuId))
-    .catch(() => undefined)
+    .catch(swallowed('inventory.queueSalesChannelPush'))
 }
 
 export type CreateSkuInput = {
@@ -284,8 +285,21 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
     })
   })
 
-  const { fillBackordersOnReceipt } = await import('./backorders')
-  void fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId).catch(() => undefined)
+  // The receipt is committed. Filling backorders from it is retried if it fails, never dropped.
+  const { attemptOrQueue } = await import('./deferred-work')
+  await attemptOrQueue(
+    {
+      tenantId,
+      kind: 'BACKORDER_FILL',
+      sourceType: 'Sku',
+      sourceId: `${dto.skuId}:${dto.warehouseId}`,
+      payload: { skuId: dto.skuId, warehouseId: dto.warehouseId },
+    },
+    async () => {
+      const { fillBackordersOnReceipt } = await import('./backorders')
+      await fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId)
+    },
+  )
 
   queueSalesChannelPush(tenantId, dto.skuId)
   return result
@@ -703,7 +717,7 @@ export async function adjustStock(
       sku?.code ?? dto.skuId,
       result.quantityAvailable,
       result.reorderPoint,
-    ).catch(() => undefined)
+    ).catch(swallowed('inventory.adjustStock'))
     // No dedupe key: a SKU can drop below its reorder point again after a restock.
     const { emitDomainEvent } = await import('./domain-events')
     void emitDomainEvent(tenantId, 'inventory.stock_level_low', {

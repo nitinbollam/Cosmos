@@ -1,5 +1,6 @@
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 /**
  * Password policy + shared rate limiting for auth endpoints.
  */
@@ -58,7 +59,7 @@ async function storeHit(key: string, windowMs: number, now: number): Promise<Win
     RETURNING "count", "resetAtMs"`
   const row = rows[0]
   if (++calls % SWEEP_EVERY === 0) {
-    void authDb.rateLimitBucket.deleteMany({ where: { resetAtMs: { lte: nowMs } } }).catch(() => undefined)
+    void authDb.rateLimitBucket.deleteMany({ where: { resetAtMs: { lte: nowMs } } }).catch(swallowed('auth-security.storeHit', { level: 'warn' }))
   }
   return { count: Number(row.count), resetAt: Number(row.resetAtMs) }
 }

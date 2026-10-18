@@ -1,5 +1,7 @@
 import { PurchaseOrderStatus, Prisma } from '@/generated/prisma-purchasing'
-import { purchasingDb } from './db'
+import { randomUUID } from 'node:crypto'
+import { orderDb, purchasingDb } from './db'
+import { enqueuePostingJob } from './posting-outbox'
 import * as inv from './inventory'
 import { ApiError } from './session'
 
@@ -286,21 +288,32 @@ export async function recordPoPayment(
   void body.method
   void body.reference
 
+  // With a bill, the bill payment goes first and carries the AP posting, so a failure there leaves
+  // the PO untouched and the request can simply be repeated. Without one the PO payment is posted
+  // here, through the outbox so the posting is keyed, retried and visible when it fails.
+  const bill = await purchasingDb.vendorBill.findFirst({
+    where: { tenantId, purchaseOrderId: poId, status: { not: 'VOID' } },
+  })
+  if (bill) {
+    const { recordBillPayment } = await import('./ap-bills')
+    await recordBillPayment(tenantId, bill.id, body)
+  }
+
   const updated = await purchasingDb.purchaseOrder.update({
     where: { id: poId },
     data: { amountPaid: new Prisma.Decimal(paid + apply) },
     include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
   })
 
-  const bill = await purchasingDb.vendorBill.findFirst({
-    where: { tenantId, purchaseOrderId: poId, status: { not: 'VOID' } },
-  })
-  if (bill) {
-    const { recordBillPayment } = await import('./ap-bills')
-    await recordBillPayment(tenantId, bill.id, body).catch(() => undefined)
-  } else {
-    const { postApPaymentJournal } = await import('./operations-gl')
-    await postApPaymentJournal(tenantId, poId, apply).catch(() => undefined)
+  if (!bill) {
+    await enqueuePostingJob(orderDb, {
+      tenantId,
+      kind: 'AP_PAYMENT_JOURNAL',
+      sourceType: 'PurchaseOrder',
+      sourceId: poId,
+      variant: `pay:${randomUUID()}`,
+      amount: new Prisma.Decimal(apply).toFixed(2),
+    })
   }
 
   return updated

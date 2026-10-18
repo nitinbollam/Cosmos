@@ -9,6 +9,8 @@ import { ApiError } from './session'
 import { resolveFxRateAtCreation } from './exchange-rates'
 import { toBaseAmount, normalizeCurrency } from './fx-util'
 import { splitBaseAmounts } from './invoice-tax-split'
+import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
+import { swallowed } from './fire-and-forget'
 import {
   allocateShipmentTax,
   inferLegacyInvoiced,
@@ -110,7 +112,7 @@ export async function issueInvoiceForOrder(
       totalAmount,
       dueAt,
     )
-    .catch(() => undefined)
+    .catch(swallowed('invoices.issueInvoiceForOrder'))
   const { emitDomainEvent } = await import('./domain-events')
   void emitDomainEvent(
     tenantId,
@@ -129,7 +131,7 @@ export async function issueInvoiceForOrder(
   if (order.channel === 'EDI') {
     void import('./edi')
       .then((m) => m.generate810ForInvoice(tenantId, finalInvoice.id))
-      .catch(() => undefined)
+      .catch(swallowed('invoices.issueInvoiceForOrder2'))
   }
 
   return finalInvoice
@@ -753,7 +755,16 @@ export async function applyCreditMemo(
 
   if (order.paymentMethod === 'NET_TERMS') {
     const { releaseCreditUsed } = await import('./credit-limit')
-    await releaseCreditUsed(tenantId, order.customerId, creditTotal).catch(() => undefined)
+    await attemptOrQueue(
+      {
+        tenantId,
+        kind: 'CREDIT_RELEASE',
+        sourceType: 'CreditMemo',
+        sourceId: creditMemo.id,
+        payload: { customerId: order.customerId, amount: String(creditTotal) },
+      },
+      () => releaseCreditUsed(tenantId, order.customerId, creditTotal),
+    )
   }
 
   // Restocked goods reverse their ship-time COGS.
@@ -791,7 +802,7 @@ export async function applyCreditMemo(
           where: { id: order.id },
           data: { amountPaid: new Prisma.Decimal(Math.max(0, paidSoFar - refundAmount)) },
         })
-        await syncInvoiceFromOrder(tenantId, order.id).catch(() => undefined)
+        await syncInvoiceOrQueue(tenantId, order.id)
       } catch (err) {
         console.error(`[payments] refund failed for credit memo ${creditMemo.id}:`, err)
       }

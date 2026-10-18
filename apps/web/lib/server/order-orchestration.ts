@@ -17,6 +17,7 @@ import * as backorders from './backorders'
 import * as dropShip from './drop-ship'
 import { emitDomainEvent, emitOrderEvent } from './domain-events'
 
+import { swallowed } from './fire-and-forget'
 function parseCompletedSteps(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []
 }
@@ -377,7 +378,7 @@ export async function dispatchFulfillmentTask(tenantId: string, taskId: string) 
     // Release the lease so an immediate retry is not told the task is busy. A crash leaves it to expire.
     await wmsDb.fulfillmentTask
       .updateMany({ where: { id: taskId, tenantId }, data: { dispatchClaimedAt: null } })
-      .catch(() => undefined)
+      .catch(swallowed('order-orchestration.dispatchFulfillmentTask'))
   }
 }
 
@@ -552,9 +553,9 @@ export async function onFulfillmentDispatched(
     amount: cogs.toFixed(2),
   })
   const { notifyOrderShipped } = await import('./notification-triggers')
-  void notifyOrderShipped(tenantId, orderId, order.customerId).catch(() => undefined)
+  void notifyOrderShipped(tenantId, orderId, order.customerId).catch(swallowed('order-orchestration.onFulfillmentDispatched'))
   const { auditLog } = await import('./audit-log')
-  void auditLog(tenantId, { action: 'order.shipped', entityType: 'Order', entityId: orderId }).catch(() => undefined)
+  void auditLog(tenantId, { action: 'order.shipped', entityType: 'Order', entityId: orderId }).catch(swallowed('order-orchestration.onFulfillmentDispatched2'))
   void emitOrderEvent(
     tenantId,
     'order.shipped',
@@ -652,7 +653,7 @@ export async function cancelOrderWithCompensation(tenantId: string, orderId: str
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         state.steps[name] = `failed: ${message}`.slice(0, 300)
-        await persist().catch(() => undefined)
+        await persist().catch(swallowed('order-orchestration.step'))
         console.error(`[orders] cancel of order ${orderId} stopped at step "${name}": ${message}`)
         throw new ApiError(
           502,
@@ -777,13 +778,13 @@ export async function cancelOrderWithCompensation(tenantId: string, orderId: str
     // Release the lock so the next cancel attempt can run.
     await orderDb.orderSaga
       .updateMany({ where: { id: saga0.id, status: CANCEL_LOCK_STATUS as never }, data: { status: restoreStatus as never } })
-      .catch(() => undefined)
+      .catch(swallowed('order-orchestration.step2'))
     throw err
   } finally {
     if (claimedTasks.length > 0) {
       await wmsDb.fulfillmentTask
         .updateMany({ where: { tenantId, id: { in: claimedTasks }, dispatchClaimedAt: claimedAt }, data: { dispatchClaimedAt: null } })
-        .catch(() => undefined)
+        .catch(swallowed('order-orchestration.step3'))
     }
   }
 }

@@ -6,6 +6,7 @@ import { authDb as prisma, tenantDb } from './db'
 import { jwtRefreshSecret, jwtSecret } from './env'
 import { ApiError, invalidateAuthSessionCache, invalidateUserSessionCache } from './session'
 
+import { swallowed } from './fire-and-forget'
 export type TokenPair = {
   accessToken: string
   refreshToken: string
@@ -115,7 +116,7 @@ export async function revokeAllUserSessions(userId: string, opts?: { exceptSessi
     data: { revokedAt: new Date() },
   })
   // Legacy single-slot token (pre-AuthSession); harmless to clear every time.
-  await prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } }).catch(() => undefined)
+  await prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } }).catch(swallowed('auth.revokeAllUserSessions', { level: 'warn' }))
   invalidateUserSessionCache(userId)
 }
 

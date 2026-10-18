@@ -9,7 +9,9 @@ import { requireStripeConnectContext, findTenantIdByConnectedAccount } from './t
 import { isConnectWebhookSecretConfigured } from './stripe-connect'
 import { processStripeEventOnce } from './stripe-webhook-events'
 import { emitOrderEvent } from './domain-events'
+import { syncInvoiceOrQueue } from './deferred-work'
 
+import { swallowed } from './fire-and-forget'
 export type AuthorizeInput = {
   orderId: string
   amount: number
@@ -148,8 +150,8 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
   if (defersFulfillmentUntilPayment(order.paymentMethod)) {
     const { runOrderFulfillmentPipeline } = await import('./order-orchestration')
     const notifyTriggers = await import('./notification-triggers')
-    void runOrderFulfillmentPipeline(dto.orderId, tenantId, dto.correlationId).catch(() => undefined)
-    void notifyTriggers.notifyOrderCreated(tenantId, dto.orderId, dto.customerId, orderTotal).catch(() => undefined)
+    void runOrderFulfillmentPipeline(dto.orderId, tenantId, dto.correlationId).catch(swallowed('payments.authorize'))
+    void notifyTriggers.notifyOrderCreated(tenantId, dto.orderId, dto.customerId, orderTotal).catch(swallowed('payments.authorize2'))
     void emitOrderEvent(tenantId, 'order.created', dto.orderId, {}, { key: dto.orderId })
   }
 
@@ -176,8 +178,7 @@ async function settleCapture(intent: { id: string; tenantId: string; orderId: st
   await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount), {
     paymentIntentId: intent.id,
   })
-  const { syncInvoiceFromOrder } = await import('./invoices')
-  await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
+  await syncInvoiceOrQueue(intent.tenantId, intent.orderId)
 }
 
 const SETTLED_STATUSES: readonly string[] = ['CAPTURED', 'REFUNDED', 'VOIDED']
@@ -250,10 +251,10 @@ export async function completeCardAuthorization(
   if (intent.status !== 'AUTHORIZED' && defersFulfillmentUntilPayment(order.paymentMethod)) {
     const { runOrderFulfillmentPipeline } = await import('./order-orchestration')
     const notifyTriggers = await import('./notification-triggers')
-    void runOrderFulfillmentPipeline(intent.orderId, tenantId, correlationId).catch(() => undefined)
+    void runOrderFulfillmentPipeline(intent.orderId, tenantId, correlationId).catch(swallowed('payments.unchanged'))
     void notifyTriggers
       .notifyOrderCreated(tenantId, intent.orderId, order.customerId, Number(order.totalAmount))
-      .catch(() => undefined)
+      .catch(swallowed('payments.unchanged2'))
     void emitOrderEvent(tenantId, 'order.created', intent.orderId, {}, { key: intent.orderId })
   }
 
@@ -541,8 +542,7 @@ async function applyPlatformStripeEvent(event: ReturnType<typeof stripe.verifySt
         })
         await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
         // A confirm arriving after this finds the payment captured and stops, so refresh the invoice here.
-        const { syncInvoiceFromOrder } = await import('./invoices')
-        await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
+        await syncInvoiceOrQueue(intent.tenantId, intent.orderId)
       }
       break
     }

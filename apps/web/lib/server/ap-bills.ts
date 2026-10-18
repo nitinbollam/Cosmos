@@ -1,8 +1,11 @@
 import { Prisma, VendorBillStatus, BillMatchStatus } from '@/generated/prisma-purchasing'
-import { purchasingDb } from './db'
-import { postApPaymentJournal, postPoReceiptJournal } from './operations-gl'
+import { randomUUID } from 'node:crypto'
+import { orderDb, purchasingDb } from './db'
+import { enqueuePostingJob } from './posting-outbox'
+import { postPoReceiptJournal } from './operations-gl'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 function toNum(v: unknown): number {
   if (v == null) return 0
   return Number(v)
@@ -263,7 +266,7 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
     await purchasingDb.vendorBill.update({ where: { id: bill.id }, data: { journalEntryId } })
   }
 
-  await runThreeWayMatch(tenantId, bill.id).catch(() => undefined)
+  await runThreeWayMatch(tenantId, bill.id).catch(swallowed('ap-bills.createBillFromPurchaseOrder'))
 
   return getVendorBill(tenantId, bill.id)
 }
@@ -302,7 +305,15 @@ export async function recordBillPayment(
     include: { supplier: true, lines: true },
   })
 
-  await postApPaymentJournal(tenantId, billId, apply).catch(() => undefined)
+  // Keyed by this payment so it posts once; a missing account or ledger outage leaves a retrying job.
+  await enqueuePostingJob(orderDb, {
+    tenantId,
+    kind: 'AP_PAYMENT_JOURNAL',
+    sourceType: 'VendorBill',
+    sourceId: billId,
+    variant: `pay:${randomUUID()}`,
+    amount: new Prisma.Decimal(apply).toFixed(2),
+  })
 
   return {
     ...updated,

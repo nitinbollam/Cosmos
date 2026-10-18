@@ -2,6 +2,7 @@ import { Prisma } from '@/generated/prisma-crm'
 import { crmDb } from './db'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 export const LEAD_KANBAN_STATUSES = [
   'NEW',
   'CONTACTED',
@@ -124,7 +125,7 @@ function emitCustomerCreated(
         { key: customer.id },
       ),
     )
-    .catch(() => undefined)
+    .catch(swallowed('crm.emitCustomerCreated'))
 }
 
 export async function importCustomers(tenantId: string, rows: Record<string, unknown>[]) {
