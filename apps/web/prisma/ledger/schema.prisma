@@ -38,8 +38,14 @@ model JournalEntry {
   postedAt           DateTime      @default(now())
   fiscalPeriodClosed Boolean       @default(false)
   isPosted           Boolean       @default(false)
+  /// Originating document (null for manual entries). With `variant` it makes automated
+  /// postings idempotent: a replayed posting job cannot create a second entry.
+  sourceType         String?
+  sourceId           String?
+  variant            String        @default("")
   lines              JournalLine[]
 
+  @@unique([tenantId, sourceType, sourceId, variant])
   @@index([tenantId, postedAt])
 }
 

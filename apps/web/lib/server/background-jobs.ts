@@ -6,6 +6,8 @@ const SWEEP_INTERVAL_MS = 10 * 60 * 1000
 const SALES_CHANNEL_FLUSH_MS = 90 * 1000
 /** Webhook retries come due from a minute after a failure, so check often. */
 const WEBHOOK_RETRY_MS = 30 * 1000
+/** GL posting outbox: new postings are picked up within seconds; retries follow their own backoff. */
+const POSTING_JOBS_MS = 15 * 1000
 
 /** Reconciliation (PLR-150) runs once a day; set RECONCILIATION_DISABLED=1 to turn it off. */
 const RECONCILIATION_MS = 24 * 60 * 60 * 1000
@@ -96,11 +98,14 @@ export function startBackgroundJobs(): void {
 
   void sweep()
   void flushSalesChannels()
+  void runPostings()
   void retryWebhooks()
   const timer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS)
   timer.unref?.()
   const salesChannelTimer = setInterval(() => void flushSalesChannels(), SALES_CHANNEL_FLUSH_MS)
   salesChannelTimer.unref?.()
+  const postingTimer = setInterval(() => void runPostings(), POSTING_JOBS_MS)
+  postingTimer.unref?.()
   const webhookTimer = setInterval(() => void retryWebhooks(), WEBHOOK_RETRY_MS)
   webhookTimer.unref?.()
 }

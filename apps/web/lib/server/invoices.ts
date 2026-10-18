@@ -3,7 +3,7 @@ import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import * as crm from './crm'
 import { deriveInvoiceStatus, formatCreditMemoNumber, formatInvoiceNumber, invoiceBalance, toStoredInvoiceStatus } from './invoice-status'
-import { postInvoiceJournal, postCreditMemoJournal } from './invoice-gl'
+import { enqueuePostingJob } from './posting-outbox'
 import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
 import { resolveFxRateAtCreation } from './exchange-rates'
@@ -57,43 +57,43 @@ export async function issueInvoiceForOrder(
 
   const paidApplied = Math.min(Number(order.amountPaid ?? 0), totalAmount)
   const fx = await resolveFxRateAtCreation(tenantId, normalizeCurrency(amounts?.currency))
-  const invoice = await orderDb.invoice.create({
-    data: {
-      tenantId,
-      orderId: order.id,
-      invoiceNumber: formatInvoiceNumber(order.id),
-      customerId: order.customerId,
-      subtotal: new Prisma.Decimal(subtotal),
-      taxAmount: new Prisma.Decimal(taxAmount),
-      totalAmount: new Prisma.Decimal(totalAmount),
-      amountPaid: new Prisma.Decimal(paidApplied),
-      currency: fx.currency,
-      fxRateToBase: new Prisma.Decimal(fx.fxRateToBase),
-      issuedAt,
-      dueAt,
-      status: toStoredInvoiceStatus(
-        deriveInvoiceStatus({
-          totalAmount,
-          amountPaid: paidApplied,
-          amountCredited: 0,
-          paymentMethod: order.paymentMethod,
-          issuedAt,
-        }),
-      ) as never,
-    },
-  })
-
   const baseTotal = toBaseAmount(totalAmount, fx.fxRateToBase)
-  const journalEntryId = await postInvoiceJournal(tenantId, invoice.id, baseTotal).catch((err) => {
-    console.error(`[gl] invoice journal failed for invoice ${invoice.id}:`, err)
-    return null
+  // The invoice and its ledger posting job commit together; a worker posts to the ledger (posting-outbox).
+  const finalInvoice = await orderDb.$transaction(async (tx) => {
+    const invoice = await tx.invoice.create({
+      data: {
+        tenantId,
+        orderId: order.id,
+        invoiceNumber: formatInvoiceNumber(order.id),
+        customerId: order.customerId,
+        subtotal: new Prisma.Decimal(subtotal),
+        taxAmount: new Prisma.Decimal(taxAmount),
+        totalAmount: new Prisma.Decimal(totalAmount),
+        amountPaid: new Prisma.Decimal(paidApplied),
+        currency: fx.currency,
+        fxRateToBase: new Prisma.Decimal(fx.fxRateToBase),
+        issuedAt,
+        dueAt,
+        status: toStoredInvoiceStatus(
+          deriveInvoiceStatus({
+            totalAmount,
+            amountPaid: paidApplied,
+            amountCredited: 0,
+            paymentMethod: order.paymentMethod,
+            issuedAt,
+          }),
+        ) as never,
+      },
+    })
+    await enqueuePostingJob(tx, {
+      tenantId,
+      kind: 'INVOICE_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoice.id,
+      amount: baseTotal.toFixed(2),
+    })
+    return invoice
   })
-  const finalInvoice = journalEntryId
-    ? await orderDb.invoice.update({
-        where: { id: invoice.id },
-        data: { journalEntryId },
-      })
-    : invoice
 
   void notifyTriggers
     .notifyInvoiceIssued(
@@ -202,14 +202,17 @@ export async function invoiceShipmentForOrder(
   }
 
   // Follow-up shipment: extend the existing invoice and post the delta to AR.
-  const newSubtotal = order.invoice.subtotal.add(subtotal)
-  const newTax = order.invoice.taxAmount.add(taxAmount)
-  const newTotal = order.invoice.totalAmount.add(totalAmount)
+  const existingInvoice = order.invoice
+  const invoiceId = existingInvoice.id
+  const newSubtotal = existingInvoice.subtotal.add(subtotal)
+  const newTax = existingInvoice.taxAmount.add(taxAmount)
+  const newTotal = existingInvoice.totalAmount.add(totalAmount)
   const paidApplied = Prisma.Decimal.min(order.amountPaid ?? new Prisma.Decimal(0), newTotal)
+  const extensionBase = toBaseAmount(totalAmount.toNumber(), Number(existingInvoice.fxRateToBase))
 
   const updated = await orderDb.$transaction(async (tx) => {
-    const inv = await tx.invoice.update({
-      where: { id: order.invoice!.id },
+    const row = await tx.invoice.update({
+      where: { id: invoiceId, tenantId },
       data: {
         subtotal: newSubtotal,
         taxAmount: newTax,
@@ -220,20 +223,25 @@ export async function invoiceShipmentForOrder(
             orderStatus: order.status,
             totalAmount: newTotal.toNumber(),
             amountPaid: paidApplied.toNumber(),
-            amountCredited: Number(order.invoice!.amountCredited),
+            amountCredited: Number(existingInvoice.amountCredited),
             paymentMethod: order.paymentMethod,
-            issuedAt: order.invoice!.issuedAt,
+            issuedAt: existingInvoice.issuedAt,
           }),
         ) as never,
       },
     })
     await markInvoiced(tx)
-    return inv
-  })
-
-  await postInvoiceJournal(tenantId, updated.id, totalAmount.toNumber()).catch((err) => {
-    console.error(`[gl] shipment invoice journal failed for invoice ${updated.id}:`, err)
-    return null
+    // Each call extends the invoice once, so each gets its own posting. PLR-147 keys this by the
+    // fulfillment task id so a retried dispatch maps to the same posting.
+    await enqueuePostingJob(tx, {
+      tenantId,
+      kind: 'INVOICE_EXTENSION_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoiceId,
+      variant: `ext:${randomUUID()}`,
+      amount: extensionBase.toFixed(2),
+    })
+    return row
   })
 
   return updated
@@ -627,17 +635,28 @@ export async function applyCreditMemo(
   const seq = (invoice.creditMemos?.length ?? 0) + 1
   const memoNumber = formatCreditMemoNumber(order.id, seq)
 
-  const creditMemo = await orderDb.creditMemo.create({
-    data: {
+  const creditBase = toBaseAmount(creditTotal, Number(invoice.fxRateToBase))
+  const creditMemo = await orderDb.$transaction(async (tx) => {
+    const memo = await tx.creditMemo.create({
+      data: {
+        tenantId,
+        orderId: order.id,
+        invoiceId: invoice.id,
+        memoNumber,
+        customerId: order.customerId,
+        totalAmount: new Prisma.Decimal(creditTotal),
+        reason: input.reason,
+        lines: memoLines as never,
+      },
+    })
+    await enqueuePostingJob(tx, {
       tenantId,
-      orderId: order.id,
-      invoiceId: invoice.id,
-      memoNumber,
-      customerId: order.customerId,
-      totalAmount: new Prisma.Decimal(creditTotal),
-      reason: input.reason,
-      lines: memoLines as never,
-    },
+      kind: 'CREDIT_MEMO_JOURNAL',
+      sourceType: 'CreditMemo',
+      sourceId: memo.id,
+      amount: creditBase.toFixed(2),
+    })
+    return memo
   })
 
   for (const ml of memoLines) {
@@ -708,24 +727,20 @@ export async function applyCreditMemo(
     await releaseCreditUsed(tenantId, order.customerId, creditTotal).catch(() => undefined)
   }
 
-  const journalEntryId = await postCreditMemoJournal(tenantId, creditMemo.id, creditTotal).catch((err) => {
-    console.error(`[gl] credit memo journal failed for ${creditMemo.id}:`, err)
-    return null
-  })
-  if (journalEntryId) {
-    await orderDb.creditMemo.update({ where: { id: creditMemo.id }, data: { journalEntryId } })
-  }
-
   // Restocked goods reverse their ship-time COGS.
   if (input.restock !== false) {
-    const { computeOrderCogs, postCogsReversalJournal } = await import('./operations-gl')
+    const { computeOrderCogs } = await import('./operations-gl')
     const returnedCogs = await computeOrderCogs(
       tenantId,
       memoLines.map((ml) => ({ skuId: ml.skuId, quantity: ml.quantity })),
     )
-    await postCogsReversalJournal(tenantId, creditMemo.id, returnedCogs).catch((err) =>
-      console.error(`[gl] COGS reversal failed for credit memo ${creditMemo.id}:`, err),
-    )
+    await enqueuePostingJob(orderDb, {
+      tenantId,
+      kind: 'COGS_REVERSAL_JOURNAL',
+      sourceType: 'CreditMemo',
+      sourceId: creditMemo.id,
+      amount: returnedCogs.toFixed(2),
+    })
   }
 
   // Money back: refund captured card/ACH payments up to the credited amount.

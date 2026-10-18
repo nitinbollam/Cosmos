@@ -8,6 +8,7 @@ import { routeFulfillment, routeWms, routePickWaves } from './routes/wms'
 import { routeRoutes, routeDispatchMobile, routePurchaseOrders, routeSuppliers, routeEdi } from './routes/logistics'
 import {
   routeInvoices,
+  routePostingJobs,
   routeBills,
   routePayments,
   routeSavedPaymentMethods,
@@ -88,6 +89,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'compliance') return await routeCompliance(m, seg, req)
     if (seg[0] === 'notifications') return await routeNotifications(m, seg, req)
     if (seg[0] === 'push') return await routePush(m, seg, req)
+    if (seg[0] === 'posting-jobs') return await routePostingJobs(m, seg, req)
     if (seg[0] === 'journal-entries') return await routeJournalEntries(m, seg, req)
     if (seg[0] === 'chart-accounts') return await routeChartAccounts(m, seg, req)
     if (seg[0] === 'financial-statements') return await routeFinancialStatements(m, seg, req)
