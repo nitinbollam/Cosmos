@@ -266,7 +266,8 @@ export async function invoiceShipmentForOrder(
       sourceType: 'Invoice',
       sourceId: invoiceId,
       variant: `ext:${fulfillmentTaskId ?? randomUUID()}`,
-      amount: extensionBase.toFixed(2),
+      amount: extension.baseTotal.toFixed(2),
+      taxAmount: extension.baseTax.toFixed(2),
     })
     return row
   })
