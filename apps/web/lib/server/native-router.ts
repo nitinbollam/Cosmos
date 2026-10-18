@@ -39,6 +39,7 @@ import {
 import { routeApprovals } from './routes/approvals'
 import { routeDiscounts } from './routes/discounts'
 import { routeGiftCards } from './routes/gift-cards'
+import { routeReconciliation } from './routes/reconciliation'
 import { routeLoyalty } from './routes/loyalty'
 import { routeSubscriptions, routeSubscriptionJobs } from './routes/subscriptions'
 import { routeCampaigns, routeUnsubscribe } from './routes/campaigns'
@@ -111,6 +112,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'approvals') return await routeApprovals(m, seg, req)
     if (seg[0] === 'discounts') return await routeDiscounts(m, seg, req)
     if (seg[0] === 'gift-cards') return await routeGiftCards(m, seg, req)
+    if (seg[0] === 'reconciliation') return await routeReconciliation(m, seg, req)
     if (seg[0] === 'loyalty') return await routeLoyalty(m, seg, req)
     if (seg[0] === 'subscriptions') return await routeSubscriptions(m, seg, req)
     if (seg[0] === 'campaigns') return await routeCampaigns(m, seg, req)
