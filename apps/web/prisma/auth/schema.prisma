@@ -84,3 +84,13 @@ enum Plan {
   GROWTH
   ENTERPRISE
 }
+
+/// PLR-160: shared fixed-window counters for auth rate limiting. Lives in the database (not process
+/// memory) so every instance sees the same counts and they survive restarts. Rows are tiny and expire.
+model RateLimitBucket {
+  key       String @id
+  count     Int
+  resetAtMs BigInt
+
+  @@index([resetAtMs])
+}
