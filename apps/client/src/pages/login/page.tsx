@@ -7,8 +7,9 @@ import { axiosErr, isEmailVerificationRequired } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 import { setB2bSession } from '@/lib/session'
 import { clearTokens, setTokens } from '@/lib/auth-session'
-
-type LoginRes = { accessToken: string; refreshToken: string }
+import { tenantPromptOf, tokensOf, type LoginResponse, type LoginTokens, type TenantPrompt } from '@/lib/login-flow'
+import { TenantPicker } from '@/components/auth/tenant-picker'
+import { isUnauthorized } from '@/lib/axios-error'
 
 type AuthMe = {
   tenantId: string
@@ -25,6 +26,38 @@ export default function LoginPage() {
   const [resendSent, setResendSent] = useState(false)
   const [resendBusy, setResendBusy] = useState(false)
   const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null)
+  const [pick, setPick] = useState<TenantPrompt | null>(null)
+
+  async function finish(r: LoginTokens) {
+    setTokens(r.accessToken, r.refreshToken)
+
+    const me = await api.get<AuthMe>('/auth/me')
+    if (!me.customerId) {
+      setErr(
+        'No CRM customer record matches your email. Ask your tenant admin to create a customer with this address.',
+      )
+      clearTokens()
+      return
+    }
+
+    setB2bSession(me.tenantId, me.customerId)
+    emitStorefrontAuthChanged()
+    window.location.href = '/catalog'
+  }
+
+  async function choose(tenantId: string) {
+    if (!pick) return
+    setErr(null)
+    setLoading(true)
+    try {
+      await finish(await api.post<LoginTokens>('/auth/login/select', { selectionToken: pick.selectionToken, tenantId }))
+    } catch (e: unknown) {
+      if (isUnauthorized(e)) setPick(null)
+      setErr(isEmailVerificationRequired(e) ? 'Please verify your email before signing in.' : axiosErr(e))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,21 +67,13 @@ export default function LoginPage() {
     setDevVerifyUrl(null)
     setLoading(true)
     try {
-      const r = await api.post<LoginRes>('/auth/login', { email, password })
-      setTokens(r.accessToken, r.refreshToken)
-
-      const me = await api.get<AuthMe>('/auth/me')
-      if (!me.customerId) {
-        setErr(
-          'No CRM customer record matches your email. Ask your tenant admin to create a customer with this address.',
-        )
-        clearTokens()
+      const r = await api.post<LoginResponse>('/auth/login', { email, password })
+      const prompt = tenantPromptOf(r)
+      if (prompt) {
+        setPick(prompt)
         return
       }
-
-      setB2bSession(me.tenantId, me.customerId)
-      emitStorefrontAuthChanged()
-      window.location.href = '/catalog'
+      await finish(tokensOf(r))
     } catch (e: unknown) {
       if (isEmailVerificationRequired(e)) {
         setNeedsVerification(true)
@@ -91,6 +116,20 @@ export default function LoginPage() {
           </h1>
           <p style={{ color: 'var(--c-text-2)', fontSize: 14, marginTop: 8 }}>B2B buyer portal</p>
         </div>
+        {pick ? (
+          <TenantPicker
+            email={email.trim()}
+            tenants={pick.tenants}
+            busy={loading}
+            error={err}
+            onPick={(id) => void choose(id)}
+            onBack={() => {
+              setPick(null)
+              setPassword('')
+              setErr(null)
+            }}
+          />
+        ) : (
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input className="pleros-input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="Email" />
           <input
@@ -105,7 +144,8 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-        {err ? <p style={{ marginTop: 16, color: 'var(--c-danger)', fontSize: 14 }}>{err}</p> : null}
+        )}
+        {err && !pick ? <p style={{ marginTop: 16, color: 'var(--c-danger)', fontSize: 14 }}>{err}</p> : null}
         {needsVerification ? (
           <div
             style={{
