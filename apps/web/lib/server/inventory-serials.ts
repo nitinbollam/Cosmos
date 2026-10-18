@@ -99,19 +99,21 @@ export async function enforceAndShipSerialsForOrder(
   for (const sku of skus) {
     const qty = bySku.get(sku.id) ?? 0
     if (qty <= 0) continue
-    const reserved = await inventoryDb.serialUnit.findMany({
-      where: { tenantId, skuId: sku.id, orderId, status: 'RESERVED' },
+    // SHIPPED units count too: a dispatch that failed after this step is retried, and must not
+    // be rejected for units it already shipped.
+    const assigned = await inventoryDb.serialUnit.findMany({
+      where: { tenantId, skuId: sku.id, orderId, status: { in: ['RESERVED', 'SHIPPED'] } },
       take: qty,
-      orderBy: { receivedAt: 'asc' },
+      orderBy: [{ status: 'desc' }, { receivedAt: 'asc' }],
     })
-    if (reserved.length < qty) {
+    if (assigned.length < qty) {
       throw new ApiError(
         400,
-        `SKU ${sku.code} is serial-tracked: assign ${qty} serial number(s) to this order before dispatch (${reserved.length} assigned)`,
+        `SKU ${sku.code} is serial-tracked: assign ${qty} serial number(s) to this order before dispatch (${assigned.length} assigned)`,
       )
     }
     await inventoryDb.serialUnit.updateMany({
-      where: { id: { in: reserved.map((r) => r.id) } },
+      where: { id: { in: assigned.filter((r) => r.status === 'RESERVED').map((r) => r.id) } },
       data: { status: 'SHIPPED' },
     })
   }
