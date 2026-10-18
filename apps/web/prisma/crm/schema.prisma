@@ -117,3 +117,19 @@ model Activity {
   @@index([customerId])
   @@index([leadId])
 }
+
+/// One row per order whose terms exposure was added to the customer's `creditUsed`. Written in
+/// the same transaction as the increment, so a retried saga cannot apply the credit twice.
+/// `releasedAt` records the full release made when the order is cancelled (once only).
+model CreditApplication {
+  id         String    @id @default(cuid())
+  tenantId   String
+  orderId    String
+  customerId String
+  amount     Decimal
+  appliedAt  DateTime  @default(now())
+  releasedAt DateTime?
+
+  @@unique([tenantId, orderId])
+  @@index([customerId])
+}
