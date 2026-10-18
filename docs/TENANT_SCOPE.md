@@ -42,13 +42,13 @@ participant checks.
 
 ## Static triage (`node scripts/scan-tenant-sites.mjs`)
 
-173 calls address a tenant-owned row by unique key without `tenantId` in the `where`.
+172 calls address a tenant-owned row by unique key without `tenantId` in the `where`.
 
 - 152 are guarded: the function reads the row with the tenant (or calls a `get*(tenantId, id)` helper) first.
   Safe today, but only while that read stays above the write. Under `enforce` the filter is added regardless.
 - 2 were hardened here by adding `tenantId` to the `where`: `salesChannelListing.upsert` in `sales-channels/core.ts`
   and both `notificationRequest.update` calls in `notifications.ts`.
-- 21 remain flagged. Each has a disposition:
+- 20 remain flagged. Each has a disposition:
 
 | Site | Disposition |
 |---|---|
@@ -61,7 +61,7 @@ participant checks.
 | `celestial/conversations.ts` touchConversation | safe by call chain; **tighten** |
 | `inventory.ts` stockReservation.update, `subscriptions.ts` subscription.update, `domain-events.ts` webhookDelivery.findUnique | system workers that sweep all tenants; wrap in `runUnscoped('...')` at step 2 of the rollout |
 
-A test (`tenant-scope.test.ts`) fails if the unguarded count rises above 21, so the list can only shrink.
+A test (`tenant-scope.test.ts`) fails if the unguarded count rises above 20, so the list can only shrink.
 
 ## Overhead
 

@@ -50,7 +50,8 @@ for (const file of [...walk(path.join(web, 'lib/server')), ...walk(path.join(web
     const model = m[2]
     if (exemptModels.has(model[0].toUpperCase() + model.slice(1))) continue
     const block = balancedBlock(stripped, m.index + m[0].length - 1)
-    const where = /where:\s*\{[^}]*\}/.exec(block)?.[0] ?? ''
+    const wm = /where:\s*\{/.exec(block)
+    const where = wm ? balancedBlock(block, wm.index + wm[0].length - 1) : ''
     if (/tenantId/.test(where)) continue
     const line = stripped.slice(0, m.index).split('\n').length
     const before = stripped.slice(Math.max(0, m.index - 2500), m.index)

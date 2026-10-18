@@ -12,6 +12,7 @@ export type ExemptReason =
 
 export const TENANT_EXEMPT_MODELS: Record<string, { reason: ExemptReason; note: string }> = {
   'analytics.CelestialMessage': { reason: 'child', note: 'belongs to a CelestialConversation (tenant-scoped)' },
+  'auth.RateLimitBucket': { reason: 'global', note: 'auth rate-limit counters keyed by IP/email, before a tenant is known (PLR-160)' },
   'auth.Tenant': { reason: 'root', note: 'the tenant row; id is the tenant id' },
   'compliance.MSAManufacturerDid': { reason: 'cross-tenant', note: 'keyed by msaTenantId (an MSA party), read across tenants by design' },
   'dispatch.RouteStop': { reason: 'child', note: 'belongs to a DeliveryRoute' },
