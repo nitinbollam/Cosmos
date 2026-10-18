@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
-import { orderDb, paymentDb, wmsDb } from './db'
+import { crmDb, orderDb, paymentDb, wmsDb } from './db'
 import {
   applyCreditUsed,
   assertCreditAvailable,
   netTermsExposure,
   releaseCreditUsed,
+  releaseOrderCredit,
 } from './credit-limit'
 import * as inv from './inventory'
 import * as payments from './payments'
@@ -23,18 +24,30 @@ function parseCompletedSteps(raw: unknown): string[] {
 async function ensureSaga(orderId: string, tenantId: string, correlationId: string) {
   const existing = await orderDb.orderSaga.findUnique({ where: { orderId } })
   if (existing) return existing
-  return orderDb.orderSaga.create({
-    data: {
-      id: randomUUID(),
-      orderId,
-      tenantId,
-      status: 'PENDING',
-      correlationId,
-      completedSteps: [],
-      compensations: {},
-    },
-  })
+  try {
+    return await orderDb.orderSaga.create({
+      data: {
+        id: randomUUID(),
+        orderId,
+        tenantId,
+        status: 'PENDING',
+        correlationId,
+        completedSteps: [],
+        compensations: {},
+      },
+    })
+  } catch (err) {
+    // A concurrent run created it first.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const winner = await orderDb.orderSaga.findUnique({ where: { orderId } })
+      if (winner) return winner
+    }
+    throw err
+  }
 }
+
+/** A RUNNING saga that has not written for this long is treated as crashed and may be taken over. */
+const SAGA_LEASE_MS = 2 * 60_000
 
 export async function transitionOrderStatus(
   tenantId: string,
@@ -49,33 +62,86 @@ export async function transitionOrderStatus(
   if (!canTransitionOrderStatus(current, nextStatus)) {
     throw new ApiError(400, `Cannot transition order from ${current} to ${nextStatus}`)
   }
-  return orderDb.order.update({
-    where: { id: orderId },
-    data: { status: nextStatus, ...extra },
+  // Compare-and-set on the status we checked: of two callers that read the same status (pack and
+  // cancel, say) only one write lands; the other is told what the order became.
+  const moved = await orderDb.order.updateMany({
+    where: { id: orderId, tenantId, status: current as never },
+    data: { status: nextStatus as never, ...extra },
+  })
+  if (moved.count !== 1) {
+    const now = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
+    if (now?.status === nextStatus) return now
+    throw new ApiError(
+      409,
+      `Order status changed from ${current} to ${now?.status ?? 'unknown'} while moving it to ${nextStatus}`,
+    )
+  }
+  return orderDb.order.findFirstOrThrow({
+    where: { id: orderId, tenantId },
     include: { lineItems: true, saga: true },
   })
 }
 
-/** Reserve stock, create WMS task, and move order to PROCESSING. Idempotent on saga steps. */
+/** Set a status only if the order is still in one of `from`. Returns whether the write landed. */
+async function setStatusIf(
+  tenantId: string,
+  orderId: string,
+  from: OrderStatus[],
+  data: { status: OrderStatus; confirmedAt?: Date; failureReason?: string | null },
+) {
+  const res = await orderDb.order.updateMany({
+    where: { id: orderId, tenantId, status: { in: from as never[] } },
+    data: data as never,
+  })
+  return res.count === 1
+}
+
+export type PipelineOutcome = 'COMPLETED' | 'ALREADY_RUNNING' | 'SKIPPED'
+
+/** Statuses a failed pipeline moves to FAILED. Packed and later orders hold committed stock and are left alone. */
+const PRE_PACK_STATUSES: OrderStatus[] = ['PENDING', 'CONFIRMED', 'BACKORDERED', 'PROCESSING']
+const OPEN_STATUSES: OrderStatus[] = ['PENDING', 'CONFIRMED', 'BACKORDERED']
+
+/**
+ * Reserve stock, create the WMS task, and move the order to PROCESSING.
+ *
+ * Safe to run twice, even at the same time: a run claims the saga with one compare-and-set (a
+ * second caller gets ALREADY_RUNNING), every step records itself on the saga as soon as its effect
+ * is done, and the effects themselves (credit, status, allocation) are idempotent. A run that
+ * fails undoes what it can, records each undo under `compensations`, moves a not-yet-packed order
+ * to FAILED, and rethrows.
+ */
 export async function runOrderFulfillmentPipeline(
   orderId: string,
   tenantId: string,
   correlationId: string,
-): Promise<void> {
+): Promise<PipelineOutcome> {
+  const isTerminal = (status: string) => status === 'CANCELLED' || status === 'FAILED' || status === 'DELIVERED'
+  const peek = await orderDb.order.findFirst({ where: { id: orderId, tenantId }, select: { status: true } })
+  if (!peek || isTerminal(peek.status)) return 'SKIPPED'
+
+  const sagaRow = await ensureSaga(orderId, tenantId, correlationId)
+  const claim = await orderDb.orderSaga.updateMany({
+    where: {
+      id: sagaRow.id,
+      OR: [{ status: { not: 'RUNNING' } }, { updatedAt: { lt: new Date(Date.now() - SAGA_LEASE_MS) } }],
+    },
+    data: { status: 'RUNNING', correlationId },
+  })
+  if (claim.count !== 1) return 'ALREADY_RUNNING'
+
+  // Read after claiming: another run may have advanced the order or the saga before we got here.
+  const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { id: sagaRow.id } })
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
     include: { lineItems: true },
   })
-  if (!order) return
-  if (order.status === 'CANCELLED' || order.status === 'FAILED' || order.status === 'DELIVERED') return
-
-  const saga = await ensureSaga(orderId, tenantId, correlationId)
+  if (!order || isTerminal(order.status)) {
+    await orderDb.orderSaga.update({ where: { id: saga.id }, data: { status: sagaRow.status } })
+    return 'SKIPPED'
+  }
   const steps = parseCompletedSteps(saga.completedSteps)
-
-  await orderDb.orderSaga.update({
-    where: { id: saga.id },
-    data: { status: 'RUNNING', correlationId },
-  })
+  const persistSteps = () => orderDb.orderSaga.update({ where: { id: saga.id }, data: { completedSteps: steps } })
 
   try {
     const unallocatedStock = order.lineItems.filter(
@@ -102,19 +168,13 @@ export async function runOrderFulfillmentPipeline(
       }
 
       if (anyBackordered) {
-        await orderDb.order.update({
-          where: { id: orderId },
-          data: { status: 'BACKORDERED' },
-        })
+        await setStatusIf(tenantId, orderId, PRE_PACK_STATUSES, { status: 'BACKORDERED' })
       }
 
       if (!steps.includes('RESERVE_INVENTORY')) {
         steps.push('RESERVE_INVENTORY')
       }
-      await orderDb.orderSaga.update({
-        where: { id: saga.id },
-        data: { completedSteps: steps },
-      })
+      await persistSteps()
     }
 
     if (!steps.includes('CREATE_DROP_SHIP')) {
@@ -123,10 +183,7 @@ export async function runOrderFulfillmentPipeline(
         await dropShip.createDropShipPurchaseOrders(tenantId, orderId)
       }
       steps.push('CREATE_DROP_SHIP')
-      await orderDb.orderSaga.update({
-        where: { id: saga.id },
-        data: { completedSteps: steps },
-      })
+      await persistSteps()
     }
 
     const openTask = await wmsDb.fulfillmentTask.findFirst({
@@ -161,33 +218,20 @@ export async function runOrderFulfillmentPipeline(
       if (!steps.includes('CREATE_FULFILLMENT')) {
         steps.push('CREATE_FULFILLMENT')
       }
-      await orderDb.orderSaga.update({
-        where: { id: saga.id },
-        data: { completedSteps: steps },
-      })
+      await persistSteps()
     }
 
     if (!steps.includes('CONFIRM_ORDER')) {
       const confirmedAt = order.confirmedAt ?? new Date()
-      const current = order.status as OrderStatus
       const refreshed = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
-      const nextStatus: OrderStatus =
-        refreshed?.status === 'BACKORDERED' ? 'BACKORDERED' : 'PROCESSING'
+      const current = (refreshed?.status ?? order.status) as OrderStatus
+      const nextStatus: OrderStatus = current === 'BACKORDERED' ? 'BACKORDERED' : 'PROCESSING'
 
-      if (current === 'PENDING' || current === 'CONFIRMED' || current === 'BACKORDERED') {
+      if (OPEN_STATUSES.includes(current)) {
         if (nextStatus !== current) {
-          await orderDb.order.update({
-            where: { id: orderId },
-            data: {
-              status: nextStatus,
-              confirmedAt,
-            },
-          })
+          await setStatusIf(tenantId, orderId, OPEN_STATUSES, { status: nextStatus, confirmedAt })
         } else if (!order.confirmedAt) {
-          await orderDb.order.update({
-            where: { id: orderId },
-            data: { confirmedAt },
-          })
+          await orderDb.order.updateMany({ where: { id: orderId, tenantId }, data: { confirmedAt } })
         }
       }
 
@@ -195,38 +239,64 @@ export async function runOrderFulfillmentPipeline(
         order.lineItems.length > 0 &&
         order.lineItems.every((li) => li.fulfillmentType === 'DROP_SHIP')
       if (dropOnly) {
-        await orderDb.order.update({
-          where: { id: orderId },
-          data: { status: 'CONFIRMED', confirmedAt },
-        })
+        await setStatusIf(tenantId, orderId, PRE_PACK_STATUSES, { status: 'CONFIRMED', confirmedAt })
       }
 
       if (order.paymentMethod === 'NET_TERMS') {
         const exposure = netTermsExposure(Number(order.totalAmount), Number(order.amountPaid ?? 0))
-        await applyCreditUsed(tenantId, order.customerId, exposure)
+        // Recorded per order, so repeating this step after a crash cannot consume the credit twice.
+        await applyCreditUsed(tenantId, order.customerId, exposure, orderId)
       }
       steps.push('CONFIRM_ORDER')
+      await persistSteps()
     }
 
     await orderDb.orderSaga.update({
       where: { id: saga.id },
       data: { status: 'COMPLETED', completedSteps: steps, failureReason: null },
     })
+    return 'COMPLETED'
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Order pipeline failed'
-    await inv.releaseReservationsForOrder(tenantId, orderId).catch(() => undefined)
-    await orderDb.orderSaga.update({
-      where: { id: saga.id },
-      data: { status: 'FAILED', failureReason: message },
-    })
-    if (order.status === 'PENDING') {
-      await orderDb.order.update({
-        where: { id: orderId },
-        data: { status: 'FAILED', failureReason: message },
-      })
-    }
-    throw err instanceof ApiError ? err : new ApiError(500, message)
+    await failPipeline(tenantId, orderId, saga.id, correlationId, err)
+    throw err instanceof ApiError ? err : new ApiError(500, err instanceof Error ? err.message : 'Order pipeline failed')
   }
+}
+
+/**
+ * End state of a failed pipeline: stock holds, the warehouse task and any applied credit are
+ * released through their idempotent paths, the order moves to FAILED if it has not been packed,
+ * and each undo is recorded on the saga so an operator can see what did not complete. An undo that
+ * fails is logged with the order and correlation ids and left for the reservation safety net.
+ */
+async function failPipeline(tenantId: string, orderId: string, sagaId: string, correlationId: string, err: unknown) {
+  const message = err instanceof Error ? err.message : 'Order pipeline failed'
+  const compensations: Record<string, string> = {}
+  const undo = async (name: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn()
+      compensations[name] = 'done'
+    } catch (undoErr) {
+      compensations[name] = `failed: ${undoErr instanceof Error ? undoErr.message : String(undoErr)}`.slice(0, 300)
+      console.error(`[orders] saga undo "${name}" failed for order ${orderId} (correlation ${correlationId}):`, undoErr)
+    }
+  }
+  console.error(`[orders] pipeline failed for order ${orderId} (correlation ${correlationId}): ${message}`)
+
+  await undo('reservations', () => inv.releaseReservationsForOrder(tenantId, orderId))
+  await undo('fulfillment', () => wmsFulfillment.cancelFulfillmentByOrder(tenantId, orderId, 'pipeline failed'))
+  await undo('credit', async () => {
+    const applied = await crmDb.creditApplication.findFirst({ where: { tenantId, orderId } })
+    if (applied && !applied.releasedAt) {
+      await releaseOrderCredit(tenantId, applied.customerId, orderId, Number(applied.amount))
+    }
+  })
+  await undo('status', async () => {
+    await setStatusIf(tenantId, orderId, PRE_PACK_STATUSES, { status: 'FAILED', failureReason: message })
+  })
+  await orderDb.orderSaga.update({
+    where: { id: sagaId },
+    data: { status: 'FAILED', failureReason: message, compensations },
+  })
 }
 
 export async function tryCaptureAuthorizedPayment(tenantId: string, orderId: string, correlationId: string) {
