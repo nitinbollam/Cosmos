@@ -65,14 +65,16 @@ export async function routeReports(method: string, seg: string[], req: Request):
     const y = url.searchParams.get('year')
     const m = url.searchParams.get('month')
     const q = url.searchParams.get('quarter')
-    const pType = url.searchParams.get('periodType') as 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null
+    const explicitType = url.searchParams.get('periodType') as 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null
     const year = y ? parseInt(y, 10) : new Date().getFullYear()
+    // A bare year (no month/quarter/periodType) is the whole year, not January.
+    const pType = explicitType ?? (m ? 'MONTHLY' : q ? 'QUARTERLY' : y ? 'YEARLY' : 'MONTHLY')
     const month = m ? parseInt(m, 10) : new Date().getMonth() + 1
     const quarter = q ? parseInt(q, 10) : 1
     return Response.json(
       await ledger.trialBalance(session.tenantId, year, {
         year,
-        periodType: pType ?? 'MONTHLY',
+        periodType: pType,
         month,
         quarter,
       }),
