@@ -314,23 +314,14 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
       throw new ApiError(400, 'Insufficient available stock at source warehouse')
     }
 
-    // Guarded atomic decrement: a concurrent transfer/reserve/ship cannot be overwritten and
-    // available can never go negative (available = onHand - reserved).
-    const moved = await tx.stockLevel.updateMany({
-      where: { id: from.id, tenantId, quantityAvailable: { gte: dto.quantity } },
+    const fromOnHand = from.quantityOnHand - dto.quantity
+    await tx.stockLevel.update({
+      where: { id: from.id },
       data: {
-        quantityOnHand: { decrement: dto.quantity },
-        quantityAvailable: { decrement: dto.quantity },
+        quantityOnHand: fromOnHand,
+        quantityAvailable: from.quantityAvailable - dto.quantity,
       },
     })
-    if (moved.count !== 1) {
-      throw new ApiError(400, 'Insufficient available stock at source warehouse')
-    }
-    const fromAfter = await tx.stockLevel.findUniqueOrThrow({
-      where: { id: from.id },
-      select: { quantityOnHand: true },
-    })
-    const fromOnHand = fromAfter.quantityOnHand
 
     await tx.stockLedgerEntry.create({
       data: {
@@ -649,25 +640,20 @@ export async function adjustStock(
       where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
     })
     if (!level) throw new ApiError(404, 'Stock level not found')
-    // Relative, guarded update. available = onHand - reserved, so requiring
-    // available >= -delta covers both "would go negative" and "less than reserved".
-    const guarded = await tx.stockLevel.updateMany({
-      where: {
-        id: level.id,
-        tenantId,
-        ...(dto.quantityDelta < 0 ? { quantityAvailable: { gte: -dto.quantityDelta } } : {}),
-      },
+    const newOnHand = level.quantityOnHand + dto.quantityDelta
+    if (newOnHand < 0) throw new ApiError(400, 'Adjustment would drive stock negative')
+    if (newOnHand < level.quantityReserved) {
+      throw new ApiError(400, 'Adjustment would leave less on hand than reserved quantity')
+    }
+
+    const updatedLevel = await tx.stockLevel.update({
+      where: { id: level.id },
       data: {
-        quantityOnHand: { increment: dto.quantityDelta },
+        quantityOnHand: newOnHand,
         quantityAvailable: { increment: dto.quantityDelta },
         ...(dto.locationId !== undefined ? { locationId: dto.locationId || null } : {}),
       },
     })
-    if (guarded.count !== 1) {
-      throw new ApiError(400, 'Adjustment would leave less on hand than reserved quantity')
-    }
-    const updatedLevel = await tx.stockLevel.findUniqueOrThrow({ where: { id: level.id } })
-    const newOnHand = updatedLevel.quantityOnHand
     await tx.stockLedgerEntry.create({
       data: {
         id: randomUUID(),
@@ -915,55 +901,41 @@ export async function commitShipmentForOrder(
 
       const level = await tx.stockLevel.findFirst({
         where: { tenantId, skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey },
-        select: { id: true },
       })
-      if (!level) {
-        throw new ApiError(409, `No stock level for sku ${res.skuId} in warehouse ${res.warehouseId}; cannot ship`)
-      }
 
-      // Release the full reservation hold; only `shipQty` actually leaves stock, so the
-      // unshipped remainder (res.quantity - shipQty) flows back into availability.
-      // The decrement is a single guarded statement, so concurrent shipments cannot overwrite
-      // each other and on-hand can never go negative.
-      const updated = await tx.stockLevel.updateMany({
-        where: { id: level.id, tenantId, quantityOnHand: { gte: shipQty } },
-        data: {
-          quantityOnHand: { decrement: shipQty },
-          quantityReserved: { decrement: res.quantity },
-          quantityAvailable: { increment: res.quantity - shipQty },
-        },
-      })
-      if (updated.count !== 1) {
-        throw new ApiError(
-          409,
-          `Insufficient on-hand stock to ship ${shipQty} of sku ${res.skuId} from warehouse ${res.warehouseId}`,
-        )
-      }
-
-      if (shipQty > 0) {
-        // Read back inside the same transaction: the row lock taken by the update above
-        // guarantees this is the exact on-hand left by this shipment.
-        const after = await tx.stockLevel.findUniqueOrThrow({
+      if (level) {
+        const newOnHand = Math.max(0, level.quantityOnHand - shipQty)
+        // Release the full reservation hold; only `shipQty` actually leaves stock, so the
+        // unshipped remainder (res.quantity - shipQty) flows back into availability.
+        const availableDelta = res.quantity - shipQty
+        await tx.stockLevel.update({
           where: { id: level.id },
-          select: { quantityOnHand: true },
-        })
-        await tx.stockLedgerEntry.create({
           data: {
-            id: randomUUID(),
-            tenantId,
-            skuId: res.skuId,
-            warehouseId: res.warehouseId,
-            batchId: batchKey,
-            eventType: 'STOCK_SHIPPED',
-            quantityDelta: -shipQty,
-            quantityAfter: after.quantityOnHand,
-            unitCost: new Prisma.Decimal(0),
-            referenceId: orderId,
-            referenceType: 'ORDER',
-            performedBy,
-            correlationId,
+            quantityOnHand: newOnHand,
+            quantityReserved: { decrement: res.quantity },
+            quantityAvailable: { increment: availableDelta },
           },
         })
+
+        if (shipQty > 0) {
+          await tx.stockLedgerEntry.create({
+            data: {
+              id: randomUUID(),
+              tenantId,
+              skuId: res.skuId,
+              warehouseId: res.warehouseId,
+              batchId: batchKey,
+              eventType: 'STOCK_SHIPPED',
+              quantityDelta: -shipQty,
+              quantityAfter: newOnHand,
+              unitCost: new Prisma.Decimal(0),
+              referenceId: orderId,
+              referenceType: 'ORDER',
+              performedBy,
+              correlationId,
+            },
+          })
+        }
       }
 
       await tx.stockReservation.update({
