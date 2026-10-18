@@ -11,7 +11,7 @@
     "lint": "node ../../scripts/eslint-soft.mjs .ts,.tsx",
     "pretypecheck": "npm run build -w @pleros/ui && npm run build -w @pleros/web-gateway-client",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test": "node ../../scripts/run-tests.mjs --import tsx 'src/**/*.test.ts'",
     "prebuild": "node ../../scripts/clean-client-public.mjs"
   },
   "dependencies": {
