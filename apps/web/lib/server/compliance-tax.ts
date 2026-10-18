@@ -1,13 +1,15 @@
 import { complianceDb } from './db'
 import { getTenantSalesTaxRate } from './tenant-tax'
 
-/** State-based demo rates — extend via tenant settings.taxJurisdictions. */
+/**
+ * State-based demo rates — extend via tenant settings.taxJurisdictions.
+ * tax-rate-allowlist: replaced by per-state tax tables in the tax/excise port; not a tenant default.
+ */
 const STATE_TAX_RATES: Record<string, number> = {
   TX: 0.0825,
   CA: 0.0725,
   NY: 0.08,
   FL: 0.06,
-  DEFAULT: 0.07,
 }
 
 export async function taxSummary(tenantId: string) {
@@ -26,10 +28,8 @@ export type RecordTaxInput = {
   correlationId: string
 }
 
-const DEFAULT_TAX_RATE = 0.07
-
-/** Standard sales tax on merchandise subtotal (7% demo rate). */
-export function computeSalesTax(subtotal: number, rate = DEFAULT_TAX_RATE): number {
+/** Sales tax on a merchandise subtotal at an explicit rate (there is no default rate). */
+export function computeSalesTax(subtotal: number, rate: number): number {
   if (!Number.isFinite(subtotal) || subtotal <= 0) return 0
   return +(subtotal * rate).toFixed(2)
 }
