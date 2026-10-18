@@ -157,21 +157,47 @@ test('completed steps are saved as each step finishes', async () => {
   }
 })
 
-test('two transitions from the same status: one wins, the other gets 409 and changes nothing', async () => {
-  for (let i = 0; i < 20; i++) {
+test('two simultaneous transitions never leave the order in a status that contradicts a success', async () => {
+  for (let i = 0; i < 30; i++) {
     const { orderId } = await seed({ status: 'PROCESSING' })
-    const results = await Promise.allSettled([
+    const [pack, cancel] = await Promise.allSettled([
       transitionOrderStatus(tenantId, orderId, 'PACKED'),
       transitionOrderStatus(tenantId, orderId, 'CANCELLED'),
     ])
-    const ok = results.filter((r) => r.status === 'fulfilled')
-    const bad = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-    assert.equal(ok.length, 1)
-    assert.equal(bad.length, 1)
-    assert.ok(bad[0].reason instanceof ApiError && (bad[0].reason.status === 409 || bad[0].reason.status === 400))
-    const winner = (ok[0] as PromiseFulfilledResult<{ status: string }>).value.status
-    assert.equal((await orderDb.order.findFirstOrThrow({ where: { id: orderId } })).status, winner)
+    const final = (await orderDb.order.findFirstOrThrow({ where: { id: orderId } })).status
+    // Pack then cancel in sequence is legal (PACKED -> CANCELLED). What must never happen is both
+    // reading PROCESSING and both writing: a loser is told 409 and its change does not apply.
+    if (cancel.status === 'fulfilled') assert.equal(final, 'CANCELLED')
+    else assert.equal(final, 'PACKED')
+    if (pack.status === 'rejected') {
+      assert.ok(pack.reason instanceof ApiError && pack.reason.status === 409, 'loser gets 409')
+    }
+    if (cancel.status === 'rejected') {
+      assert.ok(cancel.reason instanceof ApiError && cancel.reason.status === 409, 'loser gets 409')
+    }
+    assert.ok(pack.status === 'fulfilled' || cancel.status === 'fulfilled', 'at least one wins')
   }
+})
+
+test('a stale-status write is refused with 409 and applies nothing', async () => {
+  const { orderId } = await seed({ status: 'PROCESSING' })
+  // Another caller moves the order between our read and our write.
+  const original = orderDb.order.findFirst.bind(orderDb.order)
+  let first = true
+  await withPatched(orderDb.order, 'findFirst', async (args: never) => {
+    const row = await original(args)
+    if (first && row) {
+      first = false
+      await orderDb.order.update({ where: { id: orderId }, data: { status: 'CANCELLED' } })
+    }
+    return row
+  }, async () => {
+    await assert.rejects(
+      () => transitionOrderStatus(tenantId, orderId, 'PACKED'),
+      (err: unknown) => err instanceof ApiError && err.status === 409 && /CANCELLED/.test(err.message),
+    )
+  })
+  assert.equal((await orderDb.order.findFirstOrThrow({ where: { id: orderId } })).status, 'CANCELLED')
 })
 
 test('repeating the transition that already happened is a no-op, not an error', async () => {
