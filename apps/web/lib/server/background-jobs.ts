@@ -9,6 +9,10 @@ const WEBHOOK_RETRY_MS = 30 * 1000
 /** GL posting outbox: new postings are picked up within seconds; retries follow their own backoff. */
 const POSTING_JOBS_MS = 15 * 1000
 
+/** Reconciliation (PLR-150) runs once a day; set RECONCILIATION_DISABLED=1 to turn it off. */
+const RECONCILIATION_MS = 24 * 60 * 60 * 1000
+const RECONCILIATION_FIRST_RUN_MS = 5 * 60 * 1000
+
 let started = false
 
 export function startBackgroundJobs(): void {
@@ -76,17 +80,21 @@ export function startBackgroundJobs(): void {
     }
   }
 
-  const runPostings = async () => {
+  const reconcile = async () => {
+    if (process.env.RECONCILIATION_DISABLED === '1') return
     try {
-      const { runPostingJobs } = await import('./posting-outbox')
-      const res = await runPostingJobs()
-      if (res.claimed > 0) {
-        console.log(`[jobs] gl postings: done ${res.done}, retrying ${res.failed}, dead ${res.dead}`)
-      }
+      const { runReconciliationForAllTenants } = await import('./reconciliation')
+      const results = await runReconciliationForAllTenants()
+      const total = results.reduce((n, r) => n + r.findings.length, 0)
+      console.log(`[jobs] reconciliation: ${results.length} tenant(s), ${total} open finding(s)`)
     } catch (err) {
-      console.error('[jobs] gl posting run failed:', err)
+      console.error('[jobs] reconciliation failed:', err)
     }
   }
+  const reconcileFirst = setTimeout(() => void reconcile(), RECONCILIATION_FIRST_RUN_MS)
+  reconcileFirst.unref?.()
+  const reconcileTimer = setInterval(() => void reconcile(), RECONCILIATION_MS)
+  reconcileTimer.unref?.()
 
   void sweep()
   void flushSalesChannels()
