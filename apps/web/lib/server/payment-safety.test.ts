@@ -41,15 +41,19 @@ async function postings(orderId: string, description: string) {
   return new Set(rows.filter((r) => r.description?.startsWith(description)).map((r) => r.entryGroupId)).size
 }
 
-test('two refunds of one payment at the same moment refund it once', async () => {
+test('two refunds of the whole payment at the same moment refund it once', async () => {
   const p = await payment('CAPTURED')
-  const results = await Promise.allSettled([refund(tenantId, p.id, 40, 'a'), refund(tenantId, p.id, 40, 'b')])
+  // Each asks for everything. Whichever order they land in, exactly one can succeed: the loser either loses
+  // the compare-and-set (409) or, if it starts after the winner committed, sees nothing left (400).
+  // (Two 40s would not do: a refund that starts after the first has committed is a legitimate second refund.)
+  const results = await Promise.allSettled([refund(tenantId, p.id, 100, 'a'), refund(tenantId, p.id, 100, 'b')])
 
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1)
   const failed = results.find((r) => r.status === 'rejected') as PromiseRejectedResult
-  assert.equal((failed.reason as { status: number }).status, 409)
+  assert.ok([400, 409].includes((failed.reason as { status: number }).status))
   const after = await paymentDb.paymentIntent.findUniqueOrThrow({ where: { id: p.id } })
-  assert.equal(Number(after.refundedAmount), 40)
+  assert.equal(Number(after.refundedAmount), 100)
+  assert.equal(after.status, 'REFUNDED')
   assert.equal(await postings(p.orderId, 'Refund'), 1)
 })
 
