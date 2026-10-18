@@ -130,7 +130,7 @@ export async function applyPlanFromSubscription(
   })
 
   const { authDb } = await import('./db')
-  await authDb.tenant.update({ where: { id: tenantId }, data: { plan } }).catch(() => undefined)
+  await authDb.tenant.update({ where: { id: tenantId }, data: { plan } })
 }
 
 export async function downgradeToStarter(tenantId: string): Promise<void> {
@@ -139,7 +139,7 @@ export async function downgradeToStarter(tenantId: string): Promise<void> {
     data: { plan: 'STARTER', stripeSubscriptionId: null, billingStatus: 'canceled' },
   })
   const { authDb } = await import('./db')
-  await authDb.tenant.update({ where: { id: tenantId }, data: { plan: 'STARTER' } }).catch(() => undefined)
+  await authDb.tenant.update({ where: { id: tenantId }, data: { plan: 'STARTER' } })
 }
 
 /** Process Stripe Billing webhook events (subscription lifecycle). */
@@ -181,6 +181,6 @@ export async function devUpdateTenantPlan(tenantId: string, plan: TenantPlan) {
   }
   await tenantDb.tenantOrganization.update({ where: { id: tenantId }, data: { plan } })
   const { authDb } = await import('./db')
-  await authDb.tenant.update({ where: { id: tenantId }, data: { plan } }).catch(() => undefined)
+  await authDb.tenant.update({ where: { id: tenantId }, data: { plan } })
   return tenantDb.tenantOrganization.findUnique({ where: { id: tenantId } })
 }

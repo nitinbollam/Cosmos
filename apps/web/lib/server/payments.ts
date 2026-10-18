@@ -9,6 +9,7 @@ import { requireStripeConnectContext, findTenantIdByConnectedAccount } from './t
 import { isConnectWebhookSecretConfigured } from './stripe-connect'
 import { processStripeEventOnce } from './stripe-webhook-events'
 import { emitOrderEvent } from './domain-events'
+import { syncInvoiceOrQueue } from './deferred-work'
 
 export type AuthorizeInput = {
   orderId: string
@@ -176,8 +177,7 @@ async function settleCapture(intent: { id: string; tenantId: string; orderId: st
   await applyCapturedPayment(intent.tenantId, intent.orderId, Number(intent.amount), {
     paymentIntentId: intent.id,
   })
-  const { syncInvoiceFromOrder } = await import('./invoices')
-  await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
+  await syncInvoiceOrQueue(intent.tenantId, intent.orderId)
 }
 
 const SETTLED_STATUSES: readonly string[] = ['CAPTURED', 'REFUNDED', 'VOIDED']
@@ -541,8 +541,7 @@ async function applyPlatformStripeEvent(event: ReturnType<typeof stripe.verifySt
         })
         await linkPaymentIntent(intent.tenantId, intent.orderId, intent.id)
         // A confirm arriving after this finds the payment captured and stops, so refresh the invoice here.
-        const { syncInvoiceFromOrder } = await import('./invoices')
-        await syncInvoiceFromOrder(intent.tenantId, intent.orderId).catch(() => undefined)
+        await syncInvoiceOrQueue(intent.tenantId, intent.orderId)
       }
       break
     }

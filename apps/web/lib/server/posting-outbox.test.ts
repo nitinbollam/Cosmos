@@ -253,9 +253,9 @@ test('COGS and credit-memo jobs post balanced entries to the right accounts', as
   const tenantId = tenant()
   await ensurePostingAccounts(tenantId)
   const base = { tenantId, sourceType: 'Order', sourceId: 'o-1', variant: 'task-1', payload: { amount: '30.00' } }
-  const cogs = await postJob({ ...base, id: 'j1', kind: 'COGS_JOURNAL' })
-  const rev = await postJob({ ...base, id: 'j2', kind: 'COGS_REVERSAL_JOURNAL', sourceType: 'CreditMemo' })
-  const memo = await postJob({ ...base, id: 'j3', kind: 'CREDIT_MEMO_JOURNAL', sourceType: 'CreditMemo', sourceId: 'm-1' })
+  const cogs = (await postJob({ ...base, id: 'j1', kind: 'COGS_JOURNAL' }))!
+  const rev = (await postJob({ ...base, id: 'j2', kind: 'COGS_REVERSAL_JOURNAL', sourceType: 'CreditMemo' }))!
+  const memo = (await postJob({ ...base, id: 'j3', kind: 'CREDIT_MEMO_JOURNAL', sourceType: 'CreditMemo', sourceId: 'm-1' }))!
   for (const id of [cogs, rev, memo]) {
     const e = await ledgerDb.journalEntry.findUniqueOrThrow({ where: { id }, include: { lines: { include: { account: true } } } })
     const sum = (f: 'debit' | 'credit') => e.lines.reduce((s, l) => s + Number(l[f]), 0)

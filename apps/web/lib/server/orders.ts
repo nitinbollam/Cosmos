@@ -10,7 +10,8 @@ import { OrderStatus } from '@/generated/prisma-order'
 import * as discounts from './discounts'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
-import { syncInvoiceFromOrder } from './invoices'
+import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
+import { enqueuePostingJob } from './posting-outbox'
 import { assertOrderLinePrices } from './pricing'
 import * as notifyTriggers from './notification-triggers'
 import { assertAgeComplianceForOrder, type PosAgeAttestation } from './compliance-age'
@@ -221,8 +222,7 @@ export async function createOrder(
 
   const isFullyPaid = giftCardRedeemed >= totalAmount - 0.005
   if (isFullyPaid) {
-    const { syncInvoiceFromOrder } = await import('./invoices')
-    await syncInvoiceFromOrder(tenantId, order.id).catch(() => undefined)
+    await syncInvoiceOrQueue(tenantId, order.id)
   }
 
   const shouldFulfillNow = !defersFulfillmentUntilPayment(dto.paymentMethod) || isFullyPaid
@@ -396,7 +396,16 @@ export async function recordOrderPayment(
   })
 
   if (order.paymentMethod === 'NET_TERMS') {
-    await releaseCreditUsed(tenantId, order.customerId, Number(apply)).catch(() => undefined)
+    await attemptOrQueue(
+      {
+        tenantId,
+        kind: 'CREDIT_RELEASE',
+        sourceType: 'Order',
+        sourceId: id,
+        payload: { customerId: order.customerId, amount: apply.toString() },
+      },
+      () => releaseCreditUsed(tenantId, order.customerId, Number(apply)),
+    )
   }
   // Manual payments (cash, check, ACH entered by staff) don't go through card capture.
   void emitOrderEvent(tenantId, 'finance.payment_captured', id, {
@@ -406,12 +415,20 @@ export async function recordOrderPayment(
     reference: body.reference ?? null,
   })
 
-  await syncInvoiceFromOrder(tenantId, id).catch(() => undefined)
+  await syncInvoiceOrQueue(tenantId, id)
 
   const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId: id } })
   if (invoice) {
-    const { postArPaymentJournal } = await import('./operations-gl')
-    await postArPaymentJournal(tenantId, invoice.id, Number(apply)).catch(() => undefined)
+    // Queued with the payment's reference (or a fresh key), so the journal posts once and a ledger
+    // problem shows up as a failing job rather than a payment missing from the books.
+    await enqueuePostingJob(orderDb, {
+      tenantId,
+      kind: 'AR_PAYMENT_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoice.id,
+      variant: `manual:${body.reference?.trim() || randomUUID()}`,
+      amount: apply.toFixed(2),
+    })
     const { notifyPaymentReceived } = await import('./notification-triggers')
     void notifyPaymentReceived(tenantId, id, order.customerId, Number(apply), invoice.invoiceNumber).catch(
       () => undefined,

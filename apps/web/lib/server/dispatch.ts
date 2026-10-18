@@ -10,6 +10,7 @@ import * as orderOrchestration from './order-orchestration'
 import { inventoryDb, orderDb } from './db'
 import { getAgeVerificationPolicy } from './compliance-age'
 import { ApiError } from './session'
+import { attemptOrQueue } from './deferred-work'
 
 export function listRoutes(tenantId: string, date?: string, statuses?: RouteStatus[]) {
   const where: Prisma.DeliveryRouteWhereInput = { tenantId, ...(statuses?.length ? { status: { in: statuses } } : {}) }
@@ -377,7 +378,10 @@ export async function markStopDelivered(
   })
 
   if (orderId) {
-    await orderOrchestration.onDeliveryStopDelivered(tenantId, orderId).catch(() => undefined)
+    // The stop is delivered. Moving the order to DELIVERED is retried if it fails, never dropped.
+    await attemptOrQueue({ tenantId, kind: 'DELIVERY_ADVANCE', sourceType: 'Order', sourceId: orderId }, () =>
+      orderOrchestration.onDeliveryStopDelivered(tenantId, orderId),
+    )
   }
 
   await updateRouteAfterOutcome(routeId)

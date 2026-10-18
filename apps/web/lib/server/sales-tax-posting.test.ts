@@ -24,7 +24,7 @@ async function entryLines(tenantId: string, entryId: string): Promise<Row[]> {
 }
 
 async function job(tenantId: string, kind: string, amount: string, taxAmount?: string, sourceId = randomUUID()) {
-  return postJob({
+  const entryId = await postJob({
     id: randomUUID(),
     tenantId,
     kind: kind as never,
@@ -33,6 +33,8 @@ async function job(tenantId: string, kind: string, amount: string, taxAmount?: s
     variant: '',
     payload: taxAmount ? { amount, taxAmount } : { amount },
   })
+  assert.ok(entryId, 'a ledger job returns its journal entry id')
+  return entryId
 }
 
 test('a $100 invoice with 7% tax posts AR 107, revenue 100, sales tax payable 7', async () => {

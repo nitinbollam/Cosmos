@@ -284,8 +284,21 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
     })
   })
 
-  const { fillBackordersOnReceipt } = await import('./backorders')
-  void fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId).catch(() => undefined)
+  // The receipt is committed. Filling backorders from it is retried if it fails, never dropped.
+  const { attemptOrQueue } = await import('./deferred-work')
+  await attemptOrQueue(
+    {
+      tenantId,
+      kind: 'BACKORDER_FILL',
+      sourceType: 'Sku',
+      sourceId: `${dto.skuId}:${dto.warehouseId}`,
+      payload: { skuId: dto.skuId, warehouseId: dto.warehouseId },
+    },
+    async () => {
+      const { fillBackordersOnReceipt } = await import('./backorders')
+      await fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId)
+    },
+  )
 
   queueSalesChannelPush(tenantId, dto.skuId)
   return result
