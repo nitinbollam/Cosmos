@@ -43,12 +43,12 @@ test('a swallow with a stated reason, a handled catch, and the helper all pass',
   assert.equal(run({ 'a.ts': 'work().catch(() => undefined) // swallow-ok:\n' }).code, 1, 'a reason is required')
 })
 
-test('money patterns are reported by default and enforced with --money=strict', () => {
+test('money patterns may not grow past the baseline, and --money=strict allows none', () => {
   const body = "const a = x.toFixed(2)\nconst b = new Prisma.Decimal(total)\nconst ok = new Prisma.Decimal('1.50')\nconst z = new Decimal(0)\n"
-  const soft = run({ 'm.ts': body })
-  assert.equal(soft.code, 0)
-  assert.match(soft.out, /report only\) toFixed: apps\/web\/lib\/m\.ts has 1/)
-  assert.match(soft.out, /report only\) decimalFromNumber: apps\/web\/lib\/m\.ts has 1/)
+  const grown = run({ 'm.ts': body })
+  assert.equal(grown.code, 1)
+  assert.match(grown.out, /toFixed: apps\/web\/lib\/m\.ts has 1 \(baseline 0\)/)
+  assert.match(grown.out, /decimalFromNumber: apps\/web\/lib\/m\.ts has 1 \(baseline 0\)/)
   const strict = run({ 'm.ts': body }, ['--money=strict'])
   assert.equal(strict.code, 1)
   assert.equal(run({ 'm.ts': 'const a = x.toFixed(2) // money-ok: display only\n' }, ['--money=strict']).code, 0)

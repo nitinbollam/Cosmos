@@ -60,12 +60,24 @@ be visible, so these move to `fireAndForget` at warn level and are worth a metri
 
 `lib/server/money.ts` is the single place for money arithmetic (Decimal internally, integer cents at
 boundaries, decimal strings in API output, ROUND_HALF_UP to 2 places, largest-remainder `allocate`).
-`check-code-health.mjs` reports `.toFixed(` (73 sites) and `new Decimal(<non-literal>)` (123 sites)
-outside it. Those two counts are report-only until the per-area migrations land, then the lint line
-switches to `--money=strict` and the baseline becomes the allow-list for display formatting.
 
-Migration order (one PR per area, each with tests): invoices and tax, payments, orders, ledger and
-reports, purchasing, then API output as strings.
+Done in PLR-159: base-currency conversion (`fx-util.toBaseDecimal`) and the revenue/tax split
+(`splitBaseAmounts`) work in decimal, so `1.005` converts to `1.01` rather than `1.00`. A property test
+(`order-invoice-ledger.property.test.ts`, 60 random orders, partial shipments, tax rates up to 12.5%,
+random FX) proves order total = sum of invoices = ledger AR, revenue + tax = AR, and tax payable =
+invoiced tax, to the cent.
+
+API convention: money leaves the API as a two-decimal string via `formatMoney`; amounts that arrive as
+JSON numbers are converted once with `fromFloat`. Display formatting is covered by tests.
+
+Enforcement: `check-code-health.mjs` counts `.toFixed(` and `new Decimal(<non-literal>)` outside
+`money.ts`. The baseline is the allow-list: no file may exceed its count (84 `toFixed`, 131
+`new Decimal(x)` today, mostly display formatting and reads of Prisma Decimals). `--money=strict`
+fails on any remaining site and is the target once the per-area migrations are finished; a site that is
+correct as written carries `// money-ok: <reason>`.
+
+Remaining migration order (one PR per area): tax-reclass and credit-limit, payments, orders,
+reports, purchasing, then API output as strings everywhere.
 
 
 ## How it is enforced now
