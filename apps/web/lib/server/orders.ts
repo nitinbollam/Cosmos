@@ -19,6 +19,7 @@ import { defersFulfillmentUntilPayment } from './order-payment-sync'
 import { buildPaymentSummary, findPrimaryPaymentIntent } from './order-payment-admin'
 import { emitDomainEvent, emitOrderEvent } from './domain-events'
 
+import { swallowed } from './fire-and-forget'
 async function enrichOrderWithPaymentDetails<
   T extends { id: string; paymentIntentId: string | null; totalAmount: unknown; amountPaid: unknown },
 >(tenantId: string, order: T) {
@@ -234,7 +235,7 @@ export async function createOrder(
         console.error(`[orders] fulfillment pipeline failed for order ${order.id}:`, err),
       )
     }
-    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
+    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(swallowed('orders.channel'))
     void emitOrderEvent(tenantId, 'order.created', order.id, {}, { key: order.id })
   }
   return order
@@ -463,7 +464,7 @@ export async function resumeOrderAfterCreditApproval(tenantId: string, orderId: 
       orderId,
       order.customerId,
       Number(order.totalAmount),
-    ).catch(() => undefined)
+    ).catch(swallowed('orders.resumeOrderAfterCreditApproval'))
     void emitOrderEvent(tenantId, 'order.created', orderId, {}, { key: orderId })
   }
   return orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { lineItems: true } })
@@ -475,7 +476,7 @@ export async function getReorderLines(tenantId: string, orderId: string, opts?: 
   const skuIds = order.lineItems.map((li) => li.skuId)
   const prices = await resolvePricesForCustomer(tenantId, order.customerId, skuIds)
   const skus = await import('./inventory').then((m) =>
-    Promise.all(skuIds.map((id) => m.findSkuById(tenantId, id).catch(() => null))),
+    Promise.all(skuIds.map((id) => m.findSkuById(tenantId, id).catch((err) => { swallowed('orders.getReorderLines.sku', { tenantId, level: 'warn' })(err); return null }))),
   )
   const skuMap = new Map(skus.filter(Boolean).map((s) => [s!.id, s!]))
 

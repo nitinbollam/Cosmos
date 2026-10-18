@@ -5,6 +5,7 @@ import { enqueuePostingJob } from './posting-outbox'
 import { postPoReceiptJournal } from './operations-gl'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 function toNum(v: unknown): number {
   if (v == null) return 0
   return Number(v)
@@ -265,7 +266,7 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
     await purchasingDb.vendorBill.update({ where: { id: bill.id }, data: { journalEntryId } })
   }
 
-  await runThreeWayMatch(tenantId, bill.id).catch(() => undefined)
+  await runThreeWayMatch(tenantId, bill.id).catch(swallowed('ap-bills.createBillFromPurchaseOrder'))
 
   return getVendorBill(tenantId, bill.id)
 }

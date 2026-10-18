@@ -3,6 +3,7 @@ import { rateLimit, clientIp } from '../auth-security'
 import { isPortalBuyer, requirePortalCustomerId } from '../buyer-context'
 import { ApiError, requirePermission, requireSession } from './common'
 
+import { swallowed } from '../fire-and-forget'
 export async function routeGiftCards(method: string, seg: string[], req: Request): Promise<Response> {
   if (seg.length === 1 && method === 'GET') {
     const session = await requirePermission(req, 'gift-cards.read')
@@ -26,7 +27,7 @@ export async function routeGiftCards(method: string, seg: string[], req: Request
     if (!saved) throw new ApiError(400, 'Saved payment method not found')
 
     const { requireStripeConnectContext } = await import('../tenant-stripe-connect')
-    const connectCtx = await requireStripeConnectContext(session.tenantId).catch(() => null)
+    const connectCtx = await requireStripeConnectContext(session.tenantId).catch((err) => { swallowed('gift-cards.charge.connectContext', { tenantId: session.tenantId, level: 'warn' })(err); return null })
     if (connectCtx && saved.stripePaymentMethodId.startsWith('pm_') && !saved.stripePaymentMethodId.startsWith('pm_demo_')) {
       const { resolveStripeCustomerId } = await import('../stripe-customer-sync')
       const stripeCustomerId = await resolveStripeCustomerId(session.tenantId, customerId)
@@ -48,7 +49,7 @@ export async function routeGiftCards(method: string, seg: string[], req: Request
       issuedToCustomerId: customerId,
     })
     const { notifyGiftCardIssued } = await import('../notification-triggers')
-    void notifyGiftCardIssued(session.tenantId, card.id, card.code, body.amount, customerId).catch(() => undefined)
+    void notifyGiftCardIssued(session.tenantId, card.id, card.code, body.amount, customerId).catch(swallowed('gift-cards.body'))
     return Response.json(card, { status: 201 })
   }
 

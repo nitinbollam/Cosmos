@@ -3,10 +3,11 @@ import { Prisma } from '@/generated/prisma-inventory'
 import { inventoryDb } from './db'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 function queueSalesChannelPush(tenantId: string, skuId: string) {
   void import('./sales-channels/core')
     .then(({ queuePriceOrQuantityPush }) => queuePriceOrQuantityPush(tenantId, skuId))
-    .catch(() => undefined)
+    .catch(swallowed('inventory.queueSalesChannelPush'))
 }
 
 export type CreateSkuInput = {
@@ -716,7 +717,7 @@ export async function adjustStock(
       sku?.code ?? dto.skuId,
       result.quantityAvailable,
       result.reorderPoint,
-    ).catch(() => undefined)
+    ).catch(swallowed('inventory.adjustStock'))
     // No dedupe key: a SKU can drop below its reorder point again after a restock.
     const { emitDomainEvent } = await import('./domain-events')
     void emitDomainEvent(tenantId, 'inventory.stock_level_low', {

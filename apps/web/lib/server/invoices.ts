@@ -10,6 +10,7 @@ import { resolveFxRateAtCreation } from './exchange-rates'
 import { toBaseAmount, normalizeCurrency } from './fx-util'
 import { splitBaseAmounts } from './invoice-tax-split'
 import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
+import { swallowed } from './fire-and-forget'
 import {
   allocateShipmentTax,
   inferLegacyInvoiced,
@@ -111,7 +112,7 @@ export async function issueInvoiceForOrder(
       totalAmount,
       dueAt,
     )
-    .catch(() => undefined)
+    .catch(swallowed('invoices.issueInvoiceForOrder'))
   const { emitDomainEvent } = await import('./domain-events')
   void emitDomainEvent(
     tenantId,
@@ -130,7 +131,7 @@ export async function issueInvoiceForOrder(
   if (order.channel === 'EDI') {
     void import('./edi')
       .then((m) => m.generate810ForInvoice(tenantId, finalInvoice.id))
-      .catch(() => undefined)
+      .catch(swallowed('invoices.issueInvoiceForOrder2'))
   }
 
   return finalInvoice

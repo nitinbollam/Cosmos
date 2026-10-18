@@ -11,6 +11,7 @@ import * as stripe from './stripe'
 import { syncConnectPaymentIntentEvent } from './payments'
 import { processStripeEventOnce } from './stripe-webhook-events'
 
+import { swallowed } from './fire-and-forget'
 function stripeClient(): Stripe {
   return stripe.getStripeClient()
 }
@@ -157,7 +158,7 @@ async function dispatchConnectWebhookEvent(event: Stripe.Event) {
         status: dispute.status,
         connectedAccountId: accountId,
       },
-    }).catch(() => undefined)
+    }).catch(swallowed('stripe-connect.dispatchConnectWebhookEvent', { level: 'warn' }))
 
     const org = await tenantDb.tenantOrganization.findUnique({ where: { id: tenantId } })
     const recipient = org?.billingEmail?.trim()
@@ -175,7 +176,7 @@ async function dispatchConnectWebhookEvent(event: Stripe.Event) {
             note: "Disputes on connected accounts are the distributor's liability — review in Stripe Dashboard.",
           },
         })
-        .catch(() => undefined)
+        .catch(swallowed('stripe-connect.dispatchConnectWebhookEvent2', { level: 'warn' }))
     }
   }
 }

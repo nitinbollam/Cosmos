@@ -26,6 +26,32 @@ export function resetFireAndForgetFailures(): void {
   failures.clear()
 }
 
+function record(label: string, err: unknown, ctx: FireAndForgetContext): void {
+  failures.set(label, (failures.get(label) ?? 0) + 1)
+  const where = [
+    ctx.tenantId && `tenant=${ctx.tenantId}`,
+    ctx.orderId && `order=${ctx.orderId}`,
+    ctx.correlationId && `correlation=${ctx.correlationId}`,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const log = ctx.level === 'warn' ? console.warn : console.error
+  log(`[bg:${label}] failed${where ? ` (${where})` : ''}:`, err)
+  console.error(`[metric] fire_and_forget_failed 1 label=${label}`)
+}
+
+/**
+ * A `.catch` handler for work that is safe to lose but must not fail silently: logs the label and
+ * counts the failure, then resolves to undefined. Use it where the promise is awaited or chained
+ * (`await x().catch(swallowed('area.step'))`); use fireAndForget() when nothing waits on it.
+ */
+export function swallowed(label: string, ctx: FireAndForgetContext = {}): (err: unknown) => undefined {
+  return (err) => {
+    record(label, err, ctx)
+    return undefined
+  }
+}
+
 export function fireAndForget(
   label: string,
   work: Promise<unknown> | (() => Promise<unknown>),
@@ -37,17 +63,5 @@ export function fireAndForget(
   } catch (err) {
     promise = Promise.reject(err)
   }
-  promise.catch((err: unknown) => {
-    failures.set(label, (failures.get(label) ?? 0) + 1)
-    const where = [
-      ctx.tenantId && `tenant=${ctx.tenantId}`,
-      ctx.orderId && `order=${ctx.orderId}`,
-      ctx.correlationId && `correlation=${ctx.correlationId}`,
-    ]
-      .filter(Boolean)
-      .join(' ')
-    const log = ctx.level === 'warn' ? console.warn : console.error
-    log(`[bg:${label}] failed${where ? ` (${where})` : ''}:`, err)
-    console.error(`[metric] fire_and_forget_failed 1 label=${label}`)
-  })
+  promise.catch((err: unknown) => record(label, err, ctx))
 }

@@ -11,6 +11,7 @@ import { processStripeEventOnce } from './stripe-webhook-events'
 import { emitOrderEvent } from './domain-events'
 import { syncInvoiceOrQueue } from './deferred-work'
 
+import { swallowed } from './fire-and-forget'
 export type AuthorizeInput = {
   orderId: string
   amount: number
@@ -149,8 +150,8 @@ export async function authorize(tenantId: string, dto: AuthorizeInput) {
   if (defersFulfillmentUntilPayment(order.paymentMethod)) {
     const { runOrderFulfillmentPipeline } = await import('./order-orchestration')
     const notifyTriggers = await import('./notification-triggers')
-    void runOrderFulfillmentPipeline(dto.orderId, tenantId, dto.correlationId).catch(() => undefined)
-    void notifyTriggers.notifyOrderCreated(tenantId, dto.orderId, dto.customerId, orderTotal).catch(() => undefined)
+    void runOrderFulfillmentPipeline(dto.orderId, tenantId, dto.correlationId).catch(swallowed('payments.authorize'))
+    void notifyTriggers.notifyOrderCreated(tenantId, dto.orderId, dto.customerId, orderTotal).catch(swallowed('payments.authorize2'))
     void emitOrderEvent(tenantId, 'order.created', dto.orderId, {}, { key: dto.orderId })
   }
 
@@ -250,10 +251,10 @@ export async function completeCardAuthorization(
   if (intent.status !== 'AUTHORIZED' && defersFulfillmentUntilPayment(order.paymentMethod)) {
     const { runOrderFulfillmentPipeline } = await import('./order-orchestration')
     const notifyTriggers = await import('./notification-triggers')
-    void runOrderFulfillmentPipeline(intent.orderId, tenantId, correlationId).catch(() => undefined)
+    void runOrderFulfillmentPipeline(intent.orderId, tenantId, correlationId).catch(swallowed('payments.unchanged'))
     void notifyTriggers
       .notifyOrderCreated(tenantId, intent.orderId, order.customerId, Number(order.totalAmount))
-      .catch(() => undefined)
+      .catch(swallowed('payments.unchanged2'))
     void emitOrderEvent(tenantId, 'order.created', intent.orderId, {}, { key: intent.orderId })
   }
 

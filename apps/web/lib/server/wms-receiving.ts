@@ -4,6 +4,7 @@ import * as inv from './inventory'
 import * as poReceiving from './po-receiving'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 export async function listReceivingSessions(tenantId: string, status?: string) {
   const st = status?.trim()
   const allowed = Object.values(ReceivingStatus) as string[]
@@ -251,7 +252,7 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
       referenceId: it.id,
       quantity: qty,
       warehouseId: session.warehouseId,
-    }).catch(() => undefined)
+    }).catch(swallowed('wms-receiving.completeReceivingSession'))
   }
 
   await wmsDb.receivingSession.update({

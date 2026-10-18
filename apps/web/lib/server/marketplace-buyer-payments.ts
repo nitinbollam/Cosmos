@@ -3,6 +3,7 @@ import { getOrCreateMarketplaceProfile } from './marketplace-profiles'
 import * as stripe from './stripe'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 export async function ensureMarketplacePlatformCustomer(tenantId: string): Promise<string> {
   const profile = await getOrCreateMarketplaceProfile(tenantId)
   if (profile.stripePlatformCustomerId?.startsWith('cus_')) {
@@ -100,7 +101,7 @@ export async function deleteMarketplacePaymentMethod(tenantId: string, id: strin
   if (!row) throw new ApiError(404, 'Payment method not found')
   if (stripe.isStripeConfigured() && row.stripePaymentMethodId.startsWith('pm_')) {
     const client = stripe.getStripeClient()
-    await client.paymentMethods.detach(row.stripePaymentMethodId).catch(() => undefined)
+    await client.paymentMethods.detach(row.stripePaymentMethodId).catch(swallowed('marketplace-buyer-payments.deleteMarketplacePaymentMethod', { level: 'warn' }))
   }
   await marketplaceDb.marketplaceBuyerPaymentMethod.delete({ where: { id } })
   return { deleted: true }

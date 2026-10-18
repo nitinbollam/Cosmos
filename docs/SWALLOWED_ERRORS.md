@@ -13,7 +13,7 @@ classified by what a lost error would cost. The count is enforced by `scripts/ch
 
 A new swallow that is genuinely safe goes on a line with `// swallow-ok: <reason>`.
 
-## Class C: must stop swallowing (28 sites)
+## Class C: fixed (28 sites, PLR-159)
 
 Fixed in open pull requests (6): `order-saga.ts:5` and `order-orchestration.ts:217` (#69), and
 `order-orchestration.ts:455, 456, 465, 469` (#70, cancel).
@@ -22,24 +22,24 @@ Still to fix, grouped by area, one PR per area after the open PRs merge (22):
 
 | Area | Site | What is lost today | Fix |
 |---|---|---|---|
-| Payments | `payments.ts:180`, `:545` | Invoice not re-synced after a payment, so paid amount and status drift | Propagate; the payment is already recorded, so return a retryable error or queue a sync |
-| Payments | `order-payment-admin.ts:125`, `:283` | Same, after a manual payment or refund | Same |
-| Payments | `order-payment-admin.ts:129` | AR payment journal not posted | Enqueue through the posting outbox (phase 2) |
-| Payments | `order-payment-admin.ts:314` | Authorization not voided | Propagate |
-| Payments | `stripe-webhook-events.ts:47` | If the dedupe row is not deleted after a failure, Stripe's retry is ignored | Log and surface; do not swallow |
-| Orders | `orders.ts:225`, `:409` | Invoice not synced after order create / payment | Propagate or queue |
-| Orders | `orders.ts:399` | Customer credit not released after payment | Propagate |
-| Orders | `orders.ts:414` | AR payment journal not posted | Outbox |
-| Invoices | `invoices.ts:727` | Credit not released after a credit memo | Propagate |
-| Invoices | `invoices.ts:765` | Invoice not synced after a refund | Propagate or queue |
-| Purchasing | `ap-bills.ts:305`, `po-receiving.ts:303` | AP payment journal not posted | Outbox |
-| Purchasing | `po-receiving.ts:300` | Bill payment not recorded | Propagate |
-| Inventory | `inventory.ts:288` | Backorders not filled after a receipt | Propagate or queue |
-| Delivery | `dispatch.ts:380` | Order not moved to DELIVERED after the stop was delivered | Propagate |
-| Subscriptions | `subscriptions.ts:188` | Failed-payment order not cancelled (stock and credit stay held) | Log with order id and queue a retry; cancel now reports its failed step (#70) |
-| Billing | `billing.ts:133`, `:142`, `:184` | Tenant plan not updated after a Stripe event | Propagate so the webhook is retried |
+| Payments | `payments.ts:180`, `:545` | Invoice not re-synced after a payment, so paid amount and status drift | Propagate; the payment is already recorded, so return a retryable error or queue a sync — **done** |
+| Payments | `order-payment-admin.ts:125`, `:283` | Same, after a manual payment or refund | Same — **done** |
+| Payments | `order-payment-admin.ts:129` | AR payment journal not posted | Enqueue through the posting outbox (phase 2) — **done** |
+| Payments | `order-payment-admin.ts:314` | Authorization not voided | Propagate — **done** |
+| Payments | `stripe-webhook-events.ts:47` | If the dedupe row is not deleted after a failure, Stripe's retry is ignored | Log and surface; do not swallow — **done** |
+| Orders | `orders.ts:225`, `:409` | Invoice not synced after order create / payment | Propagate or queue — **done** |
+| Orders | `orders.ts:399` | Customer credit not released after payment | Propagate — **done** |
+| Orders | `orders.ts:414` | AR payment journal not posted | Outbox — **done** |
+| Invoices | `invoices.ts:727` | Credit not released after a credit memo | Propagate — **done** |
+| Invoices | `invoices.ts:765` | Invoice not synced after a refund | Propagate or queue — **done** |
+| Purchasing | `ap-bills.ts:305`, `po-receiving.ts:303` | AP payment journal not posted | Outbox — **done** |
+| Purchasing | `po-receiving.ts:300` | Bill payment not recorded | Propagate — **done** |
+| Inventory | `inventory.ts:288` | Backorders not filled after a receipt | Propagate or queue — **done** |
+| Delivery | `dispatch.ts:380` | Order not moved to DELIVERED after the stop was delivered | Propagate — **done** |
+| Subscriptions | `subscriptions.ts:188` | Failed-payment order not cancelled (stock and credit stay held) | Log with order id and queue a retry; cancel now reports its failed step (#70) — **done** |
+| Billing | `billing.ts:133`, `:142`, `:184` | Tenant plan not updated after a Stripe event | Propagate so the webhook is retried — **done** |
 
-## Class A: use `fireAndForget` (32 sites)
+## Class A: `fireAndForget` / `swallowed` (done, PLR-159)
 
 `notification-triggers.ts` (9, all notifications), `payments.ts:151, 152, 253, 256` (order-created
 notification and the pipeline kick-off, which logs its own failure since #69), `orders.ts:237, 449`,
@@ -47,7 +47,7 @@ notification and the pipeline kick-off, which logs its own failure since #69), `
 `subscriptions.ts:201, 230`, `routes/gift-cards.ts:51`, `crm.ts:127`, `celestial/orchestrator.ts:175`,
 `pos.ts:293, 360`, `wms-fulfillment.ts:285, 331`, `wms-receiving.ts:254`, `stripe-connect.ts:178`.
 
-## Class B: best effort, log at warn (17 sites)
+## Class B: best effort, logged at warn (done, PLR-159)
 
 `auth.ts:118` (legacy token clear), `auth-security.ts:61` (rate-limit bucket prune),
 `payment-idempotency.ts:20, 68`, `saved-payment-methods.ts:74`, `marketplace-buyer-payments.ts:103`
@@ -66,3 +66,11 @@ switches to `--money=strict` and the baseline becomes the allow-list for display
 
 Migration order (one PR per area, each with tests): invoices and tax, payments, orders, ledger and
 reports, purchasing, then API output as strings.
+
+
+## How it is enforced now
+
+- `scripts/check-code-health.mjs` (run by the `apps/web` lint script) has a swallow baseline of zero. A new `.catch(() => undefined|null|{})` or empty `catch {}` fails lint.
+- Work that is safe to lose uses `fireAndForget(label, work, ctx)` when nothing waits on it, or `.catch(swallowed(label, ctx))` when the promise is awaited or chained. Both log the label and context and count `[metric] fire_and_forget_failed`.
+- Where a swallow is genuinely correct, add `// swallow-ok: <reason>` to the line.
+- Class C work goes through `lib/server/deferred-work.ts` (`attemptOrQueue`, `syncInvoiceOrQueue`) or the posting outbox: it is tried inline, queued with backoff on failure, and only throws if it cannot even be queued (`[metric] deferred_work_lost`).

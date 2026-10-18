@@ -3,6 +3,7 @@ import { auditLog } from './audit-log'
 import { ApiError } from './session'
 import { effectiveRestricted, type RestrictedSkuInfo } from './age-restriction-rule'
 
+import { swallowed } from './fire-and-forget'
 export type { RestrictedSkuInfo }
 
 export type AgeVerificationPolicy = {
@@ -186,7 +187,7 @@ export async function assertAgeComplianceForOrder(
           channel: input.channel,
           skuIds: restrictedSkus.map((s) => s.id),
         },
-      }).catch(() => undefined)
+      }).catch(swallowed('compliance-age.channel'))
       throw new ApiError(
         403,
         `Age-restricted items require a licensed customer (minimum age ${requiredMinAge}). Add a tobacco/regulated license on the customer record before ordering.`,
@@ -208,7 +209,7 @@ export async function assertAgeComplianceForOrder(
           skuIds: restrictedSkus.map((s) => s.id),
           requiredMinAge,
         },
-      }).catch(() => undefined)
+      }).catch(swallowed('compliance-age.channel2'))
       throw new ApiError(
         403,
         `Age verification required for restricted items (minimum age ${requiredMinAge}). Confirm customer ID or enter date of birth.`,
@@ -228,7 +229,7 @@ export async function assertAgeComplianceForOrder(
           entityId: customer.id,
           userId: input.userId,
           metadata: { reason: 'underage', age, requiredMinAge, channel: 'POS' },
-        }).catch(() => undefined)
+        }).catch(swallowed('compliance-age.channel3'))
         throw new ApiError(403, `Customer does not meet the minimum age of ${requiredMinAge}`)
       }
     }
@@ -256,7 +257,7 @@ export async function assertAgeComplianceForOrder(
         skuIds: restrictedSkus.map((s) => s.id),
         notes: att.notes ?? null,
       },
-    }).catch(() => undefined)
+    }).catch(swallowed('compliance-age.channel4'))
   } else if (!isPos) {
     void auditLog(tenantId, {
       action: 'age_verification.passed',
@@ -269,7 +270,7 @@ export async function assertAgeComplianceForOrder(
         requiredMinAge,
         skuIds: restrictedSkus.map((s) => s.id),
       },
-    }).catch(() => undefined)
+    }).catch(swallowed('compliance-age.channel5'))
   }
 
   return { restrictedSkus, requiredMinAge }
@@ -310,7 +311,7 @@ export async function assertDeliveryAgeCompliance(
         requiredMinAge,
         skuIds: restrictedSkus.map((s) => s.id),
       },
-    }).catch(() => undefined)
+    }).catch(swallowed('compliance-age.assertDeliveryAgeCompliance'))
     throw new ApiError(
       403,
       `This delivery includes age-restricted items (minimum age ${requiredMinAge}). Confirm recipient age before marking delivered.`,
@@ -328,7 +329,7 @@ export async function assertDeliveryAgeCompliance(
       requiredMinAge,
       recipientName: typeof pod?.recipientName === 'string' ? pod.recipientName : null,
     },
-  }).catch(() => undefined)
+  }).catch(swallowed('compliance-age.assertDeliveryAgeCompliance2'))
 }
 
 /** Preview helper for clients — does not throw. */

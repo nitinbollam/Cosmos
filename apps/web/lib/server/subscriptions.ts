@@ -7,6 +7,7 @@ import * as savedPaymentMethods from './saved-payment-methods'
 import { collectOrderCardPayment } from './order-payment-admin'
 import { attemptOrQueue } from './deferred-work'
 
+import { swallowed } from './fire-and-forget'
 export type CreateSubscriptionInput = {
   customerId?: string
   savedPaymentMethodId: string
@@ -201,7 +202,7 @@ async function processOneSubscription(sub: Awaited<ReturnType<typeof listSubscri
   })
 
   const { notifySubscriptionOrderCreated } = await import('./notification-triggers')
-  void notifySubscriptionOrderCreated(sub.tenantId, sub.id, order.id, sub.customerId).catch(() => undefined)
+  void notifySubscriptionOrderCreated(sub.tenantId, sub.id, order.id, sub.customerId).catch(swallowed('subscriptions.processOneSubscription'))
 
   return order
 }
@@ -230,7 +231,7 @@ export async function processDueSubscriptions(): Promise<{ processed: number; fa
         data: { status: SubscriptionStatus.PAUSED, lastFailureReason: reason.slice(0, 500) },
       })
       const { notifySubscriptionPaymentFailed } = await import('./notification-triggers')
-      void notifySubscriptionPaymentFailed(sub.tenantId, sub.id, sub.customerId, reason).catch(() => undefined)
+      void notifySubscriptionPaymentFailed(sub.tenantId, sub.id, sub.customerId, reason).catch(swallowed('subscriptions.processDueSubscriptions'))
     }
   }
 

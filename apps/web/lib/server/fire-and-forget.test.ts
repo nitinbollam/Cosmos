@@ -61,3 +61,20 @@ test('warn level uses console.warn for the message', async () => {
   }
   assert.equal(warns.length, 1)
 })
+
+test('swallowed() resolves to undefined, logs the label and counts the failure', async () => {
+  const { swallowed } = await import('./fire-and-forget')
+  resetFireAndForgetFailures()
+  const warn = console.warn
+  const err = console.error
+  console.warn = () => undefined
+  console.error = () => undefined
+  try {
+    const out = await Promise.reject(new Error('x')).catch(swallowed('test.swallowed', { level: 'warn' }))
+    assert.equal(out, undefined)
+    assert.equal(fireAndForgetFailures()['test.swallowed'], 1)
+  } finally {
+    console.warn = warn
+    console.error = err
+  }
+})

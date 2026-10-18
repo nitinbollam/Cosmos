@@ -1,6 +1,7 @@
 import { paymentDb } from './db'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 const TTL_MS = 86_400_000 // 24 hours
 
 /** Keys are tenant-scoped so two tenants reusing the same header value never collide. */
@@ -17,7 +18,7 @@ export async function getIdempotentResponse(
   })
   if (!row) return null
   if (row.expiresAt < new Date()) {
-    await paymentDb.paymentIdempotency.delete({ where: { id: row.id } }).catch(() => undefined)
+    await paymentDb.paymentIdempotency.delete({ where: { id: row.id } }).catch(swallowed('payment-idempotency.getIdempotentResponse', { level: 'warn' }))
     return null
   }
   return { status: row.status, body: row.body }
@@ -65,7 +66,7 @@ export async function reserveIdempotencyKey(tenantId: string, key: string): Prom
 
 /** Drop a claim whose work failed, so the client can retry with the same key. */
 export async function releaseIdempotencyKey(tenantId: string, key: string): Promise<void> {
-  await paymentDb.paymentIdempotency.delete({ where: { id: scopedKey(tenantId, key) } }).catch(() => undefined)
+  await paymentDb.paymentIdempotency.delete({ where: { id: scopedKey(tenantId, key) } }).catch(swallowed('payment-idempotency.releaseIdempotencyKey', { level: 'warn' }))
 }
 
 /**

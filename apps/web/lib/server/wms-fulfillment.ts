@@ -4,6 +4,7 @@ import { enrichPickItemsWithBins, enrichPickItemsWithSkuLabels } from './pick-bi
 import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 export type ConfirmPickLineInput = {
   pickedQty: number
   markShort?: boolean
@@ -282,7 +283,7 @@ export async function confirmPickLine(
       referenceId: lineId,
       quantity: pickedQty,
       warehouseId: task.warehouseId,
-    }).catch(() => undefined)
+    }).catch(swallowed('wms-fulfillment.confirmPickLine'))
   }
 
   return getFulfillmentTask(tenantId, taskId)
@@ -328,7 +329,7 @@ export async function confirmAllPickLines(tenantId: string, taskId: string) {
       referenceId: line.id,
       quantity: line.quantity,
       warehouseId: task.warehouseId,
-    }).catch(() => undefined)
+    }).catch(swallowed('wms-fulfillment.confirmAllPickLines'))
   }
 
   return getFulfillmentTask(tenantId, taskId)
