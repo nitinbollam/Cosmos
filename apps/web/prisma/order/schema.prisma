@@ -47,6 +47,8 @@ model OrderLineItem {
   quantityAllocated   Int      @default(0)
   quantityBackordered Int      @default(0)
   returnedQty         Int      @default(0)
+  /// Units already billed on an invoice (PLR-155); lets follow-up shipments price per line.
+  quantityInvoiced    Int      @default(0)
   fulfillmentType     String   @default("STOCK")
   supplierId          String?
   dropShipPoId        String?
