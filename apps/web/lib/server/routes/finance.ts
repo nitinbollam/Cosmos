@@ -389,9 +389,6 @@ export async function routeTax(method: string, seg: string[], req: Request): Pro
   if (seg.length === 2 && seg[1] === 'settings' && method === 'PATCH') {
     assertPermission(session, 'compliance.write')
     const body = (await req.json()) as { salesTaxRate?: number }
-    if (typeof body.salesTaxRate !== 'number' || body.salesTaxRate < 0 || body.salesTaxRate > 0.5) {
-      throw new ApiError(400, 'salesTaxRate must be a number between 0 and 0.5')
-    }
     const { updateTenantSalesTaxRate } = await import('../tenant-tax')
     return Response.json(await updateTenantSalesTaxRate(session.tenantId, body.salesTaxRate))
   }

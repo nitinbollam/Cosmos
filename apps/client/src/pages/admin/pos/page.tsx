@@ -111,7 +111,7 @@ export default function PosPage() {
 
   const taxQ = useQuery({
     queryKey: ['pos-tax-settings'],
-    queryFn: () => api.get<{ salesTaxRate: number }>('/tax/settings'),
+    queryFn: () => api.get<{ salesTaxRate: number | null }>('/tax/settings'),
   })
 
   const registersQ = useQuery({
