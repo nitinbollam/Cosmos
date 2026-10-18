@@ -1,12 +1,16 @@
 import { Prisma } from '@/generated/prisma-ledger'
 import { ledgerDb } from './db'
 
+/** Tax collected from customers on behalf of a government: a liability, not revenue. */
+export const SALES_TAX_PAYABLE = '2200'
+
 /** Accounts that automated postings (invoices, COGS, credit memos) need in every tenant. */
 export const POSTING_ACCOUNTS = [
   { code: '1000', name: 'Cash', type: 'ASSET' as const },
   { code: '1100', name: 'Inventory', type: 'ASSET' as const },
   { code: '1200', name: 'Accounts Receivable', type: 'ASSET' as const },
   { code: '2100', name: 'Accounts Payable', type: 'LIABILITY' as const },
+  { code: SALES_TAX_PAYABLE, name: 'Sales Tax Payable', type: 'LIABILITY' as const },
   { code: '4000', name: 'Sales Revenue', type: 'REVENUE' as const },
   { code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' as const },
 ]
@@ -89,4 +93,31 @@ export async function createJournalOnce(
     }
     throw err
   }
+}
+
+/**
+ * The Sales Tax Payable account for a tenant, created on first use. Tenants set up before tax was
+ * split out of revenue do not have it. If the code is already taken by something that is not an
+ * active liability, posting stops with a retryable error rather than writing tax to the wrong place.
+ */
+export async function requireSalesTaxPayable(tenantId: string) {
+  const existing = await ledgerDb.chartAccount.findFirst({ where: { tenantId, code: SALES_TAX_PAYABLE } })
+  if (!existing) {
+    const acct = POSTING_ACCOUNTS.find((a) => a.code === SALES_TAX_PAYABLE)!
+    try {
+      return await ledgerDb.chartAccount.create({
+        data: { tenantId, code: acct.code, name: acct.name, type: acct.type, isActive: true },
+      })
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const winner = await ledgerDb.chartAccount.findFirst({ where: { tenantId, code: SALES_TAX_PAYABLE } })
+        if (winner) return winner
+      }
+      throw err
+    }
+  }
+  if (!existing.isActive || existing.type !== 'LIABILITY') {
+    throw new LedgerNotConfiguredError(tenantId, [`${SALES_TAX_PAYABLE} (in use as ${existing.type}${existing.isActive ? '' : ', inactive'}; needs an active liability)`])
+  }
+  return existing
 }

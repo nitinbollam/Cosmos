@@ -8,6 +8,7 @@ import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
 import { resolveFxRateAtCreation } from './exchange-rates'
 import { toBaseAmount, normalizeCurrency } from './fx-util'
+import { splitBaseAmounts } from './invoice-tax-split'
 import {
   allocateShipmentTax,
   inferLegacyInvoiced,
@@ -57,7 +58,7 @@ export async function issueInvoiceForOrder(
 
   const paidApplied = Math.min(Number(order.amountPaid ?? 0), totalAmount)
   const fx = await resolveFxRateAtCreation(tenantId, normalizeCurrency(amounts?.currency))
-  const baseTotal = toBaseAmount(totalAmount, fx.fxRateToBase)
+  const { baseTotal, baseTax } = splitBaseAmounts(totalAmount, taxAmount, fx.fxRateToBase)
   // The invoice and its ledger posting job commit together; a worker posts to the ledger (posting-outbox).
   const finalInvoice = await orderDb.$transaction(async (tx) => {
     const invoice = await tx.invoice.create({
@@ -91,6 +92,7 @@ export async function issueInvoiceForOrder(
       sourceType: 'Invoice',
       sourceId: invoice.id,
       amount: baseTotal.toFixed(2),
+      taxAmount: baseTax.toFixed(2),
     })
     return invoice
   })
@@ -208,7 +210,7 @@ export async function invoiceShipmentForOrder(
   const newTax = existingInvoice.taxAmount.add(taxAmount)
   const newTotal = existingInvoice.totalAmount.add(totalAmount)
   const paidApplied = Prisma.Decimal.min(order.amountPaid ?? new Prisma.Decimal(0), newTotal)
-  const extensionBase = toBaseAmount(totalAmount.toNumber(), Number(existingInvoice.fxRateToBase))
+  const extension = splitBaseAmounts(totalAmount.toNumber(), taxAmount.toNumber(), Number(existingInvoice.fxRateToBase))
 
   const updated = await orderDb.$transaction(async (tx) => {
     const row = await tx.invoice.update({
@@ -239,7 +241,8 @@ export async function invoiceShipmentForOrder(
       sourceType: 'Invoice',
       sourceId: invoiceId,
       variant: `ext:${randomUUID()}`,
-      amount: extensionBase.toFixed(2),
+      amount: extension.baseTotal.toFixed(2),
+      taxAmount: extension.baseTax.toFixed(2),
     })
     return row
   })
@@ -635,7 +638,7 @@ export async function applyCreditMemo(
   const seq = (invoice.creditMemos?.length ?? 0) + 1
   const memoNumber = formatCreditMemoNumber(order.id, seq)
 
-  const creditBase = toBaseAmount(creditTotal, Number(invoice.fxRateToBase))
+  const credit = splitBaseAmounts(creditTotal, creditTax, Number(invoice.fxRateToBase))
   const creditMemo = await orderDb.$transaction(async (tx) => {
     const memo = await tx.creditMemo.create({
       data: {
@@ -654,7 +657,8 @@ export async function applyCreditMemo(
       kind: 'CREDIT_MEMO_JOURNAL',
       sourceType: 'CreditMemo',
       sourceId: memo.id,
-      amount: creditBase.toFixed(2),
+      amount: credit.baseTotal.toFixed(2),
+      taxAmount: credit.baseTax.toFixed(2),
     })
     return memo
   })

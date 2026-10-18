@@ -3,7 +3,7 @@ import { Prisma } from '@/generated/prisma-ledger'
 import type { Prisma as OrderPrisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import { ApiError } from './session'
-import { createJournalOnce, requireAccounts } from './ledger-posting'
+import { createJournalOnce, requireAccounts, requireSalesTaxPayable } from './ledger-posting'
 
 /**
  * Transactional outbox for general-ledger postings.
@@ -41,6 +41,11 @@ export type EnqueueInput = {
   variant?: string
   /** Decimal amount as a string, in the tenant's base currency. */
   amount: string
+  /**
+   * The part of `amount` that is sales tax, in base currency. Posted to Sales Tax Payable instead of
+   * revenue. Omitted on jobs queued before tax was split out; those post the whole amount to revenue.
+   */
+  taxAmount?: string
 }
 
 export function postingDedupeKey(i: Pick<EnqueueInput, 'tenantId' | 'kind' | 'sourceType' | 'sourceId' | 'variant'>) {
@@ -62,7 +67,7 @@ export async function enqueuePostingJob(tx: OrderTx, input: EnqueueInput) {
       sourceId: input.sourceId,
       variant: input.variant ?? '',
       dedupeKey,
-      payload: { amount: input.amount },
+      payload: input.taxAmount && Number(input.taxAmount) > 0 ? { amount: input.amount, taxAmount: input.taxAmount } : { amount: input.amount },
     },
   })
 }
@@ -80,6 +85,14 @@ type JobRow = {
 const dec = (v: string) => new Prisma.Decimal(v)
 const ZERO = new Prisma.Decimal(0)
 
+/** The tax part of a job's amount, never more than the amount itself. */
+function taxOf(job: JobRow, total: Prisma.Decimal): Prisma.Decimal {
+  const raw = (job.payload as { taxAmount?: string })?.taxAmount
+  if (!raw || !(Number(raw) > 0)) return ZERO
+  const tax = dec(raw)
+  return tax.gt(total) ? total : tax
+}
+
 /** Posts one job to the ledger. Throws on any failure; returns the journal entry id. */
 export async function postJob(job: JobRow): Promise<string> {
   const amount = String((job.payload as { amount?: string })?.amount ?? '')
@@ -91,22 +104,41 @@ export async function postJob(job: JobRow): Promise<string> {
     case 'INVOICE_JOURNAL':
     case 'INVOICE_EXTENSION_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['1200', '4000'])
+      const total = dec(amount)
+      const tax = taxOf(job, total)
+      const lines = [
+        { accountId: a.get('1200')!.id, memo: 'Accounts receivable', debit: total, credit: ZERO },
+        { accountId: a.get('4000')!.id, memo: 'Sales revenue', debit: ZERO, credit: total.minus(tax) },
+      ]
+      if (tax.gt(0)) {
+        const payable = await requireSalesTaxPayable(job.tenantId)
+        lines.push({ accountId: payable.id, memo: 'Sales tax payable', debit: ZERO, credit: tax })
+      }
       return createJournalOnce(
         job.tenantId,
         source,
         job.kind === 'INVOICE_JOURNAL' ? `Invoice ${short} — AR recognition` : `Invoice ${short} — shipment extension`,
-        [
-          { accountId: a.get('1200')!.id, memo: 'Accounts receivable', debit: dec(amount), credit: ZERO },
-          { accountId: a.get('4000')!.id, memo: 'Sales revenue', debit: ZERO, credit: dec(amount) },
-        ],
+        lines.filter((l) => l.debit.gt(0) || l.credit.gt(0)),
       )
     }
     case 'CREDIT_MEMO_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['1200', '4000'])
-      return createJournalOnce(job.tenantId, source, `Credit memo ${short} — AR reversal`, [
-        { accountId: a.get('4000')!.id, memo: 'Sales revenue reversal', debit: dec(amount), credit: ZERO },
-        { accountId: a.get('1200')!.id, memo: 'Accounts receivable reduction', debit: ZERO, credit: dec(amount) },
-      ])
+      const total = dec(amount)
+      const tax = taxOf(job, total)
+      const lines = [
+        { accountId: a.get('4000')!.id, memo: 'Sales revenue reversal', debit: total.minus(tax), credit: ZERO },
+        { accountId: a.get('1200')!.id, memo: 'Accounts receivable reduction', debit: ZERO, credit: total },
+      ]
+      if (tax.gt(0)) {
+        const payable = await requireSalesTaxPayable(job.tenantId)
+        lines.push({ accountId: payable.id, memo: 'Sales tax payable reversal', debit: tax, credit: ZERO })
+      }
+      return createJournalOnce(
+        job.tenantId,
+        source,
+        `Credit memo ${short} — AR reversal`,
+        lines.filter((l) => l.debit.gt(0) || l.credit.gt(0)),
+      )
     }
     case 'COGS_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['5000', '1100'])

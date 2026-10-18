@@ -289,7 +289,7 @@ test('manual journal entries without a source never collide on the unique key', 
 
 test('provisioning creates every posting account and never reactivates a deactivated one', async () => {
   const tenantId = tenant()
-  assert.equal((await missingPostingAccounts(tenantId)).length, 6)
+  assert.equal((await missingPostingAccounts(tenantId)).length, 7)
   await ensurePostingAccounts(tenantId)
   assert.deepEqual(await missingPostingAccounts(tenantId), [])
   await ledgerDb.chartAccount.update({ where: { tenantId_code: { tenantId, code: '4000' } }, data: { isActive: false } })
