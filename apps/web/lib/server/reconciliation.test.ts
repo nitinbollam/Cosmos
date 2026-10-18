@@ -62,6 +62,30 @@ test('R2: invoice older than 15 min with no journal is flagged; fresh invoice an
   assert.deepEqual(res.findings.map((f) => f.entityId).sort(), [missing.id, dangling.id].sort())
 })
 
+test('R2: findings say why the posting is missing (dead job, queued job, or no job)', async () => {
+  const t = newTenant()
+  const mk = async () => {
+    const o = await mkOrder(t)
+    return orderDb.invoice.create({
+      data: { tenantId: t, orderId: o.id, invoiceNumber: `I-${randomUUID()}`, customerId: o.customerId, subtotal: 10, taxAmount: 0, totalAmount: 10, issuedAt: OLD },
+    })
+  }
+  const job = (invoiceId: string, status: 'DEAD' | 'PENDING', attempts: number) =>
+    orderDb.postingJob.create({
+      data: { tenantId: t, kind: 'INVOICE_JOURNAL', sourceType: 'Invoice', sourceId: invoiceId, dedupeKey: randomUUID(), payload: {}, status, attempts, lastError: status === 'DEAD' ? 'boom' : null },
+    })
+  const dead = await mk()
+  const queued = await mk()
+  const none = await mk()
+  await job(dead.id, 'DEAD', 8)
+  await job(queued.id, 'PENDING', 1)
+  const res = await run(t, 'R2')
+  const reason = (id: string) => (res.findings.find((f) => f.entityId === id)?.details as { reason: string }).reason
+  assert.match(reason(dead.id), /DEAD after 8 attempts/)
+  assert.match(reason(queued.id), /pending \(attempt 1\)/)
+  assert.match(reason(none.id), /no posting job queued/)
+})
+
 test('R3: an unbalanced journal entry is flagged', async () => {
   const t = newTenant()
   const acct = await ledgerDb.chartAccount.create({ data: { tenantId: t, code: '1000', name: 'Cash', type: 'ASSET' } })

@@ -82,19 +82,38 @@ export const ruleR2: Rule = async ({ tenantId, now }) => {
     })
     rows.forEach((r) => existing.add(r.id))
   }
-  return invoices
-    .filter((i) => !i.journalEntryId || !existing.has(i.journalEntryId))
-    .map((i) => ({
-      ruleId: 'R2' as const,
-      entityType: 'INVOICE',
-      entityId: i.id,
-      details: {
-        invoiceNumber: i.invoiceNumber,
-        totalAmount: i.totalAmount.toString(),
-        journalEntryId: i.journalEntryId,
-        reason: i.journalEntryId ? 'journal entry not found' : 'no journal entry linked',
-      },
-    }))
+  const missing = invoices.filter((i) => !i.journalEntryId || !existing.has(i.journalEntryId))
+
+  // Say why: a queued, retrying or dead posting job, or none at all (the invoice predates the outbox).
+  const jobs = new Map<string, { status: string; attempts: number; lastError: string | null }>()
+  for (const part of chunks(missing.map((i) => i.id))) {
+    const rows = await orderDb.postingJob.findMany({
+      where: { tenantId, kind: 'INVOICE_JOURNAL', sourceType: 'Invoice', sourceId: { in: part } },
+      select: { sourceId: true, status: true, attempts: true, lastError: true },
+    })
+    rows.forEach((r) => jobs.set(r.sourceId, { status: r.status, attempts: r.attempts, lastError: r.lastError }))
+  }
+  const reasonFor = (i: (typeof missing)[number]) => {
+    if (i.journalEntryId) return 'journal entry not found'
+    const job = jobs.get(i.id)
+    if (!job) return 'no posting job queued (invoice predates the outbox)'
+    if (job.status === 'DEAD') return `posting job is DEAD after ${job.attempts} attempts`
+    if (job.status === 'DONE') return 'posting job finished but the invoice has no journal entry linked'
+    return `posting job ${job.status.toLowerCase()} (attempt ${job.attempts})`
+  }
+
+  return missing.map((i) => ({
+    ruleId: 'R2' as const,
+    entityType: 'INVOICE',
+    entityId: i.id,
+    details: {
+      invoiceNumber: i.invoiceNumber,
+      totalAmount: i.totalAmount.toString(),
+      journalEntryId: i.journalEntryId,
+      reason: reasonFor(i),
+      postingJob: jobs.get(i.id) ?? null,
+    },
+  }))
 }
 
 /** R3: every journal entry must balance. */
