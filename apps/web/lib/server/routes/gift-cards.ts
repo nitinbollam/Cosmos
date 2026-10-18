@@ -73,7 +73,7 @@ export async function routeGiftCards(method: string, seg: string[], req: Request
   }
 
   if (seg.length === 3 && seg[2] === 'balance' && method === 'GET') {
-    rateLimit(`gift-card-balance:${clientIp(req)}`, 30, 60_000)
+    await rateLimit(`gift-card-balance:${clientIp(req)}`, 30, 60_000)
     const session = await requireSession(req)
     return Response.json(await giftCards.checkGiftCardBalance(session.tenantId, seg[1]))
   }

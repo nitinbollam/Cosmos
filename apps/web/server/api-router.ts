@@ -101,8 +101,8 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'email and password required' }, 400)
     }
     try {
-      rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
-      rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
+      await rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
+      await rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
       return json(await loginUser(body.email.trim(), body.password, sessionMeta(req)))
     } catch (e) {
       if (e instanceof ApiError) return toJsonError(e)
@@ -129,7 +129,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'Missing required fields' }, 400)
     }
     try {
-      rateLimit(`signup:${clientIp(req)}`, 5, 60 * 60 * 1000)
+      await rateLimit(`signup:${clientIp(req)}`, 5, 60 * 60 * 1000)
       assertPasswordPolicy(body.password)
       return json(
         await publicSignup({
@@ -160,7 +160,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'token, password, firstName, and lastName are required' }, 400)
     }
     try {
-      rateLimit(`accept-invite:${clientIp(req)}`, 10, 60 * 60 * 1000)
+      await rateLimit(`accept-invite:${clientIp(req)}`, 10, 60 * 60 * 1000)
       return json(
         await acceptInvite({
           token: body.token,
@@ -187,7 +187,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.email?.trim()) return json({ message: 'email required' }, 400)
     try {
-      rateLimit(`forgot:${clientIp(req)}`, 5, 15 * 60 * 1000)
+      await rateLimit(`forgot:${clientIp(req)}`, 5, 15 * 60 * 1000)
       await requestPasswordReset(body.email)
       // Always succeed so the endpoint can't be used to enumerate accounts.
       return json({ ok: true })
@@ -205,7 +205,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.token || !body.password) return json({ message: 'token and password required' }, 400)
     try {
-      rateLimit(`reset:${clientIp(req)}`, 10, 15 * 60 * 1000)
+      await rateLimit(`reset:${clientIp(req)}`, 10, 15 * 60 * 1000)
       await resetPassword(body.token, body.password)
       return json({ ok: true })
     } catch (e) {
@@ -220,7 +220,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       if (!body.currentPassword || !body.newPassword) {
         return json({ message: 'currentPassword and newPassword required' }, 400)
       }
-      rateLimit(`change-password:${session.userId}`, 5, 15 * 60 * 1000)
+      await rateLimit(`change-password:${session.userId}`, 5, 15 * 60 * 1000)
       await changePassword(session.userId, body.currentPassword, body.newPassword, session.sessionId)
       return json({ ok: true })
     } catch (e) {
@@ -237,6 +237,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.token) return json({ message: 'token required' }, 400)
     try {
+      await rateLimit(`verify-email:${clientIp(req)}`, 20, 15 * 60 * 1000)
       await verifyEmail(body.token)
       return json({ ok: true })
     } catch (e) {
@@ -253,7 +254,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.email?.trim()) return json({ message: 'email required' }, 400)
     try {
-      rateLimit(`resend-verify:${clientIp(req)}`, 5, 15 * 60 * 1000)
+      await rateLimit(`resend-verify:${clientIp(req)}`, 5, 15 * 60 * 1000)
       return json(await resendEmailVerification(body.email))
     } catch (e) {
       return toJsonError(e)
@@ -271,7 +272,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'refreshToken required' }, 400)
     }
     try {
-      rateLimit(`refresh:${clientIp(req)}`, 120, 5 * 60 * 1000)
+      await rateLimit(`refresh:${clientIp(req)}`, 120, 5 * 60 * 1000)
       // userId is optional and only cross-checked; the token itself names the user.
       return json(await refreshUserTokens(body.refreshToken, body.userId))
     } catch (e) {
