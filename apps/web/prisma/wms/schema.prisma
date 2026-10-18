@@ -18,6 +18,10 @@ model FulfillmentTask {
   warehouseId    String
   warehouseCode  String
   assignedUserId String?
+  /// Dispatch progress: COMMITTED, BACKORDERED, MARKED, POSTED. A retry resumes after the last one.
+  dispatchStep      String?
+  /// Lease so two dispatch calls for one task cannot both run the steps.
+  dispatchClaimedAt DateTime?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   pickLines      PickLine[]

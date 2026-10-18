@@ -92,9 +92,9 @@ async function routeApiRequest(req: Request): Promise<Response> {
   }
 
   if (pathname === '/api/v1/auth/login' && req.method === 'POST') {
-    let body: { email?: string; password?: string }
+    let body: { email?: string; password?: string; tenant?: string }
     try {
-      body = (await req.json()) as { email?: string; password?: string }
+      body = (await req.json()) as { email?: string; password?: string; tenant?: string }
     } catch {
       return json({ message: 'Invalid JSON body' }, 400)
     }
@@ -104,11 +104,15 @@ async function routeApiRequest(req: Request): Promise<Response> {
     try {
       await rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
       await rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
-      return json(await loginUser(body.email.trim(), body.password, sessionMeta(req)))
+      return json(
+        await loginUser(body.email.trim(), body.password, sessionMeta(req), {
+          tenantRef: typeof body.tenant === 'string' ? body.tenant : undefined,
+        }),
+      )
     } catch (e) {
       if (e instanceof ApiError) return toJsonError(e)
-      const msg = e instanceof Error ? e.message : 'Login failed'
-      return json({ message: msg }, msg === 'Invalid credentials' ? 401 : 500)
+      console.error('[auth] login failed:', e)
+      return json({ message: 'Internal server error' }, 500)
     }
   }
 

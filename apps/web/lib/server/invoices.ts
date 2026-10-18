@@ -32,6 +32,8 @@ export async function issueInvoiceForOrder(
   tenantId: string,
   orderId: string,
   amounts?: { subtotal: number; taxAmount: number; totalAmount: number; currency?: string },
+  /** Runs inside the invoice's transaction, so related bookkeeping commits or rolls back with it. */
+  inTransaction?: (tx: Prisma.TransactionClient, invoice: { id: string }) => Promise<void>,
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
@@ -94,6 +96,7 @@ export async function issueInvoiceForOrder(
       amount: baseTotal.toFixed(2),
       taxAmount: baseTax.toFixed(2),
     })
+    if (inTransaction) await inTransaction(tx, invoice)
     return invoice
   })
 
@@ -141,12 +144,22 @@ export async function invoiceShipmentForOrder(
   tenantId: string,
   orderId: string,
   shippedLines: Array<{ skuId: string; quantity: number; lineId?: string }>,
+  /**
+   * The fulfillment task that shipped these lines. When given, billing is recorded against it in
+   * the same transaction as the invoice change, so a retried dispatch returns the existing result
+   * instead of billing the shipment again.
+   */
+  fulfillmentTaskId?: string,
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
     include: { lineItems: { orderBy: { id: 'asc' } }, invoice: true },
   })
   if (!order) throw new ApiError(404, 'Order not found')
+  if (fulfillmentTaskId) {
+    const done = await orderDb.shipmentInvoice.findFirst({ where: { tenantId, fulfillmentTaskId } })
+    if (done) return order.invoice
+  }
 
   let lines: BillableLine[] = order.lineItems.map((li) => ({
     id: li.id,
@@ -190,17 +203,28 @@ export async function invoiceShipmentForOrder(
       ),
     )
 
+  const recordTask = (tx: Prisma.TransactionClient, invoiceId: string) =>
+    fulfillmentTaskId
+      ? tx.shipmentInvoice.create({ data: { tenantId, fulfillmentTaskId, orderId, invoiceId } })
+      : Promise.resolve(null)
+
   if (!order.invoice) {
     // Amounts are exact 2dp decimals; numbers appear only at the issueInvoiceForOrder boundary.
-    const invoice = await issueInvoiceForOrder(tenantId, orderId, {
-      subtotal: subtotal.toNumber(),
-      taxAmount: taxAmount.toNumber(),
-      totalAmount: totalAmount.toNumber(),
-    })
-    await orderDb.$transaction(async (tx) => {
-      await markInvoiced(tx)
-    })
-    return invoice
+    // The line counters and the task record commit with the invoice itself, so there is no window
+    // in which an invoice exists but its lines still look unbilled.
+    return issueInvoiceForOrder(
+      tenantId,
+      orderId,
+      {
+        subtotal: subtotal.toNumber(),
+        taxAmount: taxAmount.toNumber(),
+        totalAmount: totalAmount.toNumber(),
+      },
+      async (tx, invoice) => {
+        await markInvoiced(tx)
+        await recordTask(tx, invoice.id)
+      },
+    )
   }
 
   // Follow-up shipment: extend the existing invoice and post the delta to AR.
@@ -233,16 +257,16 @@ export async function invoiceShipmentForOrder(
       },
     })
     await markInvoiced(tx)
-    // Each call extends the invoice once, so each gets its own posting. PLR-147 keys this by the
-    // fulfillment task id so a retried dispatch maps to the same posting.
+    await recordTask(tx, invoiceId)
+    // Each extension gets its own posting, keyed by the fulfillment task when there is one so a
+    // retried dispatch maps to the same posting.
     await enqueuePostingJob(tx, {
       tenantId,
       kind: 'INVOICE_EXTENSION_JOURNAL',
       sourceType: 'Invoice',
       sourceId: invoiceId,
-      variant: `ext:${randomUUID()}`,
-      amount: extension.baseTotal.toFixed(2),
-      taxAmount: extension.baseTax.toFixed(2),
+      variant: `ext:${fulfillmentTaskId ?? randomUUID()}`,
+      amount: extensionBase.toFixed(2),
     })
     return row
   })
