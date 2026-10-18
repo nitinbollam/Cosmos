@@ -132,13 +132,61 @@ export async function verifyRefreshToken(refreshToken: string): Promise<jose.JWT
   }
 }
 
-export async function loginUser(email: string, password: string, meta: SessionMeta = {}): Promise<TokenPair> {
-  const user = await prisma.user.findFirst({
-    where: { email: email.trim().toLowerCase(), isActive: true },
+/** Most accounts one email can match across tenants that we will check in a single attempt. */
+const MAX_LOGIN_CANDIDATES = 10
+
+/**
+ * A valid bcrypt hash (cost 12) of a throwaway string. Compared against when no account matches so
+ * an unknown email costs the same time as a wrong password and cannot be told apart by timing.
+ */
+const DUMMY_PASSWORD_HASH = '$2b$12$uUNNSCH/KEVcXVx3kSJZNOKNqh8LZoEC25LZfVVVvdFYtk2sZp6Qe'
+
+const invalidCredentials = () => new ApiError(401, 'Invalid credentials')
+
+/**
+ * Sign in by email and password.
+ *
+ * The same address can belong to users in several tenants, so every active account for the email is
+ * checked, not whichever row the database returns first. If exactly one account's password matches,
+ * that is the account. If none does, the response is the same 401 whether the email exists or not,
+ * and one bcrypt comparison per candidate (or one against a dummy hash) has run either way. If the
+ * password matches accounts in more than one tenant, nobody is signed in: the caller must say which
+ * company (`tenantRef`, a tenant id or slug), and gets a 409 until they do.
+ */
+export async function loginUser(
+  email: string,
+  password: string,
+  meta: SessionMeta = {},
+  opts: { tenantRef?: string } = {},
+): Promise<TokenPair> {
+  let tenantId: string | undefined
+  if (opts.tenantRef?.trim()) {
+    const ref = opts.tenantRef.trim()
+    const tenant = await prisma.tenant.findFirst({ where: { OR: [{ id: ref }, { slug: ref.toLowerCase() }] }, select: { id: true } })
+    tenantId = tenant?.id ?? '__no_such_tenant__'
+  }
+  const candidates = await prisma.user.findMany({
+    where: { email: email.trim().toLowerCase(), isActive: true, ...(tenantId ? { tenantId } : {}) },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: MAX_LOGIN_CANDIDATES,
   })
-  if (!user) throw new Error('Invalid credentials')
-  const ok = await bcrypt.compare(password, user.passwordHash)
-  if (!ok) throw new Error('Invalid credentials')
+
+  const matched: typeof candidates = []
+  if (candidates.length === 0) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH)
+  } else {
+    for (const candidate of candidates) {
+      if (await bcrypt.compare(password, candidate.passwordHash)) matched.push(candidate)
+    }
+  }
+  if (matched.length === 0) throw invalidCredentials()
+  if (matched.length > 1) {
+    throw new ApiError(
+      409,
+      'This email is registered with more than one company. Enter your company code to sign in.',
+    )
+  }
+  const user = matched[0]
   // Only block accounts that were sent a verification link (new signups). Existing users
   // without emailVerifiedAt are grandfathered until they change email.
   if (!user.emailVerifiedAt && user.emailVerificationTokenHash) {
@@ -406,24 +454,35 @@ export async function verifyEmail(token: string): Promise<void> {
 export async function resendEmailVerification(
   email: string,
 ): Promise<{ ok: true; verifyUrl?: string; delivery?: 'sendgrid' | 'webhook' | 'console' }> {
-  const user = await prisma.user.findFirst({
+  // One link per tenant the address has an unverified account in; each is bound to its own user.
+  const users = await prisma.user.findMany({
     where: { email: email.trim().toLowerCase(), isActive: true, emailVerifiedAt: null },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: MAX_LOGIN_CANDIDATES,
   })
-  if (!user) return { ok: true }
-  const delivery = await sendEmailVerification(user.id)
-  // verifyUrl is only present in non-production (see mayExposeVerifyUrl).
+  if (users.length === 0) return { ok: true }
+  let first: Awaited<ReturnType<typeof sendEmailVerification>> | null = null
+  for (const user of users) {
+    const delivery = await sendEmailVerification(user.id)
+    first ??= delivery
+  }
+  // verifyUrl is only present in non-production (see mayExposeVerifyUrl), and is for the first account only.
   return {
     ok: true,
-    ...(delivery.verifyUrl ? { verifyUrl: delivery.verifyUrl } : {}),
-    delivery: delivery.provider,
+    ...(first?.verifyUrl ? { verifyUrl: first.verifyUrl } : {}),
+    delivery: first?.provider,
   }
 }
 
 /** Reveals nothing about whether the email exists; delivery happens out of band. */
 export async function requestPasswordReset(email: string): Promise<void> {
-  const user = await prisma.user.findFirst({ where: { email: email.trim().toLowerCase(), isActive: true } })
-  if (!user) return
-  await sendPasswordResetLink(user)
+  // One email per tenant the address belongs to; each link resets only its own user's password.
+  const users = await prisma.user.findMany({
+    where: { email: email.trim().toLowerCase(), isActive: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: MAX_LOGIN_CANDIDATES,
+  })
+  for (const user of users) await sendPasswordResetLink(user)
 }
 
 /**
