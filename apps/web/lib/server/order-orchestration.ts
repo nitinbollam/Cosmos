@@ -271,18 +271,58 @@ export async function onFulfillmentPacked(tenantId: string, orderId: string, ful
 
 /**
  * Dispatch a packed fulfillment task end-to-end:
- *  1. enforce serial assignment for serial-tracked SKUs
- *  2. commit inventory (decrement on-hand, fulfill reservations, STOCK_SHIPPED ledger)
- *  3. move SHORT-picked remainders to backorder
- *  4. mark the WMS task DISPATCHED
- *  5. transition the order, invoice the shipped quantities, post COGS
+ *  1. enforce serial assignment for serial-tracked SKUs, then commit inventory (decrement
+ *     on-hand, fulfill reservations, STOCK_SHIPPED ledger) and record a ShipmentCommit
+ *  2. move SHORT-picked remainders to backorder
+ *  3. mark the WMS task DISPATCHED
+ *  4. transition the order, invoice the shipped quantities, queue COGS
  *
- * Inventory is committed before the WMS status flips so a failure leaves the task
- * PACKED (retryable) rather than DISPATCHED-with-no-stock-movement.
+ * Each step is recorded on the task (`dispatchStep`) and is safe to repeat, so a call that fails
+ * part-way is retried by calling dispatch again: it resumes after the last completed step and ends
+ * in the same state as an uninterrupted run. A lease on the task keeps two calls from interleaving.
  */
+const DISPATCH_LEASE_MS = 2 * 60_000
+
 export async function dispatchFulfillmentTask(tenantId: string, taskId: string) {
+  await wmsFulfillment.getFulfillmentTaskRaw(tenantId, taskId) // 404 for an unknown task
+
+  // Claim the task. updateMany is a single compare-and-set, so only one caller wins.
+  const now = new Date()
+  const claim = await wmsDb.fulfillmentTask.updateMany({
+    where: {
+      id: taskId,
+      tenantId,
+      OR: [{ dispatchClaimedAt: null }, { dispatchClaimedAt: { lt: new Date(now.getTime() - DISPATCH_LEASE_MS) } }],
+    },
+    data: { dispatchClaimedAt: now },
+  })
+  if (claim.count !== 1) throw new ApiError(409, 'Task is already being dispatched')
+
+  try {
+    return await runDispatch(tenantId, taskId)
+  } finally {
+    // Release the lease so an immediate retry is not told the task is busy. A crash leaves it to expire.
+    await wmsDb.fulfillmentTask
+      .updateMany({ where: { id: taskId, tenantId }, data: { dispatchClaimedAt: null } })
+      .catch(() => undefined)
+  }
+}
+
+async function runDispatch(tenantId: string, taskId: string) {
+  // Read after claiming: another caller may have advanced the task since the claim was attempted.
   const task = await wmsFulfillment.getFulfillmentTaskRaw(tenantId, taskId)
-  if (task.status !== 'PACKED') throw new ApiError(400, 'Task must be PACKED before dispatch')
+  const step = task.dispatchStep ?? null
+  const resuming = task.status === 'DISPATCHED' && step !== null && step !== 'POSTED'
+
+  if (task.status === 'DISPATCHED' && step === 'POSTED') {
+    // Already complete: return the stored result instead of failing a client retry.
+    const { shipped } = await inv.commitShipmentForOrder(tenantId, task.orderId, 'system', undefined, taskId)
+    return { taskId: task.id, orderId: task.orderId, status: task.status, shipped }
+  }
+  if (task.status !== 'PACKED' && !resuming) throw new ApiError(400, 'Task must be PACKED before dispatch')
+
+  const setStep = (dispatchStep: string) =>
+    wmsDb.fulfillmentTask.update({ where: { id: taskId }, data: { dispatchStep } })
 
   const shippedLines = task.pickLines
     .map((p) => ({
@@ -293,16 +333,37 @@ export async function dispatchFulfillmentTask(tenantId: string, taskId: string) 
     }))
     .filter((l) => l.quantity > 0)
 
-  const serials = await import('./inventory-serials')
-  await serials.enforceAndShipSerialsForOrder(tenantId, task.orderId, shippedLines)
+  let shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }>
+  if (step === null) {
+    const serials = await import('./inventory-serials')
+    await serials.enforceAndShipSerialsForOrder(tenantId, task.orderId, shippedLines)
+    ;({ shipped } = await inv.commitShipmentForOrder(tenantId, task.orderId, 'system', shippedLines, taskId))
+    if (shippedLines.length > 0 && shipped.length === 0) {
+      // Picked stock that "shipped" nothing would be invoiced as zero. Stop and say so.
+      console.error(`[orders] dispatch committed no stock for picked task ${taskId} (order ${task.orderId})`)
+      throw new ApiError(500, `Dispatch of task ${taskId} found no stock to commit for order ${task.orderId}`)
+    }
+    await setStep('COMMITTED')
+  } else {
+    ;({ shipped } = await inv.commitShipmentForOrder(tenantId, task.orderId, 'system', undefined, taskId))
+  }
 
-  const { shipped } = await inv.commitShipmentForOrder(tenantId, task.orderId, 'system', shippedLines)
+  if (step === null || step === 'COMMITTED') {
+    await moveShortPicksToBackorder(tenantId, task.orderId, task.pickLines, taskId)
+    await setStep('BACKORDERED')
+  }
 
-  await moveShortPicksToBackorder(tenantId, task.orderId, task.pickLines)
-
-  const updated = await wmsFulfillment.markFulfillmentDispatched(tenantId, taskId)
+  let status: string = task.status
+  if (step !== 'MARKED') {
+    if (task.status === 'PACKED') {
+      const updated = await wmsFulfillment.markFulfillmentDispatched(tenantId, taskId)
+      status = updated.status
+    }
+    await setStep('MARKED')
+  }
 
   await onFulfillmentDispatched(tenantId, task.orderId, shipped, taskId)
+  await setStep('POSTED')
   void emitDomainEvent(
     tenantId,
     'wms.shipment_dispatched',
@@ -310,14 +371,18 @@ export async function dispatchFulfillmentTask(tenantId: string, taskId: string) 
     { key: taskId },
   )
 
-  return { taskId: updated.taskId, orderId: task.orderId, status: updated.status, shipped }
+  return { taskId, orderId: task.orderId, status: status === 'PACKED' ? 'DISPATCHED' : status, shipped }
 }
 
-/** SHORT-picked quantity goes back to backorder so a receipt can re-fulfill it. */
+/**
+ * SHORT-picked quantity goes back to backorder so a receipt can re-fulfill it. Each line's move is
+ * recorded against the task in the same transaction, so a retried dispatch does not move it twice.
+ */
 async function moveShortPicksToBackorder(
   tenantId: string,
   orderId: string,
   pickLines: Array<{ skuId: string; warehouseId: string; quantity: number; pickedQty: number }>,
+  fulfillmentTaskId?: string,
 ) {
   const shorts = pickLines.filter((p) => p.pickedQty < p.quantity)
   if (shorts.length === 0) return
@@ -328,36 +393,46 @@ async function moveShortPicksToBackorder(
   })
   if (!order) return
 
-  for (const p of shorts) {
-    const shortQty = p.quantity - p.pickedQty
-    const line = order.lineItems.find((li) => li.skuId === p.skuId && li.warehouseId === p.warehouseId)
-    if (!line) continue
+  await orderDb.$transaction(async (tx) => {
+    for (const p of shorts) {
+      const shortQty = p.quantity - p.pickedQty
+      const line = order.lineItems.find((li) => li.skuId === p.skuId && li.warehouseId === p.warehouseId)
+      if (!line) continue
 
-    await orderDb.orderLineItem.update({
-      where: { id: line.id },
-      data: {
-        quantityAllocated: { decrement: Math.min(shortQty, line.quantityAllocated) },
-        quantityBackordered: { increment: shortQty },
-      },
-    })
-    await orderDb.backorderLine.upsert({
-      where: { orderLineItemId: line.id },
-      create: {
-        id: randomUUID(),
-        tenantId,
-        orderId,
-        orderLineItemId: line.id,
-        skuId: p.skuId,
-        warehouseId: p.warehouseId,
-        quantity: shortQty,
-        status: 'OPEN',
-      },
-      update: {
-        quantity: { increment: shortQty },
-        status: 'OPEN',
-      },
-    })
-  }
+      if (fulfillmentTaskId) {
+        const moved = await tx.backorderMove.findFirst({
+          where: { tenantId, fulfillmentTaskId, orderLineItemId: line.id },
+        })
+        if (moved) continue
+        await tx.backorderMove.create({ data: { tenantId, fulfillmentTaskId, orderLineItemId: line.id } })
+      }
+
+      await tx.orderLineItem.update({
+        where: { id: line.id },
+        data: {
+          quantityAllocated: { decrement: Math.min(shortQty, line.quantityAllocated) },
+          quantityBackordered: { increment: shortQty },
+        },
+      })
+      await tx.backorderLine.upsert({
+        where: { orderLineItemId: line.id },
+        create: {
+          id: randomUUID(),
+          tenantId,
+          orderId,
+          orderLineItemId: line.id,
+          skuId: p.skuId,
+          warehouseId: p.warehouseId,
+          quantity: shortQty,
+          status: 'OPEN',
+        },
+        update: {
+          quantity: { increment: shortQty },
+          status: 'OPEN',
+        },
+      })
+    }
+  })
 }
 
 export async function onFulfillmentDispatched(
@@ -378,9 +453,14 @@ export async function onFulfillmentDispatched(
     shipped ?? order.lineItems.map((li) => ({ skuId: li.skuId, quantity: li.quantity }))
 
   const { invoiceShipmentForOrder } = await import('./invoices')
-  await invoiceShipmentForOrder(tenantId, orderId, billedLines).catch((err) =>
-    console.error(`[orders] invoicing failed for order ${orderId}:`, err),
-  )
+  if (fulfillmentTaskId) {
+    // A task dispatch must not finish without its invoice: let the error stop it so a retry bills it.
+    await invoiceShipmentForOrder(tenantId, orderId, billedLines, fulfillmentTaskId)
+  } else {
+    await invoiceShipmentForOrder(tenantId, orderId, billedLines).catch((err) =>
+      console.error(`[orders] invoicing failed for order ${orderId}:`, err),
+    )
+  }
 
   void import('./sales-channels/fulfillment-sync')
     .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
