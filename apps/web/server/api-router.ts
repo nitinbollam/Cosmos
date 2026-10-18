@@ -18,6 +18,7 @@ import { getAuthProfile } from '../lib/server/buyer-context'
 import { jwtSecret } from '../lib/server/env'
 import { handleNativeApi } from '../lib/server/native-router'
 import { ApiError, requireSession, toJsonError } from '../lib/server/session'
+import { runInRequestScope } from '../lib/server/tenant-scope'
 
 function json(data: unknown, status = 200): Response {
   return Response.json(data, { status })
@@ -28,7 +29,7 @@ function json(data: unknown, status = 200): Response {
  * (browser, proxy or service worker). Routes that set their own Cache-Control keep it.
  */
 export async function handleApiRequest(req: Request): Promise<Response> {
-  const res = await routeApiRequest(req)
+  const res = await runInRequestScope(() => routeApiRequest(req))
   if (!res.headers.has('Cache-Control')) {
     try {
       res.headers.set('Cache-Control', 'no-store')

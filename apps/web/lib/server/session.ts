@@ -1,5 +1,6 @@
 import { jwtVerify } from 'jose'
 import { jwtSecret } from './env'
+import { bindRequestTenant } from './tenant-scope'
 
 export type SessionUser = {
   userId: string
@@ -121,6 +122,9 @@ export async function getSession(req: Request): Promise<SessionUser | null> {
   const state = await revalidateUser(sub, tenantId)
   if (!state.active) return null
   if (sessionId && !(await isAuthSessionLive(sessionId, sub))) return null
+
+  // Everything this request does is now checked against the session's tenant (see tenant-scope.ts).
+  bindRequestTenant(tenantId)
 
   return {
     userId: sub,

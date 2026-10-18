@@ -70,6 +70,11 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'dispatch') return await routeDispatchMobile(m, seg, req)
     if (seg[0] === 'purchase-orders') return await routePurchaseOrders(m, seg, req)
     if (seg[0] === 'edi') return await routeEdi(m, seg, req)
+    if (seg[0] === 'health' && seg[1] === 'tenant-scope' && m === 'GET') {
+      await requireRole(req, ADMIN_ROLES)
+      const { tenantScopeReport } = await import('./tenant-scope')
+      return Response.json(tenantScopeReport())
+    }
     if (seg[0] === 'health' && seg[1] === 'db' && m === 'GET') {
       await requireRole(req, ADMIN_ROLES)
       return Response.json(await checkDatabaseConnections())
