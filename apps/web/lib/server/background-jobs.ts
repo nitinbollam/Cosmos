@@ -80,6 +80,18 @@ export function startBackgroundJobs(): void {
     }
   }
 
+  const runPostings = async () => {
+    try {
+      const { runPostingJobs } = await import('./posting-outbox')
+      const res = await runPostingJobs()
+      if (res.claimed > 0) {
+        console.log(`[jobs] gl postings: done ${res.done}, retrying ${res.failed}, dead ${res.dead}`)
+      }
+    } catch (err) {
+      console.error('[jobs] gl posting run failed:', err)
+    }
+  }
+
   const reconcile = async () => {
     if (process.env.RECONCILIATION_DISABLED === '1') return
     try {
