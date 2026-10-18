@@ -143,6 +143,20 @@ model StockReservation {
   @@index([expiresAt])
 }
 
+/// One row per fulfillment task whose stock has been committed. A retried dispatch finds this row
+/// and replays the stored lines instead of finding no ACTIVE reservations and shipping nothing.
+model ShipmentCommit {
+  id                String   @id @default(cuid())
+  tenantId          String
+  fulfillmentTaskId String
+  orderId           String
+  lines             Json
+  committedAt       DateTime @default(now())
+
+  @@unique([tenantId, fulfillmentTaskId])
+  @@index([tenantId, orderId])
+}
+
 enum ReservationStatus {
   ACTIVE
   FULFILLED

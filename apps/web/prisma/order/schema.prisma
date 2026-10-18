@@ -84,6 +84,32 @@ model BackorderLine {
   @@index([orderId])
 }
 
+/// Records that a fulfillment task's short picks were moved to backorder for a line, so a retried
+/// dispatch does not move them twice. Written in the same transaction as the quantity changes.
+model BackorderMove {
+  id                String   @id @default(cuid())
+  tenantId          String
+  fulfillmentTaskId String
+  orderLineItemId   String
+  createdAt         DateTime @default(now())
+
+  @@unique([tenantId, fulfillmentTaskId, orderLineItemId])
+}
+
+/// Records that a fulfillment task has been invoiced, in the same transaction as the invoice
+/// change, so a retried dispatch does not bill the same shipment twice.
+model ShipmentInvoice {
+  id                String   @id @default(cuid())
+  tenantId          String
+  fulfillmentTaskId String
+  orderId           String
+  invoiceId         String
+  createdAt         DateTime @default(now())
+
+  @@unique([tenantId, fulfillmentTaskId])
+  @@index([orderId])
+}
+
 enum BackorderStatus {
   OPEN
   PARTIAL

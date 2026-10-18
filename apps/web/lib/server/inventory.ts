@@ -889,9 +889,24 @@ export async function commitShipmentForOrder(
   orderId: string,
   performedBy: string,
   shippedByLine?: Array<{ skuId: string; warehouseId: string; batchId?: string; quantity: number }>,
+  /**
+   * The fulfillment task being dispatched. When given, the commit is recorded against it and a
+   * repeat call returns the stored result instead of looking for reservations that are already
+   * FULFILLED (which would report an empty shipment).
+   */
+  fulfillmentTaskId?: string,
 ): Promise<{ shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> }> {
+  type ShippedLine = { skuId: string; warehouseId: string; batchId: string; quantity: number }
+  const readCommit = async (): Promise<ShippedLine[] | null> => {
+    if (!fulfillmentTaskId) return null
+    const row = await inventoryDb.shipmentCommit.findFirst({ where: { tenantId, fulfillmentTaskId } })
+    return row ? (row.lines as unknown as ShippedLine[]) : null
+  }
+  const replay = await readCommit()
+  if (replay) return { shipped: replay }
+
   const correlationId = randomUUID()
-  const shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> = []
+  const shipped: ShippedLine[] = []
 
   // Remaining shippable quantity per sku|warehouse|batch from the pick result.
   const cap = new Map<string, number>()
@@ -902,6 +917,7 @@ export async function commitShipmentForOrder(
     }
   }
 
+  let raced: ShippedLine[] | null = null
   await inventoryDb.$transaction(async (tx) => {
     const reservations = await tx.stockReservation.findMany({
       where: { tenantId, orderId, status: 'ACTIVE' },
@@ -975,7 +991,25 @@ export async function commitShipmentForOrder(
         shipped.push({ skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey, quantity: shipQty })
       }
     }
+
+    if (fulfillmentTaskId) {
+      await tx.shipmentCommit.create({
+        data: { tenantId, fulfillmentTaskId, orderId, lines: shipped as unknown as Prisma.InputJsonValue },
+      })
+    }
+  }).catch(async (err: unknown) => {
+    // A concurrent call for the same task committed first; return what it stored.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const winner = await readCommit()
+      if (winner) {
+        raced = winner
+        return
+      }
+    }
+    throw err
   })
+  const racedResult = raced as ShippedLine[] | null
+  if (racedResult) return { shipped: racedResult }
 
   for (const line of shipped) {
     queueSalesChannelPush(tenantId, line.skuId)
