@@ -28,6 +28,7 @@ export const AVAILABLE_MODULES = [
   'campaigns',
   'expense-reports',
   'budgets',
+  'manufacturing',
 ] as const
 
 export type ModuleKey = (typeof AVAILABLE_MODULES)[number]
@@ -59,6 +60,7 @@ export const MODULE_METADATA: Record<ModuleKey, { label: string; permissions: st
   campaigns: { label: 'Marketing Campaigns', permissions: ['campaigns.read', 'campaigns.write'] },
   'expense-reports': { label: 'Expense Reports', permissions: ['expense-reports.read', 'expense-reports.write'] },
   budgets: { label: 'Budgets', permissions: ['budgets.read', 'budgets.write'] },
+  manufacturing: { label: 'Manufacturing & Kitting', permissions: ['manufacturing.read', 'manufacturing.write'] },
 }
 
 /** Standard role default permission matrices. */
@@ -68,6 +70,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   MANAGER: [
     'orders.*',
     'inventory.*',
+    'manufacturing.*',
     'wms.*',
     'purchasing.*',
     'compliance.*',
@@ -99,6 +102,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'purchasing.read',
     'reports.*',
     'inventory.read',
+    'manufacturing.read',
     'compliance.*',
     'notifications.read',
     'celestial.chat',
@@ -108,6 +112,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   WAREHOUSE_STAFF: [
     'inventory.*',
+    'manufacturing.*',
     'wms.*',
     'orders.read',
     'purchasing.read',

@@ -177,7 +177,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | AI assistant (Celestial) | ✅ | RAG + live data tools — rare in ERPs |
 | Deep BI / custom reports | ⚠️ | KPIs + EWMA demand/cashflow + saved report builder (orders/inventory/AR CSV); no anomaly UI |
 | HR / payroll | ❌ | Not implemented |
-| Manufacturing / BOM | ❌ | Not implemented |
+| Manufacturing / BOM | ✅ | BOM recipes, component cost roll-up, assembly/kitting work orders, shortage check, atomic stock deduction, finished goods receipt & dekitting |
 
 ---
 
@@ -223,7 +223,7 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | 13 | Multi-currency / multi-subsidiary |
 | 14 | Rebate & vendor allowance programs |
 | 15 | Fixed assets |
-| 16 | Manufacturing / kitting / BOM |
+| 16 | ~~Manufacturing / kitting / BOM~~ | ✅ BOM recipes, component roll-up costing & kitting assembly orders |
 | 17 | HR & payroll |
 | 18 | Advanced BI / AI forecasting | ⚠️ Partial — demand EWMA (`USAGE_EWMA` / seasonal) + AR/AP cashflow history. Deferred: Croston, forecast-accuracy store, auto-PO from plan, report builder, anomaly UI |
 | 19 | ~~Labor management in WMS~~ | ✅ Basic productivity metrics |

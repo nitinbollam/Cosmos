@@ -46,6 +46,7 @@ import { routeExpenseReports } from './routes/expense-reports'
 import { routeBudgets } from './routes/budgets'
 import { routeSystemJobs } from './routes/system-jobs'
 import { routeSalesChannels } from './routes/sales-channels'
+import { routeManufacturing } from './routes/manufacturing'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -119,6 +120,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'celestial') return await routeCelestial(m, seg, req)
     if (seg[0] === 'marketplace') return await routeMarketplace(m, seg, req)
     if (seg[0] === 'pleros-ops') return await routePlerosOps(m, seg, req)
+    if (seg[0] === 'manufacturing') return await routeManufacturing(m, seg, req)
     return null
   } catch (e) {
     return toJsonError(e)

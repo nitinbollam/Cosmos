@@ -78,6 +78,7 @@ model SKU {
   price             Decimal 
   minPrice          Decimal?
   isActive          Boolean  @default(true)
+  isKit             Boolean  @default(false)
   trackLot          Boolean  @default(false)
   trackSerial       Boolean  @default(false)
   imageUrls Json 
@@ -190,4 +191,88 @@ model SerialUnit {
   @@unique([tenantId, serialNumber])
   @@index([tenantId, skuId, status])
   @@index([tenantId, orderId])
+}
+
+model BillOfMaterials {
+  id             String          @id @default(cuid())
+  tenantId       String
+  skuId          String
+  bomNumber      String
+  name           String
+  description    String?
+  version        String          @default("1.0")
+  status         String          @default("ACTIVE") // ACTIVE, DRAFT, ARCHIVED
+  laborCost      Decimal         @default(0)
+  overheadCost   Decimal         @default(0)
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  items          BomItem[]
+  assemblyOrders AssemblyOrder[]
+
+  @@unique([tenantId, bomNumber])
+  @@index([tenantId, skuId])
+  @@index([tenantId, status])
+}
+
+model BomItem {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  bomId              String
+  componentSkuId     String
+  quantity           Decimal
+  scrapFactorPercent Decimal         @default(0)
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  bom                BillOfMaterials @relation(fields: [bomId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, bomId])
+  @@index([tenantId, componentSkuId])
+}
+
+model AssemblyOrder {
+  id                String              @id @default(cuid())
+  tenantId          String
+  orderNumber       String
+  bomId             String
+  skuId             String
+  warehouseId       String
+  destinationBinId  String?
+  quantityPlanned   Int
+  quantityCompleted Int                 @default(0)
+  status            String              @default("DRAFT") // DRAFT, RELEASED, IN_PROGRESS, COMPLETED, CANCELLED
+  unitCost          Decimal?
+  totalCost         Decimal?
+  notes             String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdBy         String
+  completedBy       String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  bom               BillOfMaterials     @relation(fields: [bomId], references: [id], onDelete: Restrict)
+  items             AssemblyOrderItem[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, warehouseId])
+  @@index([tenantId, status])
+  @@index([tenantId, skuId])
+}
+
+model AssemblyOrderItem {
+  id               String        @id @default(cuid())
+  tenantId         String
+  assemblyOrderId  String
+  componentSkuId   String
+  quantityRequired Decimal
+  quantityConsumed Decimal       @default(0)
+  unitCost         Decimal       @default(0)
+  totalCost        Decimal       @default(0)
+  batchId          String?
+  locationId       String?
+  assemblyOrder    AssemblyOrder @relation(fields: [assemblyOrderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, assemblyOrderId])
+  @@index([tenantId, componentSkuId])
 }
