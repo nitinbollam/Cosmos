@@ -7,6 +7,9 @@
  *
  * Kept free of DB and session imports so it can be unit-tested on its own.
  */
+import { adjustmentsFromPod } from './door-adjustment'
+import { vanSalesFromPod } from './van-rules'
+
 export type StopFailure = {
   reason: string
   failedAt: string
@@ -54,8 +57,17 @@ export function podWithFailure(existingPod: unknown, failure: StopFailure): Reco
  */
 export function podForDelivery(existingPod: unknown, submitted: Record<string, unknown> | undefined) {
   const { failure: _clientFailure, ...evidence } = submitted ?? {}
+  const { adjustments: _clientAdjustments, vanSales: _clientVanSales, ...clean } = evidence as Record<string, unknown>
   const earlierFailure = failureFromPod(existingPod)
-  return earlierFailure ? { ...evidence, failure: earlierFailure } : evidence
+  // `adjustments` is server-owned like `failure`: door changes already made stay, a client cannot add or drop any.
+  const earlierAdjustments = adjustmentsFromPod(existingPod)
+  const earlierVanSales = vanSalesFromPod(existingPod)
+  return {
+    ...clean,
+    ...(earlierFailure ? { failure: earlierFailure } : {}),
+    ...(earlierAdjustments.length ? { adjustments: earlierAdjustments } : {}),
+    ...(earlierVanSales.length ? { vanSales: earlierVanSales } : {}),
+  }
 }
 
 /** A route is finished once every stop has an outcome: delivered or failed. */

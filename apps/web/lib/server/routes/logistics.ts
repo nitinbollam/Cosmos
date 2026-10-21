@@ -81,6 +81,20 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
       ),
     )
   }
+  if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'adjust' && method === 'POST') {
+    assertRouteVisible(session, await dispatch.getRoute(session.tenantId, seg[1]))
+    const { reduceOrderAtDoor } = await import('../delivery-adjust')
+    return Response.json(
+      await reduceOrderAtDoor(session.tenantId, seg[1], seg[3], await req.json(), { userId: session.userId, role: session.role }),
+    )
+  }
+  if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'van-sale' && method === 'POST') {
+    assertRouteVisible(session, await dispatch.getRoute(session.tenantId, seg[1]))
+    const { sellFromVan } = await import('../van-sale')
+    return Response.json(
+      await sellFromVan(session.tenantId, seg[1], seg[3], (await req.json()) as never, { userId: session.userId, role: session.role }),
+    )
+  }
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'failed' && method === 'POST') {
     const body = (await req.json()) as { reason?: unknown }
     return Response.json(

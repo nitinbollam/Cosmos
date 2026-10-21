@@ -3,11 +3,17 @@ import { tenantDb } from './db'
 export type TenantWorkflowSettings = {
   poApprovalThreshold: number
   discountApprovalThresholdPct: number
+  /** A driver may not take more than this (pre-tax) off an order at the door without a manager. 0 = no limit. */
+  doorAdjustmentThreshold: number
+  /** A driver may not sell more than this (pre-tax) from the van in one sale; a manager must. 0 = no limit. */
+  vanSaleThreshold: number
 }
 
 const DEFAULTS: TenantWorkflowSettings = {
   poApprovalThreshold: 2500,
   discountApprovalThresholdPct: 15,
+  doorAdjustmentThreshold: 0,
+  vanSaleThreshold: 0,
 }
 
 function parseSettings(raw: unknown): Record<string, unknown> {
@@ -28,7 +34,13 @@ export async function getTenantWorkflowSettings(tenantId: string): Promise<Tenan
     s.discountApprovalThresholdPct <= 100
       ? s.discountApprovalThresholdPct
       : DEFAULTS.discountApprovalThresholdPct
-  return { poApprovalThreshold, discountApprovalThresholdPct }
+  const doorAdjustmentThreshold =
+    typeof s.doorAdjustmentThreshold === 'number' && s.doorAdjustmentThreshold >= 0
+      ? s.doorAdjustmentThreshold
+      : DEFAULTS.doorAdjustmentThreshold
+  const vanSaleThreshold =
+    typeof s.vanSaleThreshold === 'number' && s.vanSaleThreshold >= 0 ? s.vanSaleThreshold : DEFAULTS.vanSaleThreshold
+  return { poApprovalThreshold, discountApprovalThresholdPct, doorAdjustmentThreshold, vanSaleThreshold }
 }
 
 export async function updateTenantWorkflowSettings(
@@ -44,6 +56,8 @@ export async function updateTenantWorkflowSettings(
     ...(patch.discountApprovalThresholdPct !== undefined
       ? { discountApprovalThresholdPct: patch.discountApprovalThresholdPct }
       : {}),
+    ...(patch.doorAdjustmentThreshold !== undefined ? { doorAdjustmentThreshold: patch.doorAdjustmentThreshold } : {}),
+    ...(patch.vanSaleThreshold !== undefined ? { vanSaleThreshold: patch.vanSaleThreshold } : {}),
   }
   await tenantDb.tenantOrganization.update({
     where: { id: tenantId },
