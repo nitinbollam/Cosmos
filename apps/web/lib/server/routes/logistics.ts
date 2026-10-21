@@ -4,11 +4,15 @@ import { RouteStatus } from '@/generated/prisma-dispatch'
 import * as purchasing from '../purchasing'
 import * as edi from '../edi'
 import { ApiError, requireSession, requirePermission, assertPermission, assertNotBuyer } from './common'
+import { assertRouteVisible, driverFilter, driverMayCallRoutes, isDriverRole } from '../driver-scope'
 
 export async function routeRoutes(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
   const session = await requirePermission(req, isRead ? 'dispatch.read' : 'dispatch.write')
   const url = new URL(req.url)
+  const driverOnly = isDriverRole(session.role)
+  // Drivers can list and open their own routes and record stop outcomes; planning is for managers.
+  if (driverOnly && !driverMayCallRoutes(method, seg)) throw new ApiError(403, 'Drivers cannot plan or change routes')
 
   if (seg.length === 2 && seg[1] === 'shipped-orders' && method === 'GET') {
     return Response.json(await orders.listShippedOrdersForDispatch(session.tenantId))
@@ -31,13 +35,16 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
       .split(',')
       .map((x) => x.trim().toUpperCase())
       .filter((x): x is RouteStatus => (Object.values(RouteStatus) as string[]).includes(x))
-    return Response.json(await dispatch.listRoutes(session.tenantId, url.searchParams.get('date') ?? undefined, statuses))
+    return Response.json(
+      await dispatch.listRoutes(session.tenantId, url.searchParams.get('date') ?? undefined, statuses, driverFilter(session)),
+    )
   }
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as Parameters<typeof dispatch.createRoute>[1]
     return Response.json(await dispatch.createRoute(session.tenantId, body), { status: 201 })
   }
   if (seg.length === 2 && method === 'GET') {
+    assertRouteVisible(session, await dispatch.getRoute(session.tenantId, seg[1]))
     return Response.json(await dispatch.getRouteDetail(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'driver' && method === 'DELETE') {
@@ -58,6 +65,9 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
     (method === 'POST' || method === 'PATCH')
   ) {
     return Response.json(await dispatch.optimizeRouteStopsNearestNeighbor(session.tenantId, seg[1]))
+  }
+  if (seg.length === 5 && seg[2] === 'stops' && (seg[4] === 'delivered' || seg[4] === 'failed') && method === 'POST') {
+    assertRouteVisible(session, await dispatch.getRoute(session.tenantId, seg[1]))
   }
   if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'delivered' && method === 'POST') {
     const body = (await req.json()) as Record<string, unknown>
@@ -84,13 +94,14 @@ export async function routeDispatchMobile(method: string, seg: string[], req: Re
   const session = await requirePermission(req, 'dispatch.write')
 
   if (seg[1] === 'driver' && seg[2] === 'location' && method === 'POST') {
-    const body = (await req.json()) as Parameters<typeof dispatch.recordDriverLocation>[2]
+    const body = await req.json()
     return Response.json(await dispatch.recordDriverLocation(session.tenantId, session.userId, body))
   }
   if (seg[1] === 'stops' && seg.length === 4 && seg[3] === 'pod' && method === 'POST') {
     const body = (await req.json()) as Record<string, unknown>
     const routeId = String(body.routeId ?? '')
     if (!routeId.trim()) throw new ApiError(400, 'routeId is required in body')
+    assertRouteVisible(session, await dispatch.getRoute(session.tenantId, routeId.trim()))
     // Only known, validated POD fields are stored; images must be real raster images.
     const { sanitizeProofOfDelivery } = await import('../pod-validation')
     const pod = sanitizeProofOfDelivery(body)
