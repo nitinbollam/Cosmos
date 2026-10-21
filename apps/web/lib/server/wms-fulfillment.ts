@@ -47,7 +47,10 @@ const touch = (taskId: string) => wmsDb.fulfillmentTask.update({ where: { id: ta
 
 async function assertScanMatches(tenantId: string, line: { skuId: string; locationId: string | null }, scanned: string) {
   const { findSkuByScanValue } = await import('./inventory')
-  const sku = await findSkuByScanValue(tenantId, scanned).catch(() => null)
+  const sku = await findSkuByScanValue(tenantId, scanned).catch((e: unknown) => {
+    if (e instanceof ApiError && e.status === 404) return null
+    throw e
+  })
   if (sku) {
     if (sku.id !== line.skuId) throw new ApiError(400, 'That is not the item on this line')
     return
