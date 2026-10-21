@@ -103,6 +103,12 @@ model Warehouse {
   address   Json
   isActive  Boolean  @default(true)
   isDefault Boolean  @default(false)
+  /// WAREHOUSE or VEHICLE. A vehicle is a mini warehouse that rides with one driver (PLR-167).
+  kind      String   @default("WAREHOUSE")
+  /// For a vehicle: the driver it is assigned to.
+  assignedDriverId String?
+  /// For a vehicle: the US state it sells in. Van sales never cross state lines.
+  stateCode String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   bins      BinLocation[]
@@ -289,4 +295,21 @@ model AssemblyOrderItem {
 
   @@index([tenantId, assemblyOrderId])
   @@index([tenantId, componentSkuId])
+}
+
+/// What was put on or taken off a van in one go, with who did it. The stock moves themselves are
+/// ordinary transfers in the stock ledger; this is the paper that goes with them.
+model VanManifest {
+  id          String   @id @default(cuid())
+  tenantId    String
+  vanId       String
+  driverId    String?
+  /// LOAD or UNLOAD
+  kind        String
+  lines       Json
+  note        String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, vanId, createdAt])
 }
