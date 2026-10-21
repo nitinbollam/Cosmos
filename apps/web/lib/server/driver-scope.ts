@@ -39,6 +39,7 @@ export function driverMayCallRoutes(method: string, seg: string[]): boolean {
   if (method === 'POST' && seg.length === 5 && seg[2] === 'stops' && (seg[4] === 'delivered' || seg[4] === 'failed')) {
     return true
   }
+  if (method === 'POST' && seg.length === 5 && seg[2] === 'stops' && seg[4] === 'adjust') return true
   return false
 }
 
