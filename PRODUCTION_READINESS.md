@@ -15,7 +15,7 @@ Status of the go-live blockers identified in the customer/production readiness a
 ## Security hardening
 
 - **Password policy** — 10+ characters with a letter and a number, enforced server-side on signup, invite accept, reset, and change.
-- **Rate limiting** — login (per IP and per email), signup, forgot/reset password, invite accept, change password. In-memory fixed window; move to Redis for multi-replica deployments.
+- **Rate limiting** — login (per IP and per email), signup, forgot/reset password, invite accept, change password. Fixed window, counted in the auth database (`RateLimitBucket`, one atomic upsert per attempt), so limits hold across replicas; if the database is unreachable it falls back to a per-process counter and logs it.
 - **Session revalidation** — JWTs are re-checked against the user row (active flag + current role) with a 60-second cache, so deactivations and demotions take effect within a minute.
 - **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS in production.
 - **XSS** — invoice HTML escapes all user-controlled values.
