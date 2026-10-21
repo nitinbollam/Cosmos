@@ -132,6 +132,7 @@ const router = createBrowserRouter([
             path: 'inventory/:skuId',
             element: page(() => import('@/pages/admin/inventory/[skuId]/page')),
           },
+          { path: 'manufacturing', element: page(() => import('@/pages/admin/manufacturing/page')) },
           { path: 'notifications', element: page(() => import('@/pages/admin/notifications/page')) },
           { path: 'orders', element: page(() => import('@/pages/admin/orders/page')) },
           { path: 'orders/:id', element: page(() => import('@/pages/admin/orders/[id]/page')) },

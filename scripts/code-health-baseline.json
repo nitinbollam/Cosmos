@@ -49,6 +49,7 @@
     "apps/web/lib/server/inventory.ts": 8,
     "apps/web/lib/server/invoices.ts": 13,
     "apps/web/lib/server/ledger.ts": 1,
+    "apps/web/lib/server/manufacturing.ts": 21,
     "apps/web/lib/server/operations-gl.ts": 8,
     "apps/web/lib/server/order-orchestration.ts": 2,
     "apps/web/lib/server/order-payment-admin.ts": 4,
