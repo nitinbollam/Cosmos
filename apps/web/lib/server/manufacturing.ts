@@ -777,14 +777,18 @@ export async function completeAssemblyOrder(
         throw new ApiError(400, `Stock depleted for component ${comp?.code ?? item.componentSkuId}`)
       }
 
-      const newOnHand = sl.quantityOnHand - qtyToConsume
-      await tx.stockLevel.update({
-        where: { id: sl.id },
+      // Guarded decrement: a concurrent consume cannot drive on-hand or available negative.
+      const consumed = await tx.stockLevel.updateMany({
+        where: { id: sl.id, quantityOnHand: { gte: qtyToConsume }, quantityAvailable: { gte: qtyToConsume } },
         data: {
-          quantityOnHand: newOnHand,
+          quantityOnHand: { decrement: qtyToConsume },
           quantityAvailable: { decrement: qtyToConsume },
         },
       })
+      if (consumed.count !== 1) {
+        throw new ApiError(400, `Stock depleted for component ${comp?.code ?? item.componentSkuId}`)
+      }
+      const newOnHand = (await tx.stockLevel.findUniqueOrThrow({ where: { id: sl.id }, select: { quantityOnHand: true } })).quantityOnHand
 
       // Record consumption ledger entry
       await tx.stockLedgerEntry.create({
@@ -838,15 +842,15 @@ export async function completeAssemblyOrder(
 
     let newFgOnHand = order.quantityPlanned
     if (fgStockLevel) {
-      newFgOnHand = fgStockLevel.quantityOnHand + order.quantityPlanned
       await tx.stockLevel.update({
         where: { id: fgStockLevel.id },
         data: {
-          quantityOnHand: newFgOnHand,
+          quantityOnHand: { increment: order.quantityPlanned },
           quantityAvailable: { increment: order.quantityPlanned },
           ...(input.destinationBinId ? { locationId: input.destinationBinId } : {}),
         },
       })
+      newFgOnHand = (await tx.stockLevel.findUniqueOrThrow({ where: { id: fgStockLevel.id }, select: { quantityOnHand: true } })).quantityOnHand
     } else {
       fgStockLevel = await tx.stockLevel.create({
         data: {
@@ -994,14 +998,14 @@ export async function disassembleKit(
       )
     }
 
-    const newFgOnHand = fgStock.quantityOnHand - qty
-    await tx.stockLevel.update({
-      where: { id: fgStock.id },
-      data: {
-        quantityOnHand: newFgOnHand,
-        quantityAvailable: { decrement: qty },
-      },
+    const taken = await tx.stockLevel.updateMany({
+      where: { id: fgStock.id, quantityOnHand: { gte: qty }, quantityAvailable: { gte: qty } },
+      data: { quantityOnHand: { decrement: qty }, quantityAvailable: { decrement: qty } },
     })
+    if (taken.count !== 1) {
+      throw new ApiError(400, 'Insufficient finished goods stock to disassemble')
+    }
+    const newFgOnHand = (await tx.stockLevel.findUniqueOrThrow({ where: { id: fgStock.id }, select: { quantityOnHand: true } })).quantityOnHand
 
     // Finished good consumption ledger entry
     await tx.stockLedgerEntry.create({
@@ -1041,14 +1045,14 @@ export async function disassembleKit(
 
       let newCompOnHand = qtyToRestore
       if (compStock) {
-        newCompOnHand = compStock.quantityOnHand + qtyToRestore
         await tx.stockLevel.update({
           where: { id: compStock.id },
           data: {
-            quantityOnHand: newCompOnHand,
+            quantityOnHand: { increment: qtyToRestore },
             quantityAvailable: { increment: qtyToRestore },
           },
         })
+        newCompOnHand = (await tx.stockLevel.findUniqueOrThrow({ where: { id: compStock.id }, select: { quantityOnHand: true } })).quantityOnHand
       } else {
         compStock = await tx.stockLevel.create({
           data: {
