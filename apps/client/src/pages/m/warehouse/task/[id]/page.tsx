@@ -1,43 +1,36 @@
-import { Link } from 'react-router-dom'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
+import {
+  cleanScan,
+  lineLabel,
+  nextLine,
+  progress,
+  shortQtyProblem,
+  taskTitle,
+  type PickItem,
+  type PickTask,
+} from '@/lib/warehouse-tasks'
 
-type PickItem = {
-  id: string
-  skuId: string
-  quantity: number
-  pickedQty: number
-  status: string
-  binCode?: string
-}
-
-type TaskDetail = {
-  id: string
-  orderId: string
-  status: string
-  pickItems?: PickItem[]
-}
-
-function lineDone(status: string) {
-  return status === 'PICKED' || status === 'SHORT'
-}
+const CLOSED = ['CANCELLED', 'PACKED', 'DISPATCHED']
 
 export default function WarehouseTaskPage() {
   const { id } = useParams<{ id: string }>()
-  const [task, setTask] = useState<TaskDetail | null>(null)
+  const [task, setTask] = useState<PickTask | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [busyLine, setBusyLine] = useState<string | null>(null)
-  const [busyAll, setBusyAll] = useState(false)
-  const [shortQty, setShortQty] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+  const [scan, setScan] = useState('')
+  const [shortQty, setShortQty] = useState('')
+  const [showShort, setShowShort] = useState(false)
+
+  const base = `/wms/tasks/${encodeURIComponent(id ?? '')}`
 
   const load = useCallback(async () => {
     if (!id) return
     setErr(null)
     try {
-      const data = await api.get<TaskDetail>(`/wms/tasks/${encodeURIComponent(id)}`)
-      setTask(data)
+      setTask(await api.get<PickTask>(`/wms/tasks/${encodeURIComponent(id)}`))
     } catch (e) {
       setErr(axiosErr(e))
     }
@@ -47,129 +40,148 @@ export default function WarehouseTaskPage() {
     void load()
   }, [load])
 
-  async function pickLine(line: PickItem, pickedQty: number, markShort?: boolean) {
-    if (!id) return
-    setBusyLine(line.id)
+  async function run(fn: () => Promise<PickTask>) {
+    setBusy(true)
     setErr(null)
     try {
-      const updated = await api.patch<TaskDetail>(
-        `/wms/tasks/${encodeURIComponent(id)}/pick-lines/${encodeURIComponent(line.id)}`,
-        { pickedQty, markShort },
-      )
-      setTask(updated)
+      setTask(await fn())
+      setScan('')
+      setShortQty('')
+      setShowShort(false)
     } catch (e) {
       setErr(axiosErr(e))
     } finally {
-      setBusyLine(null)
+      setBusy(false)
     }
   }
 
-  async function pickAll() {
-    if (!id) return
-    setBusyAll(true)
-    setErr(null)
+  const confirm = (line: PickItem) =>
+    run(() => api.patch<PickTask>(`${base}/pick-lines/${encodeURIComponent(line.id)}`, { pickedQty: line.quantity, scanned: cleanScan(scan) }))
+
+  const markShort = (line: PickItem) => {
+    const problem = shortQtyProblem(shortQty, line.quantity)
+    if (problem) {
+      setErr(problem)
+      return
+    }
+    return run(() =>
+      api.patch<PickTask>(`${base}/pick-lines/${encodeURIComponent(line.id)}`, {
+        pickedQty: Number(shortQty),
+        markShort: true,
+        scanned: cleanScan(scan),
+      }),
+    )
+  }
+
+  const release = async () => {
+    setBusy(true)
     try {
-      const updated = await api.post<TaskDetail>(`/wms/tasks/${encodeURIComponent(id)}/pick-all`, {})
-      setTask(updated)
+      await api.post(`${base}/release`, {})
+      window.location.assign('/m/warehouse')
     } catch (e) {
       setErr(axiosErr(e))
-    } finally {
-      setBusyAll(false)
+      setBusy(false)
     }
   }
 
-  const pickItems = task?.pickItems ?? []
-  const allDone = pickItems.length > 0 && pickItems.every((p) => lineDone(p.status))
-  const canPick = task && !['CANCELLED', 'PACKED', 'DISPATCHED'].includes(task.status)
+  const items = task?.pickItems ?? []
+  const line = nextLine(items)
+  const prog = progress(items)
+  const open = task ? !CLOSED.includes(task.status) : false
 
   return (
     <div>
       <Link to="/m/warehouse" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Tasks
       </Link>
-      <h1 style={{ fontFamily: 'var(--font-display)' }}>Task {id?.slice(-8)}</h1>
-      {err && <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p>}
+      <h1 style={{ fontFamily: 'var(--font-display)', marginBottom: 4 }}>{task ? taskTitle(task) : 'Task'}</h1>
       {task && (
-        <>
-          <div className="pleros-mobile-card">
-            <p style={{ margin: 0 }}>Status: {task.status}</p>
-            <p style={{ margin: '6px 0 0', fontSize: 13, opacity: 0.8 }}>Order: {task.orderId}</p>
-            {canPick && !allDone && (
-              <button
-                type="button"
-                className="btn-primary"
-                style={{ marginTop: 12, width: '100%' }}
-                disabled={busyAll || Boolean(busyLine)}
-                onClick={() => void pickAll()}
-              >
-                {busyAll ? 'Picking…' : 'Pick all lines'}
-              </button>
-            )}
-            {allDone && (
-              <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--c-success)' }}>
-                All lines picked — ready for pack in admin.
-              </p>
-            )}
-          </div>
-
-          {pickItems.map((li) => (
-            <div key={li.id} className="pleros-mobile-card" style={{ marginTop: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ fontSize: 14 }}>SKU …{li.skuId.slice(-6)}</strong>
-                <span style={{ fontSize: 12, opacity: 0.85 }}>{li.status}</span>
-              </div>
-              <p style={{ margin: '8px 0 0', fontSize: 13, opacity: 0.75 }}>
-                Need {li.quantity} · Picked {li.pickedQty}
-                {li.binCode ? (
-                  <>
-                    {' '}
-                    · Bin <strong style={{ color: 'var(--c-accent)' }}>{li.binCode}</strong>
-                  </>
-                ) : null}
-              </p>
-              {canPick && !lineDone(li.status) && (
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={busyLine === li.id || busyAll}
-                    onClick={() => void pickLine(li, li.quantity)}
-                  >
-                    {busyLine === li.id ? 'Saving…' : `Pick ${li.quantity}`}
-                  </button>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      className="pleros-input"
-                      type="number"
-                      min={1}
-                      max={li.quantity - 1}
-                      placeholder="Short qty"
-                      value={shortQty[li.id] ?? ''}
-                      onChange={(e) => setShortQty((s) => ({ ...s, [li.id]: e.target.value }))}
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      disabled={busyLine === li.id || busyAll}
-                      onClick={() => {
-                        const q = Number(shortQty[li.id])
-                        if (!Number.isFinite(q) || q <= 0 || q >= li.quantity) {
-                          setErr(`Enter a short qty between 1 and ${li.quantity - 1}`)
-                          return
-                        }
-                        void pickLine(li, q, true)
-                      }}
-                    >
-                      Mark short
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </>
+        <p style={{ margin: '0 0 12px', fontSize: 13, opacity: 0.75 }}>
+          {prog.done} of {prog.total} lines · {prog.units} of {prog.unitsTotal} units
+        </p>
       )}
+      {err && <p style={{ color: 'var(--c-danger)', fontSize: 13 }}>{err}</p>}
+
+      {task && open && line && (
+        <div className="pleros-mobile-card">
+          <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>Go to bin</p>
+          <p style={{ margin: '2px 0 8px', fontSize: 40, fontWeight: 700, color: 'var(--c-accent)', lineHeight: 1.1 }}>
+            {line.binCode ?? 'No bin'}
+          </p>
+          <strong style={{ fontSize: 16 }}>{lineLabel(line)}</strong>
+          {line.skuCode ? <p style={{ margin: '2px 0 0', fontSize: 13, opacity: 0.7 }}>{line.skuCode}</p> : null}
+          <p style={{ margin: '10px 0 0', fontSize: 28, fontWeight: 600 }}>
+            Pick {line.quantity}
+          </p>
+
+          <input
+            className="pleros-input"
+            placeholder="Scan the item (optional)"
+            value={scan}
+            autoFocus
+            onChange={(e) => setScan(e.target.value)}
+            style={{ marginTop: 12, width: '100%' }}
+          />
+
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ marginTop: 10, width: '100%', padding: 14, fontSize: 16 }}
+            disabled={busy}
+            onClick={() => void confirm(line)}
+          >
+            {busy ? 'Saving…' : `Confirm ${line.quantity}`}
+          </button>
+
+          {showShort ? (
+            <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+              <input
+                className="pleros-input"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={line.quantity - 1}
+                placeholder={`Found (0–${line.quantity - 1})`}
+                value={shortQty}
+                onChange={(e) => setShortQty(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="btn-ghost" disabled={busy} onClick={() => void markShort(line)}>
+                Mark short
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="btn-ghost" style={{ marginTop: 10, width: '100%' }} onClick={() => setShowShort(true)}>
+              Can't find all of it
+            </button>
+          )}
+        </div>
+      )}
+
+      {task && open && !line && items.length > 0 && (
+        <div className="pleros-mobile-card">
+          <p style={{ margin: 0, color: 'var(--c-success)' }}>All lines done. Ready to pack.</p>
+        </div>
+      )}
+
+      {task && open && line && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ flex: 1 }}
+            disabled={busy}
+            onClick={() => void run(() => api.post<PickTask>(`${base}/pick-all`, {}))}
+          >
+            Pick all
+          </button>
+          <button type="button" className="btn-ghost" style={{ flex: 1 }} disabled={busy} onClick={() => void release()}>
+            Release task
+          </button>
+        </div>
+      )}
+
+      {task && !open && <p style={{ opacity: 0.7 }}>This task is {task.status.toLowerCase()}.</p>}
     </div>
   )
 }
