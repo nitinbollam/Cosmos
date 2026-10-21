@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { normalizeState, vanLinesProblem, vanSaleRefusal } from './van-rules'
 
-const van = { assignedDriverId: 'd1', stateCode: 'FL', isActive: true }
+const van: { assignedDriverId: string | null; stateCode: string | null; isActive: boolean } = { assignedDriverId: 'd1', stateCode: 'FL', isActive: true }
 const customer: { vanSalesApproved: boolean; primaryState: string | null } = { vanSalesApproved: true, primaryState: 'FL' }
 
 test('an approved customer in the van\'s state, served by the van\'s driver, may buy', () => {
