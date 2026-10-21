@@ -11,9 +11,15 @@ import { inventoryDb, orderDb } from './db'
 import { getAgeVerificationPolicy } from './compliance-age'
 import { ApiError } from './session'
 import { attemptOrQueue } from './deferred-work'
+import { parseDriverLocation } from './driver-scope'
 
-export function listRoutes(tenantId: string, date?: string, statuses?: RouteStatus[]) {
-  const where: Prisma.DeliveryRouteWhereInput = { tenantId, ...(statuses?.length ? { status: { in: statuses } } : {}) }
+export function listRoutes(tenantId: string, date?: string, statuses?: RouteStatus[], driverId?: string) {
+  const where: Prisma.DeliveryRouteWhereInput = {
+    tenantId,
+    ...(statuses?.length ? { status: { in: statuses } } : {}),
+    // A driver's list is their own routes only.
+    ...(driverId ? { driverId } : {}),
+  }
   if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const start = new Date(`${date}T00:00:00.000Z`)
     const end = new Date(`${date}T23:59:59.999Z`)
@@ -203,29 +209,26 @@ export async function unassignRouteDriver(tenantId: string, id: string) {
   return getRouteDetail(tenantId, id)
 }
 
-export async function recordDriverLocation(
-  tenantId: string,
-  userId: string,
-  body: { lat: number; lng: number; timestamp?: string; routeId?: string },
-) {
-  const ts = body.timestamp ? new Date(body.timestamp) : new Date()
-  const rid = body.routeId?.trim()
-  if (rid) {
-    const route = await dispatchDb.deliveryRoute.findFirst({ where: { id: rid, tenantId } })
-    if (!route) throw new ApiError(404, 'Route not found')
-    if (!route.driverId || route.driverId !== userId) {
-      throw new ApiError(403, 'Location allowed only for the assigned driver')
-    }
-    await dispatchDb.deliveryRoute.update({
-      where: { id: rid },
-      data: {
-        lastKnownLat: body.lat,
-        lastKnownLng: body.lng,
-        lastKnownAt: ts,
-      },
-    })
+/**
+ * Stores a driver's position on their route. Only the assigned driver may report, and only while the
+ * route is ASSIGNED or IN_PROGRESS (a route goes IN_PROGRESS at its first outcome, but the driver is
+ * on the road before that). A ping for a finished or other driver's route is rejected, not ignored.
+ */
+export async function recordDriverLocation(tenantId: string, userId: string, body: unknown) {
+  const fix = parseDriverLocation(body)
+  const route = await dispatchDb.deliveryRoute.findFirst({ where: { id: fix.routeId, tenantId } })
+  if (!route) throw new ApiError(404, 'Route not found')
+  if (!route.driverId || route.driverId !== userId) {
+    throw new ApiError(403, 'Location allowed only for the assigned driver')
   }
-  return { ok: true }
+  if (route.status !== RouteStatus.ASSIGNED && route.status !== RouteStatus.IN_PROGRESS) {
+    throw new ApiError(409, 'Location is only recorded while the route is active')
+  }
+  await dispatchDb.deliveryRoute.update({
+    where: { id: route.id },
+    data: { lastKnownLat: fix.lat, lastKnownLng: fix.lng, lastKnownAt: fix.timestamp },
+  })
+  return { ok: true, recordedAt: fix.timestamp.toISOString() }
 }
 
 export async function reorderRouteStops(tenantId: string, routeId: string, stopIds: string[]) {
