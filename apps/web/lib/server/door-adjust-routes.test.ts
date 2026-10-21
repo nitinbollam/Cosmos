@@ -4,7 +4,7 @@ import { after, before, test } from 'node:test'
 import bcrypt from 'bcrypt'
 import { handleApiRequest } from '../../server/api-router'
 import { loginUser } from './auth'
-import { authDb, dispatchDb, orderDb, tenantDb } from './db'
+import { authDb, dispatchDb, inventoryDb, orderDb, tenantDb } from './db'
 import { updateTenantWorkflowSettings } from './tenant-workflow-settings'
 
 const PASSWORD = 'door-adjust-test-pass-1'
@@ -152,4 +152,28 @@ test('a stop that already has an outcome cannot be changed, and the adjustment s
   const pod = stop.pod as { adjustments?: unknown[]; failure?: unknown }
   assert.equal(pod.adjustments?.length, 1)
   assert.ok(pod.failure)
+})
+
+test('with a van, units taken off at the door go into the van\'s stock, not back to the warehouse', async () => {
+  const van = await inventoryDb.warehouse.create({
+    data: { tenantId, name: 'Van', code: `VN-${randomUUID().slice(0, 4)}`, address: {}, kind: 'VEHICLE', assignedDriverId: idA, stateCode: 'FL' },
+  })
+  await inventoryDb.sKU.create({
+    data: { id: 's1', tenantId, code: 'S1', name: 'S1', category: 'x', cost: 5, price: 10, imageUrls: [], attributes: {} },
+  })
+  const s = await makeStop(idA)
+  const res = await call(tokenA, `/routes/${s.routeId}/stops/${s.stopId}/adjust`, {
+    reason: 'Wanted less',
+    lines: [{ lineItemId: s.l1, quantity: 4 }],
+  })
+  assert.equal(res.status, 200)
+  const level = await inventoryDb.stockLevel.findFirst({ where: { tenantId, skuId: 's1', warehouseId: van.id, batchId: '' } })
+  assert.equal(level?.quantityOnHand, 4)
+  assert.equal(level?.quantityAvailable, 4)
+  const atWarehouse = await inventoryDb.stockLevel.findFirst({ where: { tenantId, skuId: 's1', warehouseId: 'w1' } })
+  assert.equal(atWarehouse, null)
+  await inventoryDb.sKU.deleteMany({ where: { tenantId } })
+  await inventoryDb.stockLevel.deleteMany({ where: { tenantId } })
+  await inventoryDb.stockLedgerEntry.deleteMany({ where: { tenantId } })
+  await inventoryDb.warehouse.deleteMany({ where: { tenantId } })
 })
