@@ -29,6 +29,8 @@ model Customer {
   tobaccoLicenseNumber String?
   creditLimit          Decimal?  
   creditUsed           Decimal    @default(0)
+  /// A manager has approved this account to buy from a driver's van (PLR-167).
+  vanSalesApproved     Boolean    @default(false)
   paymentTermsDays     Int        @default(0)
   salesRepUserId       String?
   primaryAddressLine1  String?

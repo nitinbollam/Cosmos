@@ -554,9 +554,10 @@ export async function importSkus(tenantId: string, rows: CreateSkuInput[]) {
   return { created, failed: errors.length, errors }
 }
 
-export async function listWarehouses(tenantId: string) {
+export async function listWarehouses(tenantId: string, opts?: { includeVehicles?: boolean }) {
   const warehouses = await inventoryDb.warehouse.findMany({
-    where: { tenantId },
+    // Vans are not places an order can ship from or a picker can walk to; they have their own endpoints.
+    where: { tenantId, ...(opts?.includeVehicles ? {} : { kind: 'WAREHOUSE' }) },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
   })
   const stockSummary = await inventoryDb.stockLevel.groupBy({

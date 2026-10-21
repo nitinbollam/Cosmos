@@ -52,7 +52,7 @@ export async function templateToCartLines(tenantId: string, templateId: string, 
   const { resolvePricesForCustomer } = await import('./pricing')
   const { inventoryDb } = await import('./db')
   const skuIds = template.lines.map((l) => l.skuId)
-  const warehouses = await inventoryDb.warehouse.findMany({ where: { tenantId, isActive: true } })
+  const warehouses = await inventoryDb.warehouse.findMany({ where: { tenantId, isActive: true, kind: 'WAREHOUSE' } })
   const defaultWh = warehouses.find((w) => w.isDefault) ?? warehouses[0]
   if (!defaultWh) throw new ApiError(400, 'No warehouse configured')
 
