@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 type SidebarIconName =
   | 'dashboard'
   | 'inventory'
+  | 'manufacturing'
   | 'orders'
   | 'fulfillment'
   | 'warehouse'
@@ -46,6 +47,12 @@ const icons: Record<SidebarIconName, ReactNode> = {
     <>
       <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" {...stroke} />
       <path d="M12 12v9M4 7.5 12 12l8-4.5" {...stroke} />
+    </>
+  ),
+  manufacturing: (
+    <>
+      <path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" {...stroke} />
+      <circle cx="12" cy="12" r="4" {...stroke} />
     </>
   ),
   orders: (

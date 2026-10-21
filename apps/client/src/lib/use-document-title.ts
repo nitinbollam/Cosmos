@@ -30,6 +30,7 @@ export function getTitleForPath(pathname: string): string {
   if (pathname.startsWith('/admin/fulfillment')) return 'Fulfillment | Pleros Admin'
   if (pathname.startsWith('/admin/inventory/')) return 'SKU Details | Pleros Admin'
   if (pathname.startsWith('/admin/inventory')) return 'Inventory Management | Pleros Admin'
+  if (pathname.startsWith('/admin/manufacturing')) return 'Manufacturing & BOM | Pleros Admin'
   if (pathname.startsWith('/admin/notifications')) return 'Notifications | Pleros Admin'
   if (pathname.startsWith('/admin/orders/')) return 'Order Details | Pleros Admin'
   if (pathname.startsWith('/admin/orders')) return 'Orders | Pleros Admin'
