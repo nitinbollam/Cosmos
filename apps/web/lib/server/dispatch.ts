@@ -7,7 +7,7 @@ import { buildStopItems, NO_ITEMS } from './route-stop-items'
 import { failureReasonProblem, normalizeFailureReason, podForDelivery, podWithFailure } from './stop-outcome'
 import * as crm from './crm'
 import * as orderOrchestration from './order-orchestration'
-import { inventoryDb, orderDb } from './db'
+import { crmDb, inventoryDb, orderDb } from './db'
 import { getAgeVerificationPolicy } from './compliance-age'
 import { ApiError } from './session'
 import { attemptOrQueue } from './deferred-work'
@@ -32,6 +32,8 @@ export function listRoutes(tenantId: string, date?: string, statuses?: RouteStat
     where,
     include: { stops: { orderBy: { sequence: 'asc' } } },
     orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'desc' }],
+    // A driver's history grows without bound; the app only needs the recent routes.
+    ...(driverId ? { take: 200 } : {}),
   })
 }
 
@@ -43,12 +45,23 @@ export function listRoutes(tenantId: string, date?: string, statuses?: RouteStat
 export async function getRouteDetail(tenantId: string, id: string) {
   const route = await getRoute(tenantId, id)
   const orderIds = [...new Set(route.stops.map((s) => orderIdFromStopAddress(s.address)).filter((x): x is string => !!x))]
-  if (orderIds.length === 0) return { ...route, stops: route.stops.map((s) => ({ ...s, ...NO_ITEMS })) }
+  if (orderIds.length === 0) return { ...route, stops: route.stops.map((s) => ({ ...s, ...NO_ITEMS, contact: null })) }
 
   const orders = await orderDb.order.findMany({
     where: { tenantId, id: { in: orderIds } },
-    select: { id: true, lineItems: { select: { skuId: true, quantity: true } } },
+    select: { id: true, customerId: true, notes: true, lineItems: { select: { skuId: true, quantity: true } } },
   })
+  // Who to call at the door: the customer's phone, and any note left on the order.
+  const customerIds = [...new Set(orders.map((o) => o.customerId))]
+  const customers = customerIds.length
+    ? await crmDb.customer.findMany({ where: { tenantId, id: { in: customerIds } }, select: { id: true, name: true, phone: true } })
+    : []
+  const contactByOrder = new Map(
+    orders.map((o) => {
+      const c = customers.find((x) => x.id === o.customerId)
+      return [o.id, { name: c?.name ?? null, phone: c?.phone ?? null, orderNotes: o.notes?.trim() || null }] as const
+    }),
+  )
   const skuIds = [...new Set(orders.flatMap((o) => o.lineItems.map((l) => l.skuId)))]
   const [skus, policy] = await Promise.all([
     inventoryDb.sKU.findMany({
@@ -65,7 +78,11 @@ export async function getRouteDetail(tenantId: string, id: string) {
     stops: route.stops.map((s) => {
       const orderId = orderIdFromStopAddress(s.address)
       const lines = orderId ? linesByOrder.get(orderId) : undefined
-      return { ...s, ...(lines ? buildStopItems(lines, skuMap, policy) : NO_ITEMS) }
+      return {
+        ...s,
+        ...(lines ? buildStopItems(lines, skuMap, policy) : NO_ITEMS),
+        contact: orderId ? (contactByOrder.get(orderId) ?? null) : null,
+      }
     }),
   }
 }
