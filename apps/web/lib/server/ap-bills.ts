@@ -2,6 +2,7 @@ import { Prisma, VendorBillStatus, BillMatchStatus } from '@/generated/prisma-pu
 import { randomUUID } from 'node:crypto'
 import { orderDb, purchasingDb } from './db'
 import { enqueuePostingJob, enqueuePostingJobAfterCommit } from './posting-outbox'
+import { poReceiptJob } from './posting-sources'
 import { ApiError } from './session'
 
 import { swallowed } from './fire-and-forget'
@@ -200,23 +201,36 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
   const totalAmount = +subtotal.toFixed(2)
 
   if (existing) {
-    await purchasingDb.vendorBillLine.deleteMany({ where: { billId: existing.id } })
-    await purchasingDb.vendorBill.update({
-      where: { id: existing.id },
-      data: {
-        subtotal: new Prisma.Decimal(subtotal),
-        totalAmount: new Prisma.Decimal(totalAmount),
-        lines: {
-          create: billLines.map((l) => ({
+    // Re-bill only from the bill we read, so two re-bills at once cannot both apply. A changed total
+    // starts a new revision, whose posting brings the ledger to the new total (up or down).
+    const total = new Prisma.Decimal(totalAmount)
+    const changed = !total.equals(existing.totalAmount)
+    const rebilled = await purchasingDb.$transaction(async (tx) => {
+      const moved = await tx.vendorBill.updateMany({
+        where: { id: existing.id, tenantId, totalAmount: existing.totalAmount, receiptRevision: existing.receiptRevision },
+        data: {
+          subtotal: new Prisma.Decimal(subtotal),
+          totalAmount: total,
+          ...(changed ? { receiptRevision: { increment: 1 } } : {}),
+        },
+      })
+      if (moved.count !== 1) throw new ApiError(409, 'This bill was just re-billed by someone else — reload and try again')
+      await tx.vendorBillLine.deleteMany({ where: { billId: existing.id } })
+      for (const l of billLines) {
+        await tx.vendorBillLine.create({
+          data: {
+            billId: existing.id,
             lineNo: l.lineNo,
             skuCode: l.skuCode,
             description: l.description,
             quantity: l.quantity,
             unitCost: new Prisma.Decimal(l.unitCost),
-          })),
-        },
-      },
+          },
+        })
+      }
+      return tx.vendorBill.findUniqueOrThrow({ where: { id: existing.id } })
     })
+    if (changed) await enqueuePostingJobAfterCommit(poReceiptJob(rebilled))
     return getVendorBill(tenantId, existing.id)
   }
 
@@ -258,15 +272,7 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
   })
 
   // Inventory accrual (Dr Inventory, Cr AP) in base currency; the worker writes the journal id back to the bill.
-  const { toBaseDecimal } = await import('./fx-util')
-  await enqueuePostingJobAfterCommit({
-    tenantId,
-    kind: 'PO_RECEIPT_JOURNAL',
-    sourceType: 'VendorBill',
-    sourceId: bill.id,
-    variant: 'receipt',
-    amount: toBaseDecimal(totalAmount, fx.fxRateToBase).toString(),
-  })
+  await enqueuePostingJobAfterCommit(poReceiptJob(bill))
 
   await runThreeWayMatch(tenantId, bill.id).catch(swallowed('ap-bills.createBillFromPurchaseOrder'))
 

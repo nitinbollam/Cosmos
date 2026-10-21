@@ -102,6 +102,8 @@ model VendorBill {
   issuedAt        DateTime         @default(now())
   dueAt           DateTime?
   journalEntryId  String?
+  /// Bumped on every re-bill; each revision queues one PO receipt posting that brings the ledger to the bill's total.
+  receiptRevision Int              @default(0)
   notes           String?
   matchStatus     BillMatchStatus  @default(PENDING)
   matchNotes      String?
@@ -115,6 +117,7 @@ model VendorBill {
   @@unique([tenantId, billNumber])
   @@index([tenantId, status])
   @@index([tenantId, supplierId])
+  @@index([updatedAt])
   @@index([tenantId, purchaseOrderId])
 }
 

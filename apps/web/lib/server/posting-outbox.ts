@@ -7,6 +7,7 @@ import { createJournalOnce, requireAccounts, requireSalesTaxPayable } from './le
 import { isWorkKind, runWork, type WorkKind } from './deferred-work'
 import { ensureExpenseAccounts } from './expense-gl'
 import { ensureGiftCardLiabilityAccount } from './gift-card-gl'
+import { toBaseDecimal } from './fx-util'
 
 /**
  * Transactional outbox for general-ledger postings.
@@ -139,6 +140,7 @@ export async function postJob(job: JobRow): Promise<string | null> {
     await runWork({ tenantId: job.tenantId, kind: job.kind, sourceType: job.sourceType, sourceId: job.sourceId, payload: job.payload as Record<string, unknown> | undefined })
     return null
   }
+  if (job.kind === 'PO_RECEIPT_JOURNAL') return postPoReceiptToBillTotal(job)
   const amount = String((job.payload as { amount?: string })?.amount ?? '')
   if (!(Number(amount) > 0)) throw new Error(`Posting job ${job.id} has no positive amount`)
   const source = { sourceType: job.sourceType, sourceId: job.sourceId, variant: job.variant }
@@ -213,13 +215,6 @@ export async function postJob(job: JobRow): Promise<string | null> {
         { accountId: a.get('5000')!.id, memo: 'Cost of goods sold reversal', debit: ZERO, credit: dec(amount) },
       ])
     }
-    case 'PO_RECEIPT_JOURNAL': {
-      const a = await requireAccounts(job.tenantId, ['1100', '2100'])
-      return createJournalOnce(job.tenantId, source, `PO receipt ${short} — inventory accrual`, [
-        { accountId: a.get('1100')!.id, memo: 'Inventory received', debit: dec(amount), credit: ZERO },
-        { accountId: a.get('2100')!.id, memo: 'Accounts payable', debit: ZERO, credit: dec(amount) },
-      ])
-    }
     case 'EXPENSE_APPROVAL_JOURNAL': {
       const { expense, payable } = await ensureExpenseAccounts(job.tenantId)
       return createJournalOnce(job.tenantId, source, `Expense report approved ${short}`, [
@@ -255,13 +250,68 @@ export async function postJob(job: JobRow): Promise<string | null> {
   }
 }
 
+/** Inventory (1100) already posted for a bill's receipts, including a journal posted before the outbox. */
+async function postedReceiptNet(tenantId: string, billId: string, billJournalId: string | null) {
+  const entries = await ledgerDb.journalEntry.findMany({
+    where: { tenantId, sourceType: 'VendorBill', sourceId: billId, variant: { startsWith: 'receipt' } },
+    select: { id: true },
+  })
+  const ids = entries.map((e) => e.id)
+  if (billJournalId && !ids.includes(billJournalId)) {
+    // Bills created before the outbox carry a journal without a source key.
+    const legacy = await ledgerDb.journalEntry.findFirst({ where: { id: billJournalId, tenantId, sourceType: null }, select: { id: true } })
+    if (legacy) ids.push(legacy.id)
+  }
+  if (!ids.length) return ZERO
+  const lines = await ledgerDb.journalLine.findMany({ where: { entryId: { in: ids }, account: { code: '1100' } } })
+  return lines.reduce((n, l) => n.plus(l.debit).minus(l.credit), ZERO)
+}
+
+/**
+ * Brings the ledger to the bill's current base total: an accrual (Dr Inventory, Cr AP) when the bill
+ * grew, a reversal when it shrank (landed charges lowered), nothing when they already match. Every
+ * revision of a bill queues one of these, so a lost or out-of-order job is corrected by the next.
+ */
+async function postPoReceiptToBillTotal(job: JobRow): Promise<string | null> {
+  const load = async () => {
+    const bill = await purchasingDb.vendorBill.findFirst({ where: { id: job.sourceId, tenantId: job.tenantId } })
+    if (!bill) throw new Error(`Vendor bill ${job.sourceId} not found`)
+    const target = toBaseDecimal(bill.totalAmount, bill.fxRateToBase)
+    return { bill, target, posted: await postedReceiptNet(job.tenantId, bill.id, bill.journalEntryId) }
+  }
+  const { bill, target, posted } = await load()
+  const diff = target.minus(posted)
+  if (diff.isZero()) return null
+
+  const a = await requireAccounts(job.tenantId, ['1100', '2100'])
+  const inventory = a.get('1100')!.id
+  const payable = a.get('2100')!.id
+  const short = bill.id.slice(-8)
+  // Keyed by the state it corrects, so two workers seeing the same state post it once.
+  const source = { sourceType: 'VendorBill', sourceId: bill.id, variant: `receipt:${target}:${posted}` }
+  const journalEntryId = diff.gt(0)
+    ? await createJournalOnce(job.tenantId, source, posted.isZero() ? `PO receipt ${short} — inventory accrual` : `PO receipt ${short} — re-bill adjustment`, [
+        { accountId: inventory, memo: 'Inventory received', debit: diff, credit: ZERO },
+        { accountId: payable, memo: 'Accounts payable', debit: ZERO, credit: diff },
+      ])
+    : await createJournalOnce(job.tenantId, source, `PO receipt ${short} — re-bill reversal`, [
+        { accountId: payable, memo: 'Accounts payable reduction', debit: diff.negated(), credit: ZERO },
+        { accountId: inventory, memo: 'Inventory received reversal', debit: ZERO, credit: diff.negated() },
+      ])
+  await purchasingDb.vendorBill.updateMany({ where: { id: bill.id, tenantId: job.tenantId, journalEntryId: null }, data: { journalEntryId } })
+
+  // A re-bill or another worker may have moved things while this posted; retry until they agree.
+  const check = await load()
+  if (!check.target.equals(check.posted)) {
+    throw new Error(`Vendor bill ${bill.id} changed while posting (bill ${check.target}, posted ${check.posted}); retrying`)
+  }
+  return journalEntryId
+}
+
 /** Stores the journal id on a source record that lives outside the order database. */
 async function writeBackOutsideOrderDb(job: { tenantId: string; kind: string; sourceId: string }, journalEntryId: string) {
   const where = { id: job.sourceId, journalEntryId: null }
   switch (job.kind) {
-    case 'PO_RECEIPT_JOURNAL':
-      await purchasingDb.vendorBill.updateMany({ where: { ...where, tenantId: job.tenantId }, data: { journalEntryId } })
-      break
     case 'EXPENSE_APPROVAL_JOURNAL':
       // The report keeps its approval journal; the payment journal is found by its source key.
       await ledgerDb.expenseReport.updateMany({ where: { ...where, tenantId: job.tenantId }, data: { journalEntryId } })

@@ -6,8 +6,8 @@ import { ApiError } from './session'
 import { createApprovalRequest } from './approvals'
 import { getTenantFinanceSettings } from './tenant-finance-settings'
 import { auditLog } from './audit-log'
-import { formatMoney } from './money'
 import { enqueuePostingJobAfterCommit } from './posting-outbox'
+import { expenseApprovedJob, expensePaidJob } from './posting-sources'
 
 export type CreateExpenseLineInput = {
   category: string
@@ -40,18 +40,6 @@ async function transitionReport(
   const moved = await ledgerDb.expenseReport.updateMany({ where: { id: reportId, tenantId, status: from }, data })
   if (moved.count !== 1) throw new ApiError(409, 'Expense report was just changed by someone else — reload and try again')
   return getReport(tenantId, reportId)
-}
-
-/** Dr Employee Expenses, Cr Reimbursements Payable, posted by the outbox worker. */
-async function queueApprovalJournal(tenantId: string, reportId: string, total: Prisma.Decimal) {
-  await enqueuePostingJobAfterCommit({
-    tenantId,
-    kind: 'EXPENSE_APPROVAL_JOURNAL',
-    sourceType: 'ExpenseReport',
-    sourceId: reportId,
-    variant: 'approved',
-    amount: formatMoney(total),
-  })
 }
 
 async function getReport(tenantId: string, reportId: string, userId?: string) {
@@ -146,7 +134,8 @@ export async function submitExpenseReport(tenantId: string, reportId: string, us
     submittedAt: now,
     decidedAt: now,
   })
-  await queueApprovalJournal(tenantId, reportId, report.totalAmount)
+  // Dr Employee Expenses, Cr Reimbursements Payable, posted by the outbox worker.
+  await enqueuePostingJobAfterCommit(expenseApprovedJob(approved))
   return approved
 }
 
@@ -172,7 +161,8 @@ export async function decideExpenseReport(
     status: ExpenseReportStatus.APPROVED,
     decidedAt: new Date(),
   })
-  await queueApprovalJournal(tenantId, reportId, report.totalAmount)
+  // Dr Employee Expenses, Cr Reimbursements Payable, posted by the outbox worker.
+  await enqueuePostingJobAfterCommit(expenseApprovedJob(approved))
   return approved
 }
 
@@ -181,16 +171,12 @@ export async function markExpenseReportPaid(tenantId: string, reportId: string) 
   if (report.status !== ExpenseReportStatus.APPROVED) {
     throw new ApiError(400, 'Only approved expense reports can be marked paid')
   }
-  const paid = await transitionReport(tenantId, reportId, ExpenseReportStatus.APPROVED, { status: ExpenseReportStatus.PAID })
-  // Dr Reimbursements Payable, Cr Cash. Its own source key, so it never collides with the approval journal.
-  await enqueuePostingJobAfterCommit({
-    tenantId,
-    kind: 'EXPENSE_PAID_JOURNAL',
-    sourceType: 'ExpenseReport',
-    sourceId: reportId,
-    variant: 'paid',
-    amount: formatMoney(report.totalAmount),
+  const paid = await transitionReport(tenantId, reportId, ExpenseReportStatus.APPROVED, {
+    status: ExpenseReportStatus.PAID,
+    paidAt: new Date(),
   })
+  // Dr Reimbursements Payable, Cr Cash. Its own source key, so it never collides with the approval journal.
+  await enqueuePostingJobAfterCommit(expensePaidJob(paid))
   return paid
 }
 

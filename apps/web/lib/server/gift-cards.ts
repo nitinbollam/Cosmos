@@ -3,6 +3,7 @@ import { Prisma, GiftCardTxnType } from '@/generated/prisma-tenant'
 import { tenantDb } from './db'
 import { ApiError } from './session'
 import { enqueuePostingJobAfterCommit } from './posting-outbox'
+import { giftCardJob } from './posting-sources'
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
@@ -41,7 +42,7 @@ export async function issueGiftCard(
   const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null
   if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new ApiError(400, 'Invalid expiresAt')
 
-  const { card, txnId } = await tenantDb.$transaction(async (tx) => {
+  const { card, txn } = await tenantDb.$transaction(async (tx) => {
     const card = await tx.giftCard.create({
       data: {
         tenantId,
@@ -61,18 +62,11 @@ export async function issueGiftCard(
       },
     })
 
-    return { card, txnId: txn.id }
+    return { card, txn }
   })
 
   // Dr Cash, Cr Gift Card Liability, posted by the outbox worker so a ledger outage never blocks a sale.
-  await enqueuePostingJobAfterCommit({
-    tenantId,
-    kind: 'GIFT_CARD_ISSUE_JOURNAL',
-    sourceType: 'GiftCardTransaction',
-    sourceId: txnId,
-    ref: card.id,
-    amount: card.initialBalance.toString(),
-  })
+  await enqueuePostingJobAfterCommit(giftCardJob(tenantId, txn))
   return card
 }
 
@@ -134,18 +128,11 @@ export async function redeemGiftCard(
       },
     })
 
-    return { amountApplied, remainingBalance, cardId: card.id, txnId: txn.id, amount: txn.amount }
+    return { amountApplied, remainingBalance, txn }
   })
 
   // Dr Gift Card Liability, Cr Revenue. Queued after the balance is spent so checkout never waits on the ledger.
-  await enqueuePostingJobAfterCommit({
-    tenantId,
-    kind: 'GIFT_CARD_REDEEM_JOURNAL',
-    sourceType: 'GiftCardTransaction',
-    sourceId: result.txnId,
-    ref: result.cardId,
-    amount: result.amount.toString(),
-  })
+  await enqueuePostingJobAfterCommit(giftCardJob(tenantId, result.txn))
   return { amountApplied: result.amountApplied, remainingBalance: result.remainingBalance }
 }
 

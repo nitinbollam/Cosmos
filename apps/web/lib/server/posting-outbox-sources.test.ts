@@ -5,12 +5,47 @@ import { readFileSync } from 'node:fs'
 import { Prisma } from '@/generated/prisma-purchasing'
 import { ledgerDb, orderDb, purchasingDb, tenantDb } from './db'
 import { ensurePostingAccounts } from './ledger-posting'
-import { runPostingJobs } from './posting-outbox'
+import { postingDedupeKey, runPostingJobs } from './posting-outbox'
+import { giftCardJob, requeueMissingSourcePostings } from './posting-sources'
+import { updatePurchaseOrderLandedCosts } from './purchasing'
 import { issueGiftCard, redeemGiftCard } from './gift-cards'
 import { addExpenseLine, createExpenseReport, decideExpenseReport, markExpenseReportPaid, submitExpenseReport } from './expense-reports'
 import { createBillFromPurchaseOrder } from './ap-bills'
 
 const tenant = () => `t-${randomUUID()}`
+/** Past the sweep's grace period, so changes made in the test count as settled. */
+const later = () => new Date(Date.now() + 20 * 60_000)
+
+/** Prisma delegates are plain properties on the client, so a test can swap one out and put it back. */
+async function withPatched<T>(obj: object, key: string, replacement: unknown, fn: () => Promise<T>): Promise<T> {
+  const o = obj as Record<string, unknown>
+  const original = o[key]
+  o[key] = replacement
+  try {
+    return await fn()
+  } finally {
+    o[key] = original
+  }
+}
+
+/** Net inventory (1100) the ledger holds for a bill's receipts. */
+async function inventoryPosted(tenantId: string, billId: string) {
+  const lines = await ledgerDb.journalLine.findMany({
+    where: { entry: { tenantId, sourceType: 'VendorBill', sourceId: billId }, account: { code: '1100' } },
+  })
+  return lines.reduce((n, l) => n + Number(l.debit) - Number(l.credit), 0)
+}
+
+/** Runs the worker until nothing is left to do now (a job that saw a concurrent change retries). */
+async function drain(tenantId: string) {
+  for (let i = 0; i < 5; i++) {
+    const r = await runPostingJobs({ tenantId, now: new Date(Date.now() + i * 3_600_000) })
+    if (r.claimed === 0) return
+  }
+}
+
+const receiveMore = (poId: string, lineNo: number, qty: number) =>
+  purchasingDb.purchaseOrderLine.updateMany({ where: { purchaseOrderId: poId, lineNo }, data: { qtyReceived: { increment: qty } } })
 
 async function journal(id: string) {
   const e = await ledgerDb.journalEntry.findUniqueOrThrow({ where: { id }, include: { lines: { include: { account: true } } } })
@@ -171,4 +206,119 @@ test('expense, gift card and bill code no longer write to the ledger directly', 
     const src = readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')
     assert.ok(!/postPoReceiptJournal|postExpense(Approval|Paid)Journal|postGiftCard(Issue|Redeem)Journal/.test(src), `${f} still posts inline`)
   }
+})
+
+test('re-billing after more stock arrives posts the difference, and lowering landed charges reverses it', async () => {
+  const tenantId = tenant()
+  await ensurePostingAccounts(tenantId)
+  const po = await receivedPo(tenantId)
+  await purchasingDb.purchaseOrder.update({ where: { id: po.id }, data: { freightAmount: new Prisma.Decimal(28) } })
+  const bill = await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id })
+  // 4 x 12.50 received of 140 ordered, so 50/140 of the 28 freight: 10.00.
+  assert.equal(Number(bill.totalAmount), 60)
+  await drain(tenantId)
+  assert.equal(await inventoryPosted(tenantId, bill.id), 60)
+
+  await receiveMore(po.id, 1, 2)
+  const grown = await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id })
+  assert.equal(Number(grown.totalAmount), 90) // 75 + 15 freight
+  await drain(tenantId)
+  assert.equal(await inventoryPosted(tenantId, bill.id), 90)
+
+  await updatePurchaseOrderLandedCosts(tenantId, po.id, { freightAmount: 0 })
+  await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id })
+  await drain(tenantId)
+  assert.equal(await inventoryPosted(tenantId, bill.id), 75)
+  const reversal = await ledgerDb.journalEntry.findFirstOrThrow({ where: { tenantId, sourceId: bill.id, description: { contains: 'reversal' } } })
+  assert.deepEqual((await journal(reversal.id)).debit, [['2100', 'Accounts payable reduction', 15]])
+
+  // Re-billing with nothing new starts no revision and posts nothing.
+  const jobsBefore = (await jobs(tenantId, 'PO_RECEIPT_JOURNAL')).length
+  await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id })
+  assert.equal((await jobs(tenantId, 'PO_RECEIPT_JOURNAL')).length, jobsBefore)
+  const linked = await purchasingDb.vendorBill.findUniqueOrThrow({ where: { id: bill.id } })
+  assert.ok(linked.journalEntryId, 'the bill keeps its first receipt journal')
+})
+
+test('two re-bills at once leave the ledger at the bill total', async () => {
+  const tenantId = tenant()
+  await ensurePostingAccounts(tenantId)
+  const po = await receivedPo(tenantId)
+  const bill = await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id })
+  await receiveMore(po.id, 2, 5)
+  const results = await Promise.allSettled([
+    createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id }),
+    createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id }),
+  ])
+  for (const r of results) if (r.status === 'rejected') assert.match(String(r.reason?.message), /just re-billed/)
+  await drain(tenantId)
+  const final = await purchasingDb.vendorBill.findUniqueOrThrow({ where: { id: bill.id } })
+  assert.equal(Number(final.totalAmount), 65)
+  assert.equal(await inventoryPosted(tenantId, bill.id), 65)
+})
+
+test('a bill posted before the outbox is re-billed by the difference only', async () => {
+  const tenantId = tenant()
+  await ensurePostingAccounts(tenantId)
+  const po = await receivedPo(tenantId)
+  const bill = await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id })
+  // Make it look like the old code: a journal without a source key, linked to the bill, and no job.
+  await orderDb.postingJob.deleteMany({ where: { tenantId } })
+  const accounts = await ledgerDb.chartAccount.findMany({ where: { tenantId, code: { in: ['1100', '2100'] } } })
+  const id = (c: string) => accounts.find((a) => a.code === c)!.id
+  const legacy = await ledgerDb.journalEntry.create({
+    data: {
+      tenantId,
+      description: 'PO receipt (old)',
+      isPosted: true,
+      postedAt: new Date(),
+      lines: {
+        create: [
+          { accountId: id('1100'), debit: new Prisma.Decimal(50), credit: new Prisma.Decimal(0) },
+          { accountId: id('2100'), debit: new Prisma.Decimal(0), credit: new Prisma.Decimal(50) },
+        ],
+      },
+    },
+  })
+  await purchasingDb.vendorBill.update({ where: { id: bill.id }, data: { journalEntryId: legacy.id } })
+
+  await receiveMore(po.id, 1, 2)
+  await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: po.id })
+  assert.equal((await requeueMissingSourcePostings({ tenantId, now: later() })).requeued, 0)
+  await drain(tenantId)
+  const adjustments = await ledgerDb.journalEntry.findMany({ where: { tenantId, sourceType: 'VendorBill', sourceId: bill.id }, include: { lines: true } })
+  assert.equal(adjustments.length, 1)
+  assert.equal(adjustments[0].lines.reduce((n, l) => n + Number(l.debit), 0), 25)
+})
+
+test('a posting that could not be queued is re-queued by the sweep under the same key', async () => {
+  const tenantId = tenant()
+  await ensurePostingAccounts(tenantId)
+  const failing = { upsert: async () => { throw new Error('injected: order database unreachable') } }
+  const card = await withPatched(orderDb, 'postingJob', failing, () => issueGiftCard(tenantId, { amount: 40 }))
+  assert.equal((await jobs(tenantId, 'GIFT_CARD_ISSUE_JOURNAL')).length, 0)
+
+  assert.equal((await requeueMissingSourcePostings({ tenantId })).requeued, 0, 'too recent: the request may still be queuing it')
+  assert.equal((await requeueMissingSourcePostings({ tenantId, now: later() })).requeued, 1)
+  const [txn] = await tenantDb.giftCardTransaction.findMany({ where: { giftCardId: card.id } })
+  const [job] = await jobs(tenantId, 'GIFT_CARD_ISSUE_JOURNAL')
+  assert.equal(job.dedupeKey, postingDedupeKey(giftCardJob(tenantId, txn)))
+
+  await runPostingJobs({ tenantId })
+  assert.ok((await tenantDb.giftCardTransaction.findUniqueOrThrow({ where: { id: txn.id } })).journalEntryId)
+  assert.equal((await requeueMissingSourcePostings({ tenantId, now: later() })).requeued, 0)
+})
+
+test('the sweep leaves failed jobs alone and never posts reports paid before paidAt existed', async () => {
+  const tenantId = tenant()
+  await issueGiftCard(tenantId, { amount: 10 }) // no chart of accounts: the job will fail
+  await orderDb.postingJob.updateMany({ where: { tenantId }, data: { status: 'DEAD' } })
+
+  const report = await reportWithLine(tenantId, 30)
+  await submitExpenseReport(tenantId, report.id)
+  await ledgerDb.expenseReport.update({ where: { id: report.id }, data: { status: 'PAID', paidAt: null } })
+
+  const res = await requeueMissingSourcePostings({ tenantId, now: later() })
+  assert.equal(res.requeued, 0)
+  assert.equal((await jobs(tenantId, 'EXPENSE_PAID_JOURNAL')).length, 0)
 })
