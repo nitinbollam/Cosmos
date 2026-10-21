@@ -32,3 +32,16 @@ test('van lines are whole positive quantities, once per item', () => {
   assert.match(vanLinesProblem([{ skuId: 'a', quantity: 0 }])!, /whole numbers/i)
   assert.match(vanLinesProblem([{ skuId: 'a', quantity: 1 }, { skuId: 'a', quantity: 1 }])!, /once/i)
 })
+
+test('van sales on a stop survive delivery and a client cannot write or erase them', async () => {
+  const { podWithVanSale, vanSalesFromPod, collectsMoneyOnTheRoad, isVanSalePaymentMethod } = await import('./van-rules')
+  const { podForDelivery } = await import('./stop-outcome')
+  const rec = { at: 't', by: 'u', orderId: 'o', total: '9.00', paymentMethod: 'CASH' as const, lines: [] }
+  const pod = podWithVanSale({ failure: { reason: 'x', failedAt: 'y' } }, rec)
+  const delivered = podForDelivery(pod, { signature: 's', vanSales: [{ forged: true }] }) as Record<string, unknown>
+  assert.deepEqual(vanSalesFromPod(delivered), [rec])
+  assert.deepEqual(vanSalesFromPod(podForDelivery({}, { vanSales: [rec] })), [])
+  assert.equal(collectsMoneyOnTheRoad('CASH'), true)
+  assert.equal(collectsMoneyOnTheRoad('NET_TERMS'), false)
+  assert.equal(isVanSalePaymentMethod('CARD'), false)
+})
