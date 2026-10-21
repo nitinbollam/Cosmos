@@ -603,6 +603,8 @@ export type ApplyCreditMemoInput = {
   reason?: string
   lines: Array<{ lineItemId: string; quantity: number }>
   restock?: boolean
+  /** Put restocked units here instead of the warehouse they shipped from (a driver's van, PLR-166). */
+  restockWarehouseId?: string
   /** Refund captured Stripe payment up to credit memo total (CARD orders). */
   refundToCard?: boolean
 }
@@ -696,12 +698,16 @@ export async function applyCreditMemo(
       data: { returnedQty: { increment: ml.quantity } },
     })
     if (input.restock !== false) {
-      const { adjustStock } = await import('./inventory')
+      const { adjustStock, ensureStockLevel } = await import('./inventory')
+      const restockAt = input.restockWarehouseId ?? ml.warehouseId
+      if (input.restockWarehouseId) {
+        await ensureStockLevel(tenantId, { skuId: ml.skuId, warehouseId: restockAt })
+      }
       await adjustStock(
         tenantId,
         {
           skuId: ml.skuId,
-          warehouseId: ml.warehouseId,
+          warehouseId: restockAt,
           quantityDelta: ml.quantity,
           reason: input.reason ?? 'Customer return',
           referenceId: creditMemo.id,
