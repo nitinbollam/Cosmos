@@ -99,12 +99,16 @@ model ExpenseReport {
   journalEntryId String?
   submittedAt    DateTime?
   decidedAt      DateTime?
+  /// Set when the report is marked paid (reports paid before this field existed have none).
+  paidAt         DateTime?
   rejectReason   String?
   createdAt      DateTime            @default(now())
   lines          ExpenseLine[]
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
+  @@index([decidedAt])
+  @@index([paidAt])
 }
 
 model ExpenseLine {

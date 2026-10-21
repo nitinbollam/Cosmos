@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto'
 import { Prisma, GiftCardTxnType } from '@/generated/prisma-tenant'
 import { tenantDb } from './db'
 import { ApiError } from './session'
-import { postGiftCardIssueJournal, postGiftCardRedeemJournal } from './gift-card-gl'
+import { enqueuePostingJobAfterCommit } from './posting-outbox'
+import { giftCardJob } from './posting-sources'
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
@@ -41,7 +42,7 @@ export async function issueGiftCard(
   const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null
   if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new ApiError(400, 'Invalid expiresAt')
 
-  return tenantDb.$transaction(async (tx) => {
+  const { card, txn } = await tenantDb.$transaction(async (tx) => {
     const card = await tx.giftCard.create({
       data: {
         tenantId,
@@ -53,18 +54,20 @@ export async function issueGiftCard(
       },
     })
 
-    const journalEntryId = await postGiftCardIssueJournal(tenantId, card.id, input.amount)
-    await tx.giftCardTransaction.create({
+    const txn = await tx.giftCardTransaction.create({
       data: {
         giftCardId: card.id,
         type: GiftCardTxnType.ISSUE,
         amount: new Prisma.Decimal(input.amount),
-        journalEntryId,
       },
     })
 
-    return card
+    return { card, txn }
   })
+
+  // Dr Cash, Cr Gift Card Liability, posted by the outbox worker so a ledger outage never blocks a sale.
+  await enqueuePostingJobAfterCommit(giftCardJob(tenantId, txn))
+  return card
 }
 
 export async function getGiftCardByCode(tenantId: string, code: string) {
@@ -93,7 +96,7 @@ export async function redeemGiftCard(
 ) {
   if (input.amount <= 0) throw new ApiError(400, 'Redemption amount must be positive')
 
-  return tenantDb.$transaction(async (tx) => {
+  const result = await tenantDb.$transaction(async (tx) => {
     const normalized = normalizeCode(code)
     const card = await tx.giftCard.findFirst({ where: { tenantId, code: normalized } })
     if (!card) throw new ApiError(404, 'Gift card not found')
@@ -116,19 +119,21 @@ export async function redeemGiftCard(
       throw new ApiError(409, 'Gift card balance just changed — please try again')
     }
 
-    const journalEntryId = await postGiftCardRedeemJournal(tenantId, card.id, amountApplied)
-    await tx.giftCardTransaction.create({
+    const txn = await tx.giftCardTransaction.create({
       data: {
         giftCardId: card.id,
         type: GiftCardTxnType.REDEEM,
         amount: new Prisma.Decimal(amountApplied),
         orderRef: input.orderRef,
-        journalEntryId,
       },
     })
 
-    return { amountApplied, remainingBalance }
+    return { amountApplied, remainingBalance, txn }
   })
+
+  // Dr Gift Card Liability, Cr Revenue. Queued after the balance is spent so checkout never waits on the ledger.
+  await enqueuePostingJobAfterCommit(giftCardJob(tenantId, result.txn))
+  return { amountApplied: result.amountApplied, remainingBalance: result.remainingBalance }
 }
 
 export async function listGiftCards(tenantId: string) {

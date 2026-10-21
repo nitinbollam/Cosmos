@@ -286,6 +286,7 @@ model GiftCardTransaction {
   giftCard       GiftCard        @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
 
   @@index([giftCardId])
+  @@index([createdAt])
 }
 
 enum LoyaltyTxnType {

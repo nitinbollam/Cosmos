@@ -1,11 +1,10 @@
-import { Prisma } from '@/generated/prisma-ledger'
 import { ledgerDb } from './db'
 import { createChartAccount } from './ledger'
 import { AccountType } from '@/generated/prisma-ledger'
 
+// Expense journals are posted by the posting outbox (EXPENSE_APPROVAL_JOURNAL / EXPENSE_PAID_JOURNAL).
 const EMPLOYEE_EXPENSE_CODE = '6100'
 const REIMBURSEMENT_PAYABLE_CODE = '2160'
-const CASH_CODE = '1000'
 
 async function accountByCode(tenantId: string, code: string) {
   return ledgerDb.chartAccount.findFirst({ where: { tenantId, code, isActive: true } })
@@ -28,8 +27,8 @@ async function ensureAccount(
   }
 }
 
-export async function postExpenseApprovalJournal(tenantId: string, reportId: string, amount: number) {
-  if (amount <= 0) return null
+/** The accounts an approved expense report posts to, created on first use. */
+export async function ensureExpenseAccounts(tenantId: string) {
   const expense = await ensureAccount(tenantId, EMPLOYEE_EXPENSE_CODE, 'Employee Expenses', AccountType.EXPENSE)
   const payable = await ensureAccount(
     tenantId,
@@ -37,63 +36,5 @@ export async function postExpenseApprovalJournal(tenantId: string, reportId: str
     'Employee Reimbursements Payable',
     AccountType.LIABILITY,
   )
-
-  const entry = await ledgerDb.journalEntry.create({
-    data: {
-      tenantId,
-      description: `Expense report approved ${reportId.slice(-8)}`,
-      isPosted: true,
-      postedAt: new Date(),
-      lines: {
-        create: [
-          {
-            accountId: expense.id,
-            memo: 'Employee expense',
-            debit: new Prisma.Decimal(amount),
-            credit: new Prisma.Decimal(0),
-          },
-          {
-            accountId: payable.id,
-            memo: 'Reimbursement payable',
-            debit: new Prisma.Decimal(0),
-            credit: new Prisma.Decimal(amount),
-          },
-        ],
-      },
-    },
-  })
-  return entry.id
-}
-
-export async function postExpensePaidJournal(tenantId: string, reportId: string, amount: number) {
-  if (amount <= 0) return null
-  const payable = await accountByCode(tenantId, REIMBURSEMENT_PAYABLE_CODE)
-  const cash = await accountByCode(tenantId, CASH_CODE)
-  if (!payable || !cash) return null
-
-  const entry = await ledgerDb.journalEntry.create({
-    data: {
-      tenantId,
-      description: `Expense reimbursement paid ${reportId.slice(-8)}`,
-      isPosted: true,
-      postedAt: new Date(),
-      lines: {
-        create: [
-          {
-            accountId: payable.id,
-            memo: 'Clear reimbursement payable',
-            debit: new Prisma.Decimal(amount),
-            credit: new Prisma.Decimal(0),
-          },
-          {
-            accountId: cash.id,
-            memo: 'Cash paid',
-            debit: new Prisma.Decimal(0),
-            credit: new Prisma.Decimal(amount),
-          },
-        ],
-      },
-    },
-  })
-  return entry.id
+  return { expense, payable }
 }
