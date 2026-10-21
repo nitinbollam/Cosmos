@@ -55,3 +55,36 @@ export function vanLinesProblem(lines: unknown, max = 200): string | null {
   }
   return null
 }
+
+export const VAN_SALE_PAYMENT_METHODS = ['NET_TERMS', 'CASH', 'CHECK'] as const
+export type VanSalePaymentMethod = (typeof VAN_SALE_PAYMENT_METHODS)[number]
+
+export function isVanSalePaymentMethod(v: unknown): v is VanSalePaymentMethod {
+  return typeof v === 'string' && (VAN_SALE_PAYMENT_METHODS as readonly string[]).includes(v)
+}
+
+/** Cash and cheques are collected by the driver and counted at the end of the day; terms are billed. */
+export function collectsMoneyOnTheRoad(method: VanSalePaymentMethod): boolean {
+  return method === 'CASH' || method === 'CHECK'
+}
+
+export type VanSaleRecord = {
+  at: string
+  by: string
+  orderId: string
+  total: string
+  paymentMethod: VanSalePaymentMethod
+  lines: VanLine[]
+}
+
+export function vanSalesFromPod(pod: unknown): VanSaleRecord[] {
+  if (!pod || typeof pod !== 'object') return []
+  const v = (pod as { vanSales?: unknown }).vanSales
+  return Array.isArray(v) ? (v as VanSaleRecord[]) : []
+}
+
+/** POD JSON with the van sale appended; everything else on the stop is kept. */
+export function podWithVanSale(existingPod: unknown, record: VanSaleRecord): Record<string, unknown> {
+  const base = existingPod && typeof existingPod === 'object' ? (existingPod as Record<string, unknown>) : {}
+  return { ...base, vanSales: [...vanSalesFromPod(existingPod), record] }
+}
