@@ -21,7 +21,7 @@ Requires **Node.js ≥ 20** and **npm ≥ 10**.
 | Surface | URL | Who |
 |---------|-----|-----|
 | Landing | `/` | Everyone — role-based entry |
-| Admin ERP | `/admin` | Staff (inventory, orders, WMS, finance, CRM, POS, settings) |
+| Admin ERP | `/admin` | Staff (inventory, manufacturing, orders, WMS, finance, CRM, POS, settings) |
 | B2B shop | `/catalog`, `/cart`, `/checkout`, `/orders` | Buyer accounts |
 | Mobile PWA | `/m/warehouse`, `/m/delivery`, `/m/sales` | Warehouse, drivers, sales |
 | Signup | `/signup` | New distributor tenant |
@@ -43,7 +43,7 @@ These exist only in your local database. **Production** tenants come from `/sign
 
 ### Typical flows
 
-1. **Admin** — Sign in → dashboard → inventory / orders / warehouse / finance / CRM / POS / Celestial AI.
+1. **Admin** — Sign in → dashboard → inventory / manufacturing (BOMs, assembly orders) / orders / warehouse / finance / CRM / POS / Celestial AI. If one email belongs to several companies, sign-in shows a company picker.
 2. **New tenant** — `/signup` → verify email → `/admin/login` → onboarding (org, billing, warehouse, compliance).
 3. **B2B buyer** — Catalog → cart → checkout (NET terms or Stripe card) → orders / invoices / quotes.
 4. **POS** — `/admin/pos` → register + cart → age attestation when selling restricted SKUs → complete sale.
@@ -104,6 +104,10 @@ Health: `GET /api/v1/health/db`.
 | `npm run typecheck` | TypeScript across workspaces |
 | `npm run seed` | Load demo data |
 | `npm run db:migrate` | Push all Prisma schemas |
+| `npm run lint` | ESLint plus the repo gates below (stock writes, tax default, code health) |
+| `npm run reconcile -- --tenant <id> --dry` | Ledger / invoice / payment / posting-job reconciliation; `--all` for every tenant |
+| `npm run tax:backfill` / `npm run tax:reclass` | Sales-tax backfill and reclass to Sales Tax Payable. Both default to a dry run; **do not `--apply` in production until finance approves the totals** |
+| `npm run users -- help` | Manage users and super admins from the server |
 | `npm run prod:preflight` | lint → test → build |
 
 ---
@@ -161,6 +165,28 @@ Checkout and invoice card pay use `import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY`,
 
 ---
 
+## Engineering guardrails
+
+Rules the code enforces so money, stock and tenants stay correct. `npm run lint` fails on a violation.
+
+| Area | Rule | Where |
+|------|------|-------|
+| Posting outbox | Journal postings (invoices, COGS, AR/AP payments) are `PostingJob` rows written with the business change and retried by a worker with backoff (8 attempts, then DEAD). Ledger writes are idempotent per `(tenant, source, variant)`. | `lib/server/posting-outbox.ts` |
+| Deferred work | Side effects after money has moved (invoice sync, credit release, backorder fill, delivery advance, order cancel) are tried inline, then queued for retry. They never fail silently. | `lib/server/deferred-work.ts` |
+| Swallowed errors | `.catch(() => undefined)` and empty `catch {}` are banned. Use `fireAndForget()` / `swallowed()` (logged and counted) or let the error propagate. Opt out with `// swallow-ok: reason`. | [`docs/SWALLOWED_ERRORS.md`](docs/SWALLOWED_ERRORS.md) |
+| Money | Decimal math in `lib/server/money.ts`, rounded half away from zero to cents; API money is a two-decimal string. `toFixed` / `new Decimal(x)` counts may not grow past `scripts/code-health-baseline.json`. | `scripts/check-code-health.mjs` |
+| Stock | Quantities change only by guarded increment / decrement, never read-modify-write. | `scripts/check-stock-writes.mjs` |
+| Tax | No silent default tax rate. | `scripts/check-no-tax-default.mjs` |
+| Tenant scope | Every query is tenant-scoped; `TENANT_SCOPE_MODE` is `off` / `audit` (default) / `enforce` / `strict`. | [`docs/TENANT_SCOPE.md`](docs/TENANT_SCOPE.md) |
+
+Tests: `npm run test` runs the suite; concurrency tests need Postgres, so run `npm run prod:preflight` against Postgres before merging.
+
+### Branches and PRs
+
+`main` is the production branch; `staging` mirrors it. One branch and one PR per ticket (`feat/plr-NNN-slug` or `fix/plr-NNN-slug`, commit subjects `PLR-NNN: ...`), merged into `main`. After a merge, fast-forward `staging` to `main` so the two never diverge.
+
+---
+
 ### User management
 
 | Where | Who | What |
@@ -181,6 +207,8 @@ Every account action is recorded in the audit log (`ops.user.*`).
 | [`MISSING.md`](MISSING.md) | Short infra backlog |
 | [`docs/TESTING_FLOW.html`](docs/TESTING_FLOW.html) | Interactive Neobrutalism Testing Knowledge Base Website |
 | [`docs/TESTING_FLOW.md`](docs/TESTING_FLOW.md) | Comprehensive end-to-end testing flow & QA master guide |
+| [`docs/SWALLOWED_ERRORS.md`](docs/SWALLOWED_ERRORS.md) | Error-handling classes, helpers and the money migration plan |
+| [`docs/TENANT_SCOPE.md`](docs/TENANT_SCOPE.md) | Tenant-scoping modes and rollout |
 | [`docs/QA_STAGING_CHECKLIST.md`](docs/QA_STAGING_CHECKLIST.md) | Staging QA pass (auth, admin, buyer, mobile, billing, copy) |
 | [`docs/celestial/`](docs/celestial/) | Celestial AI knowledge base |
 
