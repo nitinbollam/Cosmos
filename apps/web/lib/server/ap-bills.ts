@@ -1,8 +1,7 @@
 import { Prisma, VendorBillStatus, BillMatchStatus } from '@/generated/prisma-purchasing'
 import { randomUUID } from 'node:crypto'
 import { orderDb, purchasingDb } from './db'
-import { enqueuePostingJob } from './posting-outbox'
-import { postPoReceiptJournal } from './operations-gl'
+import { enqueuePostingJob, enqueuePostingJobAfterCommit } from './posting-outbox'
 import { ApiError } from './session'
 
 import { swallowed } from './fire-and-forget'
@@ -258,13 +257,16 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
     include: { supplier: true, lines: true },
   })
 
-  const { toBaseAmount } = await import('./fx-util')
-  const journalEntryId = await postPoReceiptJournal(tenantId, bill.id, toBaseAmount(totalAmount, fx.fxRateToBase)).catch(
-    () => null,
-  )
-  if (journalEntryId) {
-    await purchasingDb.vendorBill.update({ where: { id: bill.id }, data: { journalEntryId } })
-  }
+  // Inventory accrual (Dr Inventory, Cr AP) in base currency; the worker writes the journal id back to the bill.
+  const { toBaseDecimal } = await import('./fx-util')
+  await enqueuePostingJobAfterCommit({
+    tenantId,
+    kind: 'PO_RECEIPT_JOURNAL',
+    sourceType: 'VendorBill',
+    sourceId: bill.id,
+    variant: 'receipt',
+    amount: toBaseDecimal(totalAmount, fx.fxRateToBase).toString(),
+  })
 
   await runThreeWayMatch(tenantId, bill.id).catch(swallowed('ap-bills.createBillFromPurchaseOrder'))
 

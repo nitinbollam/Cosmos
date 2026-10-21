@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-ledger'
 import type { Prisma as OrderPrisma } from '@/generated/prisma-order'
-import { orderDb } from './db'
+import { ledgerDb, orderDb, purchasingDb, tenantDb } from './db'
 import { ApiError } from './session'
 import { createJournalOnce, requireAccounts, requireSalesTaxPayable } from './ledger-posting'
 import { isWorkKind, runWork, type WorkKind } from './deferred-work'
+import { ensureExpenseAccounts } from './expense-gl'
+import { ensureGiftCardLiabilityAccount } from './gift-card-gl'
 
 /**
  * Transactional outbox for general-ledger postings.
@@ -23,6 +25,11 @@ export type PostingJobKind =
   | 'CREDIT_MEMO_JOURNAL'
   | 'AR_PAYMENT_JOURNAL'
   | 'AP_PAYMENT_JOURNAL'
+  | 'PO_RECEIPT_JOURNAL'
+  | 'EXPENSE_APPROVAL_JOURNAL'
+  | 'EXPENSE_PAID_JOURNAL'
+  | 'GIFT_CARD_ISSUE_JOURNAL'
+  | 'GIFT_CARD_REDEEM_JOURNAL'
   | WorkKind
 
 export const MAX_POSTING_ATTEMPTS = 8
@@ -50,6 +57,8 @@ export type EnqueueInput = {
    * revenue. Omitted on jobs queued before tax was split out; those post the whole amount to revenue.
    */
   taxAmount?: string
+  /** Id shown in the journal description when it differs from `sourceId` (the gift card for a card transaction). */
+  ref?: string
 }
 
 export function postingDedupeKey(i: Pick<EnqueueInput, 'tenantId' | 'kind' | 'sourceType' | 'sourceId' | 'variant'>) {
@@ -71,9 +80,32 @@ export async function enqueuePostingJob(tx: OrderTx, input: EnqueueInput) {
       sourceId: input.sourceId,
       variant: input.variant ?? '',
       dedupeKey,
-      payload: input.taxAmount && Number(input.taxAmount) > 0 ? { amount: input.amount, taxAmount: input.taxAmount } : { amount: input.amount },
+      payload: {
+        amount: input.amount,
+        ...(input.taxAmount && Number(input.taxAmount) > 0 ? { taxAmount: input.taxAmount } : {}),
+        ...(input.ref ? { ref: input.ref } : {}),
+      },
     },
   })
+}
+
+/**
+ * Queues a posting for a change already committed in another database (purchasing, ledger, tenant),
+ * where the job cannot share the transaction. The change has happened, so a failure here must not
+ * fail the request (a retry would repeat it); it is logged with its source key and counted instead,
+ * so the missing journal can be found and queued by hand.
+ */
+export async function enqueuePostingJobAfterCommit(input: EnqueueInput) {
+  try {
+    return await enqueuePostingJob(orderDb, input)
+  } catch (err) {
+    console.error(
+      `[gl] could not queue ${input.kind} for ${input.sourceType} ${input.sourceId} (tenant=${input.tenantId}, amount=${input.amount}); the journal is missing until it is queued:`,
+      err,
+    )
+    console.error(`[metric] posting_enqueue_failed 1 kind=${input.kind}`)
+    return null
+  }
 }
 
 type JobRow = {
@@ -111,6 +143,7 @@ export async function postJob(job: JobRow): Promise<string | null> {
   if (!(Number(amount) > 0)) throw new Error(`Posting job ${job.id} has no positive amount`)
   const source = { sourceType: job.sourceType, sourceId: job.sourceId, variant: job.variant }
   const short = job.sourceId.slice(-8)
+  const refShort = String((job.payload as { ref?: string })?.ref ?? job.sourceId).slice(-8)
 
   switch (job.kind) {
     case 'INVOICE_JOURNAL':
@@ -180,8 +213,63 @@ export async function postJob(job: JobRow): Promise<string | null> {
         { accountId: a.get('5000')!.id, memo: 'Cost of goods sold reversal', debit: ZERO, credit: dec(amount) },
       ])
     }
+    case 'PO_RECEIPT_JOURNAL': {
+      const a = await requireAccounts(job.tenantId, ['1100', '2100'])
+      return createJournalOnce(job.tenantId, source, `PO receipt ${short} — inventory accrual`, [
+        { accountId: a.get('1100')!.id, memo: 'Inventory received', debit: dec(amount), credit: ZERO },
+        { accountId: a.get('2100')!.id, memo: 'Accounts payable', debit: ZERO, credit: dec(amount) },
+      ])
+    }
+    case 'EXPENSE_APPROVAL_JOURNAL': {
+      const { expense, payable } = await ensureExpenseAccounts(job.tenantId)
+      return createJournalOnce(job.tenantId, source, `Expense report approved ${short}`, [
+        { accountId: expense.id, memo: 'Employee expense', debit: dec(amount), credit: ZERO },
+        { accountId: payable.id, memo: 'Reimbursement payable', debit: ZERO, credit: dec(amount) },
+      ])
+    }
+    case 'EXPENSE_PAID_JOURNAL': {
+      const a = await requireAccounts(job.tenantId, ['2160', '1000'])
+      return createJournalOnce(job.tenantId, source, `Expense reimbursement paid ${short}`, [
+        { accountId: a.get('2160')!.id, memo: 'Clear reimbursement payable', debit: dec(amount), credit: ZERO },
+        { accountId: a.get('1000')!.id, memo: 'Cash paid', debit: ZERO, credit: dec(amount) },
+      ])
+    }
+    case 'GIFT_CARD_ISSUE_JOURNAL': {
+      await ensureGiftCardLiabilityAccount(job.tenantId)
+      const a = await requireAccounts(job.tenantId, ['1000', '2150'])
+      return createJournalOnce(job.tenantId, source, `Gift card issued ${refShort}`, [
+        { accountId: a.get('1000')!.id, memo: 'Cash received for gift card', debit: dec(amount), credit: ZERO },
+        { accountId: a.get('2150')!.id, memo: 'Gift card liability', debit: ZERO, credit: dec(amount) },
+      ])
+    }
+    case 'GIFT_CARD_REDEEM_JOURNAL': {
+      await ensureGiftCardLiabilityAccount(job.tenantId)
+      const a = await requireAccounts(job.tenantId, ['2150', '4000'])
+      return createJournalOnce(job.tenantId, source, `Gift card redeemed ${refShort}`, [
+        { accountId: a.get('2150')!.id, memo: 'Gift card liability reduction', debit: dec(amount), credit: ZERO },
+        { accountId: a.get('4000')!.id, memo: 'Gift card revenue recognition', debit: ZERO, credit: dec(amount) },
+      ])
+    }
     default:
       throw new Error(`Unknown posting job kind ${String(job.kind)}`)
+  }
+}
+
+/** Stores the journal id on a source record that lives outside the order database. */
+async function writeBackOutsideOrderDb(job: { tenantId: string; kind: string; sourceId: string }, journalEntryId: string) {
+  const where = { id: job.sourceId, journalEntryId: null }
+  switch (job.kind) {
+    case 'PO_RECEIPT_JOURNAL':
+      await purchasingDb.vendorBill.updateMany({ where: { ...where, tenantId: job.tenantId }, data: { journalEntryId } })
+      break
+    case 'EXPENSE_APPROVAL_JOURNAL':
+      // The report keeps its approval journal; the payment journal is found by its source key.
+      await ledgerDb.expenseReport.updateMany({ where: { ...where, tenantId: job.tenantId }, data: { journalEntryId } })
+      break
+    case 'GIFT_CARD_ISSUE_JOURNAL':
+    case 'GIFT_CARD_REDEEM_JOURNAL':
+      await tenantDb.giftCardTransaction.updateMany({ where: { ...where, giftCard: { tenantId: job.tenantId } }, data: { journalEntryId } })
+      break
   }
 }
 
@@ -231,6 +319,9 @@ export async function runPostingJobs(opts: { now?: Date; limit?: number; tenantI
         variant: candidate.variant,
         payload: candidate.payload,
       })
+      // Records kept in other databases get their journal id first: if this fails the job is retried,
+      // and the posting itself is idempotent, so the write-back is never lost.
+      if (journalEntryId) await writeBackOutsideOrderDb(candidate, journalEntryId)
       await orderDb.$transaction(async (tx) => {
         await tx.postingJob.update({
           where: { id: candidate.id },
