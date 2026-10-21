@@ -313,3 +313,31 @@ model VanManifest {
 
   @@index([tenantId, vanId, createdAt])
 }
+
+/// End-of-day van count and return (PLR-168). COUNTED -> INSPECTED -> CLOSED.
+/// Nothing is written off automatically: a manager signs off each difference.
+model VanReturn {
+  id            String    @id @default(cuid())
+  tenantId      String
+  vanId         String
+  driverId      String?
+  status        String    @default("COUNTED")
+  /// [{ skuId, expected, counted, good?, damaged? }]
+  lines         Json
+  /// { expectedCents, countedCents }
+  cash          Json
+  countedBy     String
+  toWarehouseId String?
+  inspectedBy   String?
+  inspectedAt   DateTime?
+  /// Lines already moved to the warehouse, so a retry after a failure skips them.
+  moved         Json?
+  /// { lines: { [skuId]: { action, quantity, by, at, note } }, cash?: { by, at, note } }
+  resolution    Json?
+  resolvedBy    String?
+  closedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId, vanId, status])
+}
