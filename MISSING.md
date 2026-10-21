@@ -1,6 +1,6 @@
 # Notes (@pleros/web)
 
-All product code lives in **`apps/web`**. There are no Nest, Expo, or Python service folders on this branch.
+All product code lives in **`apps/web`**. There are no Nest, Expo, or Python service folders on this branch. (There is no Expo mobile app, but the server can already send Expo push notifications to one, alongside browser push.)
 
 Every line below was checked against the code on 2026-10-21. Where a status is "not built", the check was that no model, module or route for it exists.
 
@@ -13,7 +13,7 @@ Every line below was checked against the code on 2026-10-21. Where a status is "
 | POS registers | `/admin/pos` + `POST /api/v1/pos/orders` |
 | Service worker offline sync | `apps/client/public/sw.js`: shell-first `/m/*`, asset precache, SWR API GETs, queue replay / Background Sync |
 | Native PDF invoices | `GET /invoices/:id/pdf` (pdfkit); print preview at `/invoices/:id/html` |
-| Rate limiting | Database-backed (`RateLimitBucket`, one atomic upsert), so it is correct across replicas. `PRODUCTION_READINESS.md` still calls it in-memory; that line is out of date |
+| Rate limiting | Database-backed (`RateLimitBucket`, one atomic upsert), so it is correct across replicas |
 | Posting outbox | Invoice, extension, COGS, COGS reversal, credit memo, AR payment, AP payment, PO receipt, expense approval and paid, and gift-card issue and redeem journals, plus deferred work (invoice sync, credit release, backorder fill, delivery advance, order cancel) |
 | Code-health gates | Lint rejects new swallowed errors, growth in `toFixed` / `new Decimal(x)` sites, absolute stock writes, and default tax rates |
 | Tenant scoping | `withTenantScope` on every client; modes `off` / `audit` / `enforce` / `strict`, default `audit` ([`docs/TENANT_SCOPE.md`](docs/TENANT_SCOPE.md)) |
