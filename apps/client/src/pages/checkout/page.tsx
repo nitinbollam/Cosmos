@@ -289,7 +289,7 @@ export default function CheckoutPage() {
               stripePaymentMethodId: cardPaymentMethodId,
               isDefault: savedCards.length === 0,
             })
-            .catch(() => undefined)
+            .catch(() => undefined) // swallow-ok: saving the card for next time is optional; the payment already went through
         }
       }
 

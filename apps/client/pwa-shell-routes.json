@@ -4,7 +4,9 @@
     "/m/warehouse",
     "/m/warehouse/receiving",
     "/m/delivery",
-    "/m/sales"
+    "/m/sales",
+    "/m/home",
+    "/m/queue"
   ],
   "staticAssets": [
     "/",

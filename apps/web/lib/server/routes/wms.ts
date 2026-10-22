@@ -6,6 +6,43 @@ import * as wmsLabor from '../wms-labor'
 import * as wmsCycleCount from '../wms-cycle-count'
 import * as wavePicking from '../wave-picking'
 import { ApiError, requirePermission, assertPermission } from './common'
+import { isManagerRole, parseAssignedFilter } from '../pick-claim'
+
+type PickSession = { tenantId: string; userId: string; role: string }
+
+/**
+ * The picker's routes, shared by /fulfillment and /wms (the app uses /wms). A picker claims a task,
+ * picks its lines, and can give it back; only a manager hands a task to someone else.
+ */
+async function taskPickRoutes(method: string, seg: string[], req: Request, session: PickSession): Promise<Response | null> {
+  const actor = { userId: session.userId, role: session.role }
+  if (seg.length === 4 && seg[3] === 'claim' && method === 'POST') {
+    return Response.json(await wmsFulfillment.claimFulfillmentTask(session.tenantId, seg[2], session.userId))
+  }
+  if (seg.length === 4 && seg[3] === 'release' && method === 'POST') {
+    return Response.json(await wmsFulfillment.releaseFulfillmentTask(session.tenantId, seg[2], actor))
+  }
+  if (seg.length === 4 && seg[3] === 'assign' && method === 'PATCH') {
+    if (!isManagerRole(session.role)) throw new ApiError(403, 'Only a manager can give a task to someone else. Claim it instead')
+    const body = (await req.json()) as { userId?: string | null }
+    return Response.json(await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], body.userId ?? null, session.userId))
+  }
+  if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
+    return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2], actor))
+  }
+  // PATCH or POST /tasks/:id/pick-lines/:lineId   { pickedQty, markShort?, scanned? }
+  if (seg.length === 5 && seg[3] === 'pick-lines' && (method === 'PATCH' || method === 'POST')) {
+    const body = (await req.json()) as Parameters<typeof wmsFulfillment.confirmPickLine>[3]
+    return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], body, actor))
+  }
+  // POST /tasks/:id/pick-lines/:lineId/short
+  if (seg.length === 6 && seg[3] === 'pick-lines' && seg[5] === 'short' && method === 'POST') {
+    return Response.json(
+      await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], { pickedQty: 0, markShort: true }, actor),
+    )
+  }
+  return null
+}
 
 export async function routeFulfillment(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
@@ -20,17 +57,16 @@ export async function routeFulfillment(method: string, seg: string[], req: Reque
           url.searchParams.get('status') ?? undefined,
           url.searchParams.get('warehouseId') ?? undefined,
           url.searchParams.get('orderId') ?? undefined,
+          { assigned: parseAssignedFilter(url.searchParams.get('assigned')), viewerId: session.userId },
         ),
       )
     }
     if (seg.length === 3 && method === 'GET') {
       return Response.json(await wmsFulfillment.getFulfillmentTask(session.tenantId, seg[2]))
     }
-    if (seg.length === 4 && seg[3] === 'assign' && method === 'PATCH') {
-      const body = (await req.json()) as { userId?: string | null }
-      return Response.json(
-        await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], body.userId ?? null),
-      )
+    {
+      const handled = await taskPickRoutes(method, seg, req, session)
+      if (handled) return handled
     }
     if (seg.length === 2 && method === 'POST') {
       const body = (await req.json()) as wmsFulfillment.CreateFulfillmentTaskInput
@@ -45,16 +81,6 @@ export async function routeFulfillment(method: string, seg: string[], req: Reque
           body.correlationId ?? 'cancel',
         ),
       )
-    }
-    if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
-      return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2]))
-    }
-    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'pick' && method === 'POST') {
-      const body = (await req.json()) as Parameters<typeof wmsFulfillment.confirmPickLine>[3]
-      return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], body))
-    }
-    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'short' && method === 'POST') {
-      return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], { pickedQty: 0, markShort: true }))
     }
     if (seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
       const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])
@@ -85,27 +111,16 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
           url.searchParams.get('status') ?? undefined,
           url.searchParams.get('warehouseId') ?? undefined,
           url.searchParams.get('orderId') ?? undefined,
+          { assigned: parseAssignedFilter(url.searchParams.get('assigned')), viewerId: session.userId },
         ),
       )
     }
     if (seg.length === 3 && method === 'GET') {
       return Response.json(await wmsFulfillment.getFulfillmentTask(session.tenantId, seg[2]))
     }
-    if (seg.length === 4 && seg[3] === 'assign' && method === 'PATCH') {
-      const body = (await req.json()) as { userId?: string | null }
-      return Response.json(
-        await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], body.userId ?? null),
-      )
-    }
-    if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
-      return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2]))
-    }
-    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'pick' && method === 'POST') {
-      const body = (await req.json()) as Parameters<typeof wmsFulfillment.confirmPickLine>[3]
-      return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], body))
-    }
-    if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'short' && method === 'POST') {
-      return Response.json(await wmsFulfillment.confirmPickLine(session.tenantId, seg[2], seg[4], { pickedQty: 0, markShort: true }))
+    {
+      const handled = await taskPickRoutes(method, seg, req, session)
+      if (handled) return handled
     }
     if (seg.length === 4 && seg[3] === 'pack' && method === 'POST') {
       const result = await wmsFulfillment.markFulfillmentPacked(session.tenantId, seg[2])

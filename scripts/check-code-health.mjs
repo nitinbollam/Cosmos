@@ -6,7 +6,8 @@
  *   node scripts/check-code-health.mjs --update   # rewrite the baseline (do this when a count goes DOWN)
  *   node scripts/check-code-health.mjs --money=strict
  *
- * Patterns counted per file under apps/web/lib and apps/web/server (tests excluded):
+ * Patterns counted per file under apps/web/lib and apps/web/server (tests excluded). The client
+ * (apps/client/src) is checked for swallowed errors only: it formats money for display, which is fine.
  *   swallow            .catch(() => undefined|null|{}) and empty catch blocks      (always enforced)
  *   toFixed            .toFixed( outside money.ts                                  (no growth vs baseline; zero allowed with --money=strict)
  *   decimalFromNumber  new Decimal(<anything but a string literal or 0/1>)         (no growth vs baseline; zero allowed with --money=strict)
@@ -23,6 +24,8 @@ import { fileURLToPath } from 'node:url'
 const root = process.env.CODE_HEALTH_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const baselinePath = path.join(root, 'scripts', 'code-health-baseline.json')
 const roots = [path.join(root, 'apps', 'web', 'lib'), path.join(root, 'apps', 'web', 'server')]
+/** Client code is held to the swallow rule only. */
+const clientRoot = path.join(root, 'apps', 'client', 'src')
 const update = process.argv.includes('--update')
 const strict = process.argv.includes('--money=strict') // fail on ANY remaining money-pattern site, not just growth
 const SKIP = new Set(['money.ts', 'fire-and-forget.ts'])
@@ -36,21 +39,22 @@ const PATTERNS = {
 const found = { swallow: {}, toFixed: {}, decimalFromNumber: {} }
 const lines = { swallow: {}, toFixed: {}, decimalFromNumber: {} }
 
-function walk(d) {
+function walk(d, only) {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name)
     if (e.isDirectory()) {
       if (e.name === 'node_modules' || e.name === 'generated') continue
-      walk(p)
-    } else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) && !SKIP.has(e.name)) scan(p)
+      walk(p, only)
+    } else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) && !SKIP.has(e.name)) scan(p, only)
   }
 }
 
-function scan(file) {
+function scan(file, only) {
   const rel = path.relative(root, file).split(path.sep).join('/')
   const text = fs.readFileSync(file, 'utf8').split('\n')
   text.forEach((line, i) => {
     for (const [name, { optOut, res }] of Object.entries(PATTERNS)) {
+      if (only && !only.includes(name)) continue
       if (!res.some((re) => re.test(line)) || optOut.test(line)) continue
       found[name][rel] = (found[name][rel] ?? 0) + 1
       ;(lines[name][rel] ??= []).push(i + 1)
@@ -59,6 +63,7 @@ function scan(file) {
 }
 
 for (const r of roots) if (fs.existsSync(r)) walk(r)
+if (fs.existsSync(clientRoot)) walk(clientRoot, ['swallow'])
 
 if (update) {
   fs.writeFileSync(baselinePath, JSON.stringify(found, null, 2) + '\n')

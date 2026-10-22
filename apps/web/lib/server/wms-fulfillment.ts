@@ -1,13 +1,62 @@
+import { notifyAssigned, pickTaskAssignedMessage, shouldNotify } from './assignment-push'
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
 import { enrichPickItemsWithBins, enrichPickItemsWithSkuLabels } from './pick-bin-resolver'
 import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
+import { claimable, compareTasks, matchesAssigned, pickAccess, type AssignedFilter } from './pick-claim'
+import { getTenantWorkflowSettings } from './tenant-workflow-settings'
 
 import { swallowed } from './fire-and-forget'
 export type ConfirmPickLineInput = {
   pickedQty: number
   markShort?: boolean
+  /** What the picker scanned (item barcode/code, or the bin code). Checked against the line when sent. */
+  scanned?: string
+}
+
+export type PickActor = { userId: string; role: string }
+
+/** Atomically take a free task: only one of two simultaneous claimers wins. */
+async function claimIfFree(tenantId: string, taskId: string, userId: string): Promise<boolean> {
+  const res = await wmsDb.fulfillmentTask.updateMany({
+    where: { id: taskId, tenantId, assignedUserId: null, status: { in: ['PENDING', 'PICKING'] } },
+    data: { assignedUserId: userId },
+  })
+  return res.count === 1
+}
+
+/** Picking needs holding the task: the holder or a manager; anyone else is refused; an unassigned task is claimed first. */
+async function assertMayPick(
+  tenantId: string,
+  task: { id: string; assignedUserId: string | null },
+  actor: PickActor | undefined,
+) {
+  if (!actor) return
+  const access = pickAccess(task, actor)
+  if (access === 'OK') return
+  if (access === 'CLAIM_FIRST') {
+    if (await claimIfFree(tenantId, task.id, actor.userId)) return
+    const now = await wmsDb.fulfillmentTask.findFirst({ where: { id: task.id, tenantId } })
+    if (now?.assignedUserId === actor.userId) return
+  }
+  throw new ApiError(403, 'This task is being picked by someone else')
+}
+
+/** Keeps the idle clock honest: any pick counts as activity. */
+const touch = (taskId: string) => wmsDb.fulfillmentTask.update({ where: { id: taskId }, data: { updatedAt: new Date() } })
+
+async function assertScanMatches(tenantId: string, line: { skuId: string; locationId: string | null }, scanned: string) {
+  const { findSkuByScanValue } = await import('./inventory')
+  const sku = await findSkuByScanValue(tenantId, scanned).catch((e: unknown) => {
+    if (e instanceof ApiError && e.status === 404) return null
+    throw e
+  })
+  if (sku) {
+    if (sku.id !== line.skuId) throw new ApiError(400, 'That is not the item on this line')
+    return
+  }
+  throw new ApiError(400, 'That scan does not match the item on this line')
 }
 
 export { derivePickLineStatus } from './pick-line-status'
@@ -107,6 +156,13 @@ export async function ensureFulfillmentForLines(
   })
 }
 
+/** The walking order: by bin, numbers in order (A2 before A10), items with no bin last. */
+function sortByBin<T extends { binCode?: string | null }>(items: T[]): T[] {
+  return [...items].sort((a, b) =>
+    (a.binCode ?? 'ZZZ-NO-BIN').localeCompare(b.binCode ?? 'ZZZ-NO-BIN', undefined, { numeric: true }),
+  )
+}
+
 export async function getFulfillmentTask(tenantId: string, taskId: string) {
   const t = await wmsDb.fulfillmentTask.findFirst({
     where: { id: taskId, tenantId },
@@ -124,11 +180,7 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
       status: p.status,
     })),
   )
-  const pickItems = (await enrichPickItemsWithSkuLabels(tenantId, withBins)).sort((a, b) => {
-    const left = a.binCode ?? 'ZZZ-NO-BIN'
-    const right = b.binCode ?? 'ZZZ-NO-BIN'
-    return left.localeCompare(right, undefined, { numeric: true })
-  })
+  const pickItems = sortByBin(await enrichPickItemsWithSkuLabels(tenantId, withBins))
   return {
     id: t.id,
     orderId: t.orderId,
@@ -147,6 +199,7 @@ export async function listFulfillmentTasks(
   status?: string,
   warehouseId?: string,
   orderId?: string,
+  opts?: { assigned?: AssignedFilter; viewerId?: string },
 ) {
   const st = status?.trim()
   const wh = warehouseId?.trim()
@@ -193,12 +246,21 @@ export async function listFulfillmentTasks(
     }
   }
 
-  const rows = await wmsDb.fulfillmentTask.findMany({
-    where,
-    include: { pickLines: true },
-    orderBy: { createdAt: 'asc' },
-    take: 200,
-  })
+  const filter = opts?.assigned ?? 'all'
+  const rows = (
+    await wmsDb.fulfillmentTask.findMany({
+      where: {
+        ...where,
+        ...(filter === 'mine' && opts?.viewerId ? { assignedUserId: opts.viewerId } : {}),
+        ...(filter === 'unassigned' ? { assignedUserId: null } : {}),
+      },
+      include: { pickLines: true },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    })
+  )
+    .filter((t) => matchesAssigned(filter, t.assignedUserId, opts?.viewerId ?? ''))
+    .sort(compareTasks)
   return Promise.all(
     rows.map(async (t) => ({
       id: t.id,
@@ -209,18 +271,20 @@ export async function listFulfillmentTasks(
       warehouseId: t.warehouseId,
       assignedUserId: t.assignedUserId,
       createdAt: t.createdAt,
-      pickItems: await enrichPickItemsWithSkuLabels(
-        tenantId,
-        await enrichPickItemsWithBins(
+      pickItems: sortByBin(
+        await enrichPickItemsWithSkuLabels(
           tenantId,
-          t.pickLines.map((p) => ({
-            id: p.id,
-            skuId: p.skuId,
-            warehouseId: p.warehouseId,
-            quantity: p.quantity,
-            pickedQty: p.pickedQty,
-            status: p.status,
-          })),
+          await enrichPickItemsWithBins(
+            tenantId,
+            t.pickLines.map((p) => ({
+              id: p.id,
+              skuId: p.skuId,
+              warehouseId: p.warehouseId,
+              quantity: p.quantity,
+              pickedQty: p.pickedQty,
+              status: p.status,
+            })),
+          ),
         ),
       ),
     })),
@@ -232,6 +296,7 @@ export async function confirmPickLine(
   taskId: string,
   lineId: string,
   dto: ConfirmPickLineInput,
+  actor?: PickActor,
 ) {
   const pickedQty = Math.floor(Number(dto.pickedQty))
   if (!Number.isFinite(pickedQty) || pickedQty < 0) {
@@ -244,9 +309,11 @@ export async function confirmPickLine(
   })
   if (!task) throw new ApiError(404, 'Task not found')
   assertTaskPickable(task.status)
+  await assertMayPick(tenantId, task, actor)
 
   const line = task.pickLines.find((p) => p.id === lineId)
   if (!line) throw new ApiError(404, 'Pick line not found')
+  if (dto.scanned && dto.scanned.trim()) await assertScanMatches(tenantId, line, dto.scanned)
   if (line.batchId) {
     const { checkBatchNotRecalled } = await import('./compliance-recall')
     await checkBatchNotRecalled(tenantId, line.batchId, line.skuId)
@@ -264,6 +331,7 @@ export async function confirmPickLine(
     where: { id: lineId },
     data: { pickedQty, status },
   })
+  await touch(taskId)
 
   const nextTaskStatus: FulfillmentTaskStatus =
     task.status === 'PENDING' && pickedQty > 0 ? 'PICKING' : task.status
@@ -278,7 +346,7 @@ export async function confirmPickLine(
   if (pickedQty > 0) {
     const { recordLaborEvent } = await import('./wms-labor')
     void recordLaborEvent(tenantId, {
-      userId: task.assignedUserId ?? 'system',
+      userId: actor?.userId ?? task.assignedUserId ?? 'system',
       eventType: 'PICK',
       referenceId: lineId,
       quantity: pickedQty,
@@ -289,13 +357,14 @@ export async function confirmPickLine(
   return getFulfillmentTask(tenantId, taskId)
 }
 
-export async function confirmAllPickLines(tenantId: string, taskId: string) {
+export async function confirmAllPickLines(tenantId: string, taskId: string, actor?: PickActor) {
   const task = await wmsDb.fulfillmentTask.findFirst({
     where: { id: taskId, tenantId },
     include: { pickLines: true },
   })
   if (!task) throw new ApiError(404, 'Task not found')
   assertTaskPickable(task.status)
+  await assertMayPick(tenantId, task, actor)
   if (task.pickLines.length === 0) throw new ApiError(400, 'Task has no pick lines')
 
   const { checkBatchNotRecalled } = await import('./compliance-recall')
@@ -319,12 +388,14 @@ export async function confirmAllPickLines(tenantId: string, taskId: string) {
       where: { id: taskId },
       data: { status: 'PICKING' },
     })
+  } else {
+    await touch(taskId)
   }
 
   const { recordLaborEvent } = await import('./wms-labor')
   for (const line of task.pickLines) {
     void recordLaborEvent(tenantId, {
-      userId: task.assignedUserId ?? 'system',
+      userId: actor?.userId ?? task.assignedUserId ?? 'system',
       eventType: 'PICK',
       referenceId: line.id,
       quantity: line.quantity,
@@ -335,16 +406,56 @@ export async function confirmAllPickLines(tenantId: string, taskId: string) {
   return getFulfillmentTask(tenantId, taskId)
 }
 
-export async function assignFulfillmentTask(tenantId: string, taskId: string, userId: string | null) {
+export async function assignFulfillmentTask(tenantId: string, taskId: string, userId: string | null, actorId?: string) {
   const task = await wmsDb.fulfillmentTask.findFirst({ where: { id: taskId, tenantId } })
   if (!task) throw new ApiError(404, 'Task not found')
   if (task.status === 'CANCELLED' || task.status === 'DISPATCHED') {
     throw new ApiError(400, `Cannot assign task in status ${task.status}`)
   }
-  return wmsDb.fulfillmentTask.update({
+  const updated = await wmsDb.fulfillmentTask.update({
     where: { id: taskId },
     data: { assignedUserId: userId },
+    include: { pickLines: { select: { id: true } } },
   })
+  if (shouldNotify(task.assignedUserId, userId, actorId)) {
+    notifyAssigned(
+      tenantId,
+      userId,
+      pickTaskAssignedMessage({ id: taskId, orderId: task.orderId, priority: task.priority, lineCount: updated.pickLines.length }),
+    )
+  }
+  return updated
+}
+
+/** Take a task to pick. Free or already yours: yes. Held by someone who has gone quiet: yes. Otherwise 409. */
+export async function claimFulfillmentTask(tenantId: string, taskId: string, userId: string) {
+  const task = await wmsDb.fulfillmentTask.findFirst({ where: { id: taskId, tenantId } })
+  if (!task) throw new ApiError(404, 'Task not found')
+  if (task.status !== 'PENDING' && task.status !== 'PICKING') {
+    throw new ApiError(400, `Cannot pick a task in status ${task.status}`)
+  }
+  const { pickClaimStaleMinutes } = await getTenantWorkflowSettings(tenantId)
+  const now = new Date()
+  if (!claimable(task, userId, now, pickClaimStaleMinutes)) {
+    throw new ApiError(409, 'Someone else is picking this task')
+  }
+  // Compare-and-set on who held it when we looked: of two simultaneous claimers only one lands.
+  const res = await wmsDb.fulfillmentTask.updateMany({
+    where: { id: taskId, tenantId, assignedUserId: task.assignedUserId, status: { in: ['PENDING', 'PICKING'] } },
+    data: { assignedUserId: userId, updatedAt: now },
+  })
+  if (res.count !== 1) throw new ApiError(409, 'Someone else is picking this task')
+  return getFulfillmentTask(tenantId, taskId)
+}
+
+/** Give a task back. The holder or a manager can; picked lines stay picked. */
+export async function releaseFulfillmentTask(tenantId: string, taskId: string, actor: PickActor) {
+  const task = await wmsDb.fulfillmentTask.findFirst({ where: { id: taskId, tenantId } })
+  if (!task) throw new ApiError(404, 'Task not found')
+  if (task.assignedUserId === null) return getFulfillmentTask(tenantId, taskId)
+  if (pickAccess(task, actor) !== 'OK') throw new ApiError(403, 'Only the picker or a manager can release this task')
+  await wmsDb.fulfillmentTask.update({ where: { id: taskId }, data: { assignedUserId: null } })
+  return getFulfillmentTask(tenantId, taskId)
 }
 
 export async function markFulfillmentPacked(tenantId: string, taskId: string) {

@@ -169,11 +169,16 @@ test('two simultaneous transitions never leave the order in a status that contra
     // reading PROCESSING and both writing: a loser is told 409 and its change does not apply.
     if (cancel.status === 'fulfilled') assert.equal(final, 'CANCELLED')
     else assert.equal(final, 'PACKED')
+    // A loser is refused one of two ways, depending on timing: 409 when both read PROCESSING and
+    // the other write landed first, or 400 "cannot transition" when it read after the winner had
+    // already committed (a cancelled order cannot be packed). Both leave the winner's status alone.
     if (pack.status === 'rejected') {
-      assert.ok(pack.reason instanceof ApiError && pack.reason.status === 409, 'loser gets 409')
+      assert.ok(pack.reason instanceof ApiError && [409, 400].includes(pack.reason.status), 'pack loser is refused')
+      assert.equal(final, 'CANCELLED')
     }
     if (cancel.status === 'rejected') {
-      assert.ok(cancel.reason instanceof ApiError && cancel.reason.status === 409, 'loser gets 409')
+      assert.ok(cancel.reason instanceof ApiError && [409, 400].includes(cancel.reason.status), 'cancel loser is refused')
+      assert.equal(final, 'PACKED')
     }
     assert.ok(pack.status === 'fulfilled' || cancel.status === 'fulfilled', 'at least one wins')
   }

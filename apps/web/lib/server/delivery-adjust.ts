@@ -1,4 +1,4 @@
-import { orderDb, dispatchDb } from './db'
+import { orderDb, dispatchDb, inventoryDb } from './db'
 import { ApiError } from './session'
 import { getRoute, getRouteDetail } from './dispatch'
 import { orderIdFromStopAddress } from './dispatch-order'
@@ -15,9 +15,11 @@ import {
 /**
  * The customer takes less than was shipped (PLR-166). Each reduction is a credit memo against the
  * shipped order: the invoice, order total, tax, customer credit and any card refund all follow the
- * same path as an office-made return. The units stay on the truck, so stock is not put back here;
- * the end-of-day van return does that (PLR-168). Every change is recorded on the stop with who made
- * it and why.
+ * same path as an office-made return. The units stay on the truck, so they go into the driver's van
+ * stock (not back to the warehouse they shipped from) and can be resold at the next stop; the
+ * end-of-day van return takes them back to the warehouse (PLR-168). A driver with no van has
+ * nothing to put them in, so stock is left alone. Every change is recorded on the stop with who
+ * made it and why.
  */
 export async function reduceOrderAtDoor(
   tenantId: string,
@@ -70,9 +72,20 @@ export async function reduceOrderAtDoor(
     throw new ApiError(403, 'This change is above the limit for drivers. A manager needs to make it')
   }
 
+  const van = route.driverId
+    ? await inventoryDb.warehouse.findFirst({
+        where: { tenantId, kind: 'VEHICLE', assignedDriverId: route.driverId, isActive: true },
+      })
+    : null
   const { creditMemo } = await applyCreditMemo(
     tenantId,
-    { orderId, reason: `Changed at the door: ${input.reason}`, lines: input.lines, restock: false },
+    {
+      orderId,
+      reason: `Changed at the door: ${input.reason}`,
+      lines: input.lines,
+      restock: !!van,
+      restockWarehouseId: van?.id,
+    },
     actor.userId,
   )
 
