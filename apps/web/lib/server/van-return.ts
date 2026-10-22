@@ -1,7 +1,8 @@
 import { dispatchDb, inventoryDb } from './db'
 import { ApiError } from './session'
 import { adjustStock, transferStock } from './inventory'
-import { getVan } from './van-stock'
+import { getVan, planBatches } from './van-stock'
+import { leadingUnits } from './batch-split'
 import { collectsMoneyOnTheRoad, vanSalesFromPod } from './van-rules'
 import {
   MANAGER_ROLES,
@@ -126,17 +127,27 @@ export async function inspectVanReturn(
     for (const i of inspection) {
       const total = i.good + i.damaged
       if (total === 0 || moved[i.skuId]) continue
-      await transferStock(tenantId, { skuId: i.skuId, fromWarehouseId: ret.vanId, toWarehouseId: wh.id, quantity: total }, actor.userId)
-      if (i.damaged > 0) {
+      // Back lot by lot, so the warehouse gets each lot and expiry the van was carrying.
+      const plan = await planBatches(tenantId, i.skuId, ret.vanId, total)
+      for (const t of plan) {
+        await transferStock(
+          tenantId,
+          { skuId: i.skuId, fromWarehouseId: ret.vanId, toWarehouseId: wh.id, quantity: t.quantity, ...(t.batchId ? { batchId: t.batchId } : {}) },
+          actor.userId,
+        )
+      }
+      for (const t of i.damaged > 0 ? leadingUnits(plan, i.damaged) : []) {
         await adjustStock(
           tenantId,
           {
             skuId: i.skuId,
             warehouseId: wh.id,
-            quantityDelta: -i.damaged,
+            quantityDelta: -t.quantity,
+            batchId: t.batchId,
             reason: 'Damaged on van return',
             referenceId: ret.id,
             referenceType: 'VAN_RETURN',
+            ledger: true,
           },
           actor.userId,
         )
@@ -203,6 +214,7 @@ export async function resolveVanReturn(
         reason: `${short ? 'Van shortage written off' : 'Overage found on van'}: ${note}`,
         referenceId: ret.id,
         referenceType: 'VAN_RETURN',
+        ledger: true,
       },
       actor.userId,
     )
