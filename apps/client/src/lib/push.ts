@@ -107,7 +107,7 @@ export async function disablePush(): Promise<void> {
   if (!subscription) return
   const endpoint = subscription.endpoint
   await subscription.unsubscribe()
-  await (await api()).post('/push/devices/remove', { token: endpoint }).catch(() => undefined)
+  await (await api()).post('/push/devices/remove', { token: endpoint }).catch(() => undefined) // swallow-ok: the server drops dead endpoints itself when a push to it fails
 }
 
 /**
@@ -161,8 +161,8 @@ export async function forgetPushOnSignOut(gatewayBaseUrl: string, accessToken: s
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ token: endpoint }),
-      }).catch(() => undefined)
+      }).catch(() => undefined) // swallow-ok: sign-out must finish even when the server cannot be reached
     }
   }
-  await Promise.race([forget().catch(() => undefined), new Promise((r) => setTimeout(r, 2000))])
+  await Promise.race([forget().catch(() => undefined) /* swallow-ok: sign-out must finish even when the server cannot be reached */, new Promise((r) => setTimeout(r, 2000))])
 }

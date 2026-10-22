@@ -1,3 +1,4 @@
+import { notifyAssigned, pickTaskAssignedMessage, shouldNotify } from './assignment-push'
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
 import { enrichPickItemsWithBins, enrichPickItemsWithSkuLabels } from './pick-bin-resolver'
@@ -405,16 +406,25 @@ export async function confirmAllPickLines(tenantId: string, taskId: string, acto
   return getFulfillmentTask(tenantId, taskId)
 }
 
-export async function assignFulfillmentTask(tenantId: string, taskId: string, userId: string | null) {
+export async function assignFulfillmentTask(tenantId: string, taskId: string, userId: string | null, actorId?: string) {
   const task = await wmsDb.fulfillmentTask.findFirst({ where: { id: taskId, tenantId } })
   if (!task) throw new ApiError(404, 'Task not found')
   if (task.status === 'CANCELLED' || task.status === 'DISPATCHED') {
     throw new ApiError(400, `Cannot assign task in status ${task.status}`)
   }
-  return wmsDb.fulfillmentTask.update({
+  const updated = await wmsDb.fulfillmentTask.update({
     where: { id: taskId },
     data: { assignedUserId: userId },
+    include: { pickLines: { select: { id: true } } },
   })
+  if (shouldNotify(task.assignedUserId, userId, actorId)) {
+    notifyAssigned(
+      tenantId,
+      userId,
+      pickTaskAssignedMessage({ id: taskId, orderId: task.orderId, priority: task.priority, lineCount: updated.pickLines.length }),
+    )
+  }
+  return updated
 }
 
 /** Take a task to pick. Free or already yours: yes. Held by someone who has gone quiet: yes. Otherwise 409. */

@@ -202,6 +202,8 @@ const router = createBrowserRouter([
             path: 'warehouse/waves/:id',
             element: page(() => import('@/pages/m/warehouse/waves/[id]/page')),
           },
+          { path: 'home', element: page(() => import('@/pages/m/home/page')) },
+          { path: 'queue', element: page(() => import('@/pages/m/queue/page')) },
           { path: 'delivery', element: page(() => import('@/pages/m/delivery/page')) },
           {
             path: 'delivery/route/:id',

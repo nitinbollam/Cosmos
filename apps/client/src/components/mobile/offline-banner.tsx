@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   actionLabel,
   belongsTo,
@@ -214,6 +215,11 @@ export function OfflineBanner() {
         </ul>
       ) : null}
 
+      {pending > 0 ? (
+        <Link to="/m/queue" style={{ display: 'block', color: 'inherit', fontSize: 12, marginTop: 6, textDecoration: 'underline' }}>
+          See what is waiting
+        </Link>
+      ) : null}
       {msg ? <span style={{ display: 'block', fontWeight: 400, marginTop: 4 }}>{msg}</span> : null}
     </div>
   )

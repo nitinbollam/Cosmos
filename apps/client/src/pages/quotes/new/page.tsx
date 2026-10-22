@@ -44,7 +44,7 @@ function NewQuoteForm() {
       .then((me) => {
         if (me.customerId) setCustomerRef(me.customerId)
       })
-      .catch(() => undefined)
+      .catch(() => undefined) // swallow-ok: only pre-fills the customer; the buyer can still pick one
   }, [])
 
   useEffect(() => {
