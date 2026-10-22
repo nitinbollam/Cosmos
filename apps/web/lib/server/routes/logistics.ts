@@ -132,7 +132,7 @@ export async function routePurchaseOrders(method: string, seg: string[], req: Re
     return Response.json(await purchasing.createPurchaseOrder(session.tenantId, body), { status: 201 })
   }
   if (seg.length === 2 && method === 'GET') {
-    return Response.json(await purchasing.getPurchaseOrder(session.tenantId, seg[1]))
+    return Response.json(await purchasing.getPurchaseOrderDetail(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'submit' && method === 'POST') {
     return Response.json(await purchasing.submitPurchaseOrder(session.tenantId, seg[1], session.userId))

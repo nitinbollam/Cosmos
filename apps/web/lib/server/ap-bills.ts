@@ -15,9 +15,11 @@ function billBalance(total: number, paid: number): number {
   return Math.max(0, +(total - paid).toFixed(2))
 }
 
-function deriveBillStatus(total: number, paid: number, stored: VendorBillStatus): string {
+export function deriveBillStatus(total: number, paid: number, stored: VendorBillStatus): string {
   const bal = billBalance(total, paid)
   if (stored === VendorBillStatus.VOID) return 'VOID'
+  // A $0 bill (e.g. PO lines without a price) has had nothing paid on it: keep it open, not "Paid".
+  if (total <= 0.01 && paid <= 0.01) return stored === VendorBillStatus.DRAFT ? 'DRAFT' : 'ISSUED'
   if (bal <= 0.01) return 'PAID'
   if (paid > 0.01) return 'PARTIALLY_PAID'
   return stored === VendorBillStatus.DRAFT ? 'DRAFT' : 'ISSUED'
@@ -25,6 +27,15 @@ function deriveBillStatus(total: number, paid: number, stored: VendorBillStatus)
 
 function formatBillNumber(poNumber: string, seq = 1): string {
   return `BILL-${poNumber.replace(/^PO-/i, '')}-${seq}`
+}
+
+/** "PO-1001" and "1001" both map to BILL-1001-n, so take the first sequence number not in use. */
+async function nextFreeBillNumber(tenantId: string, poNumber: string): Promise<string> {
+  for (let seq = 1; ; seq++) {
+    const billNumber = formatBillNumber(poNumber, seq)
+    const taken = await purchasingDb.vendorBill.findFirst({ where: { tenantId, billNumber }, select: { id: true } })
+    if (!taken) return billNumber
+  }
 }
 
 export type ThreeWayMatchResult = {
@@ -236,7 +247,7 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
       tenantId,
       supplierId: po.supplierId,
       purchaseOrderId: po.id,
-      billNumber: formatBillNumber(po.number),
+      billNumber: await nextFreeBillNumber(tenantId, po.number),
       status: VendorBillStatus.ISSUED,
       subtotal: new Prisma.Decimal(subtotal),
       taxAmount: new Prisma.Decimal(0),
