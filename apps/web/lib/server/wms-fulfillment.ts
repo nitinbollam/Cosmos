@@ -1,6 +1,6 @@
 import { notifyAssigned, pickTaskAssignedMessage, shouldNotify } from './assignment-push'
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
-import { wmsDb } from './db'
+import { inventoryDb, wmsDb } from './db'
 import { enrichPickItemsWithBins, enrichPickItemsWithSkuLabels } from './pick-bin-resolver'
 import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
@@ -74,6 +74,17 @@ export type CreateFulfillmentTaskInput = {
   lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; batchId?: string; locationId?: string }>
 }
 
+/** Real warehouse names (code if unnamed) keyed by id; ids with no matching warehouse are absent. */
+async function warehouseCodeMap(tenantId: string, ids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return new Map()
+  const rows = await inventoryDb.warehouse.findMany({
+    where: { tenantId, id: { in: unique } },
+    select: { id: true, name: true, code: true },
+  })
+  return new Map(rows.map((w) => [w.id, w.name?.trim() || w.code]))
+}
+
 const OPEN_TASK_STATUSES: FulfillmentTaskStatus[] = ['PENDING', 'PICKING', 'PACKED']
 
 export async function createFulfillmentTask(tenantId: string, dto: CreateFulfillmentTaskInput) {
@@ -90,7 +101,8 @@ export async function createFulfillmentTask(tenantId: string, dto: CreateFulfill
   if (!first) throw new ApiError(400, 'lineItems required')
 
   const warehouseId = first.warehouseId
-  const warehouseCode = `WH-${warehouseId.slice(-6).toUpperCase()}`
+  const warehouseCode =
+    (await warehouseCodeMap(tenantId, [warehouseId])).get(warehouseId) ?? `WH-${warehouseId.slice(-6).toUpperCase()}`
 
   const task = await wmsDb.fulfillmentTask.create({
     data: {
@@ -181,12 +193,13 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
     })),
   )
   const pickItems = sortByBin(await enrichPickItemsWithSkuLabels(tenantId, withBins))
+  const codes = await warehouseCodeMap(tenantId, [t.warehouseId])
   return {
     id: t.id,
     orderId: t.orderId,
     status: t.status,
     priority: t.priority,
-    warehouseCode: t.warehouseCode,
+    warehouseCode: codes.get(t.warehouseId) ?? t.warehouseCode,
     correlationId: t.correlationId,
     warehouseId: t.warehouseId,
     assignedUserId: t.assignedUserId,
@@ -261,13 +274,14 @@ export async function listFulfillmentTasks(
   )
     .filter((t) => matchesAssigned(filter, t.assignedUserId, opts?.viewerId ?? ''))
     .sort(compareTasks)
+  const codes = await warehouseCodeMap(tenantId, rows.map((t) => t.warehouseId))
   return Promise.all(
     rows.map(async (t) => ({
       id: t.id,
       orderId: t.orderId,
       status: t.status,
       priority: t.priority,
-      warehouseCode: t.warehouseCode,
+      warehouseCode: codes.get(t.warehouseId) ?? t.warehouseCode,
       warehouseId: t.warehouseId,
       assignedUserId: t.assignedUserId,
       createdAt: t.createdAt,

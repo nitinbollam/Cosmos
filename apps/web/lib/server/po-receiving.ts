@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { orderDb, purchasingDb } from './db'
 import { enqueuePostingJob } from './posting-outbox'
 import * as inv from './inventory'
+import { auditLog } from './audit-log'
+import { swallowed } from './fire-and-forget'
 import { ApiError } from './session'
 
 function toNumberDecimal(v: unknown): number {
@@ -13,6 +15,101 @@ function toNumberDecimal(v: unknown): number {
 }
 
 export type PoLineReceipt = { lineId: string; qtyReceived: number }
+
+/** The supplier bill after a receipt, as shown to the person who received the goods. */
+export type ReceiptBillOutcome = {
+  bill: { id: string; billNumber: string; totalAmount: number } | null
+  /** Why the bill couldn't be created. The receipt itself is already saved. */
+  billError: string | null
+}
+
+/** A reason the person receiving goods can act on; database detail stays in the audit log. */
+export function billFailureReason(err: unknown): string {
+  if (err instanceof ApiError) return err.message
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    return 'another supplier bill already uses this bill number'
+  }
+  return 'an unexpected error (details are in the audit log)'
+}
+
+type BillReceiptDeps = {
+  createBill?: (
+    tenantId: string,
+    input: { purchaseOrderId: string },
+  ) => Promise<{ id: string; billNumber: string; totalAmount: unknown }>
+  audit?: typeof auditLog
+}
+
+/**
+ * Create or refresh the supplier bill for a PO after goods arrive (both Record receipt and
+ * scanner receiving sessions). Never throws: the goods are already received, so a failure is
+ * returned for the screen to show and kept in the audit log, and "Create bill" on the PO retries.
+ */
+export async function billReceivedGoods(
+  tenantId: string,
+  poId: string,
+  performedBy: string | undefined,
+  deps: BillReceiptDeps = {},
+): Promise<ReceiptBillOutcome> {
+  try {
+    const createBill = deps.createBill ?? (await import('./ap-bills')).createBillFromPurchaseOrder
+    const bill = await createBill(tenantId, { purchaseOrderId: poId })
+    return {
+      bill: { id: bill.id, billNumber: bill.billNumber, totalAmount: toNumberDecimal(bill.totalAmount) },
+      billError: null,
+    }
+  } catch (err) {
+    const reason = billFailureReason(err)
+    console.error(`[ap] vendor bill creation failed for PO ${poId}:`, err)
+    await (deps.audit ?? auditLog)(tenantId, {
+      action: 'ap.bill_creation_failed',
+      entityType: 'PurchaseOrder',
+      entityId: poId,
+      userId: performedBy,
+      metadata: { reason, detail: err instanceof Error ? err.message.slice(0, 1000) : String(err) },
+    }).catch(swallowed('po-receiving.billReceivedGoods', { tenantId }))
+    return { bill: null, billError: reason }
+  }
+}
+
+/** Find a PO by its id or its number (what a warehouse worker actually sees on the paperwork). */
+export async function findPurchaseOrderByReference(tenantId: string, reference: string) {
+  const ref = reference.trim()
+  const po = await purchasingDb.purchaseOrder.findFirst({
+    where: { tenantId, OR: [{ id: ref }, { number: ref }, { number: ref.toUpperCase() }] },
+    include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
+  })
+  if (!po) throw new ApiError(404, `No purchase order "${ref}"`)
+  return po
+}
+
+/**
+ * Why `quantity` units of a SKU can't be received against a PO line, or null when they fit.
+ * `quantity` is the total for this receipt so far (earlier scans plus the new one).
+ */
+export function overReceiptProblem(
+  poNumber: string,
+  skuCode: string,
+  line: { qtyOrdered: number; qtyReceived: number } | undefined,
+  quantity: number,
+): string | null {
+  if (!line) return `${skuCode} isn't on ${poNumber}`
+  const open = Math.max(0, line.qtyOrdered - line.qtyReceived)
+  if (quantity <= open) return null
+  if (open === 0) return `${poNumber} has no more ${skuCode} to receive`
+  return `${poNumber} has only ${open} more ${skuCode} to receive, not ${quantity}`
+}
+
+/** PO numbers by id, so receiving screens can show "PO-1001" instead of an internal id. */
+export async function purchaseOrderNumbers(tenantId: string, ids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return new Map()
+  const rows = await purchasingDb.purchaseOrder.findMany({
+    where: { tenantId, id: { in: unique } },
+    select: { id: true, number: true },
+  })
+  return new Map(rows.map((r) => [r.id, r.number]))
+}
 
 export async function getPurchaseOrderForReceiving(tenantId: string, poId: string) {
   const po = await purchasingDb.purchaseOrder.findFirst({
@@ -132,14 +229,16 @@ export async function postInventoryForPoReceipts(
   return { inventoryErrors }
 }
 
-/** Map received SKU quantities to PO lines (by sku code) and increment qtyReceived. */
-export async function syncPurchaseOrderFromSkuReceipts(
+/**
+ * Map received SKU quantities to PO lines (by sku code) without changing anything. Throws a
+ * plain-language 400 for a SKU that isn't on the PO or more units than the PO has open, so a
+ * receiving session can be refused before any stock is posted.
+ */
+export async function planPoReceiptsFromSkus(
   tenantId: string,
   poId: string,
   skuReceipts: Array<{ skuId: string; quantity: number }>,
 ) {
-  if (skuReceipts.length === 0) return null
-
   const po = await getPurchaseOrderForReceiving(tenantId, poId)
   assertPoOpenForReceiving(po.status)
 
@@ -148,23 +247,28 @@ export async function syncPurchaseOrderFromSkuReceipts(
     if (row.quantity <= 0) continue
     const sku = await inv.findSkuById(tenantId, row.skuId)
     const line = po.lines.find((l) => l.skuCode?.trim() === sku.code)
-    if (!line) {
-      throw new ApiError(400, `No PO line for SKU ${sku.code}`)
-    }
-    const open = line.qtyOrdered - line.qtyReceived - (byLineId.get(line.id) ?? 0)
-    if (row.quantity > open) {
-      throw new ApiError(
-        400,
-        `Receiving ${row.quantity} for ${sku.code} exceeds open PO quantity (${open})`,
-      )
-    }
-    byLineId.set(line.id, (byLineId.get(line.id) ?? 0) + row.quantity)
+    const total = (line ? (byLineId.get(line.id) ?? 0) : 0) + row.quantity
+    const problem = overReceiptProblem(po.number, sku.code, line, total)
+    if (problem || !line) throw new ApiError(400, problem ?? `${sku.code} isn't on ${po.number}`)
+    byLineId.set(line.id, total)
   }
 
   const receipts: PoLineReceipt[] = [...byLineId.entries()].map(([lineId, qtyReceived]) => ({
     lineId,
     qtyReceived,
   }))
+  return { po, receipts }
+}
+
+/** Map received SKU quantities to PO lines (by sku code) and increment qtyReceived. */
+export async function syncPurchaseOrderFromSkuReceipts(
+  tenantId: string,
+  poId: string,
+  skuReceipts: Array<{ skuId: string; quantity: number }>,
+) {
+  if (skuReceipts.length === 0) return null
+
+  const { po, receipts } = await planPoReceiptsFromSkus(tenantId, poId, skuReceipts)
   if (receipts.length === 0) return po
   const updated = await validateAndApplyPoLineReceipts(tenantId, poId, receipts)
   // Scanner receiving (WMS sessions) lands here rather than in receivePurchaseOrderGoods.
@@ -214,7 +318,7 @@ export async function openPoLinesForReceiving(tenantId: string, poId: string) {
   return { po, rows }
 }
 
-export type ReceiveGoodsResult = {
+export type ReceiveGoodsResult = ReceiptBillOutcome & {
   purchaseOrder: Awaited<ReturnType<typeof validateAndApplyPoLineReceipts>>
   inventoryErrors: string[]
 }
@@ -243,12 +347,9 @@ export async function receivePurchaseOrderGoods(
     ? await postInventoryForPoReceipts(tenantId, po, warehouseId, dto.lines, performedBy)
     : { inventoryErrors: [] as string[] }
 
-  if (dto.lines.some((l) => l.qtyReceived > 0)) {
-    const { createBillFromPurchaseOrder } = await import('./ap-bills')
-    await createBillFromPurchaseOrder(tenantId, { purchaseOrderId: poId }).catch((err) =>
-      console.error(`[ap] vendor bill creation failed for PO ${poId}:`, err),
-    )
-  }
+  const billing: ReceiptBillOutcome = dto.lines.some((l) => l.qtyReceived > 0)
+    ? await billReceivedGoods(tenantId, poId, performedBy)
+    : { bill: null, billError: null }
 
   // One event per receipt (no dedupe key): partial receipts against one PO are normal.
   const received = dto.lines
@@ -263,7 +364,7 @@ export async function receivePurchaseOrderGoods(
       received,
     })
   }
-  return { purchaseOrder: updatedPo, inventoryErrors }
+  return { purchaseOrder: updatedPo, inventoryErrors, ...billing }
 }
 
 export async function recordPoPayment(

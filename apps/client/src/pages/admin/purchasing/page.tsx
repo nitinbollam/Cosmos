@@ -315,7 +315,7 @@ function PoDrawer(props: {
     supplierId: string
     number: string
     notes?: string
-    lines: Array<{ lineNo: number; skuCode?: string; description: string; qtyOrdered: number }>
+    lines: Array<{ lineNo: number; skuCode?: string; description: string; qtyOrdered: number; unitCost: number }>
   }) => void
   loading: boolean
   error?: Error
@@ -326,9 +326,13 @@ function PoDrawer(props: {
   const [warehouseNote, setWarehouseNote] = useState('')
   const [lines, setLines] = useState(() =>
     props.prefillLine
-      ? [{ lineNo: 1, skuCode: props.prefillLine.skuCode, description: props.prefillLine.description, qtyOrdered: props.prefillLine.qtyOrdered }]
-      : [{ lineNo: 1, skuCode: '', description: '', qtyOrdered: 1 }],
+      ? [{ lineNo: 1, skuCode: props.prefillLine.skuCode, description: props.prefillLine.description, qtyOrdered: props.prefillLine.qtyOrdered, unitCost: '' }]
+      : [{ lineNo: 1, skuCode: '', description: '', qtyOrdered: 1, unitCost: '' }],
   )
+  // Every line needs a price: the supplier bill is built from it when goods arrive.
+  const parsedCost = (v: string) => (v.trim() === '' ? NaN : Number(v))
+  const missingCost = lines.some((l) => !(parsedCost(l.unitCost) >= 0))
+  const poTotal = lines.reduce((sum, l) => sum + (parsedCost(l.unitCost) >= 0 ? parsedCost(l.unitCost) * l.qtyOrdered : 0), 0)
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -382,6 +386,7 @@ function PoDrawer(props: {
             <input
               type="number"
               min={1}
+              aria-label={`Line ${idx + 1} quantity`}
               className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
               value={ln.qtyOrdered}
               onChange={(e) => {
@@ -390,6 +395,24 @@ function PoDrawer(props: {
                 setLines(next)
               }}
             />
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              inputMode="decimal"
+              placeholder="Unit cost ($)"
+              aria-label={`Line ${idx + 1} unit cost in dollars`}
+              className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+              value={ln.unitCost}
+              onChange={(e) => {
+                const next = [...lines]
+                next[idx] = { ...ln, unitCost: e.target.value }
+                setLines(next)
+              }}
+            />
+            <span className="self-center text-xs text-pleros-muted">
+              {parsedCost(ln.unitCost) >= 0 ? `Line total $${(parsedCost(ln.unitCost) * ln.qtyOrdered).toFixed(2)}` : 'Enter a unit cost'}
+            </span>
             <input
               placeholder="Description"
               className="col-span-2 rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
@@ -406,7 +429,7 @@ function PoDrawer(props: {
           type="button"
           className="mt-2 text-xs text-pleros-primary"
           onClick={() =>
-            setLines((l) => [...l, { lineNo: l.length + 1, skuCode: '', description: '', qtyOrdered: 1 }])
+            setLines((l) => [...l, { lineNo: l.length + 1, skuCode: '', description: '', qtyOrdered: 1, unitCost: '' }])
           }
         >
           + Add line
@@ -418,6 +441,8 @@ function PoDrawer(props: {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
+        <p className="mt-3 text-sm text-pleros-white">PO total ${poTotal.toFixed(2)}</p>
+        {missingCost && <p className="text-xs text-pleros-muted mt-1">Enter a unit cost for every line (0 if it's free).</p>}
         {props.error && <p className="text-red-400 text-xs mt-2">{props.error.message}</p>}
         <div className="mt-6 flex gap-2">
           <button
@@ -429,7 +454,7 @@ function PoDrawer(props: {
           </button>
           <button
             type="button"
-            disabled={props.loading || !supplierId}
+            disabled={props.loading || !supplierId || missingCost}
             className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() => {
               const wh = props.warehouses.find((w) => w.id === warehouseNote)
@@ -443,6 +468,7 @@ function PoDrawer(props: {
                   skuCode: l.skuCode || undefined,
                   description: l.description || `Line ${i + 1}`,
                   qtyOrdered: l.qtyOrdered,
+                  unitCost: parsedCost(l.unitCost),
                 })),
               })
             }}
