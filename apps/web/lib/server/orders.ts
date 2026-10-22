@@ -1,3 +1,4 @@
+import { orderTotals, remainingAfterGiftCard } from './order-totals'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
@@ -89,13 +90,13 @@ export async function createOrder(
   opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string; skipPriceValidation?: boolean },
 ) {
   assertValidOrderLines(dto.lineItems)
-  let subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
-  let discountAmount = 0
+  const linesTotal = orderTotals(dto.lineItems, { taxRate: 0 }).linesTotal.toNumber()
+  let discountRequested = 0
   let discountId: string | null = null
 
   if (dto.discountCode?.trim()) {
     const validated = await discounts.validateDiscount(tenantId, dto.discountCode, {
-      orderSubtotal: subtotal,
+      orderSubtotal: linesTotal,
       customerId: opts?.buyerCustomerId ?? dto.customerId,
       requestedBy: opts?.userId,
     })
@@ -103,14 +104,14 @@ export async function createOrder(
     if ('pendingApproval' in validated && validated.pendingApproval) {
       throw new ApiError(400, 'Discount is pending manager approval — checkout at full price or wait for approval')
     }
-    discountAmount = validated.amountOff
+    discountRequested = validated.amountOff
     discountId = validated.discount!.id
-    subtotal = Math.max(0, subtotal - discountAmount)
   }
 
   const taxRate = await getTenantSalesTaxRate(tenantId)
-  const taxAmount = computeSalesTax(subtotal, taxRate)
-  const totalAmount = subtotal + taxAmount
+  const totals = orderTotals(dto.lineItems, { discount: discountRequested, taxRate })
+  const discountAmount = totals.discountAmount.toNumber()
+  const totalAmount = totals.totalAmount.toNumber()
   const correlationId = randomUUID()
 
   const customerId = opts?.buyerCustomerId ?? dto.customerId
@@ -135,15 +136,13 @@ export async function createOrder(
     posAttestation: ageAttestation,
   })
 
-  let expectedGiftCardAmount = 0
+  let giftCardBalance: number | undefined
   if (dto.giftCardCode?.trim()) {
     const { checkGiftCardBalance } = await import('./gift-cards')
     const balanceCheck = await checkGiftCardBalance(tenantId, dto.giftCardCode.trim())
-    if (balanceCheck.valid && (balanceCheck.balance ?? 0) > 0) {
-      expectedGiftCardAmount = Math.min(totalAmount, balanceCheck.balance ?? 0)
-    }
+    if (balanceCheck.valid) giftCardBalance = balanceCheck.balance ?? 0
   }
-  const remainingAmountToFinance = Math.max(0, +(totalAmount - expectedGiftCardAmount).toFixed(2))
+  const remainingAmountToFinance = remainingAfterGiftCard(totals.totalAmount, giftCardBalance).remaining.toNumber()
 
   const creditCheck = await checkCreditLimitForOrder(tenantId, customerId, remainingAmountToFinance, dto.paymentMethod)
   const needsCreditApproval = !creditCheck.ok && creditCheck.requiresApproval
@@ -159,8 +158,8 @@ export async function createOrder(
       priority: (dto.priority ?? 'NORMAL') as never,
       notes: dto.notes,
       shippingAddress: dto.shippingAddress as never,
-      taxAmount: new Prisma.Decimal(taxAmount),
-      totalAmount: new Prisma.Decimal(totalAmount),
+      taxAmount: totals.taxAmount,
+      totalAmount: totals.totalAmount,
       lineItems: {
         create: dto.lineItems.map((li) => ({
           skuId: li.skuId,
