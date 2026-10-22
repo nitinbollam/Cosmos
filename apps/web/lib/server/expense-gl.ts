@@ -38,3 +38,8 @@ export async function ensureExpenseAccounts(tenantId: string) {
   )
   return { expense, payable }
 }
+
+/** Inventory Shrinkage (5100), created on first use so existing tenants need no setup. */
+export async function ensureShrinkageAccount(tenantId: string) {
+  return ensureAccount(tenantId, '5100', 'Inventory Shrinkage', AccountType.EXPENSE)
+}

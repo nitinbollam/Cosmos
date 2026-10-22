@@ -137,6 +137,7 @@ export async function inspectVanReturn(
             reason: 'Damaged on van return',
             referenceId: ret.id,
             referenceType: 'VAN_RETURN',
+            ledger: true,
           },
           actor.userId,
         )
@@ -203,6 +204,7 @@ export async function resolveVanReturn(
         reason: `${short ? 'Van shortage written off' : 'Overage found on van'}: ${note}`,
         referenceId: ret.id,
         referenceType: 'VAN_RETURN',
+        ledger: true,
       },
       actor.userId,
     )
