@@ -17,6 +17,8 @@ const MOBILE_SHELL_ROUTES = [
   '/m/warehouse/receiving',
   '/m/delivery',
   '/m/sales',
+  '/m/home',
+  '/m/queue',
 ]
 
 /** Injected at build time by vite.config.ts; fallback list for dev. */
@@ -33,6 +35,8 @@ const PRECACHE_URLS = [
   '/m/warehouse/receiving',
   '/m/delivery',
   '/m/sales',
+  '/m/home',
+  '/m/queue',
 ]
 
 self.addEventListener('install', (event) => {

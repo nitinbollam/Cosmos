@@ -1,10 +1,13 @@
+import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api-mobile'
+import { currentIdentity } from '@/lib/session-identity'
+import { creditLabel, leadAction, LEAD_STATUSES, money, type CreditView } from '@/lib/rep-app'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
 import { axiosErr } from '@/lib/axios-error'
 
-type Lead = { id: string; companyName: string; status: string; email?: string }
-type Customer = { id: string; name: string; email?: string }
+type Lead = { id: string; companyName: string; status: string; email?: string; assignedToUserId?: string | null; customerId?: string | null }
+type Customer = { id: string; name: string; email?: string; city?: string | null; state?: string | null } & CreditView
 type Activity = {
   id: string
   type: string
@@ -14,11 +17,15 @@ type Activity = {
 }
 
 export default function SalesMobilePage() {
-  const [tab, setTab] = useState<'leads' | 'customers' | 'activities'>('leads')
+  const [tab, setTab] = useState<'leads' | 'customers' | 'activities'>('customers')
   const [leads, setLeads] = useState<Lead[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [err, setErr] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  const [busyLead, setBusyLead] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const me = currentIdentity('mobile')?.userId ?? null
   const [leadForm, setLeadForm] = useState({ companyName: '', email: '' })
   const [activityForm, setActivityForm] = useState({
     customerId: '',
@@ -30,8 +37,8 @@ export default function SalesMobilePage() {
     setErr(null)
     try {
       const [l, c, a] = await Promise.all([
-        api.get<Lead[]>('/leads'),
-        api.get<Customer[]>('/customers?pageSize=50'),
+        api.get<Lead[]>('/rep/leads'),
+        api.get<Customer[]>('/rep/accounts'),
         api.get<Activity[]>('/activities'),
       ])
       setLeads(Array.isArray(l) ? l : [])
@@ -50,15 +57,40 @@ export default function SalesMobilePage() {
     e.preventDefault()
     if (!leadForm.companyName.trim()) return
     try {
-      await api.post('/leads', {
+      await api.post('/rep/leads', {
         companyName: leadForm.companyName.trim(),
         email: leadForm.email.trim() || undefined,
-        status: 'NEW',
       })
       setLeadForm({ companyName: '', email: '' })
       await load()
     } catch (ex) {
       setErr(axiosErr(ex))
+    }
+  }
+
+  async function leadCall(id: string, fn: () => Promise<unknown>) {
+    setBusyLead(id)
+    setErr(null)
+    try {
+      await fn()
+      await load()
+    } catch (ex) {
+      setErr(axiosErr(ex))
+      await load()
+    } finally {
+      setBusyLead(null)
+    }
+  }
+
+  async function convert(l: Lead) {
+    setBusyLead(l.id)
+    setErr(null)
+    try {
+      const done = await api.post<{ customerId: string }>(`/rep/leads/${l.id}/convert`, {})
+      navigate(`/m/sales/customer/${done.customerId}`)
+    } catch (ex) {
+      setErr(axiosErr(ex))
+      setBusyLead(null)
     }
   }
 
@@ -85,14 +117,14 @@ export default function SalesMobilePage() {
       <OfflineBanner />
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>Field sales</h1>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        {(['leads', 'customers', 'activities'] as const).map((t) => (
+        {(['customers', 'leads', 'activities'] as const).map((t) => (
           <button
             key={t}
             type="button"
             className={tab === t ? 'btn-primary' : 'btn-ghost'}
             onClick={() => setTab(t)}
           >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'customers' ? 'Accounts' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -120,24 +152,57 @@ export default function SalesMobilePage() {
               Add lead
             </button>
           </form>
-          {leads.map((l) => (
-            <div key={l.id} className="pleros-mobile-card">
-              <strong>{l.companyName}</strong>
-              <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.7 }}>
-                {l.status} {l.email ? `· ${l.email}` : ''}
-              </p>
-            </div>
-          ))}
+          {leads.map((l) => {
+            const act = leadAction(l, me)
+            return (
+              <div key={l.id} className="pleros-mobile-card">
+                <strong>{l.companyName}</strong>
+                <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.7 }}>
+                  {l.status} {l.email ? `· ${l.email}` : ''}
+                </p>
+                {act === 'claim' && (
+                  <button type="button" className="btn-primary" style={{ marginTop: 8 }} disabled={busyLead === l.id}
+                    onClick={() => void leadCall(l.id, () => api.post(`/rep/leads/${l.id}/claim`, {}))}>
+                    Take this lead
+                  </button>
+                )}
+                {act === 'work' && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <select className="pleros-input" value={l.status} disabled={busyLead === l.id}
+                      onChange={(e) => void leadCall(l.id, () => api.patch(`/rep/leads/${l.id}`, { status: e.target.value }))}>
+                      {LEAD_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
+                    </select>
+                    <button type="button" className="btn-primary" disabled={busyLead === l.id} onClick={() => void convert(l)}>
+                      Convert to account
+                    </button>
+                  </div>
+                )}
+                {l.customerId && (
+                  <Link to={`/m/sales/customer/${l.customerId}`} className="pleros-shop-link-accent" style={{ fontSize: 13 }}>Open account</Link>
+                )}
+              </div>
+            )
+          })}
         </>
       )}
 
-      {tab === 'customers' &&
-        customers.map((c) => (
-          <div key={c.id} className="pleros-mobile-card">
-            <strong>{c.name}</strong>
-            {c.email && <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.7 }}>{c.email}</p>}
-          </div>
-        ))}
+      {tab === 'customers' && (
+        <>
+          <input className="pleros-input" placeholder="Search accounts" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
+          {customers.filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase())).map((c) => (
+            <Link key={c.id} to={`/m/sales/customer/${c.id}`} className="pleros-mobile-card" style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <strong>{c.name}</strong>
+                <span style={{ fontSize: 12, opacity: 0.8 }}>{c.openBalance > 0 ? `Owes ${money(c.openBalance)}` : 'Paid up'}</span>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.7 }}>
+                {[c.city, c.state].filter(Boolean).join(', ') || c.email || ' '} · {creditLabel(c)}
+              </p>
+            </Link>
+          ))}
+          {customers.length === 0 && !err && <p style={{ opacity: 0.6, textAlign: 'center' }}>No accounts assigned to you yet. Convert a lead to start.</p>}
+        </>
+      )}
 
       {tab === 'activities' && (
         <>

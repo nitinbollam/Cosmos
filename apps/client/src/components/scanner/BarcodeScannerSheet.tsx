@@ -26,7 +26,7 @@ function signalHit() {
     if (!Ctx) return
     const ctx = new Ctx()
     if (ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {})
+      void ctx.resume().catch(() => {}) // swallow-ok: the scan beep is optional; the scan itself already succeeded
     }
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
@@ -37,7 +37,7 @@ function signalHit() {
     osc.start()
     osc.stop(ctx.currentTime + 0.09)
     osc.onended = () => {
-      void ctx.close().catch(() => {})
+      void ctx.close().catch(() => {}) // swallow-ok: closing the beep audio context; nothing depends on it
     }
   } catch {
     /* audio blocked */

@@ -33,6 +33,10 @@ export async function onApprovalDecided(tenantId: string, request: ApprovalReque
     const { resumeOrderAfterCreditApproval } = await import('./orders')
     await resumeOrderAfterCreditApproval(tenantId, request.subjectId)
   }
+  if (request.status === ApprovalStatus.APPROVED && request.type === ApprovalType.CREDIT_LIMIT_INCREASE) {
+    const { applyApprovedCreditIncrease } = await import('./sales-rep')
+    await applyApprovedCreditIncrease(tenantId, request)
+  }
   if (request.type === ApprovalType.EXPENSE_REPORT) {
     const { decideExpenseReport } = await import('./expense-reports')
     await decideExpenseReport(tenantId, request.subjectId, {

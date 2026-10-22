@@ -5,8 +5,9 @@ import { ledgerDb } from './db'
 import { ApiError } from './session'
 import { createApprovalRequest } from './approvals'
 import { getTenantFinanceSettings } from './tenant-finance-settings'
-import { postExpenseApprovalJournal, postExpensePaidJournal } from './expense-gl'
 import { auditLog } from './audit-log'
+import { enqueuePostingJobAfterCommit } from './posting-outbox'
+import { expenseApprovedJob, expensePaidJob } from './posting-sources'
 
 export type CreateExpenseLineInput = {
   category: string
@@ -24,6 +25,21 @@ async function recomputeTotal(reportId: string) {
     data: { totalAmount: new Prisma.Decimal(total) },
   })
   return total
+}
+
+/**
+ * Moves a report from `from` to `to` only if nobody moved it first, so two approvers (or a double
+ * click) produce one transition and one journal. The loser gets 409.
+ */
+async function transitionReport(
+  tenantId: string,
+  reportId: string,
+  from: ExpenseReportStatus,
+  data: Prisma.ExpenseReportUpdateManyMutationInput & { status: ExpenseReportStatus },
+) {
+  const moved = await ledgerDb.expenseReport.updateMany({ where: { id: reportId, tenantId, status: from }, data })
+  if (moved.count !== 1) throw new ApiError(409, 'Expense report was just changed by someone else — reload and try again')
+  return getReport(tenantId, reportId)
 }
 
 async function getReport(tenantId: string, reportId: string, userId?: string) {
@@ -113,17 +129,14 @@ export async function submitExpenseReport(tenantId: string, reportId: string, us
     })
   }
 
-  const journalEntryId = await postExpenseApprovalJournal(tenantId, reportId, total)
-  return ledgerDb.expenseReport.update({
-    where: { id: reportId },
-    data: {
-      status: ExpenseReportStatus.APPROVED,
-      submittedAt: now,
-      decidedAt: now,
-      journalEntryId,
-    },
-    include: { lines: true },
+  const approved = await transitionReport(tenantId, reportId, ExpenseReportStatus.DRAFT, {
+    status: ExpenseReportStatus.APPROVED,
+    submittedAt: now,
+    decidedAt: now,
   })
+  // Dr Employee Expenses, Cr Reimbursements Payable, posted by the outbox worker.
+  await enqueuePostingJobAfterCommit(expenseApprovedJob(approved))
+  return approved
 }
 
 export async function decideExpenseReport(
@@ -137,28 +150,20 @@ export async function decideExpenseReport(
   }
 
   if (!decision.approve) {
-    return ledgerDb.expenseReport.update({
-      where: { id: reportId },
-      data: {
-        status: ExpenseReportStatus.REJECTED,
-        decidedAt: new Date(),
-        rejectReason: decision.rejectReason?.trim() || 'Rejected',
-      },
-      include: { lines: true },
+    return transitionReport(tenantId, reportId, ExpenseReportStatus.PENDING_APPROVAL, {
+      status: ExpenseReportStatus.REJECTED,
+      decidedAt: new Date(),
+      rejectReason: decision.rejectReason?.trim() || 'Rejected',
     })
   }
 
-  const total = Number(report.totalAmount)
-  const journalEntryId = await postExpenseApprovalJournal(tenantId, reportId, total)
-  return ledgerDb.expenseReport.update({
-    where: { id: reportId },
-    data: {
-      status: ExpenseReportStatus.APPROVED,
-      decidedAt: new Date(),
-      journalEntryId,
-    },
-    include: { lines: true },
+  const approved = await transitionReport(tenantId, reportId, ExpenseReportStatus.PENDING_APPROVAL, {
+    status: ExpenseReportStatus.APPROVED,
+    decidedAt: new Date(),
   })
+  // Dr Employee Expenses, Cr Reimbursements Payable, posted by the outbox worker.
+  await enqueuePostingJobAfterCommit(expenseApprovedJob(approved))
+  return approved
 }
 
 export async function markExpenseReportPaid(tenantId: string, reportId: string) {
@@ -166,13 +171,13 @@ export async function markExpenseReportPaid(tenantId: string, reportId: string) 
   if (report.status !== ExpenseReportStatus.APPROVED) {
     throw new ApiError(400, 'Only approved expense reports can be marked paid')
   }
-  const total = Number(report.totalAmount)
-  await postExpensePaidJournal(tenantId, reportId, total)
-  return ledgerDb.expenseReport.update({
-    where: { id: reportId },
-    data: { status: ExpenseReportStatus.PAID },
-    include: { lines: true },
+  const paid = await transitionReport(tenantId, reportId, ExpenseReportStatus.APPROVED, {
+    status: ExpenseReportStatus.PAID,
+    paidAt: new Date(),
   })
+  // Dr Reimbursements Payable, Cr Cash. Its own source key, so it never collides with the approval journal.
+  await enqueuePostingJobAfterCommit(expensePaidJob(paid))
+  return paid
 }
 
 export async function adjustExpenseReportAdmin(

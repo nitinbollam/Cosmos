@@ -83,38 +83,6 @@ export async function postArRefundJournal(tenantId: string, refId: string, amoun
   return entry.id
 }
 
-export async function postPoReceiptJournal(tenantId: string, refId: string, amount: number) {
-  if (amount <= 0) return null
-  const accts = await accountsByCodes(tenantId, [INV_CODE, AP_CODE])
-  if (!accts) return null
-
-  const entry = await ledgerDb.journalEntry.create({
-    data: {
-      tenantId,
-      description: `PO receipt ${refId.slice(-8)} — inventory accrual`,
-      isPosted: true,
-      postedAt: new Date(),
-      lines: {
-        create: [
-          {
-            accountId: accts.get(INV_CODE)!.id,
-            memo: 'Inventory received',
-            debit: new Prisma.Decimal(amount),
-            credit: new Prisma.Decimal(0),
-          },
-          {
-            accountId: accts.get(AP_CODE)!.id,
-            memo: 'Accounts payable',
-            debit: new Prisma.Decimal(0),
-            credit: new Prisma.Decimal(amount),
-          },
-        ],
-      },
-    },
-  })
-  return entry.id
-}
-
 export async function postApPaymentJournal(tenantId: string, refId: string, amount: number) {
   if (amount <= 0) return null
   const accts = await accountsByCodes(tenantId, [AP_CODE, CASH_CODE])

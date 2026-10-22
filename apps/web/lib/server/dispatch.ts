@@ -1,3 +1,4 @@
+import { notifyAssigned, routeAssignedMessage, shouldNotify } from './assignment-push'
 import { Prisma, RouteStatus, StopStatus } from '@/generated/prisma-dispatch'
 import { dispatchDb } from './db'
 import { orderIdFromStopAddress } from './dispatch-order'
@@ -200,7 +201,11 @@ export async function assignRouteDriver(tenantId: string, id: string, driverId: 
     // ASSIGNED until the driver delivers or fails a stop; a route already under way stays IN_PROGRESS.
     data: { driverId, status: statusAfterAssign(route.status) as RouteStatus },
   })
-  return getRouteDetail(tenantId, id)
+  const detail = await getRouteDetail(tenantId, id)
+  if (shouldNotify(route.driverId, driverId)) {
+    notifyAssigned(tenantId, driverId, routeAssignedMessage({ id, name: route.name, stopCount: detail.stops?.length }))
+  }
+  return detail
 }
 
 /**

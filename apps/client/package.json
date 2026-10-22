@@ -8,7 +8,7 @@
     "build": "vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "preview": "vite preview",
-    "lint": "node ../../scripts/eslint-soft.mjs .ts,.tsx",
+    "lint": "node ../../scripts/eslint-soft.mjs .ts,.tsx && node ../../scripts/check-code-health.mjs",
     "pretypecheck": "npm run build -w @pleros/ui && npm run build -w @pleros/web-gateway-client",
     "typecheck": "tsc --noEmit",
     "test": "node ../../scripts/run-tests.mjs --import tsx 'src/**/*.test.ts'",
