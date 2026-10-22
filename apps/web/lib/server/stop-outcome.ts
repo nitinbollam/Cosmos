@@ -8,6 +8,7 @@
  * Kept free of DB and session imports so it can be unit-tested on its own.
  */
 import { adjustmentsFromPod } from './door-adjustment'
+import { collectionsFromPod } from './door-collection'
 import { vanSalesFromPod } from './van-rules'
 
 export type StopFailure = {
@@ -57,16 +58,18 @@ export function podWithFailure(existingPod: unknown, failure: StopFailure): Reco
  */
 export function podForDelivery(existingPod: unknown, submitted: Record<string, unknown> | undefined) {
   const { failure: _clientFailure, ...evidence } = submitted ?? {}
-  const { adjustments: _clientAdjustments, vanSales: _clientVanSales, ...clean } = evidence as Record<string, unknown>
+  const { adjustments: _clientAdjustments, vanSales: _clientVanSales, collections: _clientCollections, ...clean } = evidence as Record<string, unknown>
   const earlierFailure = failureFromPod(existingPod)
   // `adjustments` is server-owned like `failure`: door changes already made stay, a client cannot add or drop any.
   const earlierAdjustments = adjustmentsFromPod(existingPod)
   const earlierVanSales = vanSalesFromPod(existingPod)
+  const earlierCollections = collectionsFromPod(existingPod)
   return {
     ...clean,
     ...(earlierFailure ? { failure: earlierFailure } : {}),
     ...(earlierAdjustments.length ? { adjustments: earlierAdjustments } : {}),
     ...(earlierVanSales.length ? { vanSales: earlierVanSales } : {}),
+    ...(earlierCollections.length ? { collections: earlierCollections } : {}),
   }
 }
 
