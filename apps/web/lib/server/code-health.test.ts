@@ -57,3 +57,24 @@ test('money patterns may not grow past the baseline, and --money=strict allows n
 test('tests and the money and helper modules are exempt', () => {
   assert.equal(run({ 'a.test.ts': 'work().catch(() => undefined)\n', 'money.ts': 'x.toFixed(2)\n', 'fire-and-forget.ts': 'p.catch(() => undefined)\n' }, ['--money=strict']).code, 0)
 })
+
+test('client code is held to the swallow rule, but may format money for display', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'code-health-'))
+  fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true })
+  const write = (rel: string, body: string) => {
+    const f = path.join(dir, 'apps', 'client', 'src', rel)
+    fs.mkdirSync(path.dirname(f), { recursive: true })
+    fs.writeFileSync(f, body)
+  }
+  const go = () => spawnSync(process.execPath, [script], { env: { ...process.env, CODE_HEALTH_ROOT: dir }, encoding: 'utf8' })
+  write('pages/m/x.tsx', 'const label = price.toFixed(2)\nwork().catch(() => undefined) // swallow-ok: the beep is optional\n')
+  assert.equal(go().status, 0)
+  write('pages/m/y.tsx', 'work().catch(() => undefined)\n')
+  const bad = go()
+  assert.equal(bad.status, 1)
+  assert.match(`${bad.stdout}${bad.stderr}`, /swallow: apps\/client\/src\/pages\/m\/y\.tsx has 1 \(baseline 0\)/)
+  write('pages/m/z.test.tsx', 'work().catch(() => undefined)\n')
+  fs.rmSync(path.join(dir, 'apps', 'client', 'src', 'pages', 'm', 'y.tsx'))
+  assert.equal(go().status, 0, 'tests are exempt')
+  fs.rmSync(dir, { recursive: true, force: true })
+})

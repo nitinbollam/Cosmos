@@ -4,47 +4,7 @@ import { RequireMobileAuth } from '@/components/auth/require-mobile-auth'
 import { OfflineSyncRunner } from '@/components/mobile/offline-sync-runner'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { getSessionUser, signOut } from '@/lib/auth-session'
-
-type MobileTab = {
-  href: string
-  label: string
-  permission?: string
-  roles?: string[]
-}
-
-const ALL_TABS: MobileTab[] = [
-  {
-    href: '/m/warehouse',
-    label: 'Warehouse',
-    permission: 'wms.read',
-    roles: ['SUPER_ADMIN', 'TENANT_ADMIN', 'WAREHOUSE_STAFF', 'OPS_STAFF'],
-  },
-  {
-    href: '/m/delivery',
-    label: 'Delivery',
-    permission: 'dispatch.read',
-    roles: ['SUPER_ADMIN', 'TENANT_ADMIN', 'DRIVER', 'OPS_STAFF'],
-  },
-  {
-    href: '/m/sales',
-    label: 'Sales',
-    permission: 'crm.read',
-    roles: ['SUPER_ADMIN', 'TENANT_ADMIN', 'SALES_REP', 'OPS_STAFF'],
-  },
-]
-
-function isTabAllowed(tab: MobileTab, user: ReturnType<typeof getSessionUser>): boolean {
-  if (!user) return true
-  const role = user.role?.toUpperCase() || ''
-  if (role === 'SUPER_ADMIN' || role === 'TENANT_ADMIN') return true
-  if (user.permissions?.includes('*') || (tab.permission && user.permissions?.includes(tab.permission))) {
-    return true
-  }
-  if (tab.roles && tab.roles.includes(role)) {
-    return true
-  }
-  return false
-}
+import { homeFor, tabsFor } from '@/lib/mobile-home'
 
 export function MobileLayout() {
   const { pathname } = useLocation()
@@ -63,9 +23,8 @@ export function MobileLayout() {
 function MobileShell() {
   const { pathname } = useLocation()
   const user = getSessionUser()
-  const allowedTabs = ALL_TABS.filter((t) => isTabAllowed(t, user))
-  const visibleTabs = allowedTabs.length > 0 ? allowedTabs : ALL_TABS
-  const primaryHref = visibleTabs[0]?.href ?? '/m/warehouse'
+  const visibleTabs = tabsFor(user?.role, user?.permissions ?? [])
+  const primaryHref = homeFor(user?.role)
 
   return (
     <div className="pleros-mobile">

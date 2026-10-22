@@ -284,7 +284,7 @@ export async function signOut(options?: { redirectTo?: string; surface?: Surface
     await Promise.race([
       import('@/lib/push')
         .then((push) => push.forgetPushOnSignOut(gatewayBaseUrl, getAccessToken(surface)))
-        .catch(() => undefined),
+        .catch(() => undefined), // swallow-ok: sign-out must finish even if push cleanup fails
       new Promise((resolve) => setTimeout(resolve, 2500)),
     ])
   }

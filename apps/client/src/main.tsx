@@ -17,7 +17,7 @@ installAuthSync()
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+    void navigator.serviceWorker.register('/sw.js').catch(() => undefined) // swallow-ok: the app works without the service worker; it only adds offline support
   })
 }
 

@@ -7,13 +7,9 @@ import { axiosErr, isUnauthorized } from '@/lib/axios-error'
 import { parseJwtPayload } from '@/lib/jwt'
 import { setTokens } from '@/lib/auth-session'
 import { tenantPromptOf, tokensOf, type LoginResponse, type LoginTokens, type TenantPrompt } from '@/lib/login-flow'
+import { homeFor } from '@/lib/mobile-home'
 import { TenantPicker } from '@/components/auth/tenant-picker'
 
-function defaultMobileHome(role: string | undefined): string {
-  if (role === 'DRIVER') return '/m/delivery'
-  if (role === 'WAREHOUSE_STAFF') return '/m/warehouse'
-  return '/m/sales'
-}
 
 export default function MobileLoginPage() {
   const navigate = useNavigate()
@@ -33,7 +29,7 @@ export default function MobileLoginPage() {
     }
     const payload = parseJwtPayload(r.accessToken)
     const role = typeof payload?.role === 'string' ? payload.role : undefined
-    navigate(defaultMobileHome(role))
+    navigate(homeFor(role))
   }
 
   async function choose(tenantId: string) {

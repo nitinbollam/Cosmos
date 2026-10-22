@@ -58,7 +58,7 @@ export function wipeUserData(surface: Surface = currentSurface()) {
     // Push alerts belong to the buyer who turned them on; the next person here must not get them.
     void import('@/lib/push')
       .then((push) => push.dropPushSubscription())
-      .catch(() => undefined)
+      .catch(() => undefined) // swallow-ok: wiping local data must finish even if the push cleanup fails
   } else if (surface === 'admin') {
     useCelestialStore.setState({ admin: blankAssistant() })
   }
