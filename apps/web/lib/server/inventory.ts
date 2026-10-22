@@ -647,6 +647,8 @@ export async function adjustStock(
     referenceId?: string
     referenceType?: string
     correlationId?: string
+    /** Post the loss (or find) to the general ledger at the SKU's cost. Not for adjustments that carry their own journal. */
+    ledger?: boolean
   },
   performedBy: string,
 ) {
@@ -728,6 +730,22 @@ export async function adjustStock(
       quantityAvailable: result.quantityAvailable,
       reorderPoint: result.reorderPoint,
     })
+  }
+
+  if (dto.ledger) {
+    const [{ adjustmentPosting }, { enqueuePostingJobAfterCommit }] = await Promise.all([import('./stock-gl'), import('./posting-outbox')])
+    const costRow = await inventoryDb.sKU.findFirst({ where: { id: dto.skuId, tenantId }, select: { cost: true } })
+    const posting = adjustmentPosting(costRow?.cost?.toString(), dto.quantityDelta)
+    if (posting) {
+      await enqueuePostingJobAfterCommit({
+        tenantId,
+        kind: posting.kind,
+        sourceType: 'StockAdjustment',
+        sourceId: correlationId,
+        variant: `${dto.warehouseId}:${dto.skuId}:${batchKey}`,
+        amount: posting.amount,
+      })
+    }
   }
 
   queueSalesChannelPush(tenantId, dto.skuId)

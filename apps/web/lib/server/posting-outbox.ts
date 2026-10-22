@@ -3,6 +3,8 @@ import { Prisma } from '@/generated/prisma-ledger'
 import type { Prisma as OrderPrisma } from '@/generated/prisma-order'
 import { ledgerDb, orderDb, purchasingDb, tenantDb } from './db'
 import { ApiError } from './session'
+import { SHRINKAGE_ACCOUNT } from './stock-gl'
+import { ensureShrinkageAccount } from './expense-gl'
 import { createJournalOnce, requireAccounts, requireSalesTaxPayable } from './ledger-posting'
 import { isWorkKind, runWork, type WorkKind } from './deferred-work'
 import { ensureExpenseAccounts } from './expense-gl'
@@ -31,6 +33,8 @@ export type PostingJobKind =
   | 'EXPENSE_PAID_JOURNAL'
   | 'GIFT_CARD_ISSUE_JOURNAL'
   | 'GIFT_CARD_REDEEM_JOURNAL'
+  | 'STOCK_WRITE_OFF_JOURNAL'
+  | 'STOCK_FOUND_JOURNAL'
   | WorkKind
 
 export const MAX_POSTING_ATTEMPTS = 8
@@ -213,6 +217,26 @@ export async function postJob(job: JobRow): Promise<string | null> {
       return createJournalOnce(job.tenantId, source, `COGS reversal on return ${short}`, [
         { accountId: a.get('1100')!.id, memo: 'Inventory restored', debit: dec(amount), credit: ZERO },
         { accountId: a.get('5000')!.id, memo: 'Cost of goods sold reversal', debit: ZERO, credit: dec(amount) },
+      ])
+    }
+    case 'STOCK_WRITE_OFF_JOURNAL':
+    case 'STOCK_FOUND_JOURNAL': {
+      await ensureShrinkageAccount(job.tenantId)
+      const a = await requireAccounts(job.tenantId, [SHRINKAGE_ACCOUNT.code, '1100'])
+      const lost = job.kind === 'STOCK_WRITE_OFF_JOURNAL'
+      return createJournalOnce(job.tenantId, source, `${lost ? 'Stock written off' : 'Stock found'} ${short}`, [
+        {
+          accountId: (lost ? a.get(SHRINKAGE_ACCOUNT.code)! : a.get('1100')!).id,
+          memo: lost ? 'Inventory shrinkage' : 'Inventory found',
+          debit: dec(amount),
+          credit: ZERO,
+        },
+        {
+          accountId: (lost ? a.get('1100')! : a.get(SHRINKAGE_ACCOUNT.code)!).id,
+          memo: lost ? 'Inventory written off' : 'Inventory shrinkage reversal',
+          debit: ZERO,
+          credit: dec(amount),
+        },
       ])
     }
     case 'EXPENSE_APPROVAL_JOURNAL': {

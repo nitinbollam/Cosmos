@@ -148,7 +148,7 @@ export async function routeInventory(method: string, seg: string[], req: Request
   }
   if (seg[1] === 'adjust' && method === 'POST') {
     const body = (await req.json()) as Parameters<typeof inv.adjustStock>[1]
-    return Response.json(await inv.adjustStock(session.tenantId, body, session.userId))
+    return Response.json(await inv.adjustStock(session.tenantId, { ...body, ledger: true }, session.userId))
   }
   if (seg[1] === 'receive' && method === 'POST') {
     const body = (await req.json()) as Parameters<typeof inv.receiveStock>[1]

@@ -147,6 +147,7 @@ export async function inspectVanReturn(
             reason: 'Damaged on van return',
             referenceId: ret.id,
             referenceType: 'VAN_RETURN',
+            ledger: true,
           },
           actor.userId,
         )
@@ -204,26 +205,19 @@ export async function resolveVanReturn(
       throw new ApiError(409, 'Shortages are signed off after the inspection, when the missing units are all that is left on the van')
     }
     const quantity = Math.abs(line.counted - line.expected)
-    const reason = `${short ? 'Van shortage written off' : 'Overage found on van'}: ${note}`
-    // A shortage comes off the lots the van still holds. An overage has no known lot, so it is added unlabelled.
-    const parts = short
-      ? await planBatches(tenantId, skuId, ret.vanId, quantity)
-      : [{ batchId: '', quantity }]
-    for (const part of parts) {
-      await adjustStock(
-        tenantId,
-        {
-          skuId,
-          warehouseId: ret.vanId,
-          quantityDelta: short ? -part.quantity : part.quantity,
-          batchId: part.batchId,
-          reason,
-          referenceId: ret.id,
-          referenceType: 'VAN_RETURN',
-        },
-        actor.userId,
-      )
-    }
+    await adjustStock(
+      tenantId,
+      {
+        skuId,
+        warehouseId: ret.vanId,
+        quantityDelta: short ? -quantity : quantity,
+        reason: `${short ? 'Van shortage written off' : 'Overage found on van'}: ${note}`,
+        referenceId: ret.id,
+        referenceType: 'VAN_RETURN',
+        ledger: true,
+      },
+      actor.userId,
+    )
     resolution.lines[skuId] = { action: short ? 'WRITE_OFF' : 'FOUND', quantity, by: actor.userId, at: now, note }
   }
   if (body.cash === true) resolution.cash = { by: actor.userId, at: now, note }
