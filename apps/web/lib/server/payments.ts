@@ -1,3 +1,4 @@
+import { fromCents, fromFloat, toCents } from './money'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-payment'
 import { orderDb, paymentDb } from './db'
@@ -352,7 +353,6 @@ async function recordRefund(tenantId: string, amount: number, orderId: string, c
 
 const PAYMENT_CHANGED = 'This payment changed while you were working on it. Reload and try again.'
 
-const toCents = (n: number) => Math.round(n * 100)
 
 /**
  * Each money-moving step below first claims its status change with a conditional update, so a
@@ -439,18 +439,18 @@ export async function refund(
     throw new ApiError(400, `Cannot refund status ${intent.status}`)
   }
 
-  const capturedCents = toCents(Number(intent.capturedAmount ?? intent.amount))
-  const refundedBeforeCents = toCents(Number(intent.refundedAmount ?? 0))
+  const capturedCents = toCents(intent.capturedAmount ?? intent.amount)
+  const refundedBeforeCents = toCents(intent.refundedAmount ?? 0)
   // No amount means "the rest", not the original total (which over-refunds after a partial refund).
-  const refundCents = amount == null ? capturedCents - refundedBeforeCents : toCents(amount)
+  const refundCents = amount == null ? capturedCents - refundedBeforeCents : toCents(fromFloat(amount))
   if (!Number.isFinite(refundCents) || refundCents <= 0) {
     throw new ApiError(400, 'Refund amount must be greater than zero')
   }
   if (refundedBeforeCents + refundCents > capturedCents) {
     throw new ApiError(400, 'Refund exceeds the amount captured on this payment')
   }
-  const refundAmount = refundCents / 100
-  const refundedAfter = new Prisma.Decimal((refundedBeforeCents + refundCents) / 100)
+  const refundAmount = fromCents(refundCents).toNumber()
+  const refundedAfter = fromCents(refundedBeforeCents + refundCents)
 
   const claimed = await paymentDb.paymentIntent.updateMany({
     where: { id: intent.id, tenantId, status: 'CAPTURED', refundedAmount: intent.refundedAmount },
@@ -570,21 +570,20 @@ async function applyPlatformStripeEvent(event: ReturnType<typeof stripe.verifySt
           where: { stripeIntentId, status: { in: ['CAPTURED', 'REFUNDED'] } },
         })
         if (intent) {
-          const refundedTotal = (charge.amount_refunded ?? 0) / 100
-          const alreadyRecorded = Number(intent.refundedAmount ?? 0)
-          const delta = +(refundedTotal - alreadyRecorded).toFixed(2)
-          if (delta > 0.009) {
+          const refundedTotal = fromCents(charge.amount_refunded ?? 0)
+          const delta = refundedTotal.minus(intent.refundedAmount ?? 0)
+          if (delta.gte('0.01')) {
             // Compare-and-set: if a refund from Pleros lands at the same moment, fail so Stripe
             // retries this event against the new total instead of recording the refund twice.
             const moved = await paymentDb.paymentIntent.updateMany({
               where: { id: intent.id, refundedAmount: intent.refundedAmount },
               data: {
-                refundedAmount: new Prisma.Decimal(refundedTotal),
-                status: refundedTotal >= Number(intent.amount) ? 'REFUNDED' : 'CAPTURED',
+                refundedAmount: refundedTotal,
+                status: refundedTotal.gte(intent.amount) ? 'REFUNDED' : 'CAPTURED',
               },
             })
             if (moved.count !== 1) throw new Error(`refund total changed for payment ${intent.id}`)
-            await recordRefund(intent.tenantId, delta, intent.orderId, `stripe-${event.id}`)
+            await recordRefund(intent.tenantId, delta.toNumber(), intent.orderId, `stripe-${event.id}`)
           }
         }
       }
