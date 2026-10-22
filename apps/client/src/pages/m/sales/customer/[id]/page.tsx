@@ -96,8 +96,8 @@ export default function RepCustomerPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <Link to={`/m/sales/customer/${d.customer.id}/build?mode=order`} className="btn-primary" style={{ flex: 1, textAlign: 'center' }}>New order</Link>
-            <Link to={`/m/sales/customer/${d.customer.id}/build?mode=quote`} className="btn-ghost" style={{ flex: 1, textAlign: 'center' }}>New quote</Link>
+            <Link to={`/m/sales/customer/${d.customer.id}/compose?mode=order`} className="btn-primary" style={{ flex: 1, textAlign: 'center' }}>New order</Link>
+            <Link to={`/m/sales/customer/${d.customer.id}/compose?mode=quote`} className="btn-ghost" style={{ flex: 1, textAlign: 'center' }}>New quote</Link>
           </div>
 
           <h2 style={{ fontSize: '1rem', marginTop: 20 }}>Open invoices</h2>

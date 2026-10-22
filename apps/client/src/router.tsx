@@ -211,7 +211,7 @@ const router = createBrowserRouter([
           },
           { path: 'sales', element: page(() => import('@/pages/m/sales/page')) },
           { path: 'sales/customer/:id', element: page(() => import('@/pages/m/sales/customer/[id]/page')) },
-          { path: 'sales/customer/:id/build', element: page(() => import('@/pages/m/sales/customer/[id]/build/page')) },
+          { path: 'sales/customer/:id/compose', element: page(() => import('@/pages/m/sales/customer/[id]/compose/page')) },
         ],
       },
     ],
