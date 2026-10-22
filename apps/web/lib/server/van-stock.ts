@@ -3,6 +3,7 @@ import { ApiError } from './session'
 import { transferStock } from './inventory'
 import { normalizeState, vanLinesProblem, type VanLine } from './van-rules'
 import { isDriverRole } from './driver-scope'
+import { splitAcrossBatches, type BatchTake } from './batch-split'
 
 /**
  * A van is a warehouse of kind VEHICLE that rides with one driver (PLR-167). Stock moves on and
@@ -78,6 +79,42 @@ export async function getVanInventory(tenantId: string, vanId: string, actor: Ac
   }
 }
 
+/**
+ * How a quantity of one item is spread over the lots held at a place, first to expire first. Throws
+ * when the place does not hold enough, so nothing moves for that line.
+ */
+export async function planBatches(
+  tenantId: string,
+  skuId: string,
+  warehouseId: string,
+  quantity: number,
+  opts: { skipRecalled?: boolean } = {},
+): Promise<BatchTake[]> {
+  const levels = await inventoryDb.stockLevel.findMany({
+    where: { tenantId, skuId, warehouseId, quantityAvailable: { gt: 0 } },
+  })
+  const codes = levels.map((l) => l.batchId ?? '').filter(Boolean)
+  const lots = codes.length
+    ? await inventoryDb.inventoryLot.findMany({ where: { tenantId, skuId, batchCode: { in: codes } } })
+    : []
+  // A lot's expiry is recorded where it was received; the van's own level may not carry it.
+  const expiry = new Map(lots.map((l) => [l.batchCode, l.expiryDate]))
+  const { isBatchRecalled } = await import('./compliance-recall')
+  const rows = []
+  for (const l of levels) {
+    const batchId = l.batchId ?? ''
+    rows.push({
+      batchId,
+      available: l.quantityAvailable,
+      expiry: expiry.get(batchId) ?? l.expiryDate ?? null,
+      recalled: opts.skipRecalled && batchId ? await isBatchRecalled(tenantId, batchId, skuId) : false,
+    })
+  }
+  const { takes, short } = splitAcrossBatches(rows, quantity, opts)
+  if (short > 0) throw new ApiError(400, 'Insufficient available stock at source warehouse')
+  return takes
+}
+
 async function moveLines(
   tenantId: string,
   van: { id: string; assignedDriverId: string | null },
@@ -92,21 +129,22 @@ async function moveLines(
   const wh = await inventoryDb.warehouse.findFirst({ where: { id: warehouseId, tenantId, kind: 'WAREHOUSE', isActive: true } })
   if (!wh) throw new ApiError(400, 'Choose a warehouse to move stock to or from')
 
-  const moved: VanLine[] = []
+  const moved: Array<VanLine & { batches?: BatchTake[] }> = []
   let failure: unknown = null
   for (const l of lines) {
     try {
-      await transferStock(
-        tenantId,
-        {
-          skuId: l.skuId,
-          quantity: l.quantity,
-          fromWarehouseId: kind === 'LOAD' ? wh.id : van.id,
-          toWarehouseId: kind === 'LOAD' ? van.id : wh.id,
-        },
-        actor.userId,
-      )
-      moved.push({ skuId: l.skuId, quantity: l.quantity })
+      const from = kind === 'LOAD' ? wh.id : van.id
+      const to = kind === 'LOAD' ? van.id : wh.id
+      // Lot by lot, so the van's stock keeps the lot and expiry it came from. A recalled lot never goes out.
+      const plan = await planBatches(tenantId, l.skuId, from, l.quantity, { skipRecalled: kind === 'LOAD' })
+      for (const t of plan) {
+        await transferStock(
+          tenantId,
+          { skuId: l.skuId, quantity: t.quantity, fromWarehouseId: from, toWarehouseId: to, ...(t.batchId ? { batchId: t.batchId } : {}) },
+          actor.userId,
+        )
+      }
+      moved.push({ skuId: l.skuId, quantity: l.quantity, ...(plan.some((t) => t.batchId) ? { batches: plan } : {}) })
     } catch (e) {
       failure = e
       break

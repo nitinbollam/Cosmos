@@ -1,7 +1,8 @@
 import { dispatchDb, inventoryDb } from './db'
 import { ApiError } from './session'
 import { adjustStock, transferStock } from './inventory'
-import { getVan } from './van-stock'
+import { getVan, planBatches } from './van-stock'
+import { leadingUnits } from './batch-split'
 import { collectsMoneyOnTheRoad, vanSalesFromPod } from './van-rules'
 import {
   MANAGER_ROLES,
@@ -126,14 +127,23 @@ export async function inspectVanReturn(
     for (const i of inspection) {
       const total = i.good + i.damaged
       if (total === 0 || moved[i.skuId]) continue
-      await transferStock(tenantId, { skuId: i.skuId, fromWarehouseId: ret.vanId, toWarehouseId: wh.id, quantity: total }, actor.userId)
-      if (i.damaged > 0) {
+      // Back lot by lot, so the warehouse gets each lot and expiry the van was carrying.
+      const plan = await planBatches(tenantId, i.skuId, ret.vanId, total)
+      for (const t of plan) {
+        await transferStock(
+          tenantId,
+          { skuId: i.skuId, fromWarehouseId: ret.vanId, toWarehouseId: wh.id, quantity: t.quantity, ...(t.batchId ? { batchId: t.batchId } : {}) },
+          actor.userId,
+        )
+      }
+      for (const t of i.damaged > 0 ? leadingUnits(plan, i.damaged) : []) {
         await adjustStock(
           tenantId,
           {
             skuId: i.skuId,
             warehouseId: wh.id,
-            quantityDelta: -i.damaged,
+            quantityDelta: -t.quantity,
+            batchId: t.batchId,
             reason: 'Damaged on van return',
             referenceId: ret.id,
             referenceType: 'VAN_RETURN',
@@ -194,18 +204,26 @@ export async function resolveVanReturn(
       throw new ApiError(409, 'Shortages are signed off after the inspection, when the missing units are all that is left on the van')
     }
     const quantity = Math.abs(line.counted - line.expected)
-    await adjustStock(
-      tenantId,
-      {
-        skuId,
-        warehouseId: ret.vanId,
-        quantityDelta: short ? -quantity : quantity,
-        reason: `${short ? 'Van shortage written off' : 'Overage found on van'}: ${note}`,
-        referenceId: ret.id,
-        referenceType: 'VAN_RETURN',
-      },
-      actor.userId,
-    )
+    const reason = `${short ? 'Van shortage written off' : 'Overage found on van'}: ${note}`
+    // A shortage comes off the lots the van still holds. An overage has no known lot, so it is added unlabelled.
+    const parts = short
+      ? await planBatches(tenantId, skuId, ret.vanId, quantity)
+      : [{ batchId: '', quantity }]
+    for (const part of parts) {
+      await adjustStock(
+        tenantId,
+        {
+          skuId,
+          warehouseId: ret.vanId,
+          quantityDelta: short ? -part.quantity : part.quantity,
+          batchId: part.batchId,
+          reason,
+          referenceId: ret.id,
+          referenceType: 'VAN_RETURN',
+        },
+        actor.userId,
+      )
+    }
     resolution.lines[skuId] = { action: short ? 'WRITE_OFF' : 'FOUND', quantity, by: actor.userId, at: now, note }
   }
   if (body.cash === true) resolution.cash = { by: actor.userId, at: now, note }
