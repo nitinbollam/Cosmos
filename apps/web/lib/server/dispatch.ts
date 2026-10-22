@@ -5,6 +5,7 @@ import { orderIdFromStopAddress } from './dispatch-order'
 import { podEvidenceProblem } from './pod-evidence'
 import { statusAfterAssign, statusAfterOutcome, unassignDriverProblem } from './route-assignment'
 import { buildStopItems, NO_ITEMS } from './route-stop-items'
+import { checkRouteStates, stopState } from './route-state'
 import { failureReasonProblem, normalizeFailureReason, podForDelivery, podWithFailure } from './stop-outcome'
 import * as crm from './crm'
 import * as orderOrchestration from './order-orchestration'
@@ -107,6 +108,9 @@ export async function createRoute(
 ) {
   const seqs = new Set(dto.stops.map((s) => s.sequence))
   if (seqs.size !== dto.stops.length) throw new ApiError(400, 'Duplicate stop sequence')
+  // One state per route: excise, stamps and van stock are state-specific (PLR-172).
+  const stateCheck = checkRouteStates(dto.stops.map((s) => stopState(s.address)))
+  if (stateCheck.problem) throw new ApiError(400, stateCheck.problem)
   let scheduledFor: Date | undefined
   if (dto.scheduledFor?.trim()) {
     const d = new Date(dto.scheduledFor)
@@ -153,6 +157,13 @@ function addressFromOrder(
   }
 }
 
+/** Put the customer's state on the stop when the shipping address does not carry one. */
+function withState(address: Record<string, unknown>, customerState?: string | null): Record<string, unknown> {
+  if (stopState(address)) return address
+  const state = stopState({}, customerState)
+  return state ? { ...address, state } : address
+}
+
 export async function createRouteFromOrders(
   tenantId: string,
   dto: { orderIds: string[]; name?: string; scheduledFor?: string },
@@ -168,11 +179,13 @@ export async function createRouteFromOrders(
   }
 
   const customerNames = new Map<string, string>()
+  const customerStates = new Map<string, string | null>()
   for (const o of orders) {
     if (!customerNames.has(o.customerId)) {
       try {
         const c = await crm.getCustomer(tenantId, o.customerId)
         customerNames.set(o.customerId, c.name)
+        customerStates.set(o.customerId, c.primaryState ?? null)
       } catch {
         customerNames.set(o.customerId, o.customerId)
       }
@@ -181,7 +194,7 @@ export async function createRouteFromOrders(
 
   const stops = orders.map((o, i) => ({
     sequence: i + 1,
-    address: addressFromOrder(o, customerNames.get(o.customerId)),
+    address: withState(addressFromOrder(o, customerNames.get(o.customerId)), customerStates.get(o.customerId)),
   }))
 
   return createRoute(tenantId, {
