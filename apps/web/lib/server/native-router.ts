@@ -6,6 +6,7 @@ import { routeOrders, routeQuotes, routeOrderTemplates } from './routes/sales-or
 import { routeCustomers, routeLeads, routeActivities } from './routes/crm'
 import { routeFulfillment, routeWms, routePickWaves } from './routes/wms'
 import { routeVans } from './routes/vans'
+import { routeSalesRep } from './routes/sales-rep'
 import { routeRoutes, routeDispatchMobile, routePurchaseOrders, routeSuppliers, routeEdi } from './routes/logistics'
 import {
   routeInvoices,
@@ -71,6 +72,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'fulfillment') return await routeFulfillment(m, seg, req)
     if (seg[0] === 'wms') return await routeWms(m, seg, req)
     if (seg[0] === 'vans') return await routeVans(m, seg, req)
+    if (seg[0] === 'rep') return await routeSalesRep(m, seg, req)
     if (seg[0] === 'routes') return await routeRoutes(m, seg, req)
     if (seg[0] === 'dispatch') return await routeDispatchMobile(m, seg, req)
     if (seg[0] === 'purchase-orders') return await routePurchaseOrders(m, seg, req)
