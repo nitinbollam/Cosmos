@@ -35,6 +35,8 @@ export type ReceivingRow = {
   id: string
   warehouseId: string
   poId: string | null
+  /** The PO's number, e.g. PO-1001, when the session is for a PO. */
+  poNumber?: string | null
   status: string
   startedBy: string
   createdAt: string
@@ -45,6 +47,7 @@ export type ReceivingDetail = ReceivingRow & {
   items: Array<{
     id: string
     skuId: string
+    skuCode?: string | null
     receivedQty: number
     damagedQty: number
     batchId: string | null
