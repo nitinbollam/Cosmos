@@ -25,15 +25,15 @@ export type CreateFulfillmentTaskInput = {
   lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; batchId?: string; locationId?: string }>
 }
 
-/** Real warehouse codes keyed by id; ids with no matching warehouse are simply absent. */
+/** Real warehouse names (code if unnamed) keyed by id; ids with no matching warehouse are absent. */
 async function warehouseCodeMap(tenantId: string, ids: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(ids)]
   if (unique.length === 0) return new Map()
   const rows = await inventoryDb.warehouse.findMany({
     where: { tenantId, id: { in: unique } },
-    select: { id: true, code: true },
+    select: { id: true, name: true, code: true },
   })
-  return new Map(rows.map((w) => [w.id, w.code]))
+  return new Map(rows.map((w) => [w.id, w.name?.trim() || w.code]))
 }
 
 const OPEN_TASK_STATUSES: FulfillmentTaskStatus[] = ['PENDING', 'PICKING', 'PACKED']
