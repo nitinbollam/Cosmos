@@ -35,11 +35,11 @@ export function assertRouteVisible(
  */
 export function driverMayCallRoutes(method: string, seg: string[]): boolean {
   if (method === 'GET' && seg.length === 1) return true
-  if (method === 'GET' && seg.length === 2 && seg[1] !== 'shipped-orders') return true
+  if (method === 'GET' && seg.length === 2 && seg[1] !== 'shipped-orders' && seg[1] !== 'driver-days') return true
   if (method === 'POST' && seg.length === 5 && seg[2] === 'stops' && (seg[4] === 'delivered' || seg[4] === 'failed')) {
     return true
   }
-  if (method === 'POST' && seg.length === 5 && seg[2] === 'stops' && (seg[4] === 'adjust' || seg[4] === 'van-sale')) return true
+  if (method === 'POST' && seg.length === 5 && seg[2] === 'stops' && (seg[4] === 'adjust' || seg[4] === 'van-sale' || seg[4] === 'collect')) return true
   return false
 }
 

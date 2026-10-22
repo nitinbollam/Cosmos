@@ -33,7 +33,7 @@ export function podWithCollection(existingPod: unknown, record: CollectionRecord
 }
 
 /** Why a collection is not acceptable, or null when it is. `remainingCents` is what the order still owes. */
-export function collectionProblem(input: { amountCents: unknown; method: unknown; reference?: unknown }, remainingCents: number): string | null {
+export function collectionProblem(input: { amountCents?: unknown; method?: unknown; reference?: unknown }, remainingCents: number): string | null {
   const cents = input.amountCents
   if (typeof cents !== 'number' || !Number.isInteger(cents) || cents <= 0) return 'Enter the amount you collected'
   if (!COLLECT_METHODS.includes(input.method as CollectMethod)) return 'Collect cash or a cheque. Card and terms are not taken at the door'

@@ -14,6 +14,17 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
   // Drivers can list and open their own routes and record stop outcomes; planning is for managers.
   if (driverOnly && !driverMayCallRoutes(method, seg)) throw new ApiError(403, 'Drivers cannot plan or change routes')
 
+  if (seg.length === 2 && seg[1] === 'driver-days' && method === 'GET') {
+    const { driverDayReport } = await import('../driver-day')
+    return Response.json(await driverDayReport(session.tenantId, url.searchParams.get('date') ?? ''))
+  }
+  if (seg.length === 5 && seg[2] === 'stops' && seg[4] === 'collect' && method === 'POST') {
+    assertRouteVisible(session, await dispatch.getRoute(session.tenantId, seg[1]))
+    const { collectAtDoor } = await import('../driver-day')
+    return Response.json(
+      await collectAtDoor(session.tenantId, seg[1], seg[3], (await req.json()) as never, { userId: session.userId, role: session.role }),
+    )
+  }
   if (seg.length === 2 && seg[1] === 'shipped-orders' && method === 'GET') {
     return Response.json(await orders.listShippedOrdersForDispatch(session.tenantId))
   }
