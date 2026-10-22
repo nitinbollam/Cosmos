@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
+import { showReceiptBillingResult, type ReceiptBilling } from '@/lib/receipt-billing'
 import { StatusBadge } from '@/components/pleros/status-badge'
 
 type PoLine = {
@@ -28,7 +29,10 @@ type PurchaseOrder = {
   landedCostNotes?: string | null
   supplier?: { id: string; name: string; code: string }
   lines?: PoLine[]
+  /** The current supplier bill for this PO, if one exists. */
+  supplierBill?: { id: string; billNumber: string; totalAmount: number; status: string } | null
 }
+
 
 function axiosMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'response' in err) {
@@ -288,13 +292,16 @@ export default function PurchaseOrderDetailPage() {
                     <th className="pb-2 pr-4">Description</th>
                     <th className="pb-2 pr-4">Ordered</th>
                     <th className="pb-2 pr-4">Received</th>
-                    <th className="pb-2">Open</th>
+                    <th className="pb-2 pr-4">Open</th>
+                    <th className="pb-2 pr-4">Unit cost</th>
+                    <th className="pb-2">Line total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(po.data.lines ?? []).map((l) => {
                     const received = l.qtyReceived ?? 0
                     const open = Math.max(0, l.qtyOrdered - received)
+                    const cost = l.unitCost != null && l.unitCost !== '' ? Number(l.unitCost) : null
                     return (
                       <tr key={l.id} className="border-b border-pleros-border/60">
                         <td className="py-2 pr-4 text-pleros-muted">{l.lineNo}</td>
@@ -302,7 +309,9 @@ export default function PurchaseOrderDetailPage() {
                         <td className="py-2 pr-4 text-pleros-text">{l.description}</td>
                         <td className="py-2 pr-4 text-pleros-white">{l.qtyOrdered}</td>
                         <td className="py-2 pr-4 text-pleros-muted">{received}</td>
-                        <td className="py-2 text-pleros-white">{open}</td>
+                        <td className="py-2 pr-4 text-pleros-white">{open}</td>
+                        <td className="py-2 pr-4 text-pleros-text">{cost != null ? `$${cost.toFixed(2)}` : 'No price'}</td>
+                        <td className="py-2 text-pleros-white">{cost != null ? `$${(cost * l.qtyOrdered).toFixed(2)}` : '—'}</td>
                       </tr>
                     )
                   })}
@@ -314,6 +323,8 @@ export default function PurchaseOrderDetailPage() {
             </p>
           </Card>
 
+          <SupplierBillCard po={po.data} />
+
           {receiveOpen && po.data && (
             <ReceiveDrawer
               po={po.data}
@@ -324,12 +335,59 @@ export default function PurchaseOrderDetailPage() {
                 setReceiveOpen(false)
                 void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
                 void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
+                void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
               }}
             />
           )}
         </>
       )}
     </div>
+  )
+}
+
+/** The PO's supplier bill, or a way to create it when goods were received but billing failed. */
+function SupplierBillCard({ po }: { po: PurchaseOrder }) {
+  const qc = useQueryClient()
+  const received = (po.lines ?? []).some((l) => (l.qtyReceived ?? 0) > 0)
+  const createBill = useMutation({
+    mutationFn: () => api.post<{ billNumber: string }>('/bills/from-po', { purchaseOrderId: po.id }),
+    onSuccess: (bill) => {
+      showToast(`Supplier bill ${bill.billNumber} created`, 'success')
+      void qc.invalidateQueries({ queryKey: ['purchase-order', po.id] })
+      void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
+    },
+    onError: (e) => showToast(axiosMessage(e), 'error', 8000),
+  })
+  const bill = po.supplierBill
+
+  return (
+    <Card>
+      <CardTitle>Supplier bill</CardTitle>
+      {bill ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <span className="font-mono text-pleros-white">{bill.billNumber}</span>
+          <span className="text-pleros-white">${bill.totalAmount.toFixed(2)}</span>
+          <StatusBadge status={bill.status} />
+          <Link to="/admin/finance" className="text-xs text-pleros-accent">
+            Open Finance → Bills →
+          </Link>
+        </div>
+      ) : received ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-pleros-text">Goods were received but there is no supplier bill yet.</span>
+          <button
+            type="button"
+            className="btn-primary !text-xs !py-1"
+            disabled={createBill.isPending}
+            onClick={() => createBill.mutate()}
+          >
+            {createBill.isPending ? 'Creating…' : 'Create bill'}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-pleros-muted">A supplier bill is created automatically when goods are received.</p>
+      )}
+    </Card>
   )
 }
 
@@ -367,7 +425,7 @@ function ReceiveDrawer(props: {
     }
     setBusy(true)
     try {
-      const res = await api.post<{ inventoryErrors?: string[] }>(
+      const res = await api.post<{ inventoryErrors?: string[] } & ReceiptBilling>(
         `/purchase-orders/${encodeURIComponent(props.po.id)}/receive`,
         { warehouseId, lines: increments },
       )
@@ -379,6 +437,7 @@ function ReceiveDrawer(props: {
           8000,
         )
       }
+      showReceiptBillingResult(res)
       props.onDone()
     } catch (e) {
       setError(axiosMessage(e))

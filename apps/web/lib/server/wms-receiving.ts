@@ -9,21 +9,37 @@ export async function listReceivingSessions(tenantId: string, status?: string) {
   const st = status?.trim()
   const allowed = Object.values(ReceivingStatus) as string[]
   const filter = st && allowed.includes(st) ? { status: st as ReceivingStatus } : {}
-  return wmsDb.receivingSession.findMany({
+  const sessions = await wmsDb.receivingSession.findMany({
     where: { tenantId, ...filter },
     orderBy: { createdAt: 'desc' },
     take: 100,
     include: { _count: { select: { items: true } } },
   })
+  const numbers = await poReceiving.purchaseOrderNumbers(tenantId, sessions.map((s) => s.poId ?? ''))
+  return sessions.map((s) => ({ ...s, poNumber: s.poId ? (numbers.get(s.poId) ?? null) : null }))
 }
 
 export async function startReceivingSession(
   tenantId: string,
   warehouseId: string,
   startedBy: string,
-  poId?: string,
+  /** PO id or PO number. */
+  poReference?: string,
   asnId?: string,
 ) {
+  let poId: string | undefined
+  if (poReference?.trim()) {
+    const po = await poReceiving.findPurchaseOrderByReference(tenantId, poReference)
+    poReceiving.assertPoOpenForReceiving(po.status)
+    // One receiving session per PO at a time: continue the open one (e.g. started from the PO page).
+    const open = await wmsDb.receivingSession.findFirst({
+      where: { tenantId, poId: po.id, status: { in: ['OPEN', 'IN_PROGRESS'] } },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (open) return { ...open, resumed: true, poNumber: po.number }
+    poId = po.id
+  }
+
   const session = await wmsDb.receivingSession.create({
     data: {
       tenantId,
@@ -57,7 +73,7 @@ export async function startReceivingSession(
     }
   }
 
-  return session
+  return { ...session, resumed: false }
 }
 
 export async function resolveDefaultWarehouseId(tenantId: string): Promise<string> {
@@ -113,6 +129,15 @@ export async function scanReceivingItem(
     })
   }
 
+  if (session.poId) {
+    // Refuse units the PO doesn't have open now, while the worker is still holding them.
+    const po = await poReceiving.getPurchaseOrderForReceiving(tenantId, session.poId)
+    const line = po.lines.find((l) => l.skuCode?.trim() === sku.code)
+    const alreadyGood = existing ? existing.receivedQty - (existing.damagedQty ?? 0) : 0
+    const problem = poReceiving.overReceiptProblem(po.number, sku.code, line, alreadyGood + dto.receivedQty - damaged)
+    if (problem) throw new ApiError(400, problem)
+  }
+
   const expiry = dto.expiryDate ? new Date(dto.expiryDate) : null
 
   let item
@@ -158,7 +183,20 @@ export async function getReceivingSession(sessionId: string, tenantId: string) {
     include: { items: { orderBy: { scannedAt: 'asc' } } },
   })
   if (!session) throw new ApiError(404, 'Receiving session not found')
-  return session
+  const numbers = await poReceiving.purchaseOrderNumbers(tenantId, session.poId ? [session.poId] : [])
+  const codes = new Map<string, string>()
+  for (const skuId of new Set(session.items.map((it) => it.skuId))) {
+    // Display only: a SKU that can't be found shows its id instead.
+    const sku = await inv
+      .findSkuById(tenantId, skuId)
+      .catch(swallowed('wms-receiving.getReceivingSession', { tenantId, level: 'warn' }))
+    if (sku) codes.set(skuId, sku.code)
+  }
+  return {
+    ...session,
+    poNumber: session.poId ? (numbers.get(session.poId) ?? null) : null,
+    items: session.items.map((it) => ({ ...it, skuCode: codes.get(it.skuId) ?? null })),
+  }
 }
 
 export async function completeReceivingSession(sessionId: string, tenantId: string, notes: string | undefined, performedBy: string) {
@@ -176,6 +214,14 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
 
   const hasDiscrepancy = session.items.some((i) => (i.damagedQty ?? 0) > 0)
   const nextStatus = hasDiscrepancy ? 'DISCREPANCY' : 'COMPLETED'
+
+  const skuReceipts = session.items
+    .map((it) => ({ skuId: it.skuId, quantity: Math.max(0, it.receivedQty - (it.damagedQty ?? 0)) }))
+    .filter((r) => r.quantity > 0)
+  if (session.poId && skuReceipts.length > 0) {
+    // Check against the PO before any stock moves: a refused completion must not leave stock behind.
+    await poReceiving.planPoReceiptsFromSkus(tenantId, session.poId, skuReceipts)
+  }
 
   let poForCost: Awaited<ReturnType<typeof poReceiving.getPurchaseOrderForReceiving>> | null = null
   if (session.poId) {
@@ -218,14 +264,13 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
   }
 
   if (session.poId) {
-    const skuReceipts = session.items
-      .map((it) => ({
-        skuId: it.skuId,
-        quantity: Math.max(0, it.receivedQty - (it.damagedQty ?? 0)),
-      }))
-      .filter((r) => r.quantity > 0)
     await poReceiving.syncPurchaseOrderFromSkuReceipts(tenantId, session.poId, skuReceipts)
   }
+  // Goods received against a PO owe the supplier: bill them, as Record receipt does.
+  const billing: poReceiving.ReceiptBillOutcome =
+    session.poId && session.items.some((it) => it.receivedQty - (it.damagedQty ?? 0) > 0)
+      ? await poReceiving.billReceivedGoods(tenantId, session.poId, performedBy)
+      : { bill: null, billError: null }
 
   const putawayItems = session.items
     .map((it) => ({
@@ -282,7 +327,7 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
     },
     { key: sessionId },
   )
-  return { sessionId, status: nextStatus, hasDiscrepancy }
+  return { sessionId, status: nextStatus, hasDiscrepancy, ...billing }
 }
 
 export async function importReceivingItems(

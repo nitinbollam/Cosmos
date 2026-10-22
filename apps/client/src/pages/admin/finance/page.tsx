@@ -429,7 +429,7 @@ export default function FinancePage() {
   const filteredBills = useMemo(() => {
     const rows = billsQ.data ?? []
     return rows.filter((bill) => {
-      if (apFilter === 'ALL') return bill.balance > 0.01 || Number(bill.amountPaid ?? 0) > 0
+      if (apFilter === 'ALL') return true
       if (apFilter === 'MATCHED' || apFilter === 'EXCEPTION' || apFilter === 'PENDING') {
         return (bill.matchStatus ?? 'PENDING') === apFilter
       }
