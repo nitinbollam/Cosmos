@@ -401,17 +401,20 @@ export async function markStopDelivered(
   if (podProblem) throw new ApiError(400, podProblem)
 
   const orderId = orderIdFromStopAddress(stop.address)
+  let ageCheck: Awaited<ReturnType<typeof import('./compliance-age').assertDeliveryAgeCompliance>> = null
   if (orderId) {
     const { assertDeliveryAgeCompliance } = await import('./compliance-age')
-    await assertDeliveryAgeCompliance(tenantId, orderId, pod, opts?.userId)
+    ageCheck = await assertDeliveryAgeCompliance(tenantId, orderId, pod, opts?.userId)
   }
 
+  // The scanned barcode holds the recipient's personal details: only the check result is kept.
+  const { idBarcode: _idBarcode, ...evidence } = pod ?? {}
   await dispatchDb.routeStop.update({
     where: { id: stopId },
     data: {
       status: StopStatus.DELIVERED,
       // A failure recorded on an earlier attempt stays on the stop.
-      pod: podForDelivery(stop.pod, pod) as never,
+      pod: podForDelivery(stop.pod, ageCheck ? { ...evidence, ageCheck } : evidence) as never,
     },
   })
 

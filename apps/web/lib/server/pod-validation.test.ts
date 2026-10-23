@@ -11,16 +11,19 @@ test('real photos and signatures are kept; unknown fields are dropped', () => {
     notes: '  left at back door ',
     recipientName: 'Sam',
     ageConfirmed: true,
+    ageCheck: { result: 'VERIFIED' },
+    idBarcode: '@ANSI 636015090001DL...',
     deliveredAt: '2026-10-08T12:00:00Z',
     isAdmin: true,
     __proto__: { polluted: true },
   })
   assert.equal(pod.photoUrl, JPEG)
   assert.equal(pod.notes, 'left at back door')
-  assert.equal(pod.ageConfirmed, true)
+  assert.equal(pod.idBarcode, '@ANSI 636015090001DL...')
   assert.equal(pod.deliveredAt, '2026-10-08T12:00:00.000Z')
+  // A ticked "age confirmed" or a client-made ageCheck is never accepted: only the server's scan check counts.
   assert.deepEqual(Object.keys(pod).sort(), [
-    'ageConfirmed', 'deliveredAt', 'notes', 'photoUrl', 'recipientName', 'signatureDataUrl',
+    'deliveredAt', 'idBarcode', 'notes', 'photoUrl', 'recipientName', 'signatureDataUrl',
   ])
 })
 

@@ -77,7 +77,7 @@ test('license required for every non-POS channel when policy enabled', () => {
 
 test('POS attestation is ignored for non-POS channels', () => {
   const channel = 'B2B_PORTAL' as string
-  const dtoAttestation = { method: 'ID_CHECK' as const }
+  const dtoAttestation = { method: 'ID_SCAN' as const }
   const ageAttestation = channel === 'POS' ? dtoAttestation : undefined
   assert.equal(ageAttestation, undefined)
 })
