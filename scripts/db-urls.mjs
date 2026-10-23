@@ -83,3 +83,19 @@ export function resolveAllDatabaseUrls(options = {}) {
   }
   return urls
 }
+
+/**
+ * The URL with its password replaced by ***, for logs. Deploy logs are readable by anyone with
+ * access to the hosting dashboard, so a database password must never appear in them.
+ */
+export function redactDatabaseUrl(url) {
+  try {
+    const u = new URL(url)
+    if (!u.password) return url
+    u.password = '***'
+    return u.toString()
+  } catch {
+    // Not a URL we can parse: hide anything between "://user:" and "@".
+    return String(url).replace(/(\/\/[^:/@]*:)[^@]*@/, '$1***@')
+  }
+}

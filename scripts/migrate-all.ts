@@ -8,11 +8,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
-const { DB_BY_SCHEMA, envKeyForSchema, databaseUrlForSchema, getDbProvider } = require('./db-urls.mjs') as {
+const { DB_BY_SCHEMA, envKeyForSchema, databaseUrlForSchema, getDbProvider, redactDatabaseUrl } = require('./db-urls.mjs') as {
   DB_BY_SCHEMA: Record<string, string>
   envKeyForSchema: (name: string) => string
   databaseUrlForSchema: (name: string, opts?: { dataDir?: string }) => string
   getDbProvider: () => 'sqlite' | 'postgresql'
+  redactDatabaseUrl: (url: string) => string
 }
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -35,7 +36,7 @@ for (const [name] of Object.entries(DB_BY_SCHEMA)) {
   }
   const url = databaseUrlForSchema(name, { dataDir })
   const envKey = envKeyForSchema(name)
-  console.log(`\n[db push] ${name} (${provider}) -> ${url}`)
+  console.log(`\n[db push] ${name} (${provider}) -> ${redactDatabaseUrl(url)}`)
   execSync(`npx prisma db push --schema=${schema} --accept-data-loss`, {
     cwd: WEB,
     stdio: 'inherit',
