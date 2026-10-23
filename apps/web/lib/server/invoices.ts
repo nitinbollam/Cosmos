@@ -11,6 +11,8 @@ import { toBaseAmount, normalizeCurrency } from './fx-util'
 import { splitBaseAmounts } from './invoice-tax-split'
 import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
 import { swallowed } from './fire-and-forget'
+import { formatMoney } from './money'
+import { assertWithinBalance, invoiceRemaining, parsePaymentAmount } from './payment-amount'
 import {
   allocateShipmentTax,
   inferLegacyInvoiced,
@@ -323,7 +325,8 @@ export type ArSummary = {
 
 /** Pure aging bucket helper (days since issue → outstanding balance bucket). */
 export function bucketArAging(days: number, balance: number, buckets: ArAgingBuckets): void {
-  if (balance <= 0.01) return
+  // Any balance still owed is aged, a single cent included, so the buckets add up to `outstanding`.
+  if (balance <= 0) return
   if (days <= 30) buckets.current += balance
   else if (days <= 60) buckets.d30 += balance
   else if (days <= 90) buckets.d60 += balance
@@ -510,14 +513,18 @@ export async function getInvoiceByOrderId(tenantId: string, orderId: string, opt
 export async function recordInvoicePayment(
   tenantId: string,
   invoiceId: string,
-  body: { amount: number; method: string; reference?: string },
+  body: { amount: number | string; method: string; reference?: string },
   opts?: { buyerCustomerId?: string },
 ) {
+  const amount = parsePaymentAmount(body.amount)
   const invoice = await getInvoice(tenantId, invoiceId, opts)
-  if (invoice.balance <= 0.01) throw new ApiError(400, 'Invoice is already paid')
+  const remaining = invoiceRemaining(invoice)
+  if (remaining.lte(0)) throw new ApiError(400, 'Invoice is already paid')
+  // The invoice's own balance; recordOrderPayment checks the order's again as it writes.
+  assertWithinBalance(amount, remaining)
 
   const { recordOrderPayment } = await import('./orders')
-  await recordOrderPayment(tenantId, invoice.orderId, body)
+  await recordOrderPayment(tenantId, invoice.orderId, { ...body, amount: formatMoney(amount) })
 
   return getInvoice(tenantId, invoiceId, opts)
 }
@@ -570,18 +577,24 @@ export async function getInvoicePdfDocument(tenantId: string, invoiceId: string,
 export async function payInvoiceWithStripe(
   tenantId: string,
   invoiceId: string,
-  body: { paymentMethodId: string; amount?: number; correlationId: string },
+  body: { paymentMethodId: string; amount?: number | string | null; correlationId: string },
   opts?: { buyerCustomerId?: string },
 ) {
   const invoice = await getInvoice(tenantId, invoiceId, opts)
-  if (invoice.balance <= 0.01) throw new ApiError(400, 'Invoice is already paid')
-  const amount = body.amount != null ? Math.min(body.amount, invoice.balance) : invoice.balance
-  if (amount <= 0) throw new ApiError(400, 'Invalid payment amount')
+  const remaining = invoiceRemaining(invoice)
+  if (remaining.lte(0)) throw new ApiError(400, 'Invoice is already paid')
+  // No amount (absent or null) means the whole balance. Any amount that is given is checked here,
+  // before anything reaches Stripe, and an invalid one is rejected rather than replaced.
+  let amount = remaining
+  if (body.amount != null) {
+    amount = parsePaymentAmount(body.amount)
+    assertWithinBalance(amount, remaining)
+  }
 
   const orderPaymentAdmin = await import('./order-payment-admin')
   const result = await orderPaymentAdmin.collectOrderCardPayment(tenantId, invoice.orderId, {
     paymentMethodId: body.paymentMethodId,
-    amount,
+    amount: amount.toNumber(),
     correlationId: body.correlationId,
     customerId: invoice.customerId,
   })

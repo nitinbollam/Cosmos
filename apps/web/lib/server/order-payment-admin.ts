@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-payment'
 import { orderDb, paymentDb } from './db'
 import { ApiError } from './session'
+import { money } from './money'
+import { assertWithinBalance, parsePaymentAmount } from './payment-amount'
 import * as payments from './payments'
 import { syncInvoiceOrQueue } from './deferred-work'
 import { enqueuePostingJob } from './posting-outbox'
@@ -94,12 +96,14 @@ export async function getOrderPaymentSummary(
   })
 }
 
+/** The amount to charge: the whole balance when none is given, otherwise the given amount, exactly. */
 function orderCollectableBalance(order: { totalAmount: unknown; amountPaid: unknown }, amount?: number): number {
-  const balance = Math.max(0, Number(order.totalAmount) - Number(order.amountPaid ?? 0))
-  if (amount == null) return balance
-  if (amount <= 0) throw new ApiError(400, 'Invalid payment amount')
-  if (amount > balance + 0.01) throw new ApiError(400, 'Payment amount exceeds order balance')
-  return amount
+  const owed = money(String(order.totalAmount)).minus(String(order.amountPaid ?? 0))
+  if (!owed.gt(0)) throw new ApiError(400, 'Order has no balance due')
+  if (amount == null) return owed.toNumber()
+  const requested = parsePaymentAmount(amount)
+  assertWithinBalance(requested, owed)
+  return requested.toNumber()
 }
 
 /** Card collections (admin "collect payment" and invoice pay) are marked with this source. */
@@ -150,7 +154,6 @@ export async function collectOrderCardPayment(
   if (order.customerId !== body.customerId) throw new ApiError(403, 'Customer does not match order')
 
   const collectAmount = orderCollectableBalance(order, body.amount)
-  if (collectAmount <= 0.01) throw new ApiError(400, 'Order has no balance due')
 
   const intent = await paymentDb.paymentIntent.create({
     data: {
