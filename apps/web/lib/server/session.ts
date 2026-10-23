@@ -144,6 +144,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Optional structured detail (e.g. per-row validation errors), returned as `errors`. */
+    public details?: unknown,
   ) {
     super(message)
   }
@@ -167,7 +169,8 @@ export async function requireRole(req: Request, allowed: readonly string[]): Pro
 
 export function toJsonError(e: unknown): Response {
   if (e instanceof ApiError) {
-    return Response.json({ message: e.message }, { status: e.status })
+    const body = e.details === undefined ? { message: e.message } : { message: e.message, errors: e.details }
+    return Response.json(body, { status: e.status })
   }
   if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') {
     return Response.json({ message: 'Conflict' }, { status: 409 })

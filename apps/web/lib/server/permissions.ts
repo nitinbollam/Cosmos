@@ -41,7 +41,10 @@ export const MODULE_METADATA: Record<ModuleKey, { label: string; permissions: st
   crm: { label: 'CRM & Customers', permissions: ['crm.read', 'crm.write'] },
   quotes: { label: 'Quotes', permissions: ['quotes.read', 'quotes.write'] },
   dispatch: { label: 'Dispatch & Delivery', permissions: ['dispatch.read', 'dispatch.write'] },
-  finance: { label: 'Finance & Ledger', permissions: ['finance.read', 'finance.write'] },
+  finance: {
+    label: 'Finance & Ledger',
+    permissions: ['finance.read', 'finance.write', 'finance.reconcile', 'finance.reconcile.signoff', 'finance.reconcile.reopen'],
+  },
   reports: { label: 'Reports & Analytics', permissions: ['reports.read', 'reports.write'] },
   pos: { label: 'Point of Sale', permissions: ['pos.read', 'pos.write'] },
   notifications: { label: 'Notifications', permissions: ['notifications.read', 'notifications.write'] },
@@ -175,6 +178,16 @@ export function hasPermission(session: SessionUser | null | undefined, permissio
   if (permission === 'inventory.read' && perms.includes('wms.*')) return true
 
   return false
+}
+
+/**
+ * For sensitive actions that module wildcards must not grant: admins, or a user explicitly given
+ * exactly this permission. (`finance.*` would otherwise hand every sub-permission to every accountant.)
+ */
+export function hasExplicitPermission(session: SessionUser | null | undefined, permission: string): boolean {
+  if (!session) return false
+  if (session.role === 'SUPER_ADMIN' || session.role === 'TENANT_ADMIN') return true
+  return Array.isArray(session.permissions) && session.permissions.includes(permission)
 }
 
 export function assertPermission(session: SessionUser, permission: string | string[]) {

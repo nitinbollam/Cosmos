@@ -1,4 +1,6 @@
 import { AccountType, Prisma } from '@/generated/prisma-ledger'
+import { assertLedgerPeriodOpen, lockBankAccountsForGl } from './bank-period-lock'
+import { parseIsoDate } from './bank-statement-csv'
 import { ledgerDb } from './db'
 import { ApiError } from './session'
 
@@ -69,6 +71,8 @@ export type JournalLineInput = {
 export type CreateJournalEntryInput = {
   description: string
   fiscalPeriodClosed?: boolean
+  /** Optional YYYY-MM-DD accounting date (e.g. a bank-fee adjustment); defaults to now. */
+  postedAt?: string
   lines: JournalLineInput[]
 }
 
@@ -91,12 +95,19 @@ export async function createJournalDraft(tenantId: string, dto: CreateJournalEnt
   if (accounts.length !== accountIds.length) {
     throw new ApiError(400, 'One or more accounts are invalid for this tenant')
   }
+  let postedAt: Date | undefined
+  if (dto.postedAt !== undefined) {
+    postedAt = parseIsoDate(dto.postedAt) ?? undefined
+    if (!postedAt) throw new ApiError(400, 'postedAt must be a date in YYYY-MM-DD format')
+    await assertLedgerPeriodOpen(ledgerDb, tenantId, accountIds, postedAt)
+  }
 
   return ledgerDb.journalEntry.create({
     data: {
       tenantId,
       description: dto.description,
       fiscalPeriodClosed: dto.fiscalPeriodClosed ?? false,
+      ...(postedAt ? { postedAt } : {}),
       isPosted: false,
       lines: {
         create: decLines.map((l) => ({
@@ -115,11 +126,20 @@ export async function postJournalEntry(tenantId: string, id: string) {
   const entry = await getJournalEntry(tenantId, id)
   if (entry.isPosted) throw new ApiError(400, 'Already posted')
   assertJournalBalanced(entry.lines.map((l) => ({ debit: l.debit, credit: l.credit })))
-  return ledgerDb.journalEntry.update({
-    where: { id },
-    data: { isPosted: true },
-    include: { lines: { include: { account: true } } },
-  })
+  // A draft keeps its creation date, so posting it later can land inside a signed-off bank
+  // reconciliation period; that would silently change a signed-off book balance.
+  await ledgerDb.$transaction(
+    async (tx) => {
+      const accountIds = [...new Set(entry.lines.map((l) => l.accountId))]
+      // Same per-account lock as sign-off, so a posting and a sign-off of that bank never interleave.
+      await lockBankAccountsForGl(tx, tenantId, accountIds)
+      await assertLedgerPeriodOpen(tx, tenantId, accountIds, entry.postedAt)
+      const res = await tx.journalEntry.updateMany({ where: { id, tenantId, isPosted: false }, data: { isPosted: true } })
+      if (res.count !== 1) throw new ApiError(400, 'Already posted')
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  )
+  return getJournalEntry(tenantId, id)
 }
 
 export function listChartAccounts(tenantId: string) {

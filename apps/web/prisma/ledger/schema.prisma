@@ -44,34 +44,43 @@ model JournalEntry {
 }
 
 model JournalLine {
-  id        String       @id @default(cuid())
-  entryId   String
-  accountId String
-  memo      String?
-  debit     Decimal      @default(0)
-  credit    Decimal      @default(0)
-  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  account   ChartAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  id         String                        @id @default(cuid())
+  entryId    String
+  accountId  String
+  memo       String?
+  debit      Decimal                       @default(0)
+  credit     Decimal                       @default(0)
+  entry      JournalEntry                  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account    ChartAccount                  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  matchItems BankReconciliationMatchItem[]
 
   @@index([entryId])
   @@index([accountId])
 }
 
 model BankAccount {
-  id                        String              @id @default(cuid())
+  id                        String                @id @default(cuid())
   tenantId                  String
   name                      String
   accountNumber             String?
   chartAccountId            String?
-  currentBalance            Decimal             @default(0)
+  currentBalance            Decimal               @default(0)
   plaidAccessTokenEncrypted String?
   plaidItemId               String?
   plaidSyncCursor           String?
-  isActive                  Boolean             @default(true)
-  createdAt                 DateTime            @default(now())
-  updatedAt                 DateTime            @updatedAt
+  isActive                  Boolean               @default(true)
+  /// ISO 4217 code of the account's statements.
+  currency                  String                @default("USD")
+  /// Book and statement items before this date are treated as already cleared.
+  openingBalanceDate        DateTime?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
   statementLines            BankStatementLine[]
+  reconciliations           BankReconciliation[]
+  statementImports          BankStatementImport[]
 
+  /// One GL cash account per bank account, so the book side is never shared.
+  @@unique([tenantId, chartAccountId])
   @@index([tenantId])
 }
 
@@ -146,21 +155,157 @@ model BudgetLine {
 }
 
 model BankStatementLine {
-  id             String      @id @default(cuid())
-  tenantId       String
-  bankAccountId  String
-  postedAt       DateTime
-  description    String
-  amount         Decimal
-  reference      String?
-  reconciled     Boolean     @default(false)
-  reconciledAt   DateTime?
-  journalEntryId String?
-  bankAccount    BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  id              String                        @id @default(cuid())
+  tenantId        String
+  bankAccountId   String
+  postedAt        DateTime
+  description     String
+  amount          Decimal
+  reference       String?
+  reconciled      Boolean                       @default(false)
+  reconciledAt    DateTime?
+  journalEntryId  String?
+  /// sha256 of account|date|amount|reference|description|occurrence; null on rows imported before dedupe.
+  dedupeKey       String?
+  source          BankStatementSource           @default(API)
+  importId        String?
+  /// Set when the line's period is signed off; cleared only by an audited reopen.
+  lockedAt        DateTime?
+  createdAt       DateTime                      @default(now())
+  bankAccount     BankAccount                   @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  statementImport BankStatementImport?          @relation(fields: [importId], references: [id], onDelete: Restrict)
+  matchItems      BankReconciliationMatchItem[]
 
+  @@unique([tenantId, bankAccountId, dedupeKey])
   @@index([tenantId, bankAccountId])
   @@index([tenantId, reconciled])
   @@index([tenantId, postedAt])
+  @@index([importId])
+}
+
+enum BankStatementSource {
+  API
+  CSV
+  PLAID
+}
+
+enum BankReconciliationStatus {
+  UNRECONCILED
+  IN_PROGRESS
+  SIGNED_OFF
+}
+
+enum BankMatchType {
+  AUTO
+  MANUAL
+}
+
+model BankStatementImport {
+  id               String              @id @default(cuid())
+  tenantId         String
+  bankAccountId    String
+  reconciliationId String?
+  fileName         String?
+  /// sha256 of the normalized file text; the same file can only be imported once per account.
+  fileSha256       String
+  rowCount         Int
+  importedCount    Int
+  duplicateCount   Int
+  importedById     String
+  createdAt        DateTime            @default(now())
+  bankAccount      BankAccount         @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  lines            BankStatementLine[]
+
+  @@unique([tenantId, bankAccountId, fileSha256])
+  @@index([tenantId, bankAccountId])
+}
+
+/// One statement period of one bank account. Never deleted; sign-off and reopen are versioned.
+model BankReconciliation {
+  id                      String                    @id @default(cuid())
+  tenantId                String
+  bankAccountId           String
+  /// Inclusive UTC dates (stored at 00:00Z).
+  periodStart             DateTime
+  periodEnd               DateTime
+  statementOpeningBalance Decimal
+  statementClosingBalance Decimal
+  status                  BankReconciliationStatus  @default(UNRECONCILED)
+  dateWindowDays          Int                       @default(3)
+  createdById             String
+  preparedById            String?
+  preparedAt              DateTime?
+  signedOffById           String?
+  signedOffAt             DateTime?
+  bookBalanceSnapshot     Decimal?
+  adjustedBookSnapshot    Decimal?
+  adjustedBankSnapshot    Decimal?
+  /// Optimistic lock: bumped by every mutation; sign-off must present the current value.
+  version                 Int                       @default(0)
+  reopenedCount           Int                       @default(0)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  bankAccount             BankAccount               @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  matches                 BankReconciliationMatch[]
+  events                  BankReconciliationEvent[]
+
+  @@unique([tenantId, bankAccountId, periodEnd])
+  @@index([tenantId, bankAccountId, status])
+}
+
+/// A group of statement lines matched to a group of book lines (1:1, 1:n, n:1 or n:m) with equal totals.
+model BankReconciliationMatch {
+  id               String                        @id @default(cuid())
+  tenantId         String
+  reconciliationId String
+  type             BankMatchType
+  createdById      String
+  createdAt        DateTime                      @default(now())
+  /// Unmatch keeps the row for the audit trail.
+  unmatchedAt      DateTime?
+  unmatchedById    String?
+  unmatchReason    String?
+  reconciliation   BankReconciliation            @relation(fields: [reconciliationId], references: [id], onDelete: Restrict)
+  items            BankReconciliationMatchItem[]
+
+  @@index([tenantId, reconciliationId])
+}
+
+model BankReconciliationMatchItem {
+  id                    String                  @id @default(cuid())
+  tenantId              String
+  matchId               String
+  statementLineId       String?
+  journalLineId         String?
+  /// Signed bank-convention amount (+ inflow), copied at match time.
+  amount                Decimal
+  /// Equal to statementLineId/journalLineId while the match is active, null after unmatch.
+  /// The unique index makes concurrent double-matching of one line impossible.
+  activeStatementLineId String?                 @unique
+  activeJournalLineId   String?                 @unique
+  match                 BankReconciliationMatch @relation(fields: [matchId], references: [id], onDelete: Restrict)
+  statementLine         BankStatementLine?      @relation(fields: [statementLineId], references: [id], onDelete: Restrict)
+  journalLine           JournalLine?            @relation(fields: [journalLineId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, matchId])
+  @@index([statementLineId])
+  @@index([journalLineId])
+}
+
+/// Append-only reconciliation audit trail, written in the same transaction as the change.
+model BankReconciliationEvent {
+  id               String              @id @default(cuid())
+  tenantId         String
+  bankAccountId    String
+  reconciliationId String?
+  action           String
+  userId           String?
+  metadata         Json?
+  createdAt        DateTime            @default(now())
+  reconciliation   BankReconciliation? @relation(fields: [reconciliationId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, reconciliationId, createdAt])
+  @@index([tenantId, bankAccountId, createdAt])
 }
 
 enum AssetStatus {

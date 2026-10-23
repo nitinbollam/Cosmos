@@ -16,6 +16,8 @@ const STATUS: Record<string, { bg: string; text: string }> = {
   OPEN: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
   ASSIGNED: { bg: 'var(--c-accent-dim)', text: 'var(--c-primary)' },
   IN_PROGRESS: { bg: 'var(--c-warning-soft)', text: 'var(--c-warning)' },
+  UNRECONCILED: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
+  SIGNED_OFF: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
   COMPLETED: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
   WON: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
   LOST: { bg: 'var(--c-danger-soft)', text: 'var(--c-danger)' },
