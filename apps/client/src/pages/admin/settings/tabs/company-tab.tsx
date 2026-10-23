@@ -384,14 +384,19 @@ function FinanceSettingsCard() {
 
 function TaxSettingsCard() {
   const qc = useQueryClient()
-  const taxQ = useQuery<{ salesTaxRate: number; salesTaxPercent: number }>({
+  const taxQ = useQuery<{
+    status: 'configured' | 'unconfirmed' | 'missing' | 'invalid'
+    confirmedAt: string | null
+    salesTaxRate: number | null
+    salesTaxPercent: number | null
+  }>({
     queryKey: ['tax-settings'],
     queryFn: () => api.get('/tax/settings'),
   })
   const [percent, setPercent] = useState('')
 
   useEffect(() => {
-    if (taxQ.data) setPercent(String(taxQ.data.salesTaxPercent))
+    if (taxQ.data?.salesTaxPercent != null) setPercent(String(taxQ.data.salesTaxPercent))
   }, [taxQ.data])
 
   const saveMut = useMutation({
@@ -408,6 +413,15 @@ function TaxSettingsCard() {
       <p className="text-pleros-text-3 text-sm mb-4">
         Applied to orders, quotes, and POS transactions for this tenant.
       </p>
+      {taxQ.data && taxQ.data.status !== 'configured' && (
+        <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300" role="alert">
+          {taxQ.data.status === 'unconfirmed'
+            ? 'This rate was carried over from an earlier default and has not been confirmed. Confirm or correct it below and save.'
+            : taxQ.data.status === 'invalid'
+              ? 'The stored sales tax rate is invalid. Orders, quotes and POS sales are blocked until you set a valid rate.'
+              : 'No sales tax rate is set. Orders, quotes and POS sales are blocked until you set one.'}
+        </div>
+      )}
       {taxQ.isLoading ? (
         <div className="skeleton h-10 w-48" />
       ) : (
@@ -431,7 +445,7 @@ function TaxSettingsCard() {
             />
           </div>
           <button type="submit" className="btn-primary" disabled={!valid || saveMut.isPending}>
-            {saveMut.isPending ? 'Saving…' : 'Save tax rate'}
+            {saveMut.isPending ? 'Saving…' : taxQ.data?.status === 'unconfirmed' ? 'Confirm tax rate' : 'Save tax rate'}
           </button>
         </form>
       )}

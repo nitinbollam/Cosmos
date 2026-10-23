@@ -63,3 +63,21 @@ model SavedReport {
   @@index([tenantId, userId])
   @@index([tenantId, type])
 }
+
+/// PLR-150: a violation of a cross-database invariant found by the nightly reconciliation job.
+/// The job only ever writes to this table; it never touches business tables.
+model ReconciliationFinding {
+  id          String    @id @default(cuid())
+  tenantId    String
+  ruleId      String
+  entityType  String
+  entityId    String
+  details     Json
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  @@unique([tenantId, ruleId, entityType, entityId])
+  @@index([tenantId, resolvedAt])
+  @@index([tenantId, ruleId])
+}

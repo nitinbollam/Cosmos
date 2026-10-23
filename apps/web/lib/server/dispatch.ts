@@ -1,18 +1,27 @@
+import { notifyAssigned, routeAssignedMessage, shouldNotify } from './assignment-push'
 import { Prisma, RouteStatus, StopStatus } from '@/generated/prisma-dispatch'
 import { dispatchDb } from './db'
 import { orderIdFromStopAddress } from './dispatch-order'
 import { podEvidenceProblem } from './pod-evidence'
 import { statusAfterAssign, statusAfterOutcome, unassignDriverProblem } from './route-assignment'
 import { buildStopItems, NO_ITEMS } from './route-stop-items'
+import { checkRouteStates, stopState } from './route-state'
 import { failureReasonProblem, normalizeFailureReason, podForDelivery, podWithFailure } from './stop-outcome'
 import * as crm from './crm'
 import * as orderOrchestration from './order-orchestration'
-import { inventoryDb, orderDb } from './db'
+import { crmDb, inventoryDb, orderDb } from './db'
 import { getAgeVerificationPolicy } from './compliance-age'
 import { ApiError } from './session'
+import { attemptOrQueue } from './deferred-work'
+import { parseDriverLocation } from './driver-scope'
 
-export function listRoutes(tenantId: string, date?: string, statuses?: RouteStatus[]) {
-  const where: Prisma.DeliveryRouteWhereInput = { tenantId, ...(statuses?.length ? { status: { in: statuses } } : {}) }
+export function listRoutes(tenantId: string, date?: string, statuses?: RouteStatus[], driverId?: string) {
+  const where: Prisma.DeliveryRouteWhereInput = {
+    tenantId,
+    ...(statuses?.length ? { status: { in: statuses } } : {}),
+    // A driver's list is their own routes only.
+    ...(driverId ? { driverId } : {}),
+  }
   if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const start = new Date(`${date}T00:00:00.000Z`)
     const end = new Date(`${date}T23:59:59.999Z`)
@@ -25,6 +34,8 @@ export function listRoutes(tenantId: string, date?: string, statuses?: RouteStat
     where,
     include: { stops: { orderBy: { sequence: 'asc' } } },
     orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'desc' }],
+    // A driver's history grows without bound; the app only needs the recent routes.
+    ...(driverId ? { take: 200 } : {}),
   })
 }
 
@@ -36,12 +47,23 @@ export function listRoutes(tenantId: string, date?: string, statuses?: RouteStat
 export async function getRouteDetail(tenantId: string, id: string) {
   const route = await getRoute(tenantId, id)
   const orderIds = [...new Set(route.stops.map((s) => orderIdFromStopAddress(s.address)).filter((x): x is string => !!x))]
-  if (orderIds.length === 0) return { ...route, stops: route.stops.map((s) => ({ ...s, ...NO_ITEMS })) }
+  if (orderIds.length === 0) return { ...route, stops: route.stops.map((s) => ({ ...s, ...NO_ITEMS, contact: null })) }
 
   const orders = await orderDb.order.findMany({
     where: { tenantId, id: { in: orderIds } },
-    select: { id: true, lineItems: { select: { skuId: true, quantity: true } } },
+    select: { id: true, customerId: true, notes: true, lineItems: { select: { skuId: true, quantity: true } } },
   })
+  // Who to call at the door: the customer's phone, and any note left on the order.
+  const customerIds = [...new Set(orders.map((o) => o.customerId))]
+  const customers = customerIds.length
+    ? await crmDb.customer.findMany({ where: { tenantId, id: { in: customerIds } }, select: { id: true, name: true, phone: true } })
+    : []
+  const contactByOrder = new Map(
+    orders.map((o) => {
+      const c = customers.find((x) => x.id === o.customerId)
+      return [o.id, { name: c?.name ?? null, phone: c?.phone ?? null, orderNotes: o.notes?.trim() || null }] as const
+    }),
+  )
   const skuIds = [...new Set(orders.flatMap((o) => o.lineItems.map((l) => l.skuId)))]
   const [skus, policy] = await Promise.all([
     inventoryDb.sKU.findMany({
@@ -58,7 +80,11 @@ export async function getRouteDetail(tenantId: string, id: string) {
     stops: route.stops.map((s) => {
       const orderId = orderIdFromStopAddress(s.address)
       const lines = orderId ? linesByOrder.get(orderId) : undefined
-      return { ...s, ...(lines ? buildStopItems(lines, skuMap, policy) : NO_ITEMS) }
+      return {
+        ...s,
+        ...(lines ? buildStopItems(lines, skuMap, policy) : NO_ITEMS),
+        contact: orderId ? (contactByOrder.get(orderId) ?? null) : null,
+      }
     }),
   }
 }
@@ -82,6 +108,9 @@ export async function createRoute(
 ) {
   const seqs = new Set(dto.stops.map((s) => s.sequence))
   if (seqs.size !== dto.stops.length) throw new ApiError(400, 'Duplicate stop sequence')
+  // One state per route: excise, stamps and van stock are state-specific (PLR-172).
+  const stateCheck = checkRouteStates(dto.stops.map((s) => stopState(s.address)))
+  if (stateCheck.problem) throw new ApiError(400, stateCheck.problem)
   let scheduledFor: Date | undefined
   if (dto.scheduledFor?.trim()) {
     const d = new Date(dto.scheduledFor)
@@ -128,6 +157,13 @@ function addressFromOrder(
   }
 }
 
+/** Put the customer's state on the stop when the shipping address does not carry one. */
+function withState(address: Record<string, unknown>, customerState?: string | null): Record<string, unknown> {
+  if (stopState(address)) return address
+  const state = stopState({}, customerState)
+  return state ? { ...address, state } : address
+}
+
 export async function createRouteFromOrders(
   tenantId: string,
   dto: { orderIds: string[]; name?: string; scheduledFor?: string },
@@ -143,11 +179,13 @@ export async function createRouteFromOrders(
   }
 
   const customerNames = new Map<string, string>()
+  const customerStates = new Map<string, string | null>()
   for (const o of orders) {
     if (!customerNames.has(o.customerId)) {
       try {
         const c = await crm.getCustomer(tenantId, o.customerId)
         customerNames.set(o.customerId, c.name)
+        customerStates.set(o.customerId, c.primaryState ?? null)
       } catch {
         customerNames.set(o.customerId, o.customerId)
       }
@@ -156,7 +194,7 @@ export async function createRouteFromOrders(
 
   const stops = orders.map((o, i) => ({
     sequence: i + 1,
-    address: addressFromOrder(o, customerNames.get(o.customerId)),
+    address: withState(addressFromOrder(o, customerNames.get(o.customerId)), customerStates.get(o.customerId)),
   }))
 
   return createRoute(tenantId, {
@@ -176,7 +214,11 @@ export async function assignRouteDriver(tenantId: string, id: string, driverId: 
     // ASSIGNED until the driver delivers or fails a stop; a route already under way stays IN_PROGRESS.
     data: { driverId, status: statusAfterAssign(route.status) as RouteStatus },
   })
-  return getRouteDetail(tenantId, id)
+  const detail = await getRouteDetail(tenantId, id)
+  if (shouldNotify(route.driverId, driverId)) {
+    notifyAssigned(tenantId, driverId, routeAssignedMessage({ id, name: route.name, stopCount: detail.stops?.length }))
+  }
+  return detail
 }
 
 /**
@@ -202,29 +244,26 @@ export async function unassignRouteDriver(tenantId: string, id: string) {
   return getRouteDetail(tenantId, id)
 }
 
-export async function recordDriverLocation(
-  tenantId: string,
-  userId: string,
-  body: { lat: number; lng: number; timestamp?: string; routeId?: string },
-) {
-  const ts = body.timestamp ? new Date(body.timestamp) : new Date()
-  const rid = body.routeId?.trim()
-  if (rid) {
-    const route = await dispatchDb.deliveryRoute.findFirst({ where: { id: rid, tenantId } })
-    if (!route) throw new ApiError(404, 'Route not found')
-    if (!route.driverId || route.driverId !== userId) {
-      throw new ApiError(403, 'Location allowed only for the assigned driver')
-    }
-    await dispatchDb.deliveryRoute.update({
-      where: { id: rid },
-      data: {
-        lastKnownLat: body.lat,
-        lastKnownLng: body.lng,
-        lastKnownAt: ts,
-      },
-    })
+/**
+ * Stores a driver's position on their route. Only the assigned driver may report, and only while the
+ * route is ASSIGNED or IN_PROGRESS (a route goes IN_PROGRESS at its first outcome, but the driver is
+ * on the road before that). A ping for a finished or other driver's route is rejected, not ignored.
+ */
+export async function recordDriverLocation(tenantId: string, userId: string, body: unknown) {
+  const fix = parseDriverLocation(body)
+  const route = await dispatchDb.deliveryRoute.findFirst({ where: { id: fix.routeId, tenantId } })
+  if (!route) throw new ApiError(404, 'Route not found')
+  if (!route.driverId || route.driverId !== userId) {
+    throw new ApiError(403, 'Location allowed only for the assigned driver')
   }
-  return { ok: true }
+  if (route.status !== RouteStatus.ASSIGNED && route.status !== RouteStatus.IN_PROGRESS) {
+    throw new ApiError(409, 'Location is only recorded while the route is active')
+  }
+  await dispatchDb.deliveryRoute.update({
+    where: { id: route.id },
+    data: { lastKnownLat: fix.lat, lastKnownLng: fix.lng, lastKnownAt: fix.timestamp },
+  })
+  return { ok: true, recordedAt: fix.timestamp.toISOString() }
 }
 
 export async function reorderRouteStops(tenantId: string, routeId: string, stopIds: string[]) {
@@ -377,7 +416,10 @@ export async function markStopDelivered(
   })
 
   if (orderId) {
-    await orderOrchestration.onDeliveryStopDelivered(tenantId, orderId).catch(() => undefined)
+    // The stop is delivered. Moving the order to DELIVERED is retried if it fails, never dropped.
+    await attemptOrQueue({ tenantId, kind: 'DELIVERY_ADVANCE', sourceType: 'Order', sourceId: orderId }, () =>
+      orderOrchestration.onDeliveryStopDelivered(tenantId, orderId),
+    )
   }
 
   await updateRouteAfterOutcome(routeId)

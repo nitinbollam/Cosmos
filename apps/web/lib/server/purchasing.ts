@@ -1,4 +1,4 @@
-import { Prisma, PurchaseOrderStatus } from '@/generated/prisma-purchasing'
+import { Prisma, PurchaseOrderStatus, VendorBillStatus } from '@/generated/prisma-purchasing'
 import { purchasingDb } from './db'
 import { ApiError } from './session'
 import * as poReceiving from './po-receiving'
@@ -45,12 +45,28 @@ export async function getPurchaseOrder(tenantId: string, id: string) {
   return row
 }
 
+/** A PO plus its current supplier bill, so the PO page can show it (or offer to create it). */
+export async function getPurchaseOrderDetail(tenantId: string, id: string) {
+  const po = await getPurchaseOrder(tenantId, id)
+  const bill = await purchasingDb.vendorBill.findFirst({
+    where: { tenantId, purchaseOrderId: id, status: { not: VendorBillStatus.VOID } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, billNumber: true, totalAmount: true, status: true },
+  })
+  return { ...po, supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
+}
+
 export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
   const supplier = await purchasingDb.supplier.findFirst({ where: { id: dto.supplierId, tenantId } })
   if (!supplier) throw new ApiError(400, 'Unknown supplier for tenant')
 
   const lineNos = new Set(dto.lines.map((l) => l.lineNo))
   if (lineNos.size !== dto.lines.length) throw new ApiError(400, 'Duplicate line numbers')
+  for (const l of dto.lines) {
+    if (l.unitCost != null && (typeof l.unitCost !== 'number' || !Number.isFinite(l.unitCost) || l.unitCost < 0)) {
+      throw new ApiError(400, `Line ${l.lineNo}: unit cost must be a number of 0 or more`)
+    }
+  }
 
   const po = await purchasingDb.purchaseOrder.create({
     data: {
@@ -183,6 +199,8 @@ export async function receiveGoods(
   return {
     ...result.purchaseOrder,
     inventoryErrors: result.inventoryErrors,
+    bill: result.bill,
+    billError: result.billError,
   }
 }
 

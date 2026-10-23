@@ -1,7 +1,8 @@
 import { AccountType, Prisma } from '@/generated/prisma-ledger'
 import { assertLedgerPeriodOpen, lockBankAccountsForGl } from './bank-period-lock'
-import { parseIsoDate } from './bank-statement-csv'
-import { ledgerDb } from './db'
+import { addDays, parseIsoDate } from './bank-statement-csv'
+import { ledgerDb, tenantDb } from './db'
+import { periodRange } from './period-bounds'
 import { ApiError } from './session'
 
 function toDecimal(n: number): Prisma.Decimal {
@@ -97,8 +98,11 @@ export async function createJournalDraft(tenantId: string, dto: CreateJournalEnt
   }
   let postedAt: Date | undefined
   if (dto.postedAt !== undefined) {
-    postedAt = parseIsoDate(dto.postedAt) ?? undefined
-    if (!postedAt) throw new ApiError(400, 'postedAt must be a date in YYYY-MM-DD format')
+    const day = parseIsoDate(dto.postedAt)
+    if (!day) throw new ApiError(400, 'postedAt must be a date in YYYY-MM-DD format')
+    // Noon UTC is the same calendar date from UTC-11 to UTC+11, so the tenant-zone trial balance
+    // (PLR-156) and the UTC-dated bank reconciliation both put the entry on the date entered.
+    postedAt = addDays(day, 0.5)
     await assertLedgerPeriodOpen(ledgerDb, tenantId, accountIds, postedAt)
   }
 
@@ -200,73 +204,82 @@ export type TrialBalanceOptions = {
   quarter?: number
 }
 
+export type TrialBalanceRow = {
+  accountCode: string
+  accountName: string
+  type: string
+  /** Exact sums rounded for display; use the *Exact strings when comparing or posting. */
+  debits: number
+  credits: number
+  netBalance: number
+  debitsExact: string
+  creditsExact: string
+  netBalanceExact: string
+}
+
+/**
+ * Trial balance for a period in the TENANT's time zone (PLR-156). Totals are summed by the database
+ * and added as exact decimals - no per-line floating point - and the period is a half-open UTC
+ * interval so adjacent periods neither overlap nor leave gaps. A bare year means the whole year.
+ */
 export async function trialBalance(
   tenantId: string,
   year: number,
   monthOrOpts?: number | TrialBalanceOptions,
-) {
-  let start: Date
-  let end: Date
+): Promise<TrialBalanceRow[]> {
+  const org = await tenantDb.tenantOrganization.findUnique({
+    where: { id: tenantId },
+    select: { timeZone: true },
+  })
+  const tz = org?.timeZone ?? 'Etc/UTC'
 
+  let range
   if (typeof monthOrOpts === 'object' && monthOrOpts !== null) {
-    const opts = monthOrOpts
-    const y = opts.year || year
-    const pType = opts.periodType ?? 'MONTHLY'
-    if (pType === 'YEARLY') {
-      start = new Date(y, 0, 1)
-      end = new Date(y, 11, 31, 23, 59, 59, 999)
-    } else if (pType === 'QUARTERLY') {
-      const q = Math.max(1, Math.min(4, opts.quarter ?? 1))
-      const startMonth = (q - 1) * 3
-      start = new Date(y, startMonth, 1)
-      end = new Date(y, startMonth + 3, 0, 23, 59, 59, 999)
-    } else {
-      const m = Math.max(1, Math.min(12, opts.month ?? 1))
-      start = new Date(y, m - 1, 1)
-      end = new Date(y, m, 0, 23, 59, 59, 999)
-    }
+    const y = monthOrOpts.year || year
+    range = periodRange(tz, y, monthOrOpts.periodType ?? 'MONTHLY', {
+      month: monthOrOpts.month,
+      quarter: monthOrOpts.quarter,
+    })
+  } else if (typeof monthOrOpts === 'number') {
+    range = periodRange(tz, year, 'MONTHLY', { month: monthOrOpts })
   } else {
-    const m = typeof monthOrOpts === 'number' ? monthOrOpts : 1
-    start = new Date(year, m - 1, 1)
-    end = new Date(year, m, 0, 23, 59, 59, 999)
+    range = periodRange(tz, year, 'YEARLY')
   }
 
-  const entries = await ledgerDb.journalEntry.findMany({
+  const sums = await ledgerDb.journalLine.groupBy({
+    by: ['accountId'],
     where: {
-      tenantId,
-      isPosted: true,
-      postedAt: { gte: start, lte: end },
+      entry: { tenantId, isPosted: true, postedAt: { gte: range.start, lt: range.endExclusive } },
     },
-    include: { lines: { include: { account: true } } },
+    _sum: { debit: true, credit: true },
   })
+  if (sums.length === 0) return []
 
-  const map = new Map<
-    string,
-    { accountCode: string; accountName: string; type: string; debits: number; credits: number }
-  >()
+  const accounts = await ledgerDb.chartAccount.findMany({
+    where: { tenantId, id: { in: sums.map((s) => s.accountId) } },
+  })
+  const byId = new Map(accounts.map((a) => [a.id, a]))
 
-  for (const e of entries) {
-    for (const l of e.lines) {
-      const a = l.account
-      if (!map.has(a.id)) {
-        map.set(a.id, {
+  return sums
+    .flatMap((s) => {
+      const a = byId.get(s.accountId)
+      if (!a) return []
+      const debits = s._sum.debit ?? new Prisma.Decimal(0)
+      const credits = s._sum.credit ?? new Prisma.Decimal(0)
+      const net = debits.minus(credits)
+      return [
+        {
           accountCode: a.code,
           accountName: a.name,
           type: a.type,
-          debits: 0,
-          credits: 0,
-        })
-      }
-      const row = map.get(a.id)!
-      row.debits += Number(l.debit)
-      row.credits += Number(l.credit)
-    }
-  }
-
-  return [...map.values()]
+          debits: debits.toNumber(),
+          credits: credits.toNumber(),
+          netBalance: net.toNumber(),
+          debitsExact: debits.toFixed(2),
+          creditsExact: credits.toFixed(2),
+          netBalanceExact: net.toFixed(2),
+        },
+      ]
+    })
     .sort((x, y) => x.accountCode.localeCompare(y.accountCode))
-    .map((r) => ({
-      ...r,
-      netBalance: r.debits - r.credits,
-    }))
 }

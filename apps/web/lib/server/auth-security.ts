@@ -1,9 +1,8 @@
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 /**
- * Password policy + lightweight in-memory rate limiting for auth endpoints.
- * The limiter is per-process (fixed window); enough to stop credential
- * stuffing on a single node. Swap for Redis when running multiple replicas.
+ * Password policy + shared rate limiting for auth endpoints.
  */
 
 const MIN_PASSWORD_LENGTH = 10
@@ -20,30 +19,67 @@ export function assertPasswordPolicy(password: string): void {
   }
 }
 
+/**
+ * Shared fixed-window limiter (PLR-160).
+ *
+ * Counters live in the auth database (RateLimitBucket), updated with ONE atomic upsert, so every
+ * server instance sees the same count and counts survive restarts. If the database is unreachable
+ * the limiter degrades to a per-process in-memory window (logged, with a metric) instead of failing
+ * logins - availability over strictness, but never silently.
+ */
 type WindowEntry = { count: number; resetAt: number }
-const windows = new Map<string, WindowEntry>()
+const fallbackWindows = new Map<string, WindowEntry>()
+const SWEEP_EVERY = 200
+let calls = 0
 
-function sweepWindows() {
-  if (windows.size < 10_000) return
-  const now = Date.now()
-  for (const [k, v] of windows) {
-    if (v.resetAt <= now) windows.delete(k)
+function fallbackHit(key: string, windowMs: number, now: number): WindowEntry {
+  if (fallbackWindows.size > 10_000) {
+    for (const [k, v] of fallbackWindows) if (v.resetAt <= now) fallbackWindows.delete(k)
   }
-}
-
-/** Throws 429 when `key` exceeds `limit` requests within `windowMs`. */
-export function rateLimit(key: string, limit: number, windowMs: number): void {
-  const now = Date.now()
-  const entry = windows.get(key)
+  const entry = fallbackWindows.get(key)
   if (!entry || entry.resetAt <= now) {
-    sweepWindows()
-    windows.set(key, { count: 1, resetAt: now + windowMs })
-    return
+    const fresh = { count: 1, resetAt: now + windowMs }
+    fallbackWindows.set(key, fresh)
+    return fresh
   }
   entry.count += 1
+  return entry
+}
+
+async function storeHit(key: string, windowMs: number, now: number): Promise<WindowEntry> {
+  const { authDb } = await import('./db')
+  const resetAt = BigInt(now + windowMs)
+  const nowMs = BigInt(now)
+  const rows = await authDb.$queryRaw<Array<{ count: number | bigint; resetAtMs: number | bigint }>>`
+    INSERT INTO "RateLimitBucket" ("key", "count", "resetAtMs")
+    VALUES (${key}, 1, ${resetAt})
+    ON CONFLICT ("key") DO UPDATE SET
+      "count" = CASE WHEN "RateLimitBucket"."resetAtMs" <= ${nowMs} THEN 1 ELSE "RateLimitBucket"."count" + 1 END,
+      "resetAtMs" = CASE WHEN "RateLimitBucket"."resetAtMs" <= ${nowMs} THEN ${resetAt} ELSE "RateLimitBucket"."resetAtMs" END
+    RETURNING "count", "resetAtMs"`
+  const row = rows[0]
+  if (++calls % SWEEP_EVERY === 0) {
+    void authDb.rateLimitBucket.deleteMany({ where: { resetAtMs: { lte: nowMs } } }).catch(swallowed('auth-security.storeHit', { level: 'warn' }))
+  }
+  return { count: Number(row.count), resetAt: Number(row.resetAtMs) }
+}
+
+/** Throws 429 (with Retry-After) when `key` exceeds `limit` requests within `windowMs`. */
+export async function rateLimit(key: string, limit: number, windowMs: number): Promise<void> {
+  const now = Date.now()
+  let entry: WindowEntry
+  try {
+    entry = await storeHit(key, windowMs, now)
+  } catch (err) {
+    console.error('[rate-limit] shared store unavailable, using in-memory fallback:', err instanceof Error ? err.message : err)
+    console.log('[metric] rate_limit_store_errors 1')
+    entry = fallbackHit(key, windowMs, now)
+  }
   if (entry.count > limit) {
     const retryAfterSec = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
-    throw new ApiError(429, `Too many attempts. Try again in ${retryAfterSec}s`)
+    throw new ApiError(429, `Too many attempts. Try again in ${retryAfterSec}s`, {
+      'Retry-After': String(retryAfterSec),
+    })
   }
 }
 
@@ -65,6 +101,9 @@ export function clientIp(req: Request): string {
   return req.headers.get('x-real-ip')?.trim() || 'unknown'
 }
 
-export function resetRateLimits(): void {
-  windows.clear()
+/** Test helper: clear shared and in-memory counters. */
+export async function resetRateLimits(): Promise<void> {
+  fallbackWindows.clear()
+  const { authDb } = await import('./db')
+  await authDb.rateLimitBucket.deleteMany({})
 }

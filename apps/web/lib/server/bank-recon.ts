@@ -7,7 +7,7 @@ import { ApiError } from './session'
 
 /** Legacy JSON contract returns numbers; the sums behind them are Decimal. */
 function toNum(v: Prisma.Decimal): number {
-  return Number(v.toFixed(2))
+  return Number(v.toFixed(2)) // money-ok: legacy JSON contract returns numbers; the sum is Decimal
 }
 
 /** Plaid credentials and sync state stay on the server; API responses never include them. */
@@ -98,7 +98,7 @@ export async function updateBankAccount(tenantId: string, id: string, dto: BankA
   }
   if (!Object.keys(data).length) throw new ApiError(400, 'Nothing to update')
   return ledgerDb.$transaction(async (tx) => {
-    const updated = await tx.bankAccount.update({ where: { id }, data, omit: SERVER_ONLY_BANK_FIELDS })
+    const updated = await tx.bankAccount.update({ where: { id, tenantId }, data, omit: SERVER_ONLY_BANK_FIELDS })
     await tx.bankReconciliationEvent.create({
       data: {
         tenantId,
@@ -137,7 +137,7 @@ export async function importStatementLines(
       return { row: i + 1, postedAt: row.postedAt, description: row.description, amount: row.amount, reference: row.reference }
     }),
   )
-  if (errors.length) throw new ApiError(400, `${errors.length} line(s) failed validation; nothing was imported`, errors)
+  if (errors.length) throw new ApiError(400, `${errors.length} line(s) failed validation; nothing was imported`, undefined, errors)
 
   const keyed = withDedupeKeys(bankAccountId, valid)
   try {

@@ -47,6 +47,8 @@ model OrderLineItem {
   quantityAllocated   Int      @default(0)
   quantityBackordered Int      @default(0)
   returnedQty         Int      @default(0)
+  /// Units already billed on an invoice (PLR-155); lets follow-up shipments price per line.
+  quantityInvoiced    Int      @default(0)
   fulfillmentType     String   @default("STOCK")
   supplierId          String?
   dropShipPoId        String?
@@ -79,6 +81,32 @@ model BackorderLine {
 
   @@index([tenantId, status])
   @@index([tenantId, skuId, warehouseId])
+  @@index([orderId])
+}
+
+/// Records that a fulfillment task's short picks were moved to backorder for a line, so a retried
+/// dispatch does not move them twice. Written in the same transaction as the quantity changes.
+model BackorderMove {
+  id                String   @id @default(cuid())
+  tenantId          String
+  fulfillmentTaskId String
+  orderLineItemId   String
+  createdAt         DateTime @default(now())
+
+  @@unique([tenantId, fulfillmentTaskId, orderLineItemId])
+}
+
+/// Records that a fulfillment task has been invoiced, in the same transaction as the invoice
+/// change, so a retried dispatch does not bill the same shipment twice.
+model ShipmentInvoice {
+  id                String   @id @default(cuid())
+  tenantId          String
+  fulfillmentTaskId String
+  orderId           String
+  invoiceId         String
+  createdAt         DateTime @default(now())
+
+  @@unique([tenantId, fulfillmentTaskId])
   @@index([orderId])
 }
 
@@ -231,4 +259,58 @@ model OrderShipment {
 
   @@index([tenantId, orderId])
   @@index([tenantId, status])
+}
+
+enum PostingJobKind {
+  INVOICE_JOURNAL
+  INVOICE_EXTENSION_JOURNAL
+  COGS_JOURNAL
+  COGS_REVERSAL_JOURNAL
+  CREDIT_MEMO_JOURNAL
+  AR_PAYMENT_JOURNAL
+  AP_PAYMENT_JOURNAL
+  PO_RECEIPT_JOURNAL
+  EXPENSE_APPROVAL_JOURNAL
+  EXPENSE_PAID_JOURNAL
+  GIFT_CARD_ISSUE_JOURNAL
+  GIFT_CARD_REDEEM_JOURNAL
+  STOCK_WRITE_OFF_JOURNAL
+  STOCK_FOUND_JOURNAL
+  INVOICE_SYNC
+  CREDIT_RELEASE
+  BACKORDER_FILL
+  DELIVERY_ADVANCE
+  ORDER_CANCEL
+}
+
+enum PostingJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  DEAD
+}
+
+/// Transactional outbox for general-ledger postings. Written in the same transaction as the
+/// business change; a worker posts to the ledger database asynchronously with retries.
+model PostingJob {
+  id             String           @id @default(cuid())
+  tenantId       String
+  kind           PostingJobKind
+  sourceType     String
+  sourceId       String
+  variant        String           @default("")
+  dedupeKey      String           @unique
+  payload        Json
+  status         PostingJobStatus @default(PENDING)
+  attempts       Int              @default(0)
+  nextAttemptAt  DateTime         @default(now())
+  leaseUntil     DateTime?
+  lastError      String?
+  journalEntryId String?
+  createdAt      DateTime         @default(now())
+  doneAt         DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, status])
+  @@index([tenantId, sourceType, sourceId])
 }

@@ -3,9 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 import { PlerosLogo } from '@/components/pleros-logo'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
-import { axiosErr, isEmailVerificationRequired } from '@/lib/axios-error'
+import { axiosErr, isEmailVerificationRequired, isUnauthorized } from '@/lib/axios-error'
 import { emitStorefrontAuthChanged } from '@/lib/auth-events'
 import { setTokens } from '@/lib/auth-session'
+import { tenantPromptOf, tokensOf, type LoginResponse, type LoginTokens, type TenantPrompt } from '@/lib/login-flow'
+import { TenantPicker } from '@/components/auth/tenant-picker'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -17,6 +19,28 @@ export default function LoginPage() {
   const [resendSent, setResendSent] = useState(false)
   const [resendBusy, setResendBusy] = useState(false)
   const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null)
+  const [pick, setPick] = useState<TenantPrompt | null>(null)
+
+  function finish(r: LoginTokens) {
+    setTokens(r.accessToken, r.refreshToken)
+    emitStorefrontAuthChanged()
+    const next = new URLSearchParams(window.location.search).get('next')
+    navigate(next?.startsWith('/') ? next : '/admin')
+  }
+
+  async function choose(tenantId: string) {
+    if (!pick) return
+    setErr(null)
+    setLoading(true)
+    try {
+      finish(await api.post<LoginTokens>('/auth/login/select', { selectionToken: pick.selectionToken, tenantId }))
+    } catch (e) {
+      if (isUnauthorized(e)) setPick(null)
+      setErr(isEmailVerificationRequired(e) ? 'Please verify your email before signing in.' : formatApiReachabilityError(e) || axiosErr(e))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -26,11 +50,13 @@ export default function LoginPage() {
     setDevVerifyUrl(null)
     setLoading(true)
     try {
-      const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
-      setTokens(r.accessToken, r.refreshToken)
-      emitStorefrontAuthChanged()
-      const next = new URLSearchParams(window.location.search).get('next')
-      navigate(next?.startsWith('/') ? next : '/admin')
+      const r = await api.post<LoginResponse>('/auth/login', { email, password })
+      const prompt = tenantPromptOf(r)
+      if (prompt) {
+        setPick(prompt)
+        return
+      }
+      finish(tokensOf(r))
     } catch (e) {
       if (isEmailVerificationRequired(e)) {
         setNeedsVerification(true)
@@ -74,6 +100,21 @@ export default function LoginPage() {
           </h1>
           <p className="bento-section-sub">Access your distribution command center</p>
         </div>
+        {pick ? (
+          <TenantPicker
+            email={email.trim()}
+            tenants={pick.tenants}
+            busy={loading}
+            error={err}
+            onPick={(id) => void choose(id)}
+            onBack={() => {
+              setPick(null)
+              setPassword('')
+              setErr(null)
+            }}
+          />
+        ) : (
+          <>
         <input className="pleros-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <input className="pleros-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {err && <p className="text-sm font-medium" style={{ color: 'var(--c-danger)' }}>{err}</p>}
@@ -122,6 +163,8 @@ export default function LoginPage() {
         <button type="submit" className="btn-primary w-full" disabled={loading}>
           {loading ? 'Signing in…' : 'Continue'}
         </button>
+          </>
+        )}
         <p className="text-center">
           <a href="/forgot-password" className="text-sm" style={{ color: 'var(--c-accent)' }}>
             Forgot password?

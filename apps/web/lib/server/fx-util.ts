@@ -1,6 +1,16 @@
-/** Convert a foreign-currency amount to tenant base currency using a captured rate. */
+import { Prisma } from '@/generated/prisma-order'
+
+/**
+ * Convert to the base currency. Done in decimal, rounded half away from zero to cents, so
+ * 1.005 -> 1.01 (binary floats and `toFixed` give 1.00). Returns a number for the callers that still
+ * take one; use `toBaseDecimal` where the result feeds more arithmetic.
+ */
+export function toBaseDecimal(amount: number | string | Prisma.Decimal, fxRateToBase: number | string | Prisma.Decimal): Prisma.Decimal {
+  return new Prisma.Decimal(String(amount)).times(String(fxRateToBase)).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+}
+
 export function toBaseAmount(amount: number, fxRateToBase: number): number {
-  return +(amount * fxRateToBase).toFixed(2)
+  return toBaseDecimal(amount, fxRateToBase).toNumber()
 }
 
 export function normalizeCurrency(code: string | undefined | null): string {

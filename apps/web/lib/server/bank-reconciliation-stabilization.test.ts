@@ -1,5 +1,5 @@
 // Must stay the first import: points every database at fresh temp files before ./db loads.
-import { assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases } from './test-support/isolated-databases'
+import { ISOLATED_SKIP, assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases } from './test-support/isolated-databases'
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { after, before, test } from 'node:test'
@@ -12,6 +12,9 @@ import { encryptSecret } from './crypto-util'
 import { authDb, ledgerDb, tenantDb } from './db'
 import { syncPlaidTransactions } from './plaid'
 import { invalidateUserSessionCache } from './session'
+
+/** Tests that need the isolated databases; skipped with the reason where they cannot exist (CI on Postgres). */
+const dbTest = (name: string, fn: () => void | Promise<void>) => test(name, { skip: ISOLATED_SKIP }, fn)
 
 /**
  * Regression tests for the stabilization findings F-1, F-2, F-3, F-5 and F-8 of
@@ -318,12 +321,14 @@ function interleaveAtLockCheck(during: () => Promise<unknown>) {
 }
 
 before(async () => {
+  if (ISOLATED_SKIP) return
   assertIsolated()
   await prepareIsolatedDatabases(['auth', 'tenant', 'ledger'])
   stubPlaid()
 })
 
 after(async () => {
+  if (ISOLATED_SKIP) return disposeIsolatedDatabases()
   globalThis.fetch = realFetch
   invalidateUserSessionCache()
   await disposeIsolatedDatabases()
@@ -332,7 +337,7 @@ after(async () => {
 // ---------------------------------------------------------------------------------------------
 // F-1 legacy summary opening balance
 
-test('F-1: new-workflow matching never changes the bank opening balance or the legacy summary tile', async () => {
+dbTest('F-1: new-workflow matching never changes the bank opening balance or the legacy summary tile', async () => {
   const t = await makeTenant('f1')
   await postCash(t, iso(new Date(p1Start.getTime() - DAY)), 1000, t.accounts.equity, 'Opening balance')
   await postCash(t, P1.day(2), 250, t.accounts.ar, 'Receipt INV-1')
@@ -395,7 +400,7 @@ test('F-1: new-workflow matching never changes the bank opening balance or the l
 // ---------------------------------------------------------------------------------------------
 // F-2 Plaid sync and signed-off periods
 
-test('F-2: a Plaid transaction dated in a signed-off period is refused, the cursor holds, and reopen allows the retry', async () => {
+dbTest('F-2: a Plaid transaction dated in a signed-off period is refused, the cursor holds, and reopen allows the retry', async () => {
   const t = await makeTenant('f2')
   const bank = await newBank(t)
   const recon = await newRecon(t, bank, P1, '0.00', '0.00')
@@ -447,7 +452,7 @@ test('F-2: a Plaid transaction dated in a signed-off period is refused, the curs
   assert.ok(ws.unmatchedBank.some((b: { reference: string }) => b.reference === 'f2-b'), 'the late item is visible in the reopened period')
 })
 
-test('F-2: a Plaid modification or removal of a line in a signed-off period is refused, not ignored', async () => {
+dbTest('F-2: a Plaid modification or removal of a line in a signed-off period is refused, not ignored', async () => {
   const t = await makeTenant('f2m')
   const bank = await newBank(t)
   const k = await postCash(t, P1.day(10), -5, t.accounts.fees, 'BANKTEST bank fee')
@@ -478,7 +483,7 @@ test('F-2: a Plaid modification or removal of a line in a signed-off period is r
 // ---------------------------------------------------------------------------------------------
 // F-3 races with sign-off
 
-test('F-3: sign-off committing at Plaid sync lock check: the Plaid write lands before sign-off or is refused', async () => {
+dbTest('F-3: sign-off committing at Plaid sync lock check: the Plaid write lands before sign-off or is refused', async () => {
   const t = await makeTenant('f3p')
   const bank = await newBank(t)
   const recon = await newRecon(t, bank, P1, '0.00', '0.00')
@@ -513,7 +518,7 @@ test('F-3: sign-off committing at Plaid sync lock check: the Plaid write lands b
   await assertSignedPeriodIntact(t, recon, 'Plaid vs sign-off')
 })
 
-test('F-3: sign-off racing the legacy JSON import: the import lands before sign-off or is refused', async () => {
+dbTest('F-3: sign-off racing the legacy JSON import: the import lands before sign-off or is refused', async () => {
   const t = await makeTenant('f3j')
   const bank = await newBank(t)
   const recon = await newRecon(t, bank, P1, '0.00', '0.00')
@@ -561,7 +566,7 @@ test('F-3: sign-off racing the legacy JSON import: the import lands before sign-
   await assertSignedPeriodIntact(t2, recon2, 'concurrent JSON import vs sign-off')
 })
 
-test('F-3: two imports racing: each statement line is stored once, the loser gets a conflict or skips', async () => {
+dbTest('F-3: two imports racing: each statement line is stored once, the loser gets a conflict or skips', async () => {
   const t = await makeTenant('f3i')
   const bank = await newBank(t)
   const recon = await newRecon(t, bank, P1, '0.00', '0.00')
@@ -594,7 +599,7 @@ test('F-3: two imports racing: each statement line is stored once, the loser get
   assert.equal(created, 2, 'exactly the two new lines were created across all requests')
 })
 
-test('F-3: matching and unmatching racing sign-off never change a signed-off period', async () => {
+dbTest('F-3: matching and unmatching racing sign-off never change a signed-off period', async () => {
   const t = await makeTenant('f3m')
   const bank = await newBank(t)
   const k1 = await postCash(t, P1.day(3), 50, t.accounts.ar, 'BANKTEST receipt 1')
@@ -650,7 +655,7 @@ test('F-3: matching and unmatching racing sign-off never change a signed-off per
 // ---------------------------------------------------------------------------------------------
 // F-5 matches across periods
 
-test('F-5: an item matched in another period is not offered, auto-matched or blocking in any other period', async () => {
+dbTest('F-5: an item matched in another period is not offered, auto-matched or blocking in any other period', async () => {
   const t = await makeTenant('f5')
   const bank = await newBank(t)
   // P1: deposit booked day 29, on the statement day 30 (both in P1).
@@ -727,7 +732,7 @@ test('F-5: an item matched in another period is not offered, auto-matched or blo
 // ---------------------------------------------------------------------------------------------
 // F-8 actor names
 
-test('F-8: audit and match rows name same-tenant users; unknown, deleted and other-tenant users get a safe label', async () => {
+dbTest('F-8: audit and match rows name same-tenant users; unknown, deleted and other-tenant users get a safe label', async () => {
   const t = await makeTenant('f8')
   const other = await makeTenant('f8-other')
   const bank = await newBank(t)

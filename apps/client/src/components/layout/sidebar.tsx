@@ -16,6 +16,7 @@ type NavItem = {
 const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
   { href: '/admin/inventory', label: 'Inventory', icon: 'inventory', permission: 'inventory.read' },
+  { href: '/admin/manufacturing', label: 'Manufacturing', icon: 'manufacturing', permission: 'inventory.read' },
   { href: '/admin/orders', label: 'Orders', icon: 'orders', permission: 'orders.read' },
   { href: '/admin/fulfillment', label: 'Fulfillment', icon: 'fulfillment', permission: 'wms.read' },
   { href: '/admin/warehouse', label: 'Warehouse', icon: 'warehouse', permission: 'wms.read' },

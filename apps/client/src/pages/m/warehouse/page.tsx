@@ -1,18 +1,13 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api-mobile'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
 import { enqueueAction } from '@/lib/offline-queue'
 import { axiosErr } from '@/lib/axios-error'
+import { currentIdentity } from '@/lib/session-identity'
+import { actionFor, filterQuery, ownerOf, taskTitle, type PickTask, type TaskFilter } from '@/lib/warehouse-tasks'
 
-type Task = {
-  id: string
-  orderId: string
-  status: string
-  priority?: string
-  warehouseCode?: string
-  pickItems?: { id: string }[]
-}
+type Task = PickTask
 
 type WaveRow = {
   id: string
@@ -27,13 +22,17 @@ export default function WarehouseMobilePage() {
   const [waves, setWaves] = useState<WaveRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<TaskFilter>('mine')
+  const [claiming, setClaiming] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const me = currentIdentity('mobile')?.userId ?? null
 
   const load = useCallback(async () => {
     setLoading(true)
     setErr(null)
     try {
       const [taskData, waveData] = await Promise.all([
-        api.get<Task[]>('/wms/tasks'),
+        api.get<Task[]>(`/wms/tasks${filterQuery(filter) ? `?${filterQuery(filter)}` : ''}`),
         api.get<WaveRow[]>('/pick-waves').catch(() => [] as WaveRow[]),
       ])
       setTasks(Array.isArray(taskData) ? taskData : [])
@@ -48,11 +47,32 @@ export default function WarehouseMobilePage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filter])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  async function open(t: Task) {
+    if (ownerOf(t, me) === 'other') {
+      setErr('Another picker has this task. Ask a manager to reassign it.')
+      return
+    }
+    if (ownerOf(t, me) === 'free') {
+      setClaiming(t.id)
+      setErr(null)
+      try {
+        await api.post(`/wms/tasks/${encodeURIComponent(t.id)}/claim`, {})
+      } catch (e) {
+        setErr(axiosErr(e))
+        setClaiming(null)
+        void load()
+        return
+      }
+      setClaiming(null)
+    }
+    navigate(`/m/warehouse/task/${t.id}`)
+  }
 
   const activeWaves = waves.filter((w) => w.status === 'OPEN' || w.status === 'IN_PROGRESS')
 
@@ -90,24 +110,42 @@ export default function WarehouseMobilePage() {
 
       {!loading && tab === 'tasks' && (
         <>
-          {tasks.map((t) => (
-            <Link
-              key={t.id}
-              to={`/m/warehouse/task/${t.id}`}
-              className="pleros-mobile-card"
-              style={{ display: 'block', color: 'inherit', textDecoration: 'none', marginBottom: 10 }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <strong>Order #{t.orderId.slice(-8).toUpperCase()}</strong>
-                <span style={{ fontSize: 12, opacity: 0.8 }}>{t.status}</span>
-              </div>
-              <p style={{ margin: '6px 0 0', fontSize: 13, opacity: 0.7 }}>
-                {(t.pickItems?.length ?? 0)} items · {t.priority ?? 'normal'} · {t.warehouseCode ?? '—'}
-              </p>
-            </Link>
-          ))}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {([['mine', 'Mine'], ['free', 'Free'], ['all', 'All']] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                className={filter === k ? 'btn-primary' : 'btn-ghost'}
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={() => setFilter(k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tasks.map((t) => {
+            const owner = ownerOf(t, me)
+            return (
+              <button
+                key={t.id}
+                type="button"
+                className="pleros-mobile-card"
+                disabled={claiming === t.id}
+                onClick={() => void open(t)}
+                style={{ display: 'block', width: '100%', textAlign: 'left', color: 'inherit', marginBottom: 10, opacity: owner === 'other' ? 0.6 : 1 }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>{taskTitle(t)}</strong>
+                  <span style={{ fontSize: 12, opacity: 0.8 }}>{claiming === t.id ? 'Claiming…' : actionFor(owner)}</span>
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: 13, opacity: 0.7 }}>
+                  {(t.pickItems?.length ?? 0)} items · {t.priority ?? 'normal'} · {t.warehouseCode ?? '—'} · {t.status}
+                </p>
+              </button>
+            )
+          })}
           {!err && tasks.length === 0 && (
-            <p style={{ opacity: 0.6, textAlign: 'center', marginTop: 24 }}>No pending tasks</p>
+            <p style={{ opacity: 0.6, textAlign: 'center', marginTop: 24 }}>{filter === 'mine' ? 'Nothing claimed. Check the Free tab.' : 'No pending tasks'}</p>
           )}
         </>
       )}

@@ -5,9 +5,12 @@ import { routeSkus, routeWarehouses, routeInventory, routeBins, routeVolumePrice
 import { routeOrders, routeQuotes, routeOrderTemplates } from './routes/sales-orders'
 import { routeCustomers, routeLeads, routeActivities } from './routes/crm'
 import { routeFulfillment, routeWms, routePickWaves } from './routes/wms'
+import { routeVans } from './routes/vans'
+import { routeSalesRep } from './routes/sales-rep'
 import { routeRoutes, routeDispatchMobile, routePurchaseOrders, routeSuppliers, routeEdi } from './routes/logistics'
 import {
   routeInvoices,
+  routePostingJobs,
   routeBills,
   routePayments,
   routeSavedPaymentMethods,
@@ -40,6 +43,7 @@ import {
 import { routeApprovals } from './routes/approvals'
 import { routeDiscounts } from './routes/discounts'
 import { routeGiftCards } from './routes/gift-cards'
+import { routeReconciliation } from './routes/reconciliation'
 import { routeLoyalty } from './routes/loyalty'
 import { routeSubscriptions, routeSubscriptionJobs } from './routes/subscriptions'
 import { routeCampaigns, routeUnsubscribe } from './routes/campaigns'
@@ -47,6 +51,7 @@ import { routeExpenseReports } from './routes/expense-reports'
 import { routeBudgets } from './routes/budgets'
 import { routeSystemJobs } from './routes/system-jobs'
 import { routeSalesChannels } from './routes/sales-channels'
+import { routeManufacturing } from './routes/manufacturing'
 
 /** Returns Response if handled; null → 404 from catch-all route. */
 export async function handleNativeApi(method: string, path: string[], req: Request): Promise<Response | null> {
@@ -67,10 +72,17 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'quotes') return await routeQuotes(m, seg, req)
     if (seg[0] === 'fulfillment') return await routeFulfillment(m, seg, req)
     if (seg[0] === 'wms') return await routeWms(m, seg, req)
+    if (seg[0] === 'vans') return await routeVans(m, seg, req)
+    if (seg[0] === 'rep') return await routeSalesRep(m, seg, req)
     if (seg[0] === 'routes') return await routeRoutes(m, seg, req)
     if (seg[0] === 'dispatch') return await routeDispatchMobile(m, seg, req)
     if (seg[0] === 'purchase-orders') return await routePurchaseOrders(m, seg, req)
     if (seg[0] === 'edi') return await routeEdi(m, seg, req)
+    if (seg[0] === 'health' && seg[1] === 'tenant-scope' && m === 'GET') {
+      await requireRole(req, ADMIN_ROLES)
+      const { tenantScopeReport } = await import('./tenant-scope')
+      return Response.json(tenantScopeReport())
+    }
     if (seg[0] === 'health' && seg[1] === 'db' && m === 'GET') {
       await requireRole(req, ADMIN_ROLES)
       return Response.json(await checkDatabaseConnections())
@@ -83,6 +95,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'compliance') return await routeCompliance(m, seg, req)
     if (seg[0] === 'notifications') return await routeNotifications(m, seg, req)
     if (seg[0] === 'push') return await routePush(m, seg, req)
+    if (seg[0] === 'posting-jobs') return await routePostingJobs(m, seg, req)
     if (seg[0] === 'journal-entries') return await routeJournalEntries(m, seg, req)
     if (seg[0] === 'chart-accounts') return await routeChartAccounts(m, seg, req)
     if (seg[0] === 'financial-statements') return await routeFinancialStatements(m, seg, req)
@@ -108,6 +121,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'approvals') return await routeApprovals(m, seg, req)
     if (seg[0] === 'discounts') return await routeDiscounts(m, seg, req)
     if (seg[0] === 'gift-cards') return await routeGiftCards(m, seg, req)
+    if (seg[0] === 'reconciliation') return await routeReconciliation(m, seg, req)
     if (seg[0] === 'loyalty') return await routeLoyalty(m, seg, req)
     if (seg[0] === 'subscriptions') return await routeSubscriptions(m, seg, req)
     if (seg[0] === 'campaigns') return await routeCampaigns(m, seg, req)
@@ -121,6 +135,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'celestial') return await routeCelestial(m, seg, req)
     if (seg[0] === 'marketplace') return await routeMarketplace(m, seg, req)
     if (seg[0] === 'pleros-ops') return await routePlerosOps(m, seg, req)
+    if (seg[0] === 'manufacturing') return await routeManufacturing(m, seg, req)
     return null
   } catch (e) {
     return toJsonError(e)

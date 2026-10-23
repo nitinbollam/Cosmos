@@ -3,7 +3,8 @@ import { Prisma } from '@/generated/prisma-payment'
 import { orderDb, paymentDb } from './db'
 import { ApiError } from './session'
 import * as payments from './payments'
-import { syncInvoiceFromOrder } from './invoices'
+import { syncInvoiceOrQueue } from './deferred-work'
+import { enqueuePostingJob } from './posting-outbox'
 import { resolveStripeCustomerId } from './stripe-customer-sync'
 import * as stripe from './stripe'
 import { applyCapturedPayment, linkPaymentIntent } from './order-payment-sync'
@@ -122,11 +123,19 @@ export async function settleCollectedCardPayment(
 ) {
   await linkPaymentIntent(tenantId, orderId, paymentIntentId)
   await applyCapturedPayment(tenantId, orderId, amount, { paymentIntentId })
-  await syncInvoiceFromOrder(tenantId, orderId).catch(() => undefined)
+  await syncInvoiceOrQueue(tenantId, orderId)
   const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
   if (invoice) {
-    const { postArPaymentJournal } = await import('./operations-gl')
-    await postArPaymentJournal(tenantId, invoice.id, amount).catch(() => undefined)
+    // Keyed by the payment, so a repeat of this settlement posts once. A ledger outage or a missing
+    // account leaves a visible, retrying job rather than a payment with no journal.
+    await enqueuePostingJob(orderDb, {
+      tenantId,
+      kind: 'AR_PAYMENT_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoice.id,
+      variant: `intent:${paymentIntentId}`,
+      amount: new Prisma.Decimal(amount).toFixed(2),
+    })
   }
   return invoice
 }
@@ -280,7 +289,7 @@ export async function refundOrderPayment(
 
   const refundAmount = amount != null ? Math.min(amount, refundable) : refundable
   const result = await payments.refund(tenantId, intent.id, refundAmount, correlationId)
-  await syncInvoiceFromOrder(tenantId, orderId).catch(() => undefined)
+  await syncInvoiceOrQueue(tenantId, orderId)
   return result
 }
 
@@ -311,6 +320,6 @@ export async function voidAuthorizedPaymentsForOrder(tenantId: string, orderId: 
     where: { tenantId, orderId, status: 'AUTHORIZED' },
   })
   for (const intent of intents) {
-    await payments.voidIntent(tenantId, intent.id, randomUUID()).catch(() => undefined)
+    await payments.voidIntent(tenantId, intent.id, randomUUID())
   }
 }

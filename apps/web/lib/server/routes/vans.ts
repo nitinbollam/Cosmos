@@ -1,0 +1,49 @@
+import { ApiError, requirePermission } from './common'
+import * as vans from '../van-stock'
+
+export async function routeVans(method: string, seg: string[], req: Request): Promise<Response> {
+  // The driver counts their own van, so that one call needs dispatch access; the rest of a return
+  // (inspect, sign off) is warehouse and manager work.
+  const driverCount = method === 'POST' && seg.length === 3 && seg[2] === 'returns'
+  const session = await requirePermission(req, method === 'GET' || driverCount ? 'dispatch.read' : 'inventory.write')
+  const actor = { userId: session.userId, role: session.role }
+  const isDriver = session.role.toUpperCase() === 'DRIVER'
+
+  if (seg.length === 1 && method === 'GET') return Response.json(await vans.listVans(session.tenantId, actor))
+  if (driverCount) {
+    const { submitVanCount } = await import('../van-return')
+    return Response.json(await submitVanCount(session.tenantId, seg[1], (await req.json()) as never, actor), { status: 201 })
+  }
+  if (seg.length === 3 && seg[2] === 'returns' && method === 'GET') {
+    const { listVanReturns } = await import('../van-return')
+    return Response.json(await listVanReturns(session.tenantId, seg[1], actor))
+  }
+  if (seg.length === 2 && seg[1] !== 'customers' && method === 'GET') {
+    return Response.json(await vans.getVanInventory(session.tenantId, seg[1], actor))
+  }
+  // Everything below is for managers and warehouse staff, not the driver on the road.
+  if (isDriver) throw new ApiError(403, 'Drivers cannot create vans or change who can buy from them')
+  if (seg.length === 4 && seg[1] === 'returns' && seg[3] === 'inspect' && method === 'POST') {
+    const { inspectVanReturn } = await import('../van-return')
+    return Response.json(await inspectVanReturn(session.tenantId, seg[2], (await req.json()) as never, actor))
+  }
+  if (seg.length === 4 && seg[1] === 'returns' && seg[3] === 'resolve' && method === 'POST') {
+    const { resolveVanReturn } = await import('../van-return')
+    return Response.json(await resolveVanReturn(session.tenantId, seg[2], (await req.json()) as never, actor))
+  }
+  if (seg.length === 1 && method === 'POST') {
+    return Response.json(await vans.createVan(session.tenantId, (await req.json()) as never), { status: 201 })
+  }
+  if (seg.length === 3 && seg[2] === 'load' && method === 'POST') {
+    return Response.json(await vans.loadVan(session.tenantId, seg[1], (await req.json()) as never, actor))
+  }
+  if (seg.length === 3 && seg[2] === 'unload' && method === 'POST') {
+    return Response.json(await vans.unloadVan(session.tenantId, seg[1], (await req.json()) as never, actor))
+  }
+  if (seg.length === 4 && seg[1] === 'customers' && seg[3] === 'van-sales' && method === 'PUT') {
+    const body = (await req.json()) as { approved?: unknown }
+    if (typeof body.approved !== 'boolean') throw new ApiError(400, 'approved must be true or false')
+    return Response.json(await vans.setVanSalesApproved(session.tenantId, seg[2], body.approved))
+  }
+  throw new ApiError(404, 'Van route not found')
+}

@@ -56,7 +56,7 @@ export async function exchangePublicToken(tenantId: string, bankAccountId: strin
   })
 
   await ledgerDb.bankAccount.update({
-    where: { id: bankAccountId },
+    where: { id: bankAccountId, tenantId },
     data: {
       plaidAccessTokenEncrypted: encryptSecret(res.access_token),
       plaidItemId: res.item_id,
@@ -235,7 +235,7 @@ async function applyPlaidPage(
           if (line.lockedAt || isFrozen(line.postedAt) || isFrozen(postedAt)) {
             frozen.push({ transactionId: t.transaction_id, date: t.date, change: 'modify' })
           } else if (line.reconciled || line.matchItems.some((i) => i.activeStatementLineId)) {
-            held.push({ transactionId: t.transaction_id, change: 'modify', date: t.date, amount: amount.toFixed(2), description })
+            held.push({ transactionId: t.transaction_id, change: 'modify', date: t.date, amount: amount.toFixed(2), description }) // money-ok: Decimal to 2-decimal string
           } else {
             updates.push({ id: line.id, postedAt, description, amount })
           }
@@ -268,12 +268,12 @@ async function applyPlaidPage(
         if (creates.size) await tx.bankStatementLine.createMany({ data: [...creates.values()] })
         for (const u of updates) {
           await tx.bankStatementLine.update({
-            where: { id: u.id },
+            where: { id: u.id, tenantId },
             data: { postedAt: u.postedAt, description: u.description, amount: u.amount },
           })
         }
         if (deletes.length) await tx.bankStatementLine.deleteMany({ where: { tenantId, id: { in: deletes } } })
-        await tx.bankAccount.update({ where: { id: bankAccountId }, data: { plaidSyncCursor: page.next_cursor } })
+        await tx.bankAccount.update({ where: { id: bankAccountId, tenantId }, data: { plaidSyncCursor: page.next_cursor } })
 
         const counts = { added: creates.size, modified: updates.length, removed: deletes.length, held: held.length }
         if (counts.added || counts.modified || counts.removed || counts.held) {
@@ -312,6 +312,7 @@ async function applyPlaidPage(
         409,
         `${e.changes.length} Plaid transaction(s) fall in the signed-off reconciliation period through ${through}. ` +
           'Nothing from this sync page was saved and the sync position was kept; reopen that period with a reason, then sync again.',
+        undefined,
         e.changes,
       )
     }

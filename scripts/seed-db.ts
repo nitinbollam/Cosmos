@@ -195,6 +195,7 @@ async function seedTenantOrg(tenantId: string) {
         settings: {
           currency: 'USD',
           salesTaxRate: 0.07,
+          salesTaxConfirmedAt: '2026-01-01T00:00:00.000Z',
           ageVerification: {
             enabled: true,
             minimumAge: 21,
@@ -217,6 +218,7 @@ async function seedTenantOrg(tenantId: string) {
         settings: {
           currency: 'USD',
           salesTaxRate: 0.07,
+          salesTaxConfirmedAt: '2026-01-01T00:00:00.000Z',
           ageVerification: {
             enabled: true,
             minimumAge: 21,
@@ -1583,7 +1585,7 @@ async function seedPeerTenant(): Promise<{ tenantId: string; userId: string; war
         onboardingPhase: 'READY',
         createdAt: new Date(Date.now() - 45 * 86400000),
         metadata: {},
-        settings: { currency: 'USD', salesTaxRate: 0.07 },
+        settings: { currency: 'USD', salesTaxRate: 0.07, salesTaxConfirmedAt: '2026-01-01T00:00:00.000Z' },
       },
     })
     await tenantDb.$disconnect()

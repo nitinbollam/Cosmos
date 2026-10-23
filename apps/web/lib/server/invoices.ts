@@ -3,11 +3,21 @@ import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import * as crm from './crm'
 import { deriveInvoiceStatus, formatCreditMemoNumber, formatInvoiceNumber, invoiceBalance, toStoredInvoiceStatus } from './invoice-status'
-import { postInvoiceJournal, postCreditMemoJournal } from './invoice-gl'
+import { enqueuePostingJob } from './posting-outbox'
 import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
 import { resolveFxRateAtCreation } from './exchange-rates'
 import { toBaseAmount, normalizeCurrency } from './fx-util'
+import { splitBaseAmounts } from './invoice-tax-split'
+import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
+import { swallowed } from './fire-and-forget'
+import {
+  allocateShipmentTax,
+  inferLegacyInvoiced,
+  lineSubtotal,
+  priceShipment,
+  type BillableLine,
+} from './invoice-pricing'
 
 function orderSubtotal(lineItems: Array<{ quantity: number; unitPrice: Prisma.Decimal }>): number {
   return lineItems.reduce((s, li) => s + li.quantity * Number(li.unitPrice), 0)
@@ -24,6 +34,8 @@ export async function issueInvoiceForOrder(
   tenantId: string,
   orderId: string,
   amounts?: { subtotal: number; taxAmount: number; totalAmount: number; currency?: string },
+  /** Runs inside the invoice's transaction, so related bookkeeping commits or rolls back with it. */
+  inTransaction?: (tx: Prisma.TransactionClient, invoice: { id: string }) => Promise<void>,
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
@@ -50,43 +62,45 @@ export async function issueInvoiceForOrder(
 
   const paidApplied = Math.min(Number(order.amountPaid ?? 0), totalAmount)
   const fx = await resolveFxRateAtCreation(tenantId, normalizeCurrency(amounts?.currency))
-  const invoice = await orderDb.invoice.create({
-    data: {
+  const { baseTotal, baseTax } = splitBaseAmounts(totalAmount, taxAmount, fx.fxRateToBase)
+  // The invoice and its ledger posting job commit together; a worker posts to the ledger (posting-outbox).
+  const finalInvoice = await orderDb.$transaction(async (tx) => {
+    const invoice = await tx.invoice.create({
+      data: {
+        tenantId,
+        orderId: order.id,
+        invoiceNumber: formatInvoiceNumber(order.id),
+        customerId: order.customerId,
+        subtotal: new Prisma.Decimal(subtotal),
+        taxAmount: new Prisma.Decimal(taxAmount),
+        totalAmount: new Prisma.Decimal(totalAmount),
+        amountPaid: new Prisma.Decimal(paidApplied),
+        currency: fx.currency,
+        fxRateToBase: new Prisma.Decimal(fx.fxRateToBase),
+        issuedAt,
+        dueAt,
+        status: toStoredInvoiceStatus(
+          deriveInvoiceStatus({
+            totalAmount,
+            amountPaid: paidApplied,
+            amountCredited: 0,
+            paymentMethod: order.paymentMethod,
+            issuedAt,
+          }),
+        ) as never,
+      },
+    })
+    await enqueuePostingJob(tx, {
       tenantId,
-      orderId: order.id,
-      invoiceNumber: formatInvoiceNumber(order.id),
-      customerId: order.customerId,
-      subtotal: new Prisma.Decimal(subtotal),
-      taxAmount: new Prisma.Decimal(taxAmount),
-      totalAmount: new Prisma.Decimal(totalAmount),
-      amountPaid: new Prisma.Decimal(paidApplied),
-      currency: fx.currency,
-      fxRateToBase: new Prisma.Decimal(fx.fxRateToBase),
-      issuedAt,
-      dueAt,
-      status: toStoredInvoiceStatus(
-        deriveInvoiceStatus({
-          totalAmount,
-          amountPaid: paidApplied,
-          amountCredited: 0,
-          paymentMethod: order.paymentMethod,
-          issuedAt,
-        }),
-      ) as never,
-    },
+      kind: 'INVOICE_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoice.id,
+      amount: baseTotal.toFixed(2),
+      taxAmount: baseTax.toFixed(2),
+    })
+    if (inTransaction) await inTransaction(tx, invoice)
+    return invoice
   })
-
-  const baseTotal = toBaseAmount(totalAmount, fx.fxRateToBase)
-  const journalEntryId = await postInvoiceJournal(tenantId, invoice.id, baseTotal).catch((err) => {
-    console.error(`[gl] invoice journal failed for invoice ${invoice.id}:`, err)
-    return null
-  })
-  const finalInvoice = journalEntryId
-    ? await orderDb.invoice.update({
-        where: { id: invoice.id },
-        data: { journalEntryId },
-      })
-    : invoice
 
   void notifyTriggers
     .notifyInvoiceIssued(
@@ -98,7 +112,7 @@ export async function issueInvoiceForOrder(
       totalAmount,
       dueAt,
     )
-    .catch(() => undefined)
+    .catch(swallowed('invoices.issueInvoiceForOrder'))
   const { emitDomainEvent } = await import('./domain-events')
   void emitDomainEvent(
     tenantId,
@@ -117,7 +131,7 @@ export async function issueInvoiceForOrder(
   if (order.channel === 'EDI') {
     void import('./edi')
       .then((m) => m.generate810ForInvoice(tenantId, finalInvoice.id))
-      .catch(() => undefined)
+      .catch(swallowed('invoices.issueInvoiceForOrder2'))
   }
 
   return finalInvoice
@@ -131,62 +145,133 @@ export async function issueInvoiceForOrder(
 export async function invoiceShipmentForOrder(
   tenantId: string,
   orderId: string,
-  shippedLines: Array<{ skuId: string; quantity: number }>,
+  shippedLines: Array<{ skuId: string; quantity: number; lineId?: string }>,
+  /**
+   * The fulfillment task that shipped these lines. When given, billing is recorded against it in
+   * the same transaction as the invoice change, so a retried dispatch returns the existing result
+   * instead of billing the shipment again.
+   */
+  fulfillmentTaskId?: string,
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
-    include: { lineItems: true, invoice: true },
+    include: { lineItems: { orderBy: { id: 'asc' } }, invoice: true },
   })
   if (!order) throw new ApiError(404, 'Order not found')
-
-  const priceBySku = new Map<string, number>()
-  for (const li of order.lineItems) {
-    if (!priceBySku.has(li.skuId)) priceBySku.set(li.skuId, Number(li.unitPrice))
+  if (fulfillmentTaskId) {
+    const done = await orderDb.shipmentInvoice.findFirst({ where: { tenantId, fulfillmentTaskId } })
+    if (done) return order.invoice
   }
 
-  const subtotal = +shippedLines
-    .reduce((s, l) => s + l.quantity * (priceBySku.get(l.skuId) ?? 0), 0)
-    .toFixed(2)
-  if (subtotal <= 0) return order.invoice ?? null
+  let lines: BillableLine[] = order.lineItems.map((li) => ({
+    id: li.id,
+    skuId: li.skuId,
+    quantity: li.quantity,
+    quantityInvoiced: li.quantityInvoiced,
+    unitPrice: li.unitPrice,
+  }))
+  // Orders invoiced before per-line tracking existed: infer what was already billed.
+  if (order.invoice && lines.every((l) => l.quantityInvoiced === 0)) {
+    lines = inferLegacyInvoiced(lines, order.invoice.subtotal)
+  }
 
-  const orderSub = orderSubtotal(order.lineItems)
-  const taxRate = orderSub > 0 ? Number(order.taxAmount ?? 0) / orderSub : 0
-  const taxAmount = +(subtotal * taxRate).toFixed(2)
-  const totalAmount = +(subtotal + taxAmount).toFixed(2)
+  const { allocations, subtotal } = priceShipment(lines, shippedLines)
+  if (subtotal.lte(0)) return order.invoice ?? null
+
+  const orderSub = lineSubtotal(lines)
+  const invoicedSoFar = order.invoice?.subtotal ?? new Prisma.Decimal(0)
+  if (invoicedSoFar.add(subtotal).gt(orderSub)) {
+    console.error(`[invoices] shipment would exceed order subtotal for order ${orderId}`)
+    throw new ApiError(409, 'Invoice would exceed the order total')
+  }
+
+  const open = new Map(lines.map((l) => [l.id, l.quantity - l.quantityInvoiced]))
+  for (const a of allocations) open.set(a.lineId, (open.get(a.lineId) ?? 0) - a.quantity)
+  const completesOrder = [...open.values()].every((q) => q <= 0)
+
+  const taxAmount = allocateShipmentTax({
+    orderSubtotal: orderSub,
+    orderTax: order.taxAmount ?? new Prisma.Decimal(0),
+    invoicedTaxSoFar: order.invoice?.taxAmount ?? new Prisma.Decimal(0),
+    shipmentSubtotal: subtotal,
+    completesOrder,
+  })
+  const totalAmount = subtotal.add(taxAmount)
+
+  const markInvoiced = (tx: Prisma.TransactionClient) =>
+    Promise.all(
+      allocations.map((a) =>
+        tx.orderLineItem.update({ where: { id: a.lineId }, data: { quantityInvoiced: { increment: a.quantity } } }),
+      ),
+    )
+
+  const recordTask = (tx: Prisma.TransactionClient, invoiceId: string) =>
+    fulfillmentTaskId
+      ? tx.shipmentInvoice.create({ data: { tenantId, fulfillmentTaskId, orderId, invoiceId } })
+      : Promise.resolve(null)
 
   if (!order.invoice) {
-    return issueInvoiceForOrder(tenantId, orderId, { subtotal, taxAmount, totalAmount })
+    // Amounts are exact 2dp decimals; numbers appear only at the issueInvoiceForOrder boundary.
+    // The line counters and the task record commit with the invoice itself, so there is no window
+    // in which an invoice exists but its lines still look unbilled.
+    return issueInvoiceForOrder(
+      tenantId,
+      orderId,
+      {
+        subtotal: subtotal.toNumber(),
+        taxAmount: taxAmount.toNumber(),
+        totalAmount: totalAmount.toNumber(),
+      },
+      async (tx, invoice) => {
+        await markInvoiced(tx)
+        await recordTask(tx, invoice.id)
+      },
+    )
   }
 
   // Follow-up shipment: extend the existing invoice and post the delta to AR.
-  const newSubtotal = +(Number(order.invoice.subtotal) + subtotal).toFixed(2)
-  const newTax = +(Number(order.invoice.taxAmount) + taxAmount).toFixed(2)
-  const newTotal = +(Number(order.invoice.totalAmount) + totalAmount).toFixed(2)
-  const paidApplied = Math.min(Number(order.amountPaid ?? 0), newTotal)
+  const existingInvoice = order.invoice
+  const invoiceId = existingInvoice.id
+  const newSubtotal = existingInvoice.subtotal.add(subtotal)
+  const newTax = existingInvoice.taxAmount.add(taxAmount)
+  const newTotal = existingInvoice.totalAmount.add(totalAmount)
+  const paidApplied = Prisma.Decimal.min(order.amountPaid ?? new Prisma.Decimal(0), newTotal)
+  const extension = splitBaseAmounts(totalAmount.toNumber(), taxAmount.toNumber(), Number(existingInvoice.fxRateToBase))
 
-  const updated = await orderDb.invoice.update({
-    where: { id: order.invoice.id },
-    data: {
-      subtotal: new Prisma.Decimal(newSubtotal),
-      taxAmount: new Prisma.Decimal(newTax),
-      totalAmount: new Prisma.Decimal(newTotal),
-      amountPaid: new Prisma.Decimal(paidApplied),
-      status: toStoredInvoiceStatus(
-        deriveInvoiceStatus({
-          orderStatus: order.status,
-          totalAmount: newTotal,
-          amountPaid: paidApplied,
-          amountCredited: Number(order.invoice.amountCredited),
-          paymentMethod: order.paymentMethod,
-          issuedAt: order.invoice.issuedAt,
-        }),
-      ) as never,
-    },
-  })
-
-  await postInvoiceJournal(tenantId, updated.id, totalAmount).catch((err) => {
-    console.error(`[gl] shipment invoice journal failed for invoice ${updated.id}:`, err)
-    return null
+  const updated = await orderDb.$transaction(async (tx) => {
+    const row = await tx.invoice.update({
+      where: { id: invoiceId, tenantId },
+      data: {
+        subtotal: newSubtotal,
+        taxAmount: newTax,
+        totalAmount: newTotal,
+        amountPaid: paidApplied,
+        status: toStoredInvoiceStatus(
+          deriveInvoiceStatus({
+            orderStatus: order.status,
+            totalAmount: newTotal.toNumber(),
+            amountPaid: paidApplied.toNumber(),
+            amountCredited: Number(existingInvoice.amountCredited),
+            paymentMethod: order.paymentMethod,
+            issuedAt: existingInvoice.issuedAt,
+          }),
+        ) as never,
+      },
+    })
+    await markInvoiced(tx)
+    await recordTask(tx, invoiceId)
+    // Each extension gets its own posting, keyed by the fulfillment task when there is one so a
+    // retried dispatch maps to the same posting.
+    await enqueuePostingJob(tx, {
+      tenantId,
+      kind: 'INVOICE_EXTENSION_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoiceId,
+      variant: `ext:${fulfillmentTaskId ?? randomUUID()}`,
+      amount: extension.baseTotal.toFixed(2),
+      taxAmount: extension.baseTax.toFixed(2),
+    })
+    return row
   })
 
   return updated
@@ -518,6 +603,8 @@ export type ApplyCreditMemoInput = {
   reason?: string
   lines: Array<{ lineItemId: string; quantity: number }>
   restock?: boolean
+  /** Put restocked units here instead of the warehouse they shipped from (a driver's van, PLR-166). */
+  restockWarehouseId?: string
   /** Refund captured Stripe payment up to credit memo total (CARD orders). */
   refundToCard?: boolean
 }
@@ -580,17 +667,29 @@ export async function applyCreditMemo(
   const seq = (invoice.creditMemos?.length ?? 0) + 1
   const memoNumber = formatCreditMemoNumber(order.id, seq)
 
-  const creditMemo = await orderDb.creditMemo.create({
-    data: {
+  const credit = splitBaseAmounts(creditTotal, creditTax, Number(invoice.fxRateToBase))
+  const creditMemo = await orderDb.$transaction(async (tx) => {
+    const memo = await tx.creditMemo.create({
+      data: {
+        tenantId,
+        orderId: order.id,
+        invoiceId: invoice.id,
+        memoNumber,
+        customerId: order.customerId,
+        totalAmount: new Prisma.Decimal(creditTotal),
+        reason: input.reason,
+        lines: memoLines as never,
+      },
+    })
+    await enqueuePostingJob(tx, {
       tenantId,
-      orderId: order.id,
-      invoiceId: invoice.id,
-      memoNumber,
-      customerId: order.customerId,
-      totalAmount: new Prisma.Decimal(creditTotal),
-      reason: input.reason,
-      lines: memoLines as never,
-    },
+      kind: 'CREDIT_MEMO_JOURNAL',
+      sourceType: 'CreditMemo',
+      sourceId: memo.id,
+      amount: credit.baseTotal.toFixed(2),
+      taxAmount: credit.baseTax.toFixed(2),
+    })
+    return memo
   })
 
   for (const ml of memoLines) {
@@ -599,12 +698,16 @@ export async function applyCreditMemo(
       data: { returnedQty: { increment: ml.quantity } },
     })
     if (input.restock !== false) {
-      const { adjustStock } = await import('./inventory')
+      const { adjustStock, ensureStockLevel } = await import('./inventory')
+      const restockAt = input.restockWarehouseId ?? ml.warehouseId
+      if (input.restockWarehouseId) {
+        await ensureStockLevel(tenantId, { skuId: ml.skuId, warehouseId: restockAt })
+      }
       await adjustStock(
         tenantId,
         {
           skuId: ml.skuId,
-          warehouseId: ml.warehouseId,
+          warehouseId: restockAt,
           quantityDelta: ml.quantity,
           reason: input.reason ?? 'Customer return',
           referenceId: creditMemo.id,
@@ -658,27 +761,32 @@ export async function applyCreditMemo(
 
   if (order.paymentMethod === 'NET_TERMS') {
     const { releaseCreditUsed } = await import('./credit-limit')
-    await releaseCreditUsed(tenantId, order.customerId, creditTotal).catch(() => undefined)
-  }
-
-  const journalEntryId = await postCreditMemoJournal(tenantId, creditMemo.id, creditTotal).catch((err) => {
-    console.error(`[gl] credit memo journal failed for ${creditMemo.id}:`, err)
-    return null
-  })
-  if (journalEntryId) {
-    await orderDb.creditMemo.update({ where: { id: creditMemo.id }, data: { journalEntryId } })
+    await attemptOrQueue(
+      {
+        tenantId,
+        kind: 'CREDIT_RELEASE',
+        sourceType: 'CreditMemo',
+        sourceId: creditMemo.id,
+        payload: { customerId: order.customerId, amount: String(creditTotal) },
+      },
+      () => releaseCreditUsed(tenantId, order.customerId, creditTotal),
+    )
   }
 
   // Restocked goods reverse their ship-time COGS.
   if (input.restock !== false) {
-    const { computeOrderCogs, postCogsReversalJournal } = await import('./operations-gl')
+    const { computeOrderCogs } = await import('./operations-gl')
     const returnedCogs = await computeOrderCogs(
       tenantId,
       memoLines.map((ml) => ({ skuId: ml.skuId, quantity: ml.quantity })),
     )
-    await postCogsReversalJournal(tenantId, creditMemo.id, returnedCogs).catch((err) =>
-      console.error(`[gl] COGS reversal failed for credit memo ${creditMemo.id}:`, err),
-    )
+    await enqueuePostingJob(orderDb, {
+      tenantId,
+      kind: 'COGS_REVERSAL_JOURNAL',
+      sourceType: 'CreditMemo',
+      sourceId: creditMemo.id,
+      amount: returnedCogs.toFixed(2),
+    })
   }
 
   // Money back: refund captured card/ACH payments up to the credited amount.
@@ -700,7 +808,7 @@ export async function applyCreditMemo(
           where: { id: order.id },
           data: { amountPaid: new Prisma.Decimal(Math.max(0, paidSoFar - refundAmount)) },
         })
-        await syncInvoiceFromOrder(tenantId, order.id).catch(() => undefined)
+        await syncInvoiceOrQueue(tenantId, order.id)
       } catch (err) {
         console.error(`[payments] refund failed for credit memo ${creditMemo.id}:`, err)
       }

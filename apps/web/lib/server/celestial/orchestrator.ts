@@ -18,6 +18,7 @@ import { buildDocFallbackReply, composeFromToolResults, toolResultHasData } from
 import type { ToolResult } from './tools'
 import type { CelestialToolName } from './intent'
 
+import { swallowed } from '../fire-and-forget'
 function shouldUseDirectCompose(toolResults: ToolResult[]): boolean {
   return toolResults.some(toolResultHasData)
 }
@@ -172,7 +173,7 @@ async function persistChatResult(
     entityId: prepared.conversationId,
     userId: session.userId,
     metadata: { provider, tools: prepared.toolsUsed },
-  }).catch(() => undefined)
+  }).catch(swallowed('orchestrator.persistChatResult'))
 }
 
 export async function chat(session: SessionUser, input: CelestialChatInput): Promise<CelestialChatResult> {

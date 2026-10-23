@@ -24,7 +24,7 @@ export function parseMoney(value: unknown): Prisma.Decimal | null {
     text = value.trim().replace(/,/g, '')
   } else return null
   if (!MONEY_RE.test(text)) return null
-  return new Prisma.Decimal(text)
+  return new Prisma.Decimal(text) // money-ok: parsed from a validated decimal string
 }
 
 export function requireMoney(value: unknown, field: string): Prisma.Decimal {
@@ -68,7 +68,7 @@ export function dayDiff(a: Date, b: Date): number {
 }
 
 export function money(d: Prisma.Decimal): string {
-  return d.toFixed(2)
+  return d.toFixed(2) // money-ok: Decimal to 2-decimal API string
 }
 
 /** RFC 4180 CSV: quoted fields, doubled quotes, CRLF or LF line endings. */
@@ -267,7 +267,7 @@ export function withDedupeKeys<T extends ValidStatementLine>(bankAccountId: stri
     const base = [
       bankAccountId,
       isoDate(l.postedAt),
-      l.amount.toFixed(2),
+      l.amount.toFixed(2), // money-ok: Decimal formatted into the dedupe key
       (l.reference ?? '').toUpperCase(),
       l.description.replace(/\s+/g, ' ').toUpperCase(),
     ].join('|')

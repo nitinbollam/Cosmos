@@ -70,6 +70,8 @@ type PendingEvent = {
 
 const ZERO = new Prisma.Decimal(0)
 const sum = (values: Prisma.Decimal[]) => values.reduce((a, b) => a.plus(b), ZERO)
+/** Re-wraps a Decimal read from the database (never a JS number), so arithmetic starts from a fresh instance. */
+const dec = (v: Prisma.Decimal) => new Prisma.Decimal(v) // money-ok: input is already a Decimal
 
 // ---------------------------------------------------------------------------------------------
 // Transactions, locking and audit
@@ -274,14 +276,14 @@ async function computeWorkspace(db: Db, recon: ReconWithAccount) {
     date: r.entry.postedAt,
     description: r.entry.description,
     memo: r.memo,
-    amount: new Prisma.Decimal(r.debit).minus(r.credit),
+    amount: dec(r.debit).minus(r.credit),
   }))
   const bank: BankItem[] = bankRows.map((r) => ({
     id: r.id,
     date: r.postedAt,
     description: r.description,
     reference: r.reference,
-    amount: new Prisma.Decimal(r.amount),
+    amount: dec(r.amount),
   }))
 
   // Reconciling items: not cleared as of this period. Unmatched: reconciling and not owned by any match.
@@ -292,13 +294,13 @@ async function computeWorkspace(db: Db, recon: ReconWithAccount) {
   const periodBank = bank.filter((b) => b.date >= recon.periodStart)
 
   const bookBalance = sum(book.map((b) => b.amount))
-  const bankBalance = new Prisma.Decimal(recon.statementClosingBalance)
+  const bankBalance = dec(recon.statementClosingBalance)
   const depositsInTransit = sum(outstandingBook.filter((b) => b.amount.isPositive()).map((b) => b.amount))
   const outstandingPayments = sum(outstandingBook.filter((b) => b.amount.isNegative()).map((b) => b.amount.negated()))
   const unrecordedBankItems = sum(outstandingBank.map((b) => b.amount))
   const adjustedBank = bankBalance.plus(depositsInTransit).minus(outstandingPayments)
   const adjustedBook = bookBalance.plus(unrecordedBankItems)
-  const statementComputedClosing = new Prisma.Decimal(recon.statementOpeningBalance).plus(sum(periodBank.map((b) => b.amount)))
+  const statementComputedClosing = dec(recon.statementOpeningBalance).plus(sum(periodBank.map((b) => b.amount)))
 
   return {
     cutoff,
@@ -341,14 +343,14 @@ function signOffBlockers(recon: ReconWithAccount, ws: Workspace, now = new Date(
 }
 
 function serializeRecon(r: BankReconciliation) {
-  const opt = (d: Prisma.Decimal | null) => (d === null ? null : money(new Prisma.Decimal(d)))
+  const opt = (d: Prisma.Decimal | null) => (d === null ? null : money(dec(d)))
   return {
     id: r.id,
     bankAccountId: r.bankAccountId,
     periodStart: isoDate(r.periodStart),
     periodEnd: isoDate(r.periodEnd),
-    statementOpeningBalance: money(new Prisma.Decimal(r.statementOpeningBalance)),
-    statementClosingBalance: money(new Prisma.Decimal(r.statementClosingBalance)),
+    statementOpeningBalance: money(dec(r.statementOpeningBalance)),
+    statementClosingBalance: money(dec(r.statementClosingBalance)),
     status: r.status,
     dateWindowDays: r.dateWindowDays,
     createdById: r.createdById,
@@ -423,7 +425,7 @@ function serializeWorkspace(recon: ReconWithAccount, ws: Workspace) {
             statementLineId: i.statementLineId,
             date: line ? isoDate(line.date) : null,
             description: line?.description ?? null,
-            amount: money(new Prisma.Decimal(i.amount)),
+            amount: money(dec(i.amount)),
           }
         }),
       journalLines: m.items
@@ -434,7 +436,7 @@ function serializeWorkspace(recon: ReconWithAccount, ws: Workspace) {
             journalLineId: i.journalLineId,
             date: line ? isoDate(line.date) : null,
             description: line?.description ?? null,
-            amount: money(new Prisma.Decimal(i.amount)),
+            amount: money(dec(i.amount)),
           }
         }),
     })),
@@ -452,7 +454,7 @@ function serializeWorkspace(recon: ReconWithAccount, ws: Workspace) {
           statementLineId: i.statementLineId,
           date: i.statementLine ? isoDate(i.statementLine.postedAt) : null,
           description: i.statementLine?.description ?? null,
-          amount: money(new Prisma.Decimal(i.amount)),
+          amount: money(dec(i.amount)),
         })),
       journalLines: m.items
         .filter((i) => i.journalLineId)
@@ -460,7 +462,7 @@ function serializeWorkspace(recon: ReconWithAccount, ws: Workspace) {
           journalLineId: i.journalLineId,
           date: i.journalLine ? isoDate(i.journalLine.entry.postedAt) : null,
           description: i.journalLine?.entry.description ?? null,
-          amount: money(new Prisma.Decimal(i.amount)),
+          amount: money(dec(i.amount)),
         })),
     })),
     unmatchedBook: ws.unmatchedBook.map(bookOut),
@@ -633,20 +635,20 @@ export async function updateReconciliation(
 
   return runRecon(actor, await reconAccountId(actor.tenantId, id), async (tx, emit) => {
     const before = await lockOpenRecon(tx, actor, id)
-    const after = await tx.bankReconciliation.update({ where: { id: before.id }, data })
+    const after = await tx.bankReconciliation.update({ where: { id: before.id, tenantId: actor.tenantId }, data })
     await emit({
       bankAccountId: before.bankAccountId,
       reconciliationId: id,
       action: 'bank_recon.updated',
       metadata: {
         before: {
-          opening: money(new Prisma.Decimal(before.statementOpeningBalance)),
-          closing: money(new Prisma.Decimal(before.statementClosingBalance)),
+          opening: money(dec(before.statementOpeningBalance)),
+          closing: money(dec(before.statementClosingBalance)),
           dateWindowDays: before.dateWindowDays,
         },
         after: {
-          opening: money(new Prisma.Decimal(after.statementOpeningBalance)),
-          closing: money(new Prisma.Decimal(after.statementClosingBalance)),
+          opening: money(dec(after.statementOpeningBalance)),
+          closing: money(dec(after.statementClosingBalance)),
           dateWindowDays: after.dateWindowDays,
         },
       },
@@ -674,7 +676,7 @@ export async function importStatementCsv(
   const peek = await findRecon(ledgerDb, actor.tenantId, id)
   const parsed = parseStatementCsv(body.csvText, body.mapping, { periodStart: peek.periodStart, periodEnd: peek.periodEnd })
   if (parsed.errors.length) {
-    throw new ApiError(400, `${parsed.errors.length} row(s) failed validation; nothing was imported`, parsed.errors)
+    throw new ApiError(400, `${parsed.errors.length} row(s) failed validation; nothing was imported`, undefined, parsed.errors)
   }
   const fileName = typeof body.fileName === 'string' ? body.fileName.trim().slice(0, 200) || null : null
 
@@ -968,7 +970,7 @@ export async function signOff(actor: ReconActor, id: string, body: { version?: u
       }
       const ws = await computeWorkspace(tx, recon)
       const blockers = signOffBlockers(recon, ws)
-      if (blockers.length) throw new ApiError(409, blockers[0]!, blockers)
+      if (blockers.length) throw new ApiError(409, blockers[0]!, undefined, blockers)
 
       const now = new Date()
       const res = await tx.bankReconciliation.updateMany({
@@ -1058,7 +1060,7 @@ export async function reopen(actor: ReconActor, id: string, body: { reason?: unk
         },
         data: { lockedAt: null },
       })
-      const snap = (d: Prisma.Decimal | null) => (d === null ? null : money(new Prisma.Decimal(d)))
+      const snap = (d: Prisma.Decimal | null) => (d === null ? null : money(dec(d)))
       await emit({
         bankAccountId: recon.bankAccountId,
         reconciliationId: id,

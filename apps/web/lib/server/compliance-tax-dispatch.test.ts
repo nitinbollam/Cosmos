@@ -5,8 +5,8 @@ import { orderIdFromStopAddress } from './dispatch-order'
 import { netTermsExposure } from './credit-limit'
 
 test('computeSalesTax applies 7% rate', () => {
-  assert.equal(computeSalesTax(100), 7)
-  assert.equal(computeSalesTax(0), 0)
+  assert.equal(computeSalesTax(100, 0.07), 7)
+  assert.equal(computeSalesTax(0, 0.07), 0)
 })
 
 test('orderIdFromStopAddress reads orderId from address JSON', () => {

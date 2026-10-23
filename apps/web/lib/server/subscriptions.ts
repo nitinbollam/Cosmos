@@ -5,7 +5,9 @@ import { ApiError } from './session'
 import * as orders from './orders'
 import * as savedPaymentMethods from './saved-payment-methods'
 import { collectOrderCardPayment } from './order-payment-admin'
+import { attemptOrQueue } from './deferred-work'
 
+import { swallowed } from './fire-and-forget'
 export type CreateSubscriptionInput = {
   customerId?: string
   savedPaymentMethodId: string
@@ -181,11 +183,13 @@ async function processOneSubscription(sub: Awaited<ReturnType<typeof listSubscri
     })
   } catch (payErr) {
     const { cancelOrderWithCompensation } = await import('./order-orchestration')
-    await cancelOrderWithCompensation(
-      sub.tenantId,
-      order.id,
-      `Subscription payment failed: ${payErr instanceof Error ? payErr.message : 'Declined'}`,
-    ).catch(() => undefined)
+    const reason = `Subscription payment failed: ${payErr instanceof Error ? payErr.message : 'Declined'}`
+    // The order is unpaid and holds stock and credit. If the cancel cannot finish now it is retried
+    // (it resumes from the step that failed); the payment error is still what the caller sees.
+    await attemptOrQueue(
+      { tenantId: sub.tenantId, kind: 'ORDER_CANCEL', sourceType: 'Order', sourceId: order.id, payload: { reason } },
+      () => cancelOrderWithCompensation(sub.tenantId, order.id, reason),
+    )
     throw payErr
   }
 
@@ -198,7 +202,7 @@ async function processOneSubscription(sub: Awaited<ReturnType<typeof listSubscri
   })
 
   const { notifySubscriptionOrderCreated } = await import('./notification-triggers')
-  void notifySubscriptionOrderCreated(sub.tenantId, sub.id, order.id, sub.customerId).catch(() => undefined)
+  void notifySubscriptionOrderCreated(sub.tenantId, sub.id, order.id, sub.customerId).catch(swallowed('subscriptions.processOneSubscription'))
 
   return order
 }
@@ -227,7 +231,7 @@ export async function processDueSubscriptions(): Promise<{ processed: number; fa
         data: { status: SubscriptionStatus.PAUSED, lastFailureReason: reason.slice(0, 500) },
       })
       const { notifySubscriptionPaymentFailed } = await import('./notification-triggers')
-      void notifySubscriptionPaymentFailed(sub.tenantId, sub.id, sub.customerId, reason).catch(() => undefined)
+      void notifySubscriptionPaymentFailed(sub.tenantId, sub.id, sub.customerId, reason).catch(swallowed('subscriptions.processDueSubscriptions'))
     }
   }
 

@@ -4,6 +4,7 @@ import * as stripe from './stripe'
 import { requireStripeConnectContext } from './tenant-stripe-connect'
 import { resolveStripeCustomerId } from './stripe-customer-sync'
 
+import { swallowed } from './fire-and-forget'
 export async function listSavedPaymentMethods(tenantId: string, customerId: string) {
   const connectCtx = await requireStripeConnectContext(tenantId)
   const rows = await paymentDb.savedPaymentMethod.findMany({
@@ -71,7 +72,7 @@ export async function deleteSavedPaymentMethod(tenantId: string, customerId: str
     !row.stripePaymentMethodId.startsWith('pm_demo_') &&
     (!row.stripeConnectedAccountId || row.stripeConnectedAccountId === connectCtx.connectedAccountId)
   ) {
-    await stripe.detachPaymentMethod(connectCtx, row.stripePaymentMethodId).catch(() => undefined)
+    await stripe.detachPaymentMethod(connectCtx, row.stripePaymentMethodId).catch(swallowed('saved-payment-methods.deleteSavedPaymentMethod', { level: 'warn' }))
   }
   await paymentDb.savedPaymentMethod.delete({ where: { id } })
   return { deleted: true }

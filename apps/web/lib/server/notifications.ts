@@ -43,7 +43,7 @@ async function deliverRecord(
       payload: dto.payload ?? {},
     })
     return notificationDb.notificationRequest.update({
-      where: { id },
+      where: { id, tenantId },
       data: {
         status: NotificationStatus.SENT,
         errorMessage: null,
@@ -56,7 +56,7 @@ async function deliverRecord(
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'delivery failed'
     return notificationDb.notificationRequest.update({
-      where: { id },
+      where: { id, tenantId },
       data: { status: NotificationStatus.FAILED, errorMessage: msg },
     })
   }

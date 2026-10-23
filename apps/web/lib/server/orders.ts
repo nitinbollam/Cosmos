@@ -1,3 +1,4 @@
+import { orderTotals, remainingAfterGiftCard } from './order-totals'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
@@ -10,7 +11,8 @@ import { OrderStatus } from '@/generated/prisma-order'
 import * as discounts from './discounts'
 import { ApiError } from './session'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
-import { syncInvoiceFromOrder } from './invoices'
+import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
+import { enqueuePostingJob } from './posting-outbox'
 import { assertOrderLinePrices } from './pricing'
 import * as notifyTriggers from './notification-triggers'
 import { assertAgeComplianceForOrder, type PosAgeAttestation } from './compliance-age'
@@ -18,6 +20,7 @@ import { defersFulfillmentUntilPayment } from './order-payment-sync'
 import { buildPaymentSummary, findPrimaryPaymentIntent } from './order-payment-admin'
 import { emitDomainEvent, emitOrderEvent } from './domain-events'
 
+import { swallowed } from './fire-and-forget'
 async function enrichOrderWithPaymentDetails<
   T extends { id: string; paymentIntentId: string | null; totalAmount: unknown; amountPaid: unknown },
 >(tenantId: string, order: T) {
@@ -87,13 +90,13 @@ export async function createOrder(
   opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string; skipPriceValidation?: boolean },
 ) {
   assertValidOrderLines(dto.lineItems)
-  let subtotal = dto.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0)
-  let discountAmount = 0
+  const linesTotal = orderTotals(dto.lineItems, { taxRate: 0 }).linesTotal.toNumber()
+  let discountRequested = 0
   let discountId: string | null = null
 
   if (dto.discountCode?.trim()) {
     const validated = await discounts.validateDiscount(tenantId, dto.discountCode, {
-      orderSubtotal: subtotal,
+      orderSubtotal: linesTotal,
       customerId: opts?.buyerCustomerId ?? dto.customerId,
       requestedBy: opts?.userId,
     })
@@ -101,14 +104,14 @@ export async function createOrder(
     if ('pendingApproval' in validated && validated.pendingApproval) {
       throw new ApiError(400, 'Discount is pending manager approval — checkout at full price or wait for approval')
     }
-    discountAmount = validated.amountOff
+    discountRequested = validated.amountOff
     discountId = validated.discount!.id
-    subtotal = Math.max(0, subtotal - discountAmount)
   }
 
   const taxRate = await getTenantSalesTaxRate(tenantId)
-  const taxAmount = computeSalesTax(subtotal, taxRate)
-  const totalAmount = subtotal + taxAmount
+  const totals = orderTotals(dto.lineItems, { discount: discountRequested, taxRate })
+  const discountAmount = totals.discountAmount.toNumber()
+  const totalAmount = totals.totalAmount.toNumber()
   const correlationId = randomUUID()
 
   const customerId = opts?.buyerCustomerId ?? dto.customerId
@@ -133,15 +136,13 @@ export async function createOrder(
     posAttestation: ageAttestation,
   })
 
-  let expectedGiftCardAmount = 0
+  let giftCardBalance: number | undefined
   if (dto.giftCardCode?.trim()) {
     const { checkGiftCardBalance } = await import('./gift-cards')
     const balanceCheck = await checkGiftCardBalance(tenantId, dto.giftCardCode.trim())
-    if (balanceCheck.valid && (balanceCheck.balance ?? 0) > 0) {
-      expectedGiftCardAmount = Math.min(totalAmount, balanceCheck.balance ?? 0)
-    }
+    if (balanceCheck.valid) giftCardBalance = balanceCheck.balance ?? 0
   }
-  const remainingAmountToFinance = Math.max(0, +(totalAmount - expectedGiftCardAmount).toFixed(2))
+  const remainingAmountToFinance = remainingAfterGiftCard(totals.totalAmount, giftCardBalance).remaining.toNumber()
 
   const creditCheck = await checkCreditLimitForOrder(tenantId, customerId, remainingAmountToFinance, dto.paymentMethod)
   const needsCreditApproval = !creditCheck.ok && creditCheck.requiresApproval
@@ -157,8 +158,8 @@ export async function createOrder(
       priority: (dto.priority ?? 'NORMAL') as never,
       notes: dto.notes,
       shippingAddress: dto.shippingAddress as never,
-      taxAmount: new Prisma.Decimal(taxAmount),
-      totalAmount: new Prisma.Decimal(totalAmount),
+      taxAmount: totals.taxAmount,
+      totalAmount: totals.totalAmount,
       lineItems: {
         create: dto.lineItems.map((li) => ({
           skuId: li.skuId,
@@ -221,8 +222,7 @@ export async function createOrder(
 
   const isFullyPaid = giftCardRedeemed >= totalAmount - 0.005
   if (isFullyPaid) {
-    const { syncInvoiceFromOrder } = await import('./invoices')
-    await syncInvoiceFromOrder(tenantId, order.id).catch(() => undefined)
+    await syncInvoiceOrQueue(tenantId, order.id)
   }
 
   const shouldFulfillNow = !defersFulfillmentUntilPayment(dto.paymentMethod) || isFullyPaid
@@ -234,7 +234,7 @@ export async function createOrder(
         console.error(`[orders] fulfillment pipeline failed for order ${order.id}:`, err),
       )
     }
-    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(() => undefined)
+    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(swallowed('orders.channel'))
     void emitOrderEvent(tenantId, 'order.created', order.id, {}, { key: order.id })
   }
   return order
@@ -396,7 +396,16 @@ export async function recordOrderPayment(
   })
 
   if (order.paymentMethod === 'NET_TERMS') {
-    await releaseCreditUsed(tenantId, order.customerId, Number(apply)).catch(() => undefined)
+    await attemptOrQueue(
+      {
+        tenantId,
+        kind: 'CREDIT_RELEASE',
+        sourceType: 'Order',
+        sourceId: id,
+        payload: { customerId: order.customerId, amount: apply.toString() },
+      },
+      () => releaseCreditUsed(tenantId, order.customerId, Number(apply)),
+    )
   }
   // Manual payments (cash, check, ACH entered by staff) don't go through card capture.
   void emitOrderEvent(tenantId, 'finance.payment_captured', id, {
@@ -406,12 +415,20 @@ export async function recordOrderPayment(
     reference: body.reference ?? null,
   })
 
-  await syncInvoiceFromOrder(tenantId, id).catch(() => undefined)
+  await syncInvoiceOrQueue(tenantId, id)
 
   const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId: id } })
   if (invoice) {
-    const { postArPaymentJournal } = await import('./operations-gl')
-    await postArPaymentJournal(tenantId, invoice.id, Number(apply)).catch(() => undefined)
+    // Queued with the payment's reference (or a fresh key), so the journal posts once and a ledger
+    // problem shows up as a failing job rather than a payment missing from the books.
+    await enqueuePostingJob(orderDb, {
+      tenantId,
+      kind: 'AR_PAYMENT_JOURNAL',
+      sourceType: 'Invoice',
+      sourceId: invoice.id,
+      variant: `manual:${body.reference?.trim() || randomUUID()}`,
+      amount: apply.toFixed(2),
+    })
     const { notifyPaymentReceived } = await import('./notification-triggers')
     void notifyPaymentReceived(tenantId, id, order.customerId, Number(apply), invoice.invoiceNumber).catch(
       () => undefined,
@@ -446,7 +463,7 @@ export async function resumeOrderAfterCreditApproval(tenantId: string, orderId: 
       orderId,
       order.customerId,
       Number(order.totalAmount),
-    ).catch(() => undefined)
+    ).catch(swallowed('orders.resumeOrderAfterCreditApproval'))
     void emitOrderEvent(tenantId, 'order.created', orderId, {}, { key: orderId })
   }
   return orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { lineItems: true } })
@@ -458,7 +475,7 @@ export async function getReorderLines(tenantId: string, orderId: string, opts?: 
   const skuIds = order.lineItems.map((li) => li.skuId)
   const prices = await resolvePricesForCustomer(tenantId, order.customerId, skuIds)
   const skus = await import('./inventory').then((m) =>
-    Promise.all(skuIds.map((id) => m.findSkuById(tenantId, id).catch(() => null))),
+    Promise.all(skuIds.map((id) => m.findSkuById(tenantId, id).catch((err) => { swallowed('orders.getReorderLines.sku', { tenantId, level: 'warn' })(err); return null }))),
   )
   const skuMap = new Map(skus.filter(Boolean).map((s) => [s!.id, s!]))
 

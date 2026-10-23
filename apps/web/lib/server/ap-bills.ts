@@ -1,8 +1,11 @@
 import { Prisma, VendorBillStatus, BillMatchStatus } from '@/generated/prisma-purchasing'
-import { purchasingDb } from './db'
-import { postApPaymentJournal, postPoReceiptJournal } from './operations-gl'
+import { randomUUID } from 'node:crypto'
+import { orderDb, purchasingDb } from './db'
+import { enqueuePostingJob, enqueuePostingJobAfterCommit } from './posting-outbox'
+import { poReceiptJob } from './posting-sources'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 function toNum(v: unknown): number {
   if (v == null) return 0
   return Number(v)
@@ -12,9 +15,11 @@ function billBalance(total: number, paid: number): number {
   return Math.max(0, +(total - paid).toFixed(2))
 }
 
-function deriveBillStatus(total: number, paid: number, stored: VendorBillStatus): string {
+export function deriveBillStatus(total: number, paid: number, stored: VendorBillStatus): string {
   const bal = billBalance(total, paid)
   if (stored === VendorBillStatus.VOID) return 'VOID'
+  // A $0 bill (e.g. PO lines without a price) has had nothing paid on it: keep it open, not "Paid".
+  if (total <= 0.01 && paid <= 0.01) return stored === VendorBillStatus.DRAFT ? 'DRAFT' : 'ISSUED'
   if (bal <= 0.01) return 'PAID'
   if (paid > 0.01) return 'PARTIALLY_PAID'
   return stored === VendorBillStatus.DRAFT ? 'DRAFT' : 'ISSUED'
@@ -22,6 +27,15 @@ function deriveBillStatus(total: number, paid: number, stored: VendorBillStatus)
 
 function formatBillNumber(poNumber: string, seq = 1): string {
   return `BILL-${poNumber.replace(/^PO-/i, '')}-${seq}`
+}
+
+/** "PO-1001" and "1001" both map to BILL-1001-n, so take the first sequence number not in use. */
+async function nextFreeBillNumber(tenantId: string, poNumber: string): Promise<string> {
+  for (let seq = 1; ; seq++) {
+    const billNumber = formatBillNumber(poNumber, seq)
+    const taken = await purchasingDb.vendorBill.findFirst({ where: { tenantId, billNumber }, select: { id: true } })
+    if (!taken) return billNumber
+  }
 }
 
 export type ThreeWayMatchResult = {
@@ -198,23 +212,36 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
   const totalAmount = +subtotal.toFixed(2)
 
   if (existing) {
-    await purchasingDb.vendorBillLine.deleteMany({ where: { billId: existing.id } })
-    await purchasingDb.vendorBill.update({
-      where: { id: existing.id },
-      data: {
-        subtotal: new Prisma.Decimal(subtotal),
-        totalAmount: new Prisma.Decimal(totalAmount),
-        lines: {
-          create: billLines.map((l) => ({
+    // Re-bill only from the bill we read, so two re-bills at once cannot both apply. A changed total
+    // starts a new revision, whose posting brings the ledger to the new total (up or down).
+    const total = new Prisma.Decimal(totalAmount)
+    const changed = !total.equals(existing.totalAmount)
+    const rebilled = await purchasingDb.$transaction(async (tx) => {
+      const moved = await tx.vendorBill.updateMany({
+        where: { id: existing.id, tenantId, totalAmount: existing.totalAmount, receiptRevision: existing.receiptRevision },
+        data: {
+          subtotal: new Prisma.Decimal(subtotal),
+          totalAmount: total,
+          ...(changed ? { receiptRevision: { increment: 1 } } : {}),
+        },
+      })
+      if (moved.count !== 1) throw new ApiError(409, 'This bill was just re-billed by someone else — reload and try again')
+      await tx.vendorBillLine.deleteMany({ where: { billId: existing.id } })
+      for (const l of billLines) {
+        await tx.vendorBillLine.create({
+          data: {
+            billId: existing.id,
             lineNo: l.lineNo,
             skuCode: l.skuCode,
             description: l.description,
             quantity: l.quantity,
             unitCost: new Prisma.Decimal(l.unitCost),
-          })),
-        },
-      },
+          },
+        })
+      }
+      return tx.vendorBill.findUniqueOrThrow({ where: { id: existing.id } })
     })
+    if (changed) await enqueuePostingJobAfterCommit(poReceiptJob(rebilled))
     return getVendorBill(tenantId, existing.id)
   }
 
@@ -233,7 +260,7 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
       tenantId,
       supplierId: po.supplierId,
       purchaseOrderId: po.id,
-      billNumber: formatBillNumber(po.number),
+      billNumber: await nextFreeBillNumber(tenantId, po.number),
       status: VendorBillStatus.ISSUED,
       subtotal: new Prisma.Decimal(subtotal),
       taxAmount: new Prisma.Decimal(0),
@@ -255,15 +282,10 @@ export async function createBillFromPurchaseOrder(tenantId: string, input: Creat
     include: { supplier: true, lines: true },
   })
 
-  const { toBaseAmount } = await import('./fx-util')
-  const journalEntryId = await postPoReceiptJournal(tenantId, bill.id, toBaseAmount(totalAmount, fx.fxRateToBase)).catch(
-    () => null,
-  )
-  if (journalEntryId) {
-    await purchasingDb.vendorBill.update({ where: { id: bill.id }, data: { journalEntryId } })
-  }
+  // Inventory accrual (Dr Inventory, Cr AP) in base currency; the worker writes the journal id back to the bill.
+  await enqueuePostingJobAfterCommit(poReceiptJob(bill))
 
-  await runThreeWayMatch(tenantId, bill.id).catch(() => undefined)
+  await runThreeWayMatch(tenantId, bill.id).catch(swallowed('ap-bills.createBillFromPurchaseOrder'))
 
   return getVendorBill(tenantId, bill.id)
 }
@@ -302,7 +324,15 @@ export async function recordBillPayment(
     include: { supplier: true, lines: true },
   })
 
-  await postApPaymentJournal(tenantId, billId, apply).catch(() => undefined)
+  // Keyed by this payment so it posts once; a missing account or ledger outage leaves a retrying job.
+  await enqueuePostingJob(orderDb, {
+    tenantId,
+    kind: 'AP_PAYMENT_JOURNAL',
+    sourceType: 'VendorBill',
+    sourceId: billId,
+    variant: `pay:${randomUUID()}`,
+    amount: new Prisma.Decimal(apply).toFixed(2),
+  })
 
   return {
     ...updated,

@@ -249,6 +249,7 @@ export async function approveCycleCount(tenantId: string, id: string, performedB
           referenceId: row.id,
           referenceType: 'CYCLE_COUNT',
           correlationId,
+          ledger: true,
           reason: `Cycle count ${row.id}`,
         },
         performedBy,

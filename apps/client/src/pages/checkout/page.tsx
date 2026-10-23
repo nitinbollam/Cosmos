@@ -97,7 +97,7 @@ export default function CheckoutPage() {
           primaryState?: string | null
           primaryZip?: string | null
         }>('/customers/me'),
-        api.get<{ salesTaxRate: number }>('/tax/settings'),
+        api.get<{ salesTaxRate: number | null }>('/tax/settings'),
         api.get<SavedCard[]>('/saved-payment-methods').catch(() => [] as SavedCard[]),
       ])
       setCustomer(c)
@@ -106,7 +106,7 @@ export default function CheckoutPage() {
       setCity(c.primaryCity ?? '')
       setState(c.primaryState ?? '')
       setZip(c.primaryZip ?? '')
-      setTaxRate(tax.salesTaxRate)
+      setTaxRate(tax.salesTaxRate ?? 0)
       setSavedCards(methods)
       const defaultCard = methods.find((m) => m.isDefault) ?? methods[0]
       if (defaultCard) {
@@ -289,7 +289,7 @@ export default function CheckoutPage() {
               stripePaymentMethodId: cardPaymentMethodId,
               isDefault: savedCards.length === 0,
             })
-            .catch(() => undefined)
+            .catch(() => undefined) // swallow-ok: saving the card for next time is optional; the payment already went through
         }
       }
 

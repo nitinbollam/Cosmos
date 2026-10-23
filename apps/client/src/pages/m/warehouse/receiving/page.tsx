@@ -2,8 +2,9 @@ import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api-mobile'
 import { OfflineBanner } from '@/components/mobile/offline-banner'
-import { enqueueAction } from '@/lib/offline-queue'
+import { enqueueAction, readQueue } from '@/lib/offline-queue'
 import { axiosErr } from '@/lib/axios-error'
+import type { ReceiptBilling } from '@/lib/receipt-billing'
 import type { ScanResult } from '@/components/scanner/types'
 
 // Lazy so the decode engine (~500kB) is fetched only when a picker actually
@@ -32,11 +33,12 @@ type ScanEntry = {
 const RECENT_LIMIT = 50
 
 export default function ReceivingMobilePage() {
-  const [poId, setPoId] = useState('')
+  const [poRef, setPoRef] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [scan, setScan] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [completing, setCompleting] = useState(false)
   const [recent, setRecent] = useState<ScanEntry[]>([])
   const [totals, setTotals] = useState<Record<ScanStatus, number>>({ sent: 0, queued: 0, error: 0 })
   const nextId = useRef(0)
@@ -56,11 +58,16 @@ export default function ReceivingMobilePage() {
         setMsg("You're offline — connect to start a receiving session. Scans work offline once it has started.")
         return
       }
-      const res = await api.post<{ id: string }>('/wms/receiving/sessions', {
-        purchaseOrderId: poId || undefined,
+      const res = await api.post<{ id: string; resumed?: boolean; poNumber?: string }>('/wms/receiving/sessions', {
+        purchaseOrderId: poRef.trim() || undefined,
       })
       setSessionId(res.id)
-      setMsg(`Session #${res.id.slice(-8).toUpperCase()} started`)
+      const label = `#${res.id.slice(-8).toUpperCase()}`
+      setMsg(
+        res.resumed
+          ? `Continuing the open session ${label}${res.poNumber ? ` for ${res.poNumber}` : ''}`
+          : `Session ${label} started`,
+      )
     } catch (e) {
       setMsg(axiosErr(e))
     }
@@ -93,6 +100,43 @@ export default function ReceivingMobilePage() {
     },
     [sessionId, record],
   )
+
+  // Finishing on the phone: posts the stock, updates the PO and creates the supplier bill.
+  async function completeSession() {
+    if (!sessionId) return
+    if (!navigator.onLine) {
+      setMsg("You're offline — connect to complete the session.")
+      return
+    }
+    const queued = readQueue().filter(
+      (a) => a.type === 'receiving_scan' && (a.payload as { sessionId?: string } | undefined)?.sessionId === sessionId,
+    ).length
+    if (queued > 0) {
+      setMsg(`${queued} scan${queued === 1 ? ' is' : 's are'} still queued offline. Wait for them to send, then complete.`)
+      return
+    }
+    setCompleting(true)
+    setMsg(null)
+    try {
+      const res = await api.patch<ReceiptBilling & { status: string }>(
+        `/wms/receiving/sessions/${sessionId}/complete`,
+      )
+      const done = res.status === 'DISCREPANCY' ? 'Receiving complete, with damaged units noted.' : 'Receiving complete.'
+      setMsg(
+        res.billError
+          ? `${done} The supplier bill couldn't be created: ${res.billError}. Ask the office to use "Create bill" on the purchase order.`
+          : done,
+      )
+      setSessionId(null)
+      setRecent([])
+      setTotals({ sent: 0, queued: 0, error: 0 })
+      setPoRef('')
+    } catch (e) {
+      setMsg(axiosErr(e))
+    } finally {
+      setCompleting(false)
+    }
+  }
 
   async function scanLine() {
     await submitCode(scan, 'manual')
@@ -189,8 +233,16 @@ export default function ReceivingMobilePage() {
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>Receiving</h1>
       {!sessionId ? (
         <>
-          <label style={{ display: 'block', fontSize: 13, marginTop: 12 }}>PO ID (optional)</label>
-          <input className="pleros-input" value={poId} onChange={(e) => setPoId(e.target.value)} />
+          <label htmlFor="receiving-po" style={{ display: 'block', fontSize: 13, marginTop: 12 }}>
+            PO number (optional)
+          </label>
+          <input
+            id="receiving-po"
+            className="pleros-input"
+            placeholder="e.g. PO-1001"
+            value={poRef}
+            onChange={(e) => setPoRef(e.target.value)}
+          />
           <button
             type="button"
             className="btn-primary"
@@ -230,6 +282,15 @@ export default function ReceivingMobilePage() {
             onClick={() => void scanLine()}
           >
             Add scan
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ marginTop: 16, width: '100%', minHeight: 48 }}
+            disabled={completing}
+            onClick={() => void completeSession()}
+          >
+            {completing ? 'Completing…' : 'Complete receiving'}
           </button>
           {recentList}
         </>

@@ -18,3 +18,8 @@ test('derivePickLineStatus returns SHORT when partial with markShort', () => {
 test('derivePickLineStatus returns PENDING for partial without markShort', () => {
   assert.equal(derivePickLineStatus(10, 7), 'PENDING')
 })
+
+test('derivePickLineStatus returns SHORT when nothing could be found and the picker marks it short', () => {
+  assert.equal(derivePickLineStatus(10, 0, true), 'SHORT')
+  assert.equal(derivePickLineStatus(10, 0, false), 'PENDING')
+})

@@ -29,6 +29,8 @@ model Customer {
   tobaccoLicenseNumber String?
   creditLimit          Decimal?  
   creditUsed           Decimal    @default(0)
+  /// A manager has approved this account to buy from a driver's van (PLR-167).
+  vanSalesApproved     Boolean    @default(false)
   paymentTermsDays     Int        @default(0)
   salesRepUserId       String?
   primaryAddressLine1  String?
@@ -116,4 +118,20 @@ model Activity {
   @@index([tenantId])
   @@index([customerId])
   @@index([leadId])
+}
+
+/// One row per order whose terms exposure was added to the customer's `creditUsed`. Written in
+/// the same transaction as the increment, so a retried saga cannot apply the credit twice.
+/// `releasedAt` records the full release made when the order is cancelled (once only).
+model CreditApplication {
+  id         String    @id @default(cuid())
+  tenantId   String
+  orderId    String
+  customerId String
+  amount     Decimal
+  appliedAt  DateTime  @default(now())
+  releasedAt DateTime?
+
+  @@unique([tenantId, orderId])
+  @@index([customerId])
 }

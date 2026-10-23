@@ -45,8 +45,12 @@ export async function createTenantOrganization(input: {
   const { seedOnboardingSteps } = await import('./tenant')
   await seedOnboardingSteps(tenantId)
 
-  const { ensureTier5Accounts } = await import('./operations-gl')
-  await ensureTier5Accounts(tenantId).catch(() => undefined)
+  // Every account an automated posting needs (cash, inventory, AR, AP, revenue, COGS). If this fails
+  // the posting jobs fail visibly with LedgerNotConfiguredError and retry once the accounts exist.
+  const { ensurePostingAccounts } = await import('./ledger-posting')
+  await ensurePostingAccounts(tenantId).catch((err) =>
+    console.error(`[signup] could not provision posting accounts for tenant ${tenantId}:`, err),
+  )
 
   return { tenantId, slug }
 }

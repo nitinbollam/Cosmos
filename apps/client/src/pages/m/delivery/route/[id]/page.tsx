@@ -8,6 +8,7 @@ import { PodPhoto } from '@/components/pod/PodPhoto'
 import { SignaturePad, type CapturedSignature } from '@/components/pod/SignaturePad'
 import { COMMON_FAILURE_REASONS, MAX_FAILURE_REASON_LENGTH } from '@/components/pod/failure-reasons'
 import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
+import { navigationUrl, routeProgress, routeSummary, telUrl } from '@/lib/driver-routes'
 
 type StopFailure = { reason: string; failedAt: string }
 
@@ -30,6 +31,8 @@ type Stop = {
   minimumAge?: number | null
   /** The recipient's age must be confirmed before this stop can be delivered. */
   ageCheckRequired?: boolean
+  /** Who to call at the door and any note on the order, from the server. */
+  contact?: { name: string | null; phone: string | null; orderNotes: string | null } | null
 }
 
 /** Who and where, from the stop's address: name on one line, street/city on the next. */
@@ -47,6 +50,7 @@ function stopAddressLines(address: unknown): { who: string | null; where: string
 
 type RouteDetail = {
   id: string
+  name?: string | null
   status: string
   stops: Stop[]
 }
@@ -72,6 +76,68 @@ function withStopDelivered(route: RouteDetail, stopId: string, pod: StopPod): Ro
   }
 }
 
+function RouteHeader({ route }: { route: RouteDetail }) {
+  const p = routeProgress(route)
+  const done = route.status === 'COMPLETED' || (p.total > 0 && p.remaining === 0)
+  const sum = done ? routeSummary(route) : null
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <p style={{ margin: '0 0 6px', fontSize: 13, opacity: 0.75 }}>
+        {p.delivered} of {p.total} delivered
+        {p.failed > 0 ? ` · ${p.failed} failed` : ''}
+        {p.remaining > 0 ? ` · ${p.remaining} to go` : ''}
+      </p>
+      <div
+        role="progressbar"
+        aria-valuenow={p.percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Route progress"
+        style={{ height: 6, borderRadius: 3, background: 'rgba(127,127,127,0.25)', overflow: 'hidden' }}
+      >
+        <div style={{ width: `${p.percent}%`, height: '100%', background: 'var(--c-accent)' }} />
+      </div>
+      {sum && (
+        <div className="pleros-mobile-card" style={{ marginTop: 10 }}>
+          <strong>Route finished</strong>
+          <p style={{ margin: '6px 0 0', fontSize: 13 }}>
+            {sum.delivered} delivered, {sum.failed} failed
+            {sum.minutes != null ? ` · ${Math.floor(sum.minutes / 60)}h ${sum.minutes % 60}m between first and last stop` : ''}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Navigate, call, and any note on the order, for a stop still to be done. */
+function StopActions({ stop }: { stop: Stop }) {
+  const open = stop.status !== 'DELIVERED' && stop.status !== 'FAILED'
+  const nav = navigationUrl(stop.address)
+  const tel = telUrl(stop.contact?.phone)
+  const notes = stop.contact?.orderNotes
+  if (!open || (!nav && !tel && !notes)) return null
+  return (
+    <div style={{ marginTop: 8 }}>
+      {(nav || tel) && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {nav && (
+            <a className="btn-ghost" style={{ fontSize: 13, padding: '6px 12px' }} href={nav} target="_blank" rel="noopener noreferrer">
+              Navigate
+            </a>
+          )}
+          {tel && (
+            <a className="btn-ghost" style={{ fontSize: 13, padding: '6px 12px' }} href={tel}>
+              Call{stop.contact?.name ? ` ${stop.contact.name}` : ''}
+            </a>
+          )}
+        </div>
+      )}
+      {notes && <p style={{ fontSize: 12, margin: '8px 0 0', opacity: 0.8 }}>Note: {notes}</p>}
+    </div>
+  )
+}
+
 export default function DeliveryRoutePage() {
   const { id } = useParams<{ id: string }>()
   const [route, setRoute] = useState<RouteDetail | null>(null)
@@ -87,6 +153,8 @@ export default function DeliveryRoutePage() {
   const [submitting, setSubmitting] = useState<string | null>(null)
   // The stop whose "mark failed" form is open, and the reason being entered.
   const [failingStop, setFailingStop] = useState<string | null>(null)
+  // Only one stop's delivery form is open at a time: the next one, unless the driver opens another.
+  const [openStop, setOpenStop] = useState<string | null>(null)
   const [failReason, setFailReason] = useState('')
 
   const detailsFor = (stopId: string) => details[stopId] ?? EMPTY_DETAILS
@@ -179,12 +247,18 @@ export default function DeliveryRoutePage() {
     }
   }
 
+  const nextOpen = [...(route?.stops ?? [])].sort((a, b) => a.sequence - b.sequence).find((x) => x.status !== 'DELIVERED' && x.status !== 'FAILED')
+  // A stop the driver opened stays active only while it still needs an outcome.
+  const openedStillOpen = (route?.stops ?? []).some((x) => x.id === openStop && x.status !== 'DELIVERED' && x.status !== 'FAILED')
+  const activeStopId = (openedStillOpen ? openStop : null) ?? nextOpen?.id ?? null
+
   return (
     <div>
       <Link to="/m/delivery" className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
         ← Routes
       </Link>
-      <h1 style={{ fontFamily: 'var(--font-display)' }}>Route {id?.slice(-8)}</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', marginBottom: 4 }}>{route?.name?.trim() || `Route ${id?.slice(-8)}`}</h1>
+      {route && <RouteHeader route={route} />}
       {err && <p style={{ color: 'var(--c-danger)' }}>{err}</p>}
       {(route?.stops ?? []).map((s) => (
         <div key={s.id} className="pleros-mobile-card">
@@ -204,6 +278,7 @@ export default function DeliveryRoutePage() {
               </p>
             )
           })()}
+          <StopActions stop={s} />
           <StopItems items={s.items} />
           {s.status === 'DELIVERED' &&
             (s.pod?.photoUrl ? (
@@ -267,10 +342,15 @@ export default function DeliveryRoutePage() {
               </div>
             </div>
           )}
+          {s.status !== 'DELIVERED' && s.status !== 'FAILED' && s.id !== activeStopId && (
+            <button type="button" className="btn-ghost" style={{ marginTop: 8 }} onClick={() => setOpenStop(s.id)}>
+              Open stop
+            </button>
+          )}
           {s.status !== 'DELIVERED' && s.status !== 'FAILED' && (
-            // Hidden, not unmounted, while the failed form is open: the photo and the
-            // signature strokes must still be there if the driver cancels.
-            <div hidden={failingStop === s.id}>
+            // Hidden, not unmounted, while the failed form is open or another stop is the active one:
+            // the photo and the signature strokes must still be there when it is shown again.
+            <div hidden={failingStop === s.id || s.id !== activeStopId}>
               <input
                 className="pleros-input"
                 placeholder="Recipient name (optional)"

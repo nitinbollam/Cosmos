@@ -1,5 +1,6 @@
 import { jwtVerify } from 'jose'
 import { jwtSecret } from './env'
+import { bindRequestTenant } from './tenant-scope'
 
 export type SessionUser = {
   userId: string
@@ -122,6 +123,9 @@ export async function getSession(req: Request): Promise<SessionUser | null> {
   if (!state.active) return null
   if (sessionId && !(await isAuthSessionLive(sessionId, sub))) return null
 
+  // Everything this request does is now checked against the session's tenant (see tenant-scope.ts).
+  bindRequestTenant(tenantId)
+
   return {
     userId: sub,
     tenantId,
@@ -144,6 +148,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Extra response headers, e.g. Retry-After on a 429. */
+    public headers?: Record<string, string>,
     /** Optional structured detail (e.g. per-row validation errors), returned as `errors`. */
     public details?: unknown,
   ) {
@@ -170,7 +176,7 @@ export async function requireRole(req: Request, allowed: readonly string[]): Pro
 export function toJsonError(e: unknown): Response {
   if (e instanceof ApiError) {
     const body = e.details === undefined ? { message: e.message } : { message: e.message, errors: e.details }
-    return Response.json(body, { status: e.status })
+    return Response.json(body, { status: e.status, headers: e.headers })
   }
   if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') {
     return Response.json({ message: 'Conflict' }, { status: 409 })

@@ -36,6 +36,20 @@ const SCHEMAS: Record<string, string> = {
   saleschannels: 'pleros_sales_channels',
 }
 
+/**
+ * The generated clients follow the schema files' provider. CI switches every schema to Postgres
+ * (scripts/apply-prisma-provider.mjs), where these file-backed databases cannot work, so the tests
+ * that need them are skipped there with this reason instead of failing or touching a real server.
+ */
+function schemaProvider(schema: string): string {
+  const text = fs.readFileSync(path.join(WEB_ROOT, 'prisma', schema, 'schema.prisma'), 'utf8')
+  return /datasource\s+\w+\s*\{[^}]*provider\s*=\s*"(\w+)"/.exec(text)?.[1] ?? 'unknown'
+}
+const nonSqlite = ['auth', 'tenant', 'ledger'].filter((s) => schemaProvider(s) !== 'sqlite')
+export const ISOLATED_SKIP: string | false = nonSqlite.length
+  ? `isolated SQLite databases unavailable: ${nonSqlite.join(', ')} schema provider is not sqlite`
+  : false
+
 export const ISOLATED_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pleros-bankrecon-test-'))
 
 function urlFor(schema: string) {
@@ -85,7 +99,7 @@ export async function disposeIsolatedDatabases() {
   const db = (await import('../db')) as Record<string, unknown>
   for (const client of Object.values(db)) {
     const c = client as { $disconnect?: () => Promise<void> }
-    if (typeof c?.$disconnect === 'function') await c.$disconnect().catch(() => undefined)
+    if (typeof c?.$disconnect === 'function') await c.$disconnect().catch(() => undefined) // swallow-ok: test teardown; the temp directory is deleted next
   }
   fs.rmSync(ISOLATED_DIR, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }

@@ -3,10 +3,11 @@ import { Prisma } from '@/generated/prisma-inventory'
 import { inventoryDb } from './db'
 import { ApiError } from './session'
 
+import { swallowed } from './fire-and-forget'
 function queueSalesChannelPush(tenantId: string, skuId: string) {
   void import('./sales-channels/core')
     .then(({ queuePriceOrQuantityPush }) => queuePriceOrQuantityPush(tenantId, skuId))
-    .catch(() => undefined)
+    .catch(swallowed('inventory.queueSalesChannelPush'))
 }
 
 export type CreateSkuInput = {
@@ -284,8 +285,21 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
     })
   })
 
-  const { fillBackordersOnReceipt } = await import('./backorders')
-  void fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId).catch(() => undefined)
+  // The receipt is committed. Filling backorders from it is retried if it fails, never dropped.
+  const { attemptOrQueue } = await import('./deferred-work')
+  await attemptOrQueue(
+    {
+      tenantId,
+      kind: 'BACKORDER_FILL',
+      sourceType: 'Sku',
+      sourceId: `${dto.skuId}:${dto.warehouseId}`,
+      payload: { skuId: dto.skuId, warehouseId: dto.warehouseId },
+    },
+    async () => {
+      const { fillBackordersOnReceipt } = await import('./backorders')
+      await fillBackordersOnReceipt(tenantId, dto.skuId, dto.warehouseId)
+    },
+  )
 
   queueSalesChannelPush(tenantId, dto.skuId)
   return result
@@ -314,14 +328,23 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
       throw new ApiError(400, 'Insufficient available stock at source warehouse')
     }
 
-    const fromOnHand = from.quantityOnHand - dto.quantity
-    await tx.stockLevel.update({
-      where: { id: from.id },
+    // Guarded atomic decrement: a concurrent transfer/reserve/ship cannot be overwritten and
+    // available can never go negative (available = onHand - reserved).
+    const moved = await tx.stockLevel.updateMany({
+      where: { id: from.id, tenantId, quantityAvailable: { gte: dto.quantity } },
       data: {
-        quantityOnHand: fromOnHand,
-        quantityAvailable: from.quantityAvailable - dto.quantity,
+        quantityOnHand: { decrement: dto.quantity },
+        quantityAvailable: { decrement: dto.quantity },
       },
     })
+    if (moved.count !== 1) {
+      throw new ApiError(400, 'Insufficient available stock at source warehouse')
+    }
+    const fromAfter = await tx.stockLevel.findUniqueOrThrow({
+      where: { id: from.id },
+      select: { quantityOnHand: true },
+    })
+    const fromOnHand = fromAfter.quantityOnHand
 
     await tx.stockLedgerEntry.create({
       data: {
@@ -531,9 +554,10 @@ export async function importSkus(tenantId: string, rows: CreateSkuInput[]) {
   return { created, failed: errors.length, errors }
 }
 
-export async function listWarehouses(tenantId: string) {
+export async function listWarehouses(tenantId: string, opts?: { includeVehicles?: boolean }) {
   const warehouses = await inventoryDb.warehouse.findMany({
-    where: { tenantId },
+    // Vans are not places an order can ship from or a picker can walk to; they have their own endpoints.
+    where: { tenantId, ...(opts?.includeVehicles ? {} : { kind: 'WAREHOUSE' }) },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
   })
   const stockSummary = await inventoryDb.stockLevel.groupBy({
@@ -623,6 +647,8 @@ export async function adjustStock(
     referenceId?: string
     referenceType?: string
     correlationId?: string
+    /** Post the loss (or find) to the general ledger at the SKU's cost. Not for adjustments that carry their own journal. */
+    ledger?: boolean
   },
   performedBy: string,
 ) {
@@ -640,20 +666,25 @@ export async function adjustStock(
       where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
     })
     if (!level) throw new ApiError(404, 'Stock level not found')
-    const newOnHand = level.quantityOnHand + dto.quantityDelta
-    if (newOnHand < 0) throw new ApiError(400, 'Adjustment would drive stock negative')
-    if (newOnHand < level.quantityReserved) {
-      throw new ApiError(400, 'Adjustment would leave less on hand than reserved quantity')
-    }
-
-    const updatedLevel = await tx.stockLevel.update({
-      where: { id: level.id },
+    // Relative, guarded update. available = onHand - reserved, so requiring
+    // available >= -delta covers both "would go negative" and "less than reserved".
+    const guarded = await tx.stockLevel.updateMany({
+      where: {
+        id: level.id,
+        tenantId,
+        ...(dto.quantityDelta < 0 ? { quantityAvailable: { gte: -dto.quantityDelta } } : {}),
+      },
       data: {
-        quantityOnHand: newOnHand,
+        quantityOnHand: { increment: dto.quantityDelta },
         quantityAvailable: { increment: dto.quantityDelta },
         ...(dto.locationId !== undefined ? { locationId: dto.locationId || null } : {}),
       },
     })
+    if (guarded.count !== 1) {
+      throw new ApiError(400, 'Adjustment would leave less on hand than reserved quantity')
+    }
+    const updatedLevel = await tx.stockLevel.findUniqueOrThrow({ where: { id: level.id } })
+    const newOnHand = updatedLevel.quantityOnHand
     await tx.stockLedgerEntry.create({
       data: {
         id: randomUUID(),
@@ -689,7 +720,7 @@ export async function adjustStock(
       sku?.code ?? dto.skuId,
       result.quantityAvailable,
       result.reorderPoint,
-    ).catch(() => undefined)
+    ).catch(swallowed('inventory.adjustStock'))
     // No dedupe key: a SKU can drop below its reorder point again after a restock.
     const { emitDomainEvent } = await import('./domain-events')
     void emitDomainEvent(tenantId, 'inventory.stock_level_low', {
@@ -699,6 +730,22 @@ export async function adjustStock(
       quantityAvailable: result.quantityAvailable,
       reorderPoint: result.reorderPoint,
     })
+  }
+
+  if (dto.ledger) {
+    const [{ adjustmentPosting }, { enqueuePostingJobAfterCommit }] = await Promise.all([import('./stock-gl'), import('./posting-outbox')])
+    const costRow = await inventoryDb.sKU.findFirst({ where: { id: dto.skuId, tenantId }, select: { cost: true } })
+    const posting = adjustmentPosting(costRow?.cost?.toString(), dto.quantityDelta)
+    if (posting) {
+      await enqueuePostingJobAfterCommit({
+        tenantId,
+        kind: posting.kind,
+        sourceType: 'StockAdjustment',
+        sourceId: correlationId,
+        variant: `${dto.warehouseId}:${dto.skuId}:${batchKey}`,
+        amount: posting.amount,
+      })
+    }
   }
 
   queueSalesChannelPush(tenantId, dto.skuId)
@@ -875,9 +922,24 @@ export async function commitShipmentForOrder(
   orderId: string,
   performedBy: string,
   shippedByLine?: Array<{ skuId: string; warehouseId: string; batchId?: string; quantity: number }>,
+  /**
+   * The fulfillment task being dispatched. When given, the commit is recorded against it and a
+   * repeat call returns the stored result instead of looking for reservations that are already
+   * FULFILLED (which would report an empty shipment).
+   */
+  fulfillmentTaskId?: string,
 ): Promise<{ shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> }> {
+  type ShippedLine = { skuId: string; warehouseId: string; batchId: string; quantity: number }
+  const readCommit = async (): Promise<ShippedLine[] | null> => {
+    if (!fulfillmentTaskId) return null
+    const row = await inventoryDb.shipmentCommit.findFirst({ where: { tenantId, fulfillmentTaskId } })
+    return row ? (row.lines as unknown as ShippedLine[]) : null
+  }
+  const replay = await readCommit()
+  if (replay) return { shipped: replay }
+
   const correlationId = randomUUID()
-  const shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> = []
+  const shipped: ShippedLine[] = []
 
   // Remaining shippable quantity per sku|warehouse|batch from the pick result.
   const cap = new Map<string, number>()
@@ -888,6 +950,7 @@ export async function commitShipmentForOrder(
     }
   }
 
+  let raced: ShippedLine[] | null = null
   await inventoryDb.$transaction(async (tx) => {
     const reservations = await tx.stockReservation.findMany({
       where: { tenantId, orderId, status: 'ACTIVE' },
@@ -901,41 +964,55 @@ export async function commitShipmentForOrder(
 
       const level = await tx.stockLevel.findFirst({
         where: { tenantId, skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey },
+        select: { id: true },
       })
+      if (!level) {
+        throw new ApiError(409, `No stock level for sku ${res.skuId} in warehouse ${res.warehouseId}; cannot ship`)
+      }
 
-      if (level) {
-        const newOnHand = Math.max(0, level.quantityOnHand - shipQty)
-        // Release the full reservation hold; only `shipQty` actually leaves stock, so the
-        // unshipped remainder (res.quantity - shipQty) flows back into availability.
-        const availableDelta = res.quantity - shipQty
-        await tx.stockLevel.update({
+      // Release the full reservation hold; only `shipQty` actually leaves stock, so the
+      // unshipped remainder (res.quantity - shipQty) flows back into availability.
+      // The decrement is a single guarded statement, so concurrent shipments cannot overwrite
+      // each other and on-hand can never go negative.
+      const updated = await tx.stockLevel.updateMany({
+        where: { id: level.id, tenantId, quantityOnHand: { gte: shipQty } },
+        data: {
+          quantityOnHand: { decrement: shipQty },
+          quantityReserved: { decrement: res.quantity },
+          quantityAvailable: { increment: res.quantity - shipQty },
+        },
+      })
+      if (updated.count !== 1) {
+        throw new ApiError(
+          409,
+          `Insufficient on-hand stock to ship ${shipQty} of sku ${res.skuId} from warehouse ${res.warehouseId}`,
+        )
+      }
+
+      if (shipQty > 0) {
+        // Read back inside the same transaction: the row lock taken by the update above
+        // guarantees this is the exact on-hand left by this shipment.
+        const after = await tx.stockLevel.findUniqueOrThrow({
           where: { id: level.id },
+          select: { quantityOnHand: true },
+        })
+        await tx.stockLedgerEntry.create({
           data: {
-            quantityOnHand: newOnHand,
-            quantityReserved: { decrement: res.quantity },
-            quantityAvailable: { increment: availableDelta },
+            id: randomUUID(),
+            tenantId,
+            skuId: res.skuId,
+            warehouseId: res.warehouseId,
+            batchId: batchKey,
+            eventType: 'STOCK_SHIPPED',
+            quantityDelta: -shipQty,
+            quantityAfter: after.quantityOnHand,
+            unitCost: new Prisma.Decimal(0),
+            referenceId: orderId,
+            referenceType: 'ORDER',
+            performedBy,
+            correlationId,
           },
         })
-
-        if (shipQty > 0) {
-          await tx.stockLedgerEntry.create({
-            data: {
-              id: randomUUID(),
-              tenantId,
-              skuId: res.skuId,
-              warehouseId: res.warehouseId,
-              batchId: batchKey,
-              eventType: 'STOCK_SHIPPED',
-              quantityDelta: -shipQty,
-              quantityAfter: newOnHand,
-              unitCost: new Prisma.Decimal(0),
-              referenceId: orderId,
-              referenceType: 'ORDER',
-              performedBy,
-              correlationId,
-            },
-          })
-        }
       }
 
       await tx.stockReservation.update({
@@ -947,7 +1024,25 @@ export async function commitShipmentForOrder(
         shipped.push({ skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey, quantity: shipQty })
       }
     }
+
+    if (fulfillmentTaskId) {
+      await tx.shipmentCommit.create({
+        data: { tenantId, fulfillmentTaskId, orderId, lines: shipped as unknown as Prisma.InputJsonValue },
+      })
+    }
+  }).catch(async (err: unknown) => {
+    // A concurrent call for the same task committed first; return what it stored.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const winner = await readCommit()
+      if (winner) {
+        raced = winner
+        return
+      }
+    }
+    throw err
   })
+  const racedResult = raced as ShippedLine[] | null
+  if (racedResult) return { shipped: racedResult }
 
   for (const line of shipped) {
     queueSalesChannelPush(tenantId, line.skuId)

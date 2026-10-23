@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
+import { axiosErr } from '@/lib/axios-error'
+import { showReceiptBillingResult, type ReceiptBilling } from '@/lib/receipt-billing'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
@@ -46,18 +48,20 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
       setRecvPo('')
       void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
     },
-    onError: (e: Error) => showToast(e.message, 'error'),
+    onError: (e: Error) => showToast(axiosErr(e), 'error'),
   })
 
   const completeRecvMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/wms/receiving/sessions/${id}/complete`),
-    onSuccess: () => {
+    mutationFn: (id: string) => api.patch<ReceiptBilling>(`/wms/receiving/sessions/${id}/complete`),
+    onSuccess: (res) => {
       showToast('Receiving session completed')
+      showReceiptBillingResult(res)
+      void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
       void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
       void qc.invalidateQueries({ queryKey: ['receiving-session', recvDetailId] })
       setRecvDetailId(null)
     },
-    onError: (e: Error) => showToast(e.message, 'error'),
+    onError: (e: Error) => showToast(axiosErr(e), 'error'),
   })
 
   const importReceivingMut = useMutation({
@@ -93,7 +97,7 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
       void qc.invalidateQueries({ queryKey: ['receiving-session', recvDetailId] })
       void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
     },
-    onError: (e: Error) => showToast(e.message, 'error'),
+    onError: (e: Error) => showToast(axiosErr(e), 'error'),
   })
 
   return (
@@ -171,7 +175,7 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
                   <td className="font-mono text-sm font-semibold">#{s.id.slice(-8).toUpperCase()}</td>
                   <td className="text-sm">{warehouseLabel.get(s.warehouseId) ?? s.warehouseId.slice(-6)}</td>
                   <td className="font-mono text-sm" style={{ color: 'var(--c-text-2)' }}>
-                    {s.poId ? `PO #${s.poId.slice(-8)}` : '—'}
+                    {s.poNumber ?? (s.poId ? `PO #${s.poId.slice(-8)}` : '—')}
                   </td>
                   <td>
                     <StatusBadge status={s.status} />
@@ -267,7 +271,9 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
             </div>
 
             {recvDetailQ.data.poId && (
-              <p className="font-mono text-xs text-sky-400">PO #{recvDetailQ.data.poId.slice(-8)}</p>
+              <p className="font-mono text-xs text-sky-400">
+                {recvDetailQ.data.poNumber ?? `PO #${recvDetailQ.data.poId.slice(-8)}`}
+              </p>
             )}
 
             {(recvDetailQ.data.status === 'OPEN' || recvDetailQ.data.status === 'IN_PROGRESS') && (
@@ -296,7 +302,7 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
               <tbody>
                 {(recvDetailQ.data.items ?? []).map((it) => (
                   <tr key={it.id}>
-                    <td className="font-mono text-sm">{it.skuId.slice(-12)}</td>
+                    <td className="font-mono text-sm">{it.skuCode ?? it.skuId.slice(-12)}</td>
                     <td>{it.receivedQty}</td>
                     <td>{it.damagedQty}</td>
                     <td className="font-mono text-xs">{it.batchId ?? '—'}</td>

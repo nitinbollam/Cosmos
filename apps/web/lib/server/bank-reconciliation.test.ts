@@ -1,5 +1,5 @@
 // Must stay the first import: points every database at fresh temp files before ./db loads.
-import { assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases } from './test-support/isolated-databases'
+import { ISOLATED_SKIP, assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases } from './test-support/isolated-databases'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { after, before, test } from 'node:test'
@@ -12,6 +12,9 @@ import { reconciliationReportLines } from './bank-reconciliation-document'
 import { createBankAccount, getReconciliationSummary } from './bank-recon'
 import { authDb, ledgerDb, tenantDb } from './db'
 import { invalidateUserSessionCache } from './session'
+
+/** Tests that need the isolated databases; skipped with the reason where they cannot exist (CI on Postgres). */
+const dbTest = (name: string, fn: () => void | Promise<void>) => test(name, { skip: ISOLATED_SKIP }, fn)
 
 // ---------------------------------------------------------------------------------------------
 // Fixtures
@@ -168,6 +171,7 @@ const lineByRef: Record<string, string> = {}
 let lateDraftId = ''
 
 before(async () => {
+  if (ISOLATED_SKIP) return
   assertIsolated()
   await prepareIsolatedDatabases(['auth', 'tenant', 'ledger'])
   A = await makeTenant('banktest-a')
@@ -175,6 +179,7 @@ before(async () => {
 })
 
 after(async () => {
+  if (ISOLATED_SKIP) return disposeIsolatedDatabases()
   RECON_RULES.requireDistinctSigner = false
   invalidateUserSessionCache()
   await disposeIsolatedDatabases()
@@ -218,7 +223,7 @@ test('auto-match plan: exact pair matches, window excludes, equal amounts stay a
 // ---------------------------------------------------------------------------------------------
 // Setup through the API
 
-test('setup: bank account linked to its GL cash account, reconciliation created', async () => {
+dbTest('setup: bank account linked to its GL cash account, reconciliation created', async () => {
   const acct = A.tokens.ACCOUNTANT!
   // Opening balance booked before the reconciliation start date (already cleared).
   await postCash(A, iso(new Date(monthStart.getTime() - DAY)), 1000, A.accounts.equity, 'Opening balance')
@@ -296,7 +301,7 @@ test('setup: bank account linked to its GL cash account, reconciliation created'
 // ---------------------------------------------------------------------------------------------
 // CSV import
 
-test('malformed CSV rows are rejected with row numbers and nothing is imported', async () => {
+dbTest('malformed CSV rows are rejected with row numbers and nothing is imported', async () => {
   const csv = [
     'date,description,amount,reference',
     `${day(3)},BANKTEST ok,10.00,X1`,
@@ -323,7 +328,7 @@ test('malformed CSV rows are rejected with row numbers and nothing is imported',
   })
 })
 
-test('CSV import, then the same file again (rejected) and an overlapping file (duplicates skipped)', async () => {
+dbTest('CSV import, then the same file again (rejected) and an overlapping file (duplicates skipped)', async () => {
   const acct = A.tokens.ACCOUNTANT!
   const first = await api(acct, 'POST', `/bank-reconciliations/${reconA}/import-csv`, { csvText: STATEMENT_CSV, fileName: 'sept.csv' })
   assert.equal(first.status, 201, JSON.stringify(first.body))
@@ -362,7 +367,7 @@ test('CSV import, then the same file again (rejected) and an overlapping file (d
 // ---------------------------------------------------------------------------------------------
 // Matching
 
-test('auto-match: exact amount within window matches; outside window and equal-amount ambiguity stay open', async () => {
+dbTest('auto-match: exact amount within window matches; outside window and equal-amount ambiguity stay open', async () => {
   // The workspace previews the suggestions without writing anything.
   let preview: { pairs: { statementLineId: string; journalLineId: string }[]; ambiguousStatementLineIds: string[] } | undefined
   await assertNoChange(A.id, async () => {
@@ -408,7 +413,7 @@ test('auto-match: exact amount within window matches; outside window and equal-a
   assert.equal((await api(A.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${reconA}/auto-match`, { dateWindowDays: 99 })).status, 400)
 })
 
-test('manual match and unmatch keep a full trail; rematch is allowed', async () => {
+dbTest('manual match and unmatch keep a full trail; rematch is allowed', async () => {
   const acct = A.tokens.ACCOUNTANT!
   const path = `/bank-reconciliations/${reconA}/matches`
   await assertNoChange(A.id, async () => {
@@ -445,7 +450,7 @@ test('manual match and unmatch keep a full trail; rematch is allowed', async () 
   assert.equal(mirrored.length, 1)
 })
 
-test('one-to-many and many-to-one matches with equal totals', async () => {
+dbTest('one-to-many and many-to-one matches with equal totals', async () => {
   const acct = A.tokens.ACCOUNTANT!
   const path = `/bank-reconciliations/${reconA}/matches`
   const oneToMany = await api(acct, 'POST', path, { statementLineIds: [lineByRef.R6], journalLineIds: [book.d1, book.d2] })
@@ -460,7 +465,7 @@ test('one-to-many and many-to-one matches with equal totals', async () => {
   assert.equal(group.journalLines.length, 2)
 })
 
-test('concurrent matching of the same line: exactly one wins, no double match', async () => {
+dbTest('concurrent matching of the same line: exactly one wins, no double match', async () => {
   const path = `/bank-reconciliations/${reconA}/matches`
   const body = { statementLineIds: [lineByRef.R4], journalLineIds: [book.c2] }
   const results = await Promise.all([
@@ -479,7 +484,7 @@ test('concurrent matching of the same line: exactly one wins, no double match', 
 // ---------------------------------------------------------------------------------------------
 // Sign-off
 
-test('sign-off is blocked by unequal balances and by unbooked bank items; nothing changes', async () => {
+dbTest('sign-off is blocked by unequal balances and by unbooked bank items; nothing changes', async () => {
   const mgr = A.tokens.MANAGER!
   let ws = (await api(mgr, 'GET', `/bank-reconciliations/${reconA}`)).body
   // Only the bank fee is open: balances tie, but the fee is not in the books yet.
@@ -530,7 +535,7 @@ test('sign-off is blocked by unequal balances and by unbooked bank items; nothin
   assert.equal((await api(A.tokens.ACCOUNTANT!, 'PATCH', `/bank-reconciliations/${reconA}`, { statementClosingBalance: '1667.50' })).status, 200)
 })
 
-test('sign-off needs the dedicated permission and the current version', async () => {
+dbTest('sign-off needs the dedicated permission and the current version', async () => {
   const ws = (await api(A.tokens.MANAGER!, 'GET', `/bank-reconciliations/${reconA}`)).body
   assert.equal(ws.balances.adjustedBook, '1667.50')
   assert.equal(ws.balances.adjustedBank, '1667.50')
@@ -546,7 +551,7 @@ test('sign-off needs the dedicated permission and the current version', async ()
   assert.equal((await api(A.tokens.PREPARER_ONLY!, 'GET', `/bank-reconciliations/${reconA}`)).status, 200)
 })
 
-test('successful sign-off records preparer and signer; a concurrent double sign-off has one winner', async () => {
+dbTest('successful sign-off records preparer and signer; a concurrent double sign-off has one winner', async () => {
   const ws = (await api(A.tokens.MANAGER!, 'GET', `/bank-reconciliations/${reconA}`)).body
   const version = ws.reconciliation.version
   const results = await Promise.all([
@@ -573,7 +578,7 @@ test('successful sign-off records preparer and signer; a concurrent double sign-
   assert.equal(signedEvents, 1)
 })
 
-test('signed-off period rejects imports, matching, unmatching, edits and backdated ledger changes', async () => {
+dbTest('signed-off period rejects imports, matching, unmatching, edits and backdated ledger changes', async () => {
   const acct = A.tokens.ACCOUNTANT!
   const ws = (await api(acct, 'GET', `/bank-reconciliations/${reconA}`)).body
   const someMatch = ws.matched[0].matchId
@@ -621,7 +626,7 @@ test('signed-off period rejects imports, matching, unmatching, edits and backdat
   assert.equal((await api(acct, 'POST', `/journal-entries/${later.body.id}/post`)).status, 200)
 })
 
-test('PDF export shows status, signer and balances', async () => {
+dbTest('PDF export shows status, signer and balances', async () => {
   const res = await api(A.tokens.ACCOUNTANT!, 'GET', `/bank-reconciliations/${reconA}/pdf`)
   assert.equal(res.status, 200)
   const pdf = res.body as Buffer
@@ -644,7 +649,7 @@ test('PDF export shows status, signer and balances', async () => {
 // ---------------------------------------------------------------------------------------------
 // Reopen
 
-test('reopen: wildcard accountant refused, reason required, explicit grant reopens with an audit event', async () => {
+dbTest('reopen: wildcard accountant refused, reason required, explicit grant reopens with an audit event', async () => {
   const before = (await api(A.tokens.ACCOUNTANT!, 'GET', `/bank-reconciliations/${reconA}`)).body.reconciliation
   await assertNoChange(A.id, async () => {
     const wildcard = await api(A.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${reconA}/reopen`, { reason: 'Need to fix a match' })
@@ -676,7 +681,7 @@ test('reopen: wildcard accountant refused, reason required, explicit grant reope
   assert.equal((await api(A.tokens.ACCOUNTANT!, 'PATCH', `/bank-reconciliations/${reconA}`, { dateWindowDays: 4 })).status, 200)
 })
 
-test('separation of duties (opt-in rule): preparer cannot sign, a different signer can', async () => {
+dbTest('separation of duties (opt-in rule): preparer cannot sign, a different signer can', async () => {
   RECON_RULES.requireDistinctSigner = true
   try {
     const ws = (await api(A.tokens.ACCOUNTANT!, 'GET', `/bank-reconciliations/${reconA}`)).body
@@ -693,7 +698,7 @@ test('separation of duties (opt-in rule): preparer cannot sign, a different sign
   }
 })
 
-test('a period that has not ended cannot be signed off', async () => {
+dbTest('a period that has not ended cannot be signed off', async () => {
   const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const thisMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
   const created = await api(A.tokens.ACCOUNTANT!, 'POST', '/bank-reconciliations', {
@@ -714,7 +719,7 @@ test('a period that has not ended cannot be signed off', async () => {
 // ---------------------------------------------------------------------------------------------
 // Authorization and tenant isolation
 
-test('roles without finance access are refused everywhere; finance roles are allowed (positive control)', async () => {
+dbTest('roles without finance access are refused everywhere; finance roles are allowed (positive control)', async () => {
   const ws = (await api(A.tokens.ACCOUNTANT!, 'GET', `/bank-reconciliations/${reconA}`)).body
   const matchId = ws.matched[0].matchId
   const calls: [string, string, unknown][] = [
@@ -749,7 +754,7 @@ test('roles without finance access are refused everywhere; finance roles are all
   }
 })
 
-test('tenant isolation: another tenant cannot see or change tenant A records (positive control in own tenant)', async () => {
+dbTest('tenant isolation: another tenant cannot see or change tenant A records (positive control in own tenant)', async () => {
   const ws = (await api(A.tokens.ACCOUNTANT!, 'GET', `/bank-reconciliations/${reconA}`)).body
   const matchId = ws.matched[0].matchId
   const bAcct = B.tokens.ACCOUNTANT!
@@ -792,7 +797,7 @@ test('tenant isolation: another tenant cannot see or change tenant A records (po
 // ---------------------------------------------------------------------------------------------
 // Legacy summary defects
 
-test('legacy summary: per-account opening balance (D1) and no 300-line cap (D8), in Decimal', async () => {
+dbTest('legacy summary: per-account opening balance (D1) and no 300-line cap (D8), in Decimal', async () => {
   const tenantId = `t-${randomUUID()}`
   const one = await createBankAccount(tenantId, { name: 'Operating', openingBalance: 1000 })
   const two = await createBankAccount(tenantId, { name: 'Payroll', openingBalance: '500.10' })
@@ -814,7 +819,7 @@ test('legacy summary: per-account opening balance (D1) and no 300-line cap (D8),
   await ledgerDb.bankAccount.deleteMany({ where: { tenantId } })
 })
 
-test('bank account responses never include Plaid credentials or sync state', async () => {
+dbTest('bank account responses never include Plaid credentials or sync state', async () => {
   const acct = A.tokens.ACCOUNTANT!
   await ledgerDb.bankAccount.update({
     where: { id: bankA },

@@ -3,15 +3,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AuthThemeToolbar } from '@/components/auth-theme-toolbar'
 import { PwaInstallHint } from '@/components/mobile/pwa-install-hint'
 import { api, formatApiReachabilityError } from '@/lib/api-mobile'
-import { axiosErr } from '@/lib/axios-error'
+import { axiosErr, isUnauthorized } from '@/lib/axios-error'
 import { parseJwtPayload } from '@/lib/jwt'
 import { setTokens } from '@/lib/auth-session'
+import { tenantPromptOf, tokensOf, type LoginResponse, type LoginTokens, type TenantPrompt } from '@/lib/login-flow'
+import { homeFor } from '@/lib/mobile-home'
+import { TenantPicker } from '@/components/auth/tenant-picker'
 
-function defaultMobileHome(role: string | undefined): string {
-  if (role === 'DRIVER') return '/m/delivery'
-  if (role === 'WAREHOUSE_STAFF') return '/m/warehouse'
-  return '/m/sales'
-}
 
 export default function MobileLoginPage() {
   const navigate = useNavigate()
@@ -20,21 +18,46 @@ export default function MobileLoginPage() {
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const [pick, setPick] = useState<TenantPrompt | null>(null)
+
+  function finish(r: LoginTokens) {
+    setTokens(r.accessToken, r.refreshToken)
+    const next = new URLSearchParams(window.location.search).get('next')
+    if (next?.startsWith('/m/')) {
+      navigate(next)
+      return
+    }
+    const payload = parseJwtPayload(r.accessToken)
+    const role = typeof payload?.role === 'string' ? payload.role : undefined
+    navigate(homeFor(role))
+  }
+
+  async function choose(tenantId: string) {
+    if (!pick) return
+    setErr(null)
+    setLoading(true)
+    try {
+      finish(await api.post<LoginTokens>('/auth/login/select', { selectionToken: pick.selectionToken, tenantId }))
+    } catch (e) {
+      if (isUnauthorized(e)) setPick(null)
+      setErr(formatApiReachabilityError(e) || axiosErr(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setErr(null)
     setLoading(true)
     try {
-      const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email, password })
-      setTokens(r.accessToken, r.refreshToken)
-      const next = new URLSearchParams(window.location.search).get('next')
-      if (next?.startsWith('/m/')) {
-        navigate(next)
+      const r = await api.post<LoginResponse>('/auth/login', { email, password })
+      const prompt = tenantPromptOf(r)
+      if (prompt) {
+        setPick(prompt)
         return
       }
-      const payload = parseJwtPayload(r.accessToken)
-      const role = typeof payload?.role === 'string' ? payload.role : undefined
-      navigate(defaultMobileHome(role))
+      finish(tokensOf(r))
     } catch (e) {
       setErr(formatApiReachabilityError(e) || axiosErr(e))
     } finally {
@@ -54,6 +77,22 @@ export default function MobileLoginPage() {
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <div className="w-full max-w-sm">
           <PwaInstallHint />
+        {pick ? (
+          <div className="pleros-mobile-card w-full space-y-4">
+            <TenantPicker
+              email={email.trim()}
+              tenants={pick.tenants}
+              busy={loading}
+              error={err}
+              onPick={(id) => void choose(id)}
+              onBack={() => {
+                setPick(null)
+                setPassword('')
+                setErr(null)
+              }}
+            />
+          </div>
+        ) : (
         <form onSubmit={submit} className="pleros-mobile-card w-full space-y-4">
           <div>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', margin: 0 }}>Sign in</h1>
@@ -72,6 +111,7 @@ export default function MobileLoginPage() {
             </Link>
           </p>
         </form>
+        )}
         </div>
       </main>
     </div>

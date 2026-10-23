@@ -44,7 +44,14 @@ export async function processStripeEventOnce(
     await handle()
   } catch (e) {
     console.error(`[stripe] webhook processing failed for event ${event.id} (${event.type}):`, e)
-    await paymentDb.stripeWebhookEvent.delete({ where: { id: event.id } }).catch(() => undefined)
+    // Releasing the claim is what lets Stripe's retry be processed. If that fails the retry will be
+    // refused until the claim goes stale, so say so loudly; the original error is still the one thrown.
+    try {
+      await paymentDb.stripeWebhookEvent.delete({ where: { id: event.id } })
+    } catch (releaseErr) {
+      console.error(`[stripe] could not release the claim on event ${event.id}; its retry is blocked until the claim expires:`, releaseErr)
+      console.error('[metric] stripe_webhook_claim_release_failed 1')
+    }
     throw e
   }
   await paymentDb.stripeWebhookEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } })

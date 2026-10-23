@@ -476,9 +476,6 @@ export async function routeTax(method: string, seg: string[], req: Request): Pro
   if (seg.length === 2 && seg[1] === 'settings' && method === 'PATCH') {
     assertPermission(session, 'compliance.write')
     const body = (await req.json()) as { salesTaxRate?: number }
-    if (typeof body.salesTaxRate !== 'number' || body.salesTaxRate < 0 || body.salesTaxRate > 0.5) {
-      throw new ApiError(400, 'salesTaxRate must be a number between 0 and 0.5')
-    }
     const { updateTenantSalesTaxRate } = await import('../tenant-tax')
     return Response.json(await updateTenantSalesTaxRate(session.tenantId, body.salesTaxRate))
   }
@@ -525,4 +522,24 @@ export async function routeFinancialStatements(method: string, seg: string[], re
   }
 
   throw new ApiError(404, 'Financial statement route not found')
+}
+
+export async function routePostingJobs(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requirePermission(req, method === 'GET' ? 'finance.read' : 'finance.write')
+  const outbox = await import('../posting-outbox')
+  const url = new URL(req.url)
+
+  if (seg.length === 1 && method === 'GET') {
+    const raw = (url.searchParams.get('status') ?? 'PENDING,DEAD').split(',').map((x) => x.trim().toUpperCase())
+    const allowed = ['PENDING', 'RUNNING', 'DONE', 'DEAD'] as const
+    const statuses = raw.filter((x): x is (typeof allowed)[number] => (allowed as readonly string[]).includes(x))
+    return Response.json(await outbox.listPostingJobs(session.tenantId, statuses.length ? statuses : ['PENDING', 'DEAD']))
+  }
+  if (seg.length === 2 && seg[1] === 'stats' && method === 'GET') {
+    return Response.json(await outbox.postingQueueStats(session.tenantId))
+  }
+  if (seg.length === 3 && seg[2] === 'retry' && method === 'POST') {
+    return Response.json(await outbox.retryPostingJob(session.tenantId, seg[1]))
+  }
+  throw new ApiError(404, 'Posting job route not found')
 }

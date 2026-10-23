@@ -6,6 +6,7 @@ import { authDb as prisma, tenantDb } from './db'
 import { jwtRefreshSecret, jwtSecret } from './env'
 import { ApiError, invalidateAuthSessionCache, invalidateUserSessionCache } from './session'
 
+import { swallowed } from './fire-and-forget'
 export type TokenPair = {
   accessToken: string
   refreshToken: string
@@ -115,7 +116,7 @@ export async function revokeAllUserSessions(userId: string, opts?: { exceptSessi
     data: { revokedAt: new Date() },
   })
   // Legacy single-slot token (pre-AuthSession); harmless to clear every time.
-  await prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } }).catch(() => undefined)
+  await prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } }).catch(swallowed('auth.revokeAllUserSessions', { level: 'warn' }))
   invalidateUserSessionCache(userId)
 }
 
@@ -132,13 +133,51 @@ export async function verifyRefreshToken(refreshToken: string): Promise<jose.JWT
   }
 }
 
-export async function loginUser(email: string, password: string, meta: SessionMeta = {}): Promise<TokenPair> {
-  const user = await prisma.user.findFirst({
-    where: { email: email.trim().toLowerCase(), isActive: true },
+/** Most accounts one email can match across tenants that we will check in a single attempt. */
+const MAX_LOGIN_CANDIDATES = 10
+
+/**
+ * A valid bcrypt hash (cost 12) of a throwaway string. Compared against when no account matches so
+ * an unknown email costs the same time as a wrong password and cannot be told apart by timing.
+ */
+const DUMMY_PASSWORD_HASH = '$2b$12$uUNNSCH/KEVcXVx3kSJZNOKNqh8LZoEC25LZfVVVvdFYtk2sZp6Qe'
+
+const invalidCredentials = () => new ApiError(401, 'Invalid credentials')
+
+type AuthUserRow = Awaited<ReturnType<typeof prisma.user.findMany>>[number]
+
+/**
+ * Every active account for the email whose password matches. One bcrypt comparison runs per
+ * candidate (or one against a dummy hash when there is none), so an unknown email costs the same
+ * as a wrong password and the 401 is identical either way. `tenantRef` (a tenant id or slug)
+ * narrows the search to one company.
+ */
+async function matchAccounts(email: string, password: string, tenantRef?: string): Promise<AuthUserRow[]> {
+  let tenantId: string | undefined
+  if (tenantRef?.trim()) {
+    const ref = tenantRef.trim()
+    const tenant = await prisma.tenant.findFirst({ where: { OR: [{ id: ref }, { slug: ref.toLowerCase() }] }, select: { id: true } })
+    tenantId = tenant?.id ?? '__no_such_tenant__'
+  }
+  const candidates = await prisma.user.findMany({
+    where: { email: email.trim().toLowerCase(), isActive: true, ...(tenantId ? { tenantId } : {}) },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: MAX_LOGIN_CANDIDATES,
   })
-  if (!user) throw new Error('Invalid credentials')
-  const ok = await bcrypt.compare(password, user.passwordHash)
-  if (!ok) throw new Error('Invalid credentials')
+
+  const matched: AuthUserRow[] = []
+  if (candidates.length === 0) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH)
+  } else {
+    for (const candidate of candidates) {
+      if (await bcrypt.compare(password, candidate.passwordHash)) matched.push(candidate)
+    }
+  }
+  if (matched.length === 0) throw invalidCredentials()
+  return matched
+}
+
+async function openSession(user: AuthUserRow, meta: SessionMeta): Promise<TokenPair> {
   // Only block accounts that were sent a verification link (new signups). Existing users
   // without emailVerifiedAt are grandfathered until they change email.
   if (!user.emailVerifiedAt && user.emailVerificationTokenHash) {
@@ -149,6 +188,100 @@ export async function loginUser(email: string, password: string, meta: SessionMe
     data: { lastLoginAt: new Date() },
   })
   return signPair(user, meta)
+}
+
+/**
+ * Sign in by email and password, for callers that cannot show a company picker.
+ *
+ * The same address can belong to users in several tenants, so every active account for the email is
+ * checked, not whichever row the database returns first. If exactly one account's password matches,
+ * that is the account. If the password matches accounts in more than one tenant, nobody is signed in:
+ * the caller must say which company (`tenantRef`) and gets a 409 until they do. The sign-in screens
+ * use `startLogin`, which hands back a list of companies to choose from instead.
+ */
+export async function loginUser(
+  email: string,
+  password: string,
+  meta: SessionMeta = {},
+  opts: { tenantRef?: string } = {},
+): Promise<TokenPair> {
+  const matched = await matchAccounts(email, password, opts.tenantRef)
+  if (matched.length > 1) {
+    throw new ApiError(
+      409,
+      'This email is registered with more than one company. Enter your company code to sign in.',
+    )
+  }
+  return openSession(matched[0], meta)
+}
+
+export type TenantChoice = { id: string; slug: string; name: string }
+
+export type LoginOutcome =
+  | { kind: 'session'; tokens: TokenPair }
+  | { kind: 'select'; selectionToken: string; tenants: TenantChoice[] }
+
+/** How long a person has to pick a company after proving their password. */
+const TENANT_SELECTION_TTL = '5m'
+
+/** Signed with a key derived from the access secret, so it can never be used as an access token. */
+const selectionKey = () => new TextEncoder().encode(`${jwtSecret()}:tenant-selection`)
+
+/**
+ * Step one of sign-in: email and password, no company needed.
+ *
+ * One matching account signs in directly. If the same password opens accounts in several companies,
+ * no session is created. The caller gets a short-lived selection token that names exactly the accounts
+ * whose password was just proven, plus the company names to show. Names are only revealed after the
+ * password matched, so this tells an outsider nothing about who is registered where.
+ */
+export async function startLogin(
+  email: string,
+  password: string,
+  meta: SessionMeta = {},
+  opts: { tenantRef?: string } = {},
+): Promise<LoginOutcome> {
+  const matched = await matchAccounts(email, password, opts.tenantRef)
+  if (matched.length === 1) return { kind: 'session', tokens: await openSession(matched[0], meta) }
+
+  const tenants = await prisma.tenant.findMany({
+    where: { id: { in: matched.map((u) => u.tenantId) }, isActive: true },
+    select: { id: true, slug: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+  const usable = new Set(tenants.map((t) => t.id))
+  const accounts = matched.filter((u) => usable.has(u.tenantId))
+  if (accounts.length === 0) throw invalidCredentials()
+  if (accounts.length === 1) return { kind: 'session', tokens: await openSession(accounts[0], meta) }
+
+  const selectionToken = await new jose.SignJWT({ typ: 'tenant_selection', uids: accounts.map((u) => u.id) })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setJti(randomUUID())
+    .setExpirationTime(TENANT_SELECTION_TTL)
+    .sign(selectionKey())
+  return { kind: 'select', selectionToken, tenants }
+}
+
+/**
+ * Step two: trade a selection token and a chosen company for a session. Only the accounts named in
+ * the token can be chosen, and the account is re-read so a deactivation in between still blocks it.
+ */
+export async function completeTenantSelection(
+  selectionToken: string,
+  tenantId: string,
+  meta: SessionMeta = {},
+): Promise<TokenPair> {
+  let uids: string[]
+  try {
+    const { payload } = await jose.jwtVerify(selectionToken, selectionKey())
+    if (payload.typ !== 'tenant_selection' || !Array.isArray(payload.uids)) throw new Error('wrong token')
+    uids = payload.uids.filter((u): u is string => typeof u === 'string')
+  } catch {
+    throw new ApiError(401, 'Your sign-in expired. Enter your password again.')
+  }
+  const user = await prisma.user.findFirst({ where: { id: { in: uids }, tenantId, isActive: true } })
+  if (!user) throw new ApiError(401, 'Your sign-in expired. Enter your password again.')
+  return openSession(user, meta)
 }
 
 export type VerificationDelivery = {
@@ -406,24 +539,35 @@ export async function verifyEmail(token: string): Promise<void> {
 export async function resendEmailVerification(
   email: string,
 ): Promise<{ ok: true; verifyUrl?: string; delivery?: 'sendgrid' | 'webhook' | 'console' }> {
-  const user = await prisma.user.findFirst({
+  // One link per tenant the address has an unverified account in; each is bound to its own user.
+  const users = await prisma.user.findMany({
     where: { email: email.trim().toLowerCase(), isActive: true, emailVerifiedAt: null },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: MAX_LOGIN_CANDIDATES,
   })
-  if (!user) return { ok: true }
-  const delivery = await sendEmailVerification(user.id)
-  // verifyUrl is only present in non-production (see mayExposeVerifyUrl).
+  if (users.length === 0) return { ok: true }
+  let first: Awaited<ReturnType<typeof sendEmailVerification>> | null = null
+  for (const user of users) {
+    const delivery = await sendEmailVerification(user.id)
+    first ??= delivery
+  }
+  // verifyUrl is only present in non-production (see mayExposeVerifyUrl), and is for the first account only.
   return {
     ok: true,
-    ...(delivery.verifyUrl ? { verifyUrl: delivery.verifyUrl } : {}),
-    delivery: delivery.provider,
+    ...(first?.verifyUrl ? { verifyUrl: first.verifyUrl } : {}),
+    delivery: first?.provider,
   }
 }
 
 /** Reveals nothing about whether the email exists; delivery happens out of band. */
 export async function requestPasswordReset(email: string): Promise<void> {
-  const user = await prisma.user.findFirst({ where: { email: email.trim().toLowerCase(), isActive: true } })
-  if (!user) return
-  await sendPasswordResetLink(user)
+  // One email per tenant the address belongs to; each link resets only its own user's password.
+  const users = await prisma.user.findMany({
+    where: { email: email.trim().toLowerCase(), isActive: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: MAX_LOGIN_CANDIDATES,
+  })
+  for (const user of users) await sendPasswordResetLink(user)
 }
 
 /**

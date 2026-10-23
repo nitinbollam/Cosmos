@@ -6,6 +6,14 @@ const SWEEP_INTERVAL_MS = 10 * 60 * 1000
 const SALES_CHANNEL_FLUSH_MS = 90 * 1000
 /** Webhook retries come due from a minute after a failure, so check often. */
 const WEBHOOK_RETRY_MS = 30 * 1000
+/** GL posting outbox: new postings are picked up within seconds; retries follow their own backoff. */
+const POSTING_JOBS_MS = 15 * 1000
+/** Re-queues postings lost between a bill, expense or gift card change and its job (see posting-sources.ts). */
+const POSTING_SOURCE_SWEEP_MS = 10 * 60 * 1000
+
+/** Reconciliation (PLR-150) runs once a day; set RECONCILIATION_DISABLED=1 to turn it off. */
+const RECONCILIATION_MS = 24 * 60 * 60 * 1000
+const RECONCILIATION_FIRST_RUN_MS = 5 * 60 * 1000
 
 let started = false
 
@@ -18,6 +26,9 @@ export function startBackgroundJobs(): void {
       const { releaseExpiredReservations } = await import('./inventory')
       const { released } = await releaseExpiredReservations()
       if (released > 0) console.log(`[jobs] released ${released} expired stock reservation(s)`)
+      const { releaseReservationsOfDeadOrders } = await import('./reservation-safety-net')
+      const leaked = await releaseReservationsOfDeadOrders()
+      if (leaked.released > 0) console.log(`[jobs] released ${leaked.released} reservation(s) held by cancelled or failed orders`)
     } catch (err) {
       console.error('[jobs] reservation sweep failed:', err)
     }
@@ -74,13 +85,55 @@ export function startBackgroundJobs(): void {
     }
   }
 
+  const runPostings = async () => {
+    try {
+      const { runPostingJobs } = await import('./posting-outbox')
+      const res = await runPostingJobs()
+      if (res.claimed > 0) {
+        console.log(`[jobs] gl postings: done ${res.done}, retrying ${res.failed}, dead ${res.dead}`)
+      }
+    } catch (err) {
+      console.error('[jobs] gl posting run failed:', err)
+    }
+  }
+
+  const requeueMissingPostings = async () => {
+    try {
+      const { requeueMissingSourcePostings } = await import('./posting-sources')
+      await requeueMissingSourcePostings()
+    } catch (err) {
+      console.error('[jobs] posting source sweep failed:', err)
+    }
+  }
+
+  const reconcile = async () => {
+    if (process.env.RECONCILIATION_DISABLED === '1') return
+    try {
+      const { runReconciliationForAllTenants } = await import('./reconciliation')
+      const results = await runReconciliationForAllTenants()
+      const total = results.reduce((n, r) => n + r.findings.length, 0)
+      console.log(`[jobs] reconciliation: ${results.length} tenant(s), ${total} open finding(s)`)
+    } catch (err) {
+      console.error('[jobs] reconciliation failed:', err)
+    }
+  }
+  const reconcileFirst = setTimeout(() => void reconcile(), RECONCILIATION_FIRST_RUN_MS)
+  reconcileFirst.unref?.()
+  const reconcileTimer = setInterval(() => void reconcile(), RECONCILIATION_MS)
+  reconcileTimer.unref?.()
+
   void sweep()
   void flushSalesChannels()
+  void runPostings()
   void retryWebhooks()
   const timer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS)
   timer.unref?.()
   const salesChannelTimer = setInterval(() => void flushSalesChannels(), SALES_CHANNEL_FLUSH_MS)
   salesChannelTimer.unref?.()
+  const postingTimer = setInterval(() => void runPostings(), POSTING_JOBS_MS)
+  postingTimer.unref?.()
+  const postingSweepTimer = setInterval(() => void requeueMissingPostings(), POSTING_SOURCE_SWEEP_MS)
+  postingSweepTimer.unref?.()
   const webhookTimer = setInterval(() => void retryWebhooks(), WEBHOOK_RETRY_MS)
   webhookTimer.unref?.()
 }

@@ -3,7 +3,8 @@ import { jwtVerify } from 'jose'
 import {
   acceptInvite,
   changePassword,
-  loginUser,
+  completeTenantSelection,
+  startLogin,
   logoutUser,
   refreshUserTokens,
   requestPasswordReset,
@@ -18,6 +19,7 @@ import { getAuthProfile } from '../lib/server/buyer-context'
 import { jwtSecret } from '../lib/server/env'
 import { handleNativeApi } from '../lib/server/native-router'
 import { ApiError, requireSession, toJsonError } from '../lib/server/session'
+import { runInRequestScope } from '../lib/server/tenant-scope'
 
 function json(data: unknown, status = 200): Response {
   return Response.json(data, { status })
@@ -28,7 +30,7 @@ function json(data: unknown, status = 200): Response {
  * (browser, proxy or service worker). Routes that set their own Cache-Control keep it.
  */
 export async function handleApiRequest(req: Request): Promise<Response> {
-  const res = await routeApiRequest(req)
+  const res = await runInRequestScope(() => routeApiRequest(req))
   if (!res.headers.has('Cache-Control')) {
     try {
       res.headers.set('Cache-Control', 'no-store')
@@ -91,9 +93,9 @@ async function routeApiRequest(req: Request): Promise<Response> {
   }
 
   if (pathname === '/api/v1/auth/login' && req.method === 'POST') {
-    let body: { email?: string; password?: string }
+    let body: { email?: string; password?: string; tenant?: string }
     try {
-      body = (await req.json()) as { email?: string; password?: string }
+      body = (await req.json()) as { email?: string; password?: string; tenant?: string }
     } catch {
       return json({ message: 'Invalid JSON body' }, 400)
     }
@@ -101,13 +103,40 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'email and password required' }, 400)
     }
     try {
-      rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
-      rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
-      return json(await loginUser(body.email.trim(), body.password, sessionMeta(req)))
+      await rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
+      await rateLimit(`login:${body.email.trim().toLowerCase()}`, 10, 5 * 60 * 1000)
+      const outcome = await startLogin(body.email.trim(), body.password, sessionMeta(req), {
+        tenantRef: typeof body.tenant === 'string' ? body.tenant : undefined,
+      })
+      // Same password, several companies: nothing is signed in yet, the person picks one.
+      if (outcome.kind === 'select') {
+        return json({ requiresTenantSelection: true, selectionToken: outcome.selectionToken, tenants: outcome.tenants })
+      }
+      return json(outcome.tokens)
     } catch (e) {
       if (e instanceof ApiError) return toJsonError(e)
-      const msg = e instanceof Error ? e.message : 'Login failed'
-      return json({ message: msg }, msg === 'Invalid credentials' ? 401 : 500)
+      console.error('[auth] login failed:', e)
+      return json({ message: 'Internal server error' }, 500)
+    }
+  }
+
+  if (pathname === '/api/v1/auth/login/select' && req.method === 'POST') {
+    let body: { selectionToken?: string; tenantId?: string }
+    try {
+      body = (await req.json()) as typeof body
+    } catch {
+      return json({ message: 'Invalid JSON body' }, 400)
+    }
+    if (!body.selectionToken || !body.tenantId) {
+      return json({ message: 'selectionToken and tenantId required' }, 400)
+    }
+    try {
+      await rateLimit(`login:${clientIp(req)}`, 20, 5 * 60 * 1000)
+      return json(await completeTenantSelection(body.selectionToken, body.tenantId, sessionMeta(req)))
+    } catch (e) {
+      if (e instanceof ApiError) return toJsonError(e)
+      console.error('[auth] tenant selection failed:', e)
+      return json({ message: 'Internal server error' }, 500)
     }
   }
 
@@ -129,7 +158,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'Missing required fields' }, 400)
     }
     try {
-      rateLimit(`signup:${clientIp(req)}`, 5, 60 * 60 * 1000)
+      await rateLimit(`signup:${clientIp(req)}`, 5, 60 * 60 * 1000)
       assertPasswordPolicy(body.password)
       return json(
         await publicSignup({
@@ -160,7 +189,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'token, password, firstName, and lastName are required' }, 400)
     }
     try {
-      rateLimit(`accept-invite:${clientIp(req)}`, 10, 60 * 60 * 1000)
+      await rateLimit(`accept-invite:${clientIp(req)}`, 10, 60 * 60 * 1000)
       return json(
         await acceptInvite({
           token: body.token,
@@ -187,7 +216,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.email?.trim()) return json({ message: 'email required' }, 400)
     try {
-      rateLimit(`forgot:${clientIp(req)}`, 5, 15 * 60 * 1000)
+      await rateLimit(`forgot:${clientIp(req)}`, 5, 15 * 60 * 1000)
       await requestPasswordReset(body.email)
       // Always succeed so the endpoint can't be used to enumerate accounts.
       return json({ ok: true })
@@ -205,7 +234,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.token || !body.password) return json({ message: 'token and password required' }, 400)
     try {
-      rateLimit(`reset:${clientIp(req)}`, 10, 15 * 60 * 1000)
+      await rateLimit(`reset:${clientIp(req)}`, 10, 15 * 60 * 1000)
       await resetPassword(body.token, body.password)
       return json({ ok: true })
     } catch (e) {
@@ -220,7 +249,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       if (!body.currentPassword || !body.newPassword) {
         return json({ message: 'currentPassword and newPassword required' }, 400)
       }
-      rateLimit(`change-password:${session.userId}`, 5, 15 * 60 * 1000)
+      await rateLimit(`change-password:${session.userId}`, 5, 15 * 60 * 1000)
       await changePassword(session.userId, body.currentPassword, body.newPassword, session.sessionId)
       return json({ ok: true })
     } catch (e) {
@@ -237,6 +266,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.token) return json({ message: 'token required' }, 400)
     try {
+      await rateLimit(`verify-email:${clientIp(req)}`, 20, 15 * 60 * 1000)
       await verifyEmail(body.token)
       return json({ ok: true })
     } catch (e) {
@@ -253,7 +283,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
     }
     if (!body.email?.trim()) return json({ message: 'email required' }, 400)
     try {
-      rateLimit(`resend-verify:${clientIp(req)}`, 5, 15 * 60 * 1000)
+      await rateLimit(`resend-verify:${clientIp(req)}`, 5, 15 * 60 * 1000)
       return json(await resendEmailVerification(body.email))
     } catch (e) {
       return toJsonError(e)
@@ -271,7 +301,7 @@ async function routeApiRequest(req: Request): Promise<Response> {
       return json({ message: 'refreshToken required' }, 400)
     }
     try {
-      rateLimit(`refresh:${clientIp(req)}`, 120, 5 * 60 * 1000)
+      await rateLimit(`refresh:${clientIp(req)}`, 120, 5 * 60 * 1000)
       // userId is optional and only cross-checked; the token itself names the user.
       return json(await refreshUserTokens(body.refreshToken, body.userId))
     } catch (e) {
