@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { PickTask, WarehouseRow, pickProgress, priorityBorder } from '../types'
+import { orderLabel } from '@/lib/order-label'
 
 interface PicksTabProps {
   warehouses: WarehouseRow[]
@@ -130,9 +131,7 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
                 const taskCode = t.id.startsWith('seed_tsk_')
                   ? `TSK-${t.id.replace('seed_tsk_', '').toUpperCase()}`
                   : `TSK-${t.id.slice(-6).toUpperCase()}`
-                const orderCode = t.orderId.startsWith('seed_ord_')
-                  ? `ORD-${t.orderId.replace('seed_ord_', '').toUpperCase()}`
-                  : `ORD-${t.orderId.slice(-6).toUpperCase()}`
+                const orderCode = orderLabel(t.orderId, t.orderNumber)
                 return (
                   <tr
                     key={t.id}
@@ -252,7 +251,7 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
                 Order
               </div>
               <Link to={adminPath(`/orders/${detailTask.orderId}`)} className="text-primary font-mono hover:underline">
-                {detailTask.orderId}
+                {orderLabel(detailTask.orderId, detailTask.orderNumber)}
               </Link>
             </div>
             <div>

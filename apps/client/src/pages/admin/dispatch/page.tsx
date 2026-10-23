@@ -26,6 +26,7 @@ import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
 import { api } from '@/lib/api-admin'
 import { isForbidden } from '@/lib/axios-error'
 import { useQueryParams } from '@/lib/use-query-params'
+import { orderLabel } from '@/lib/order-label'
 
 type RouteStop = {
   id: string
@@ -972,6 +973,7 @@ function CreateRouteDrawer(props: {
   const shippedOrders = useQuery<
     Array<{
       id: string
+      orderNumber?: number | null
       customerId: string
       status: string
       totalAmount: string | number
@@ -1105,7 +1107,7 @@ function CreateRouteDrawer(props: {
                 <ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {(shippedOrders.data ?? []).map((o) => {
                     const isChecked = selectedOrderIds.includes(o.id)
-                    const code = o.id.startsWith('seed_ord_') ? `ORD-${o.id.replace('seed_ord_', '').toUpperCase()}` : `ORD-${o.id.slice(-6).toUpperCase()}`
+                    const code = orderLabel(o.id, o.orderNumber)
 
                     return (
                       <li key={o.id}>

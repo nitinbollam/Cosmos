@@ -30,6 +30,15 @@ if (process.env.PLEROS_SKIP_DB_MIGRATE !== '1') {
   }
 }
 
+// Orders created before order numbers existed get one (idempotent; a failure never blocks boot).
+if (process.env.PLEROS_SKIP_DB_MIGRATE !== '1') {
+  try {
+    execFileSync(process.execPath, ['--import', './apps/web/server/register-paths.mjs', '--import', 'tsx', 'scripts/backfill-order-numbers.ts'], { cwd: ROOT, stdio: 'inherit' })
+  } catch (err) {
+    console.error('[start] order number backfill failed (orders keep their legacy labels):', err instanceof Error ? err.message : err)
+  }
+}
+
 // First admin / account recovery on a hosted database: set PLEROS_BOOTSTRAP_ADMIN_EMAIL and
 // PLEROS_BOOTSTRAP_ADMIN_PASSWORD, deploy once, sign in, then remove both variables. Creates a
 // platform SUPER_ADMIN, or resets that admin's password if it already exists.

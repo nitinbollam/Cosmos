@@ -5,9 +5,11 @@ import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { orderLabel } from '@/lib/order-label'
 
 type OrderRow = {
   id: string
+  orderNumber?: number | null
   customerId: string
   status: string
   totalAmount: string | number
@@ -33,13 +35,6 @@ function customerLabel(o: OrderRow): string {
   return `Customer #${o.customerId.slice(-6).toUpperCase()}`
 }
 
-function formatOrderNumber(id: string): string {
-  if (!id) return ''
-  if (id.startsWith('seed_ord_')) {
-    return `ORD-${id.replace('seed_ord_', '').toUpperCase()}`
-  }
-  return `ORD-${id.slice(-6).toUpperCase()}`
-}
 
 export function RecentOrders() {
   const { data, isLoading, isError, error, refetch } = useQuery<ListResp>({
@@ -92,7 +87,7 @@ export function RecentOrders() {
               {rows.map((o) => (
                 <tr key={o.id}>
                   <td className="font-mono text-sm font-semibold" style={{ color: 'var(--c-primary)' }}>
-                    #{formatOrderNumber(o.id)}
+                    #{orderLabel(o.id, o.orderNumber)}
                   </td>
                   <td className="font-medium">{customerLabel(o)}</td>
                   <td>

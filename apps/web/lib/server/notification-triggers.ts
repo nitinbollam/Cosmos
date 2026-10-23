@@ -2,8 +2,18 @@ import { NotificationChannel } from '@/generated/prisma-notification'
 import * as crm from './crm'
 import * as notifications from './notifications'
 import { shouldSendCustomerNotification } from './customer-notification-prefs'
+import { orderNumberMap } from './order-number'
 
 import { swallowed } from './fire-and-forget'
+/** The order's number, so messages say ORD-1042 like every screen does (null for a not-yet-numbered order). */
+async function numberOf(tenantId: string, orderId: string): Promise<number | null> {
+  try {
+    return (await orderNumberMap(tenantId, [orderId])).get(orderId) ?? null
+  } catch {
+    return null
+  }
+}
+
 async function customerContact(tenantId: string, customerId: string) {
   try {
     const customer = await crm.getCustomer(tenantId, customerId)
@@ -31,7 +41,7 @@ export async function notifyOrderCreated(
         channel: NotificationChannel.EMAIL,
         recipient: contact.email,
         templateKey: 'order.created',
-        payload: { orderId, total: totalAmount.toFixed(2), customerName: contact.name },
+        payload: { orderId, orderNumber: await numberOf(tenantId, orderId), total: totalAmount.toFixed(2), customerName: contact.name },
       },
       `order-created:${orderId}`,
     )
@@ -68,7 +78,9 @@ async function pushToCustomer(
 export async function notifyOrderShipped(tenantId: string, orderId: string, customerId: string) {
   // Side by side, so a slow push service never delays the email.
   await Promise.all([
-    pushToCustomer(tenantId, customerId, 'order.shipped', { orderId }, `order-shipped:${orderId}`).catch((err) =>
+    numberOf(tenantId, orderId).then((orderNumber) =>
+      pushToCustomer(tenantId, customerId, 'order.shipped', { orderId, orderNumber }, `order-shipped:${orderId}`),
+    ).catch((err) =>
       console.error(`[notification] order.shipped push failed for order ${orderId}:`, err),
     ),
     emailOrderShipped(tenantId, orderId, customerId),
@@ -88,7 +100,7 @@ async function emailOrderShipped(tenantId: string, orderId: string, customerId: 
         channel: NotificationChannel.EMAIL,
         recipient: contact.email,
         templateKey: 'order.shipped',
-        payload: { orderId, customerName: contact.name },
+        payload: { orderId, orderNumber: await numberOf(tenantId, orderId), customerName: contact.name },
       },
       `order-shipped:${orderId}`,
     )

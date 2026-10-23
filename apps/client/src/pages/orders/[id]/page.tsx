@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { useCartStore } from '@/stores/cart.store'
 import { PodPhoto } from '@/components/pod/PodPhoto'
+import { orderLabel } from '@/lib/order-label'
 
 type Line = {
   id: string
@@ -19,6 +20,7 @@ type Line = {
 
 type OrderDetail = {
   id: string
+  orderNumber?: number | null
   status: string
   channel: string
   customerId: string
@@ -75,12 +77,8 @@ function trackingUrl(carrier: string | null | undefined, trackingNumber: string 
 
 const ADMIN_BASE = import.meta.env.VITE_WEB_ADMIN_ORIGIN?.replace(/\/$/, '') ?? ''
 
-function formatOrderNumber(id: string): string {
-  if (!id) return ''
-  if (id.startsWith('seed_ord_')) {
-    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
-  }
-  return `#ORD-${id.slice(-8).toUpperCase()}`
+function formatOrderNumber(id: string, orderNumber?: number | null): string {
+  return id ? `#${orderLabel(id, orderNumber)}` : ''
 }
 
 export default function StorefrontOrderDetailPage() {
@@ -215,7 +213,7 @@ export default function StorefrontOrderDetailPage() {
       {o ? (
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-            <h1 style={{ fontSize: 22, margin: 0, color: 'var(--c-heading)' }}>Order {formatOrderNumber(o.id)}</h1>
+            <h1 style={{ fontSize: 22, margin: 0, color: 'var(--c-heading)' }}>Order {formatOrderNumber(o.id, o.orderNumber)}</h1>
             <div style={{ fontSize: 13 }}>
               <a
                 href={storefrontAdminHref(`/orders/${encodeURIComponent(o.id)}`)}

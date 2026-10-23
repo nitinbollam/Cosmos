@@ -1,6 +1,7 @@
 import { notifyAssigned, pickTaskAssignedMessage, shouldNotify } from './assignment-push'
 import type { FulfillmentTaskStatus, Prisma } from '@/generated/prisma-wms'
 import { inventoryDb, wmsDb } from './db'
+import { orderNumberMap } from './order-number'
 import { enrichPickItemsWithBins, enrichPickItemsWithSkuLabels } from './pick-bin-resolver'
 import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
@@ -194,9 +195,11 @@ export async function getFulfillmentTask(tenantId: string, taskId: string) {
   )
   const pickItems = sortByBin(await enrichPickItemsWithSkuLabels(tenantId, withBins))
   const codes = await warehouseCodeMap(tenantId, [t.warehouseId])
+  const orderNumbers = await orderNumberMap(tenantId, [t.orderId])
   return {
     id: t.id,
     orderId: t.orderId,
+    orderNumber: orderNumbers.get(t.orderId) ?? null,
     status: t.status,
     priority: t.priority,
     warehouseCode: codes.get(t.warehouseId) ?? t.warehouseCode,
@@ -275,10 +278,12 @@ export async function listFulfillmentTasks(
     .filter((t) => matchesAssigned(filter, t.assignedUserId, opts?.viewerId ?? ''))
     .sort(compareTasks)
   const codes = await warehouseCodeMap(tenantId, rows.map((t) => t.warehouseId))
+  const orderNumbers = await orderNumberMap(tenantId, rows.map((t) => t.orderId))
   return Promise.all(
     rows.map(async (t) => ({
       id: t.id,
       orderId: t.orderId,
+      orderNumber: orderNumbers.get(t.orderId) ?? null,
       status: t.status,
       priority: t.priority,
       warehouseCode: codes.get(t.warehouseId) ?? t.warehouseCode,
