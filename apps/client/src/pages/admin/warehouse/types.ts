@@ -72,6 +72,10 @@ export type CycleDetail = Omit<CycleRow, '_count'> & {
     id: string
     skuId: string
     locationLabel: string | null
+    /** Filled by the server for display; ids stay as the fallback. */
+    skuCode?: string | null
+    skuName?: string | null
+    binCode?: string | null
     systemQty: number
     countedQty: number | null
   }>

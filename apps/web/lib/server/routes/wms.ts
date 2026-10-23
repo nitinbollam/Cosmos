@@ -268,7 +268,7 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
       })
     }
     if (seg.length === 3 && method === 'GET') {
-      return Response.json(await wmsCycleCount.getCycleCount(session.tenantId, seg[2]))
+      return Response.json(await wmsCycleCount.getCycleCountSheet(session.tenantId, seg[2]))
     }
     if (seg.length === 5 && seg[3] === 'lines' && seg[4] === 'import' && method === 'POST') {
       const body = (await req.json()) as { rows?: Parameters<typeof wmsCycleCount.importCycleLineCounts>[2] }

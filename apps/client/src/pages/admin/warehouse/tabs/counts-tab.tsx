@@ -61,7 +61,7 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
   })
 
   const submitCountMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/wms/cycle-counts/${id}/submit`),
+    mutationFn: (id: string) => api.patch(`/wms/cycle-counts/${id}/submit-for-approval`),
     onSuccess: () => {
       showToast('Submitted for review')
       void qc.invalidateQueries({ queryKey: ['cycle-counts'] })
@@ -370,8 +370,11 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
                       const varNonZero = varNum != null && varNum !== 0
                       return (
                         <tr key={ln.id}>
-                          <td className="font-mono text-xs">{ln.skuId}</td>
-                          <td>{ln.locationLabel ?? '—'}</td>
+                          <td>
+                            <span className="font-mono text-xs">{ln.skuCode ?? ln.skuId}</span>
+                            {ln.skuName ? <span className="block text-xs text-pleros-text-3">{ln.skuName}</span> : null}
+                          </td>
+                          <td className="font-mono text-xs">{ln.binCode ?? '—'}</td>
                           <td className="font-mono">{ln.systemQty}</td>
                           <td className="min-w-[100px]">
                             {inProgress ? (
