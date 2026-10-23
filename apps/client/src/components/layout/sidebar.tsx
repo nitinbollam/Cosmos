@@ -11,6 +11,8 @@ type NavItem = {
   icon: SidebarIconName
   feature?: 'celestial' | 'marketplace'
   permission?: string
+  /** Roles that must not see this item even though they hold the permission (e.g. drivers work from /m/delivery). */
+  hiddenForRoles?: string[]
 }
 
 const BASE_SIDEBAR_NAV: NavItem[] = [
@@ -25,7 +27,7 @@ const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin/compliance', label: 'Compliance', icon: 'compliance', permission: 'compliance.read' },
   { href: '/admin/crm', label: 'CRM', icon: 'crm', permission: 'crm.read' },
   { href: '/admin/quotes', label: 'Quotes', icon: 'orders', permission: 'quotes.read' },
-  { href: '/admin/dispatch', label: 'Dispatch', icon: 'dispatch', permission: 'dispatch.read' },
+  { href: '/admin/dispatch', label: 'Dispatch', icon: 'dispatch', permission: 'dispatch.read', hiddenForRoles: ['DRIVER'] },
   { href: '/admin/finance', label: 'Finance', icon: 'finance', permission: 'finance.read' },
   { href: '/admin/approvals', label: 'Approvals', icon: 'orders', permission: 'approvals.read' },
   { href: '/admin/budgets', label: 'Budgets', icon: 'finance', permission: 'budgets.read' },
@@ -88,6 +90,7 @@ export function Sidebar({
   const navItems = BASE_SIDEBAR_NAV.filter((item) => {
     if (item.feature === 'celestial' && navFeatures?.celestial === false) return false
     if (item.feature === 'marketplace' && navFeatures?.marketplace !== true) return false
+    if (item.hiddenForRoles?.includes((me?.role ?? '').toUpperCase())) return false
     if (!hasClientPermission(me?.permissions, me?.role, item.permission)) return false
     return true
   })

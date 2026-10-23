@@ -16,7 +16,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { StatusBadge } from '@/components/pleros/status-badge'
@@ -174,6 +174,12 @@ function routeMapEmbedUrl(route: DeliveryRoute): string {
 }
 
 export default function DispatchPage() {
+  // Drivers work their own routes from the mobile app; the planning board is for managers (PLR-165).
+  const { data: me } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => api.get<{ role?: string }>('/auth/me'),
+  })
+  if ((me?.role ?? '').toUpperCase() === 'DRIVER') return <Navigate to="/m/delivery" replace />
   return (
     <Suspense fallback={<div className="p-8 text-pleros-muted text-sm flex items-center gap-2"><span>🚚</span> Loading fleet dispatch…</div>}>
       <DispatchDashboard />
