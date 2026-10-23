@@ -201,6 +201,8 @@ model PickWave {
   warehouseId String
   status      PickWaveStatus @default(OPEN)
   createdBy   String
+  startedAt   DateTime?
+  completedAt DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   tasks       PickWaveTask[]

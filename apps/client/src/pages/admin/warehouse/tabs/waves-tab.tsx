@@ -57,7 +57,7 @@ export function WavesTab({ warehouses, warehouseLabel }: WavesTabProps) {
   })
 
   const startWaveMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/pick-waves/${id}/start`),
+    mutationFn: (id: string) => api.post(`/pick-waves/${id}/start`),
     onSuccess: () => {
       showToast('Wave started')
       void qc.invalidateQueries({ queryKey: ['pick-waves'] })
@@ -67,7 +67,7 @@ export function WavesTab({ warehouses, warehouseLabel }: WavesTabProps) {
   })
 
   const completeWaveMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/pick-waves/${id}/complete`),
+    mutationFn: (id: string) => api.post(`/pick-waves/${id}/complete`),
     onSuccess: () => {
       showToast('Wave completed')
       void qc.invalidateQueries({ queryKey: ['pick-waves'] })

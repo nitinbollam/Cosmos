@@ -55,6 +55,20 @@ export default function WarehouseTaskPage() {
     }
   }
 
+  /** Packing answers with the new status, not the task, so reload it to show "packed". */
+  async function pack() {
+    setBusy(true)
+    setErr(null)
+    try {
+      await api.post(`${base}/pack`, {})
+      await load()
+    } catch (e) {
+      setErr(axiosErr(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const confirm = (line: PickItem) =>
     run(() => api.patch<PickTask>(`${base}/pick-lines/${encodeURIComponent(line.id)}`, { pickedQty: line.quantity, scanned: cleanScan(scan) }))
 
@@ -161,6 +175,9 @@ export default function WarehouseTaskPage() {
       {task && open && !line && items.length > 0 && (
         <div className="pleros-mobile-card">
           <p style={{ margin: 0, color: 'var(--c-success)' }}>All lines done. Ready to pack.</p>
+          <button type="button" className="btn-primary" style={{ marginTop: 10, width: '100%' }} disabled={busy} onClick={() => void pack()}>
+            {busy ? 'Packing…' : 'Pack'}
+          </button>
         </div>
       )}
 
