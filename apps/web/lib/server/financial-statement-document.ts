@@ -6,7 +6,7 @@ function money(n: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
-async function tenantName(tenantId: string): Promise<string> {
+export async function tenantName(tenantId: string): Promise<string> {
   try {
     const org = await tenant.findTenantById(tenantId)
     if (org.displayName?.trim()) return org.displayName.trim()
@@ -16,7 +16,7 @@ async function tenantName(tenantId: string): Promise<string> {
   return 'Pleros Distribution ERP'
 }
 
-function pdfBuffer(doc: InstanceType<typeof PDFDocument>): Promise<Buffer> {
+export function pdfBuffer(doc: InstanceType<typeof PDFDocument>): Promise<Buffer> {
   const chunks: Buffer[] = []
   doc.on('data', (chunk: Buffer) => chunks.push(chunk))
   return new Promise((resolve, reject) => {

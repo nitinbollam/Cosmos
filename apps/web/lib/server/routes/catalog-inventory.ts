@@ -20,6 +20,25 @@ export async function routeSkus(method: string, seg: string[], req: Request): Pr
     throw new ApiError(403, 'Forbidden')
   }
 
+  if (seg[1] === 'export.pdf' && seg.length === 2 && method === 'GET') {
+    // Staff only: the list carries cost, which buyers must not see.
+    if (isPortalBuyer(session.role)) throw new ApiError(403, 'Forbidden')
+    assertPermission(session, 'inventory.read')
+    const { buildInventoryListPdf } = await import('../inventory-document')
+    const pdf = await buildInventoryListPdf(session.tenantId, {
+      search: (url.searchParams.get('search') ?? url.searchParams.get('q'))?.trim() || undefined,
+      category: url.searchParams.get('category') || undefined,
+      warehouseId: url.searchParams.get('warehouseId') || undefined,
+      inStockOnly: url.searchParams.get('inStock') === 'true',
+    })
+    return new Response(pdf, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="inventory-${new Date().toISOString().slice(0, 10)}.pdf"`,
+      },
+    })
+  }
+
   if (seg[1] === 'categories' && method === 'GET') {
     return Response.json(await inv.distinctCategories(session.tenantId))
   }

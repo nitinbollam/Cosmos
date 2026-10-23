@@ -9,6 +9,7 @@ import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overla
 import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
 import { ScanButton } from '@/components/scanner'
 import { isNotFound } from '@/lib/axios-error'
+import { downloadApiFile } from '@/lib/file-download'
 
 type SkuRow = {
   id: string
@@ -104,6 +105,8 @@ export default function InventoryPage() {
   const [historySkuId, setHistorySkuId] = useState<string | null>(null)
   const [adjustOpen, setAdjustOpen] = useState<SkuRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportErr, setExportErr] = useState<string | null>(null)
 
   const [adjWarehouse, setAdjWarehouse] = useState('')
   const [adjDelta, setAdjDelta] = useState(0)
@@ -194,6 +197,29 @@ export default function InventoryPage() {
       return api.get<SkuPage>(`/skus?${q.toString()}`)
     },
   })
+
+  /** The whole filtered list as a PDF (every page, not just the 50 rows on screen). */
+  async function exportPdf() {
+    setExporting(true)
+    setExportErr(null)
+    try {
+      const q = new URLSearchParams()
+      if (debouncedSearch) q.set('search', debouncedSearch)
+      if (category) q.set('category', category)
+      if (warehouseId) q.set('warehouseId', warehouseId)
+      if (inStockOnly) q.set('inStock', 'true')
+      const qs = q.toString()
+      await downloadApiFile(
+        `/skus/export.pdf${qs ? `?${qs}` : ''}`,
+        `inventory-${new Date().toISOString().slice(0, 10)}.pdf`,
+        'application/pdf',
+      )
+    } catch (e) {
+      setExportErr(e instanceof Error ? e.message : 'Could not export the PDF')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const editSkuQ = useQuery({
     queryKey: ['skus', editId],
@@ -297,6 +323,9 @@ export default function InventoryPage() {
           <button type="button" className="btn-ghost" onClick={() => setImportOpen((open) => !open)}>
             {importOpen ? 'Hide import' : 'Import CSV/Excel'}
           </button>
+          <button type="button" className="btn-ghost" disabled={exporting} onClick={() => void exportPdf()}>
+            {exporting ? 'Exporting…' : 'Export PDF'}
+          </button>
           <button
             type="button"
             className="btn-primary"
@@ -309,6 +338,12 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      {exportErr ? (
+        <p role="alert" className="text-sm text-red-400">
+          {exportErr}
+        </p>
+      ) : null}
 
       {(demandQ.data ?? []).length > 0 ? (
         <div className="pleros-card">
