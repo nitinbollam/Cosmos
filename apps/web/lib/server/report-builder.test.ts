@@ -67,3 +67,11 @@ test('rowsToCsv builds header and body', () => {
   )
   assert.equal(csv, 'A,"B, C"\n1,x\n2,"y,z"')
 })
+
+test('csvEscape stops spreadsheet formulas but leaves plain numbers', () => {
+  assert.equal(csvEscape('=1+1'), "'=1+1")
+  assert.equal(csvEscape('+1-555-1424'), "'+1-555-1424")
+  assert.equal(csvEscape('@cmd'), "'@cmd")
+  assert.equal(csvEscape('-12.50'), '-12.50')
+  assert.equal(csvEscape(-3), '-3')
+})

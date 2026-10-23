@@ -165,8 +165,17 @@ export function agingBucket(days: number): string {
   return '120+'
 }
 
+/**
+ * Spreadsheet apps run a cell that starts with = + - @ (or a tab or carriage return) as a formula.
+ * Such cells get a leading apostrophe so they open as text; plain numbers ("-12.50") stay numbers.
+ * Same rule as apps/client/src/lib/csv-download.ts.
+ */
+export function neutralizeFormula(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s) ? `'${s}` : s
+}
+
 export function csvEscape(value: unknown): string {
-  const s = value == null ? '' : String(value)
+  const s = neutralizeFormula(value == null ? '' : String(value))
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
 }
 
