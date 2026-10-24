@@ -6,8 +6,20 @@ export type StripeConnectContext = {
   tenantId: string
 }
 
-export function stripeAccountOpts(ctx: StripeConnectContext): Stripe.RequestOptions {
-  return ctx.connectedAccountId ? { stripeAccount: ctx.connectedAccountId } : {}
+/**
+ * Request options for a Stripe call, or undefined when there are none. stripe-node only recognises an
+ * options object by its keys, so an empty {} is read as an extra argument and the call throws
+ * "Unknown arguments" (direct charges with no Connect account).
+ */
+export function stripeAccountOpts(
+  ctx: StripeConnectContext,
+  extra?: Stripe.RequestOptions,
+): Stripe.RequestOptions | undefined {
+  const opts: Stripe.RequestOptions = {
+    ...(ctx.connectedAccountId ? { stripeAccount: ctx.connectedAccountId } : {}),
+    ...extra,
+  }
+  return Object.keys(opts).length ? opts : undefined
 }
 
 /**
