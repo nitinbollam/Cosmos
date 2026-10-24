@@ -409,7 +409,7 @@ export async function listInvoices(
     } else if (status === 'OVERDUE') {
       const raw = await orderDb.invoice.findMany({
         where: { ...where, status: { in: ['ISSUED', 'PARTIALLY_PAID'] }, order: { status: { notIn: ['CANCELLED', 'FAILED'] } } },
-        include: { order: { select: { status: true, paymentMethod: true, channel: true } }, creditMemos: true },
+        include: { order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } }, creditMemos: true },
         orderBy: { issuedAt: 'desc' },
         take: 2000,
       })
@@ -447,7 +447,7 @@ export async function listInvoices(
   const [items, total] = await Promise.all([
     orderDb.invoice.findMany({
       where,
-      include: { order: { select: { status: true, paymentMethod: true, channel: true } }, creditMemos: true },
+      include: { order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } }, creditMemos: true },
       orderBy: { issuedAt: 'desc' },
       skip: (safePage - 1) * safePageSize,
       take: safePageSize,

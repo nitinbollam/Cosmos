@@ -10,6 +10,7 @@ type WarehouseRow = {
 
 type OrderRow = {
   id: string
+  orderNumber?: number | null
   status: string
   total: number
   createdAt: string | Date
@@ -181,7 +182,8 @@ function formatToolSection(result: ToolResult): string | null {
   }
 }
 
-function formatOrderCode(id: string): string {
+function formatOrderCode(id: string, orderNumber?: number | null): string {
+  if (orderNumber != null) return `ORD-${orderNumber}`
   if (!id) return ''
   if (id.startsWith('seed_ord_')) return `ORD-${id.replace('seed_ord_', '').toUpperCase()}`
   return `ORD-${id.slice(-6).toUpperCase()}`
@@ -222,7 +224,7 @@ function formatOrders(result: ToolResult): string {
   }
   const listPath = result.links[0]?.href?.replace(/\/[^/]+$/, '') ?? '/admin/orders'
   const tableRows = rows.map((o) => {
-    const code = formatOrderCode(o.id)
+    const code = formatOrderCode(o.id, o.orderNumber)
     const date = formatDate(o.createdAt)
     return `| **#${code}** | \`${o.status}\` | $${o.total.toFixed(2)} | ${date} | ${o.lineCount ?? '—'} |`
   })
@@ -240,7 +242,7 @@ function formatOrders(result: ToolResult): string {
 function formatOrderDetail(result: ToolResult): string {
   const o = result.data as OrderRow & { amountPaid?: number; lines?: unknown[] }
   if (!o?.id) return '**Order:** Not found.'
-  const code = formatOrderCode(o.id)
+  const code = formatOrderCode(o.id, o.orderNumber)
   const detailHref = result.links[0]?.href ?? `/admin/orders/${o.id}`
   return [
     `### Order Details (#${code})`,

@@ -21,8 +21,10 @@ function appPublicUrl(): string {
 }
 
 /** Short human-facing reference for an order — the app's own UI shows the same last-8-chars-uppercase form. */
-function shortOrderRef(orderId: string): string {
-  return orderId.slice(-8).toUpperCase()
+/** ORD-1042 when the payload carries the order number, else the tail of the id (orders not yet numbered). */
+function shortOrderRef(orderId: string, orderNumber?: unknown): string {
+  if (typeof orderNumber === 'number') return `ORD-${orderNumber}`
+  return `ORD-${orderId.slice(-6).toUpperCase()}`
 }
 
 const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subject: string; body: string }> = {
@@ -35,7 +37,7 @@ const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subj
     const orderUrl = `${appPublicUrl()}/orders/${orderId}`
     return {
       subject: 'Order confirmation',
-      body: `Your order #${shortOrderRef(orderId)} was placed for $${String(p.total ?? '')}. Thank you for your business.\n\nView your order: ${orderUrl}`,
+      body: `Your order ${shortOrderRef(orderId, p.orderNumber)} was placed for $${String(p.total ?? '')}. Thank you for your business.\n\nView your order: ${orderUrl}`,
     }
   },
   'order.shipped': (p) => {
@@ -43,7 +45,7 @@ const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subj
     const orderUrl = `${appPublicUrl()}/orders/${orderId}`
     return {
       subject: 'Your order has shipped',
-      body: `Order #${shortOrderRef(orderId)} is on its way.\n\nTrack your order: ${orderUrl}`,
+      body: `Order ${shortOrderRef(orderId, p.orderNumber)} is on its way.\n\nTrack your order: ${orderUrl}`,
     }
   },
   'invoice.issued': (p) => {
@@ -113,7 +115,7 @@ const PUSH_COPY: Record<
     const orderId = String(p.orderId ?? '')
     return {
       title: 'Your order has shipped',
-      body: `Order #${shortOrderRef(orderId)} is on its way.`,
+      body: `Order ${shortOrderRef(orderId, p.orderNumber)} is on its way.`,
       url: `/orders/${encodeURIComponent(orderId)}`,
       // One notification per order: a second shipment doesn't replace the first on screen.
       tag: `order.shipped:${orderId}`,

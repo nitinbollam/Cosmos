@@ -6,6 +6,7 @@ import * as search from '../search'
 import { isPortalBuyer } from '../buyer-context'
 import { ApiError, type SessionUser } from '../session'
 import type { CelestialToolName } from './intent'
+import { orderCodeOf } from '../order-number'
 
 export type ToolContext = {
   session: SessionUser
@@ -50,13 +51,14 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       if (ctx.orderStatus) filters.status = ctx.orderStatus
       const page = await orders.listOrders(session.tenantId, 1, 10, filters, buyerOpts)
       const links = page.items.map((o) => ({
-        label: `Order …${o.id.slice(-8)} (${o.status})`,
+        label: `Order ${orderCodeOf(o)} (${o.status})`,
         href: isBuyer ? `/orders/${o.id}` : `/admin/orders/${o.id}`,
       }))
       return {
         name,
         data: page.items.map((o) => ({
           id: o.id,
+          orderNumber: o.orderNumber,
           status: o.status,
           total: Number(o.totalAmount),
           createdAt: o.createdAt,
@@ -72,6 +74,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
         name,
         data: {
           id: order.id,
+          orderNumber: order.orderNumber,
           status: order.status,
           total: Number(order.totalAmount),
           amountPaid: Number(order.amountPaid),
@@ -84,7 +87,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
         },
         links: [
           {
-            label: `Order …${order.id.slice(-8)}`,
+            label: `Order ${orderCodeOf(order)}`,
             href: isBuyer ? `/orders/${order.id}` : `/admin/orders/${order.id}`,
           },
         ],

@@ -5,9 +5,11 @@ import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { orderLabel } from '@/lib/order-label'
 
 type OrderRow = {
   id: string
+  orderNumber?: number | null
   customerId: string
   customerName?: string | null
   channel: string
@@ -40,13 +42,6 @@ const STATUS_TABS = [
 
 const CHANNELS = ['ALL', 'B2B_PORTAL', 'POS', 'SALES_REP', 'API'] as const
 
-function formatOrderNumber(id: string): string {
-  if (!id) return ''
-  if (id.startsWith('seed_ord_')) {
-    return `ORD-${id.replace('seed_ord_', '').toUpperCase()}`
-  }
-  return `ORD-${id.slice(-8).toUpperCase()}`
-}
 
 function customerLabel(o: OrderRow): string {
   if (o.customerName) return o.customerName
@@ -212,7 +207,7 @@ export default function OrdersPage() {
                   <tr key={o.id}>
                     <td className="font-mono text-sm">
                       <Link to={adminPath(`/orders/${encodeURIComponent(o.id)}`)} className="text-pleros-accent hover:underline font-semibold">
-                        #{formatOrderNumber(o.id)}
+                        #{orderLabel(o.id, o.orderNumber)}
                       </Link>
                     </td>
                     <td className="max-w-[200px] truncate text-sm">{customerLabel(o)}</td>
