@@ -4,6 +4,8 @@
 
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000
 const SALES_CHANNEL_FLUSH_MS = 90 * 1000
+/** Scheduled marketing campaigns go out within 5 minutes of their time (PLR-100). */
+const CAMPAIGN_INTERVAL_MS = 5 * 60 * 1000
 /** Webhook retries come due from a minute after a failure, so check often. */
 const WEBHOOK_RETRY_MS = 30 * 1000
 /** GL posting outbox: new postings are picked up within seconds; retries follow their own backoff. */
@@ -50,14 +52,20 @@ export function startBackgroundJobs(): void {
     } catch (err) {
       console.error('[jobs] subscriptions sweep failed:', err)
     }
+  }
+
+  // Campaigns run on their own 5-minute timer rather than the 10-minute sweep.
+  const runCampaigns = async () => {
     try {
       const { processScheduledCampaigns } = await import('./campaigns')
       const campRes = await processScheduledCampaigns()
-      if (campRes.processed > 0 || campRes.failed > 0) {
-        console.log(`[jobs] campaigns: processed ${campRes.processed}, failed ${campRes.failed}`)
+      if (campRes.processed > 0 || campRes.failed > 0 || campRes.interrupted > 0) {
+        console.log(
+          `[jobs] campaigns: processed ${campRes.processed}, failed ${campRes.failed}, interrupted ${campRes.interrupted}`,
+        )
       }
     } catch (err) {
-      console.error('[jobs] campaigns sweep failed:', err)
+      console.error('[jobs] campaigns run failed:', err)
     }
   }
 
@@ -123,11 +131,14 @@ export function startBackgroundJobs(): void {
   reconcileTimer.unref?.()
 
   void sweep()
+  void runCampaigns()
   void flushSalesChannels()
   void runPostings()
   void retryWebhooks()
   const timer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS)
   timer.unref?.()
+  const campaignTimer = setInterval(() => void runCampaigns(), CAMPAIGN_INTERVAL_MS)
+  campaignTimer.unref?.()
   const salesChannelTimer = setInterval(() => void flushSalesChannels(), SALES_CHANNEL_FLUSH_MS)
   salesChannelTimer.unref?.()
   const postingTimer = setInterval(() => void runPostings(), POSTING_JOBS_MS)
