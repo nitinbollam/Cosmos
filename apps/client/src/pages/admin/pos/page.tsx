@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/pleros/empty-state'
 import { ScanButton, useKeyboardWedge } from '@/components/scanner'
 import { authFetch } from '@/lib/auth-session'
 import { IdScanPanel, type IdScan, type IdScanResult } from '@/components/id-scan/IdScanPanel'
+import { orderLabel } from '@/lib/order-label'
 
 type Register = { id: string; name: string; warehouseId: string | null }
 type Customer = { id: string; name: string; email?: string | null; isLicensedTobacco?: boolean }
@@ -70,6 +71,7 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartLine[]>([])
   const [lastOrderId, setLastOrderId] = useState<string | null>(null)
   const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null)
+  const [lastOrderNumber, setLastOrderNumber] = useState<number | null>(null)
   const [submitErr, setSubmitErr] = useState<string | null>(null)
   const [ageMethod, setAgeMethod] = useState<AgeAttestationMethod>('ID_SCAN')
   const [idScan, setIdScan] = useState<IdScan | null>(null)
@@ -285,7 +287,7 @@ export default function PosPage() {
           },
         ]
       }
-      return api.post<{ id: string; orderNumber?: string; totalAmount: number }>('/pos/orders', {
+      return api.post<{ id: string; orderNumber?: number | null; totalAmount: number }>('/pos/orders', {
         registerId,
         customerId: effectiveCustomerId,
         tenders,
@@ -310,6 +312,7 @@ export default function PosPage() {
     },
     onSuccess: (order) => {
       setLastOrderId(order.id)
+      setLastOrderNumber(order.orderNumber ?? null)
       setLastOrderTotal(order.totalAmount)
       setCart([])
       setSubmitErr(null)
@@ -494,7 +497,7 @@ export default function PosPage() {
             <span>✅</span> Sale Complete
           </p>
           <p className="text-sm text-pleros-text-2 mt-1">
-            Order <span className="font-mono font-semibold text-pleros-white">#{lastOrderId.startsWith('seed_ord_') ? `ORD-${lastOrderId.replace('seed_ord_', '').toUpperCase()}` : `ORD-${lastOrderId.slice(-6).toUpperCase()}`}</span>
+            Order <span className="font-mono font-semibold text-pleros-white">#{orderLabel(lastOrderId, lastOrderNumber)}</span>
             {lastOrderTotal != null ? ` · ${money(lastOrderTotal)}` : ''}
           </p>
           <div className="flex flex-wrap gap-3 mt-3">

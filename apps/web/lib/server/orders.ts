@@ -19,6 +19,7 @@ import { assertAgeComplianceForOrder, type PosAgeAttestation } from './complianc
 import { defersFulfillmentUntilPayment } from './order-payment-sync'
 import { buildPaymentSummary, findPrimaryPaymentIntent } from './order-payment-admin'
 import { emitDomainEvent, emitOrderEvent } from './domain-events'
+import { allocateOrderNumber, parseOrderNumberQuery } from './order-number'
 
 import { swallowed } from './fire-and-forget'
 async function enrichOrderWithPaymentDetails<
@@ -147,9 +148,11 @@ export async function createOrder(
   const creditCheck = await checkCreditLimitForOrder(tenantId, customerId, remainingAmountToFinance, dto.paymentMethod)
   const needsCreditApproval = !creditCheck.ok && creditCheck.requiresApproval
 
+  const orderNumber = await allocateOrderNumber(tenantId)
   const order = await orderDb.order.create({
     data: {
       tenantId,
+      orderNumber,
       customerId,
       channel: channel as never,
       status: needsCreditApproval ? OrderStatus.AWAITING_APPROVAL : undefined,
@@ -277,7 +280,12 @@ export async function listOrders(
 
   if (filters?.search?.trim()) {
     const s = filters.search.trim()
-    where.OR = [{ id: { contains: s } }, { customerId: { contains: s } }]
+    const byNumber = parseOrderNumberQuery(s)
+    where.OR = [
+      { id: { contains: s } },
+      { customerId: { contains: s } },
+      ...(byNumber != null ? [{ orderNumber: byNumber }] : []),
+    ]
   }
 
   const st = filters?.status?.trim()
@@ -366,6 +374,7 @@ export async function listShippedOrdersForDispatch(tenantId: string) {
     take: 100,
     select: {
       id: true,
+      orderNumber: true,
       customerId: true,
       status: true,
       totalAmount: true,

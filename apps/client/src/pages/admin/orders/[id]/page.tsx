@@ -6,6 +6,7 @@ import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { AdminOrderPaymentPanel } from '@/components/admin-order-payment-panel'
+import { orderLabel } from '@/lib/order-label'
 
 type LineItem = {
   id: string
@@ -36,6 +37,7 @@ type Saga = {
 
 type OrderDetail = {
   id: string
+  orderNumber?: number | null
   tenantId?: string
   customerId: string
   channel: string
@@ -332,7 +334,7 @@ export default function OrderDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-pleros-white font-display font-mono tracking-tight">
-                #{data.id.startsWith('seed_ord_') ? `ORD-${data.id.replace('seed_ord_', '').toUpperCase()}` : `ORD-${data.id.slice(-6).toUpperCase()}`}
+                #{orderLabel(data.id, data.orderNumber)}
               </h1>
               <div className="flex flex-wrap gap-3 mt-3 items-center">
                 <StatusBadge status={data.status} />

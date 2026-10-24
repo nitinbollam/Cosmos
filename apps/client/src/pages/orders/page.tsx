@@ -5,9 +5,11 @@ import { isUnauthorized } from '@/lib/axios-error'
 import { ensureB2bCustomerId } from '@/lib/session'
 import { StatusBadge } from '@/components/status-badge'
 import { useCartStore } from '@/stores/cart.store'
+import { orderLabel } from '@/lib/order-label'
 
 type OrderRow = {
   id: string
+  orderNumber?: number | null
   status: string
   channel: string
   customerId: string
@@ -24,12 +26,8 @@ type OrderPage = {
   hasMore?: boolean
 }
 
-function formatOrderNumber(id: string): string {
-  if (!id) return ''
-  if (id.startsWith('seed_ord_')) {
-    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
-  }
-  return `#ORD-${id.slice(-8).toUpperCase()}`
+function formatOrderNumber(id: string, orderNumber?: number | null): string {
+  return id ? `#${orderLabel(id, orderNumber)}` : ''
 }
 
 export default function StorefrontOrdersPage() {
@@ -151,7 +149,7 @@ export default function StorefrontOrdersPage() {
                   style={{ cursor: 'pointer' }}
                   onClick={() => navigate(`/orders/${encodeURIComponent(o.id)}`)}
                 >
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600 }}>{formatOrderNumber(o.id)}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600 }}>{formatOrderNumber(o.id, o.orderNumber)}</td>
                   <td style={{ color: 'var(--c-text-3)', fontSize: 13 }}>{new Date(o.createdAt).toLocaleString()}</td>
                   <td>
                     <StatusBadge status={o.status} />

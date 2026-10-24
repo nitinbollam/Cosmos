@@ -5,6 +5,7 @@ import { axiosErr } from '@/lib/axios-error'
 import { jwtEmail } from '@/lib/jwt'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { getAccessToken } from '@/lib/auth-session'
+import { orderLabel } from '@/lib/order-label'
 
 type NotificationRow = {
   id: string
@@ -36,8 +37,8 @@ function templateSummary(row: NotificationRow) {
       return `Order placed for $${String(p.total ?? '—')}.`
     case 'order.shipped': {
       const oid = String(p.orderId ?? '')
-      const code = oid.startsWith('seed_ord_') ? `ORD-${oid.replace('seed_ord_', '').toUpperCase()}` : `ORD-${oid.slice(-6).toUpperCase()}`
-      return `Order #${code} is on its way.`
+      const num = typeof p.orderNumber === 'number' ? p.orderNumber : null
+      return `Order #${orderLabel(oid, num)} is on its way.`
     }
     case 'invoice.issued':
       return `Invoice ${String(p.invoiceNumber ?? '—')} for $${String(p.total ?? '—')}${p.dueAt ? ` · due ${String(p.dueAt)}` : ''}.`

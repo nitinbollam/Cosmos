@@ -6,10 +6,12 @@ import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { orderLabel } from '@/lib/order-label'
 
 type TaskDetail = {
   id: string
   orderId: string
+  orderNumber?: number | null
   status: string
   priority: string
   warehouseCode: string
@@ -158,7 +160,7 @@ export default function FulfillmentTaskDetailPage() {
                   to={adminPath(`/orders/${encodeURIComponent(t.orderId)}`)}
                   className="font-mono text-pleros-primary hover:underline"
                 >
-                  {t.orderId}
+                  {orderLabel(t.orderId, t.orderNumber)}
                 </Link>
               </div>
               <div>Warehouse {t.warehouseCode}</div>

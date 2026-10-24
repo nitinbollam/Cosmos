@@ -20,6 +20,7 @@ export type BinRow = {
 export type PickTask = {
   id: string
   orderId: string
+  orderNumber?: number | null
   status: string
   priority: string
   warehouseCode: string

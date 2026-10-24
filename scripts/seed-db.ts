@@ -631,6 +631,8 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
   }
 
   try {
+    // ORD-1001.. in spec order, matching what a live tenant would have been given.
+    const numberOf = (id: string) => 1001 + specs.findIndex((x) => x.id === id)
     for (const o of specs) {
       const existing = await prisma.order.findUnique({ where: { id: o.id } })
       if (existing) {
@@ -650,6 +652,7 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
         data: {
           id: o.id,
           tenantId,
+          orderNumber: numberOf(o.id),
           customerId: ctx.customerAcmeId,
           channel: o.channel,
           status: o.status,
@@ -672,6 +675,10 @@ async function seedOrders(tenantId: string, ctx: Pick<SeedCtx, 'customerAcmeId' 
         },
       })
     }
+    // Live orders continue after the seeded ones; never move an existing counter backwards.
+    const last = 1000 + specs.length
+    await prisma.orderCounter.upsert({ where: { tenantId }, create: { tenantId, lastNumber: last }, update: {} })
+    await prisma.orderCounter.updateMany({ where: { tenantId, lastNumber: { lt: last } }, data: { lastNumber: last } })
   } finally {
     await prisma.$disconnect()
   }

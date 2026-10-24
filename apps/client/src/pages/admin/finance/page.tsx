@@ -22,6 +22,7 @@ import { ChartOfAccountsTab } from '@/pages/admin/finance/tabs/chart-of-accounts
 import { GeneralLedgerTab } from '@/pages/admin/finance/tabs/general-ledger-tab'
 import { IncomeStatementTab } from '@/pages/admin/finance/tabs/income-statement-tab'
 import { BalanceSheetTab } from '@/pages/admin/finance/tabs/balance-sheet-tab'
+import { orderLabel } from '@/lib/order-label'
 
 type FinanceTab =
   | 'invoices'
@@ -83,7 +84,7 @@ type InvoiceRow = {
   amountCredited?: string | number
   balance: number
   issuedAt: string
-  order?: { status: string; paymentMethod: string }
+  order?: { status: string; paymentMethod: string; orderNumber?: number | null }
 }
 
 type InvoiceList = { items: InvoiceRow[]; total: number; page: number; pageSize: number; hasMore?: boolean }
@@ -647,9 +648,7 @@ export default function FinancePage() {
                 </thead>
                 <tbody>
                   {invoiceRows.map((inv) => {
-                    const orderCode = inv.orderId.startsWith('seed_ord_')
-                      ? `ORD-${inv.orderId.replace('seed_ord_', '').toUpperCase()}`
-                      : `ORD-${inv.orderId.slice(-6).toUpperCase()}`
+                    const orderCode = orderLabel(inv.orderId, inv.order?.orderNumber)
                     const customerCode = inv.customerId.startsWith('cust_')
                       ? `Customer #${inv.customerId.slice(-6).toUpperCase()}`
                       : inv.customerId

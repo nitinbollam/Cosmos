@@ -6,10 +6,12 @@ import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { orderLabel } from '@/lib/order-label'
 
 type FloorTask = {
   id: string
   orderId: string
+  orderNumber?: number | null
   status: string
   priority: string
   warehouseCode: string
@@ -163,9 +165,7 @@ export default function FulfillmentTasksPage() {
               <tbody>
                 {rows.map((t) => {
                   const taskCode = `TSK-${t.id.slice(-6).toUpperCase()}`
-                  const orderCode = t.orderId.startsWith('seed_ord_')
-                    ? `ORD-${t.orderId.replace('seed_ord_', '').toUpperCase()}`
-                    : `ORD-${t.orderId.slice(-6).toUpperCase()}`
+                  const orderCode = orderLabel(t.orderId, t.orderNumber)
                   return (
                     <tr key={t.id} className="border-b border-pleros-border/60 hover:bg-pleros-surface-2/40">
                       <td className="py-2.5 pr-4">

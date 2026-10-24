@@ -35,7 +35,17 @@ test('order and invoice emails link straight to the record', async () => {
       payload: { orderId: 'ord_abc12345xyz', total: '99.00' },
     })
     assert.match(created.body, /https:\/\/app\.example\.test\/orders\/ord_abc12345xyz/)
-    assert.match(created.body, /#12345XYZ/)
+    // An order without a number yet falls back to one consistent tail of its id.
+    assert.match(created.body, /ORD-345XYZ/)
+
+    const numbered = await deliverNotification({
+      tenantId: 't1',
+      channel: 'EMAIL',
+      recipient: 'buyer@example.com',
+      templateKey: 'order.created',
+      payload: { orderId: 'ord_abc12345xyz', orderNumber: 1042, total: '99.00' },
+    })
+    assert.match(numbered.body, /ORD-1042/)
 
     const shipped = await deliverNotification({
       tenantId: 't1',
@@ -45,6 +55,7 @@ test('order and invoice emails link straight to the record', async () => {
       payload: { orderId: 'ord_abc12345xyz' },
     })
     assert.match(shipped.body, /https:\/\/app\.example\.test\/orders\/ord_abc12345xyz/)
+    assert.match(shipped.body, /ORD-345XYZ/)
 
     const invoice = await deliverNotification({
       tenantId: 't1',
