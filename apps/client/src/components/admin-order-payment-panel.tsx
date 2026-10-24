@@ -2,6 +2,7 @@ import { Elements, useStripe } from '@stripe/react-stripe-js'
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
+import { axiosErr } from '@/lib/axios-error'
 import { AdminStripeCardForm, confirmStripeAction } from '@/components/admin-stripe-card-form'
 import { useStripeConnect } from '@/lib/stripe-connect'
 
@@ -177,18 +178,20 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
 
   const manualMut = useMutation({
     mutationFn: async () => {
+      // Sent as typed: the server rejects malformed amounts rather than reading "10abc" as 10.
       await api.post(`/orders/${encodeURIComponent(orderId)}/payments`, {
-        amount: parseFloat(manualAmount),
+        amount: manualAmount.trim(),
         method: manualMethod,
       })
     },
+    onMutate: () => setErr(null),
     onSuccess: () => {
       invalidate()
       setMode('none')
       setManualAmount('')
       setErr(null)
     },
-    onError: (e: Error) => setErr(e.message),
+    onError: (e) => setErr(axiosErr(e)),
   })
 
   return (
@@ -239,7 +242,7 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
         </a>
       ) : null}
 
-      {err ? <p className="text-sm text-red-400 mt-3">{err}</p> : null}
+      {err ? <p role="alert" className="text-sm text-red-400 mt-3">{err}</p> : null}
 
       <div className="flex flex-wrap gap-2 mt-4">
         {data.paymentStatus === 'AUTHORIZED' ? (
@@ -252,12 +255,12 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
             </button>
           </>
         ) : null}
-        {balance > 0.01 && stripePromise && chargesEnabled ? (
+        {balance > 0 && stripePromise && chargesEnabled ? (
           <button type="button" className="btn-primary text-sm" onClick={() => setMode(mode === 'collect' ? 'none' : 'collect')}>
             Collect card (Stripe)
           </button>
         ) : null}
-        {balance > 0.01 ? (
+        {balance > 0 ? (
           <button type="button" className="btn-ghost text-sm" onClick={() => setMode(mode === 'manual' ? 'none' : 'manual')}>
             Record payment
           </button>
@@ -307,24 +310,34 @@ export function AdminOrderPaymentPanel({ orderId, data }: { orderId: string; dat
 
       {mode === 'manual' ? (
         <div className="mt-4 pt-4 border-t space-y-3" style={{ borderColor: 'var(--c-border)' }}>
-          <input className="pleros-input" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} placeholder={String(balance)} />
+          <input
+            className="pleros-input"
+            aria-label="Payment amount"
+            inputMode="decimal"
+            value={manualAmount}
+            onChange={(e) => {
+              setManualAmount(e.target.value)
+              setErr(null)
+            }}
+            placeholder={String(balance)}
+          />
           <select className="pleros-input" value={manualMethod} onChange={(e) => setManualMethod(e.target.value as typeof manualMethod)}>
             <option value="ACH">ACH</option>
             <option value="CHECK">Check</option>
             <option value="CASH">Cash</option>
           </select>
           <button type="button" className="btn-primary text-sm" disabled={manualMut.isPending} onClick={() => manualMut.mutate()}>
-            Record
+            {manualMut.isPending ? 'Recording…' : 'Record'}
           </button>
         </div>
       ) : null}
 
-      {!stripeLoading && balance > 0.01 && !chargesEnabled ? (
+      {!stripeLoading && balance > 0 && !chargesEnabled ? (
         <p className="text-xs text-amber-400 mt-3">
           Stripe Connect onboarding required — finish Connect in Settings → Integrations before collecting card payments.
         </p>
       ) : null}
-      {!stripePublishable && balance > 0.01 ? (
+      {!stripePublishable && balance > 0 ? (
         <p className="text-xs text-amber-400 mt-3">Set VITE_STRIPE_PUBLISHABLE_KEY for card collection.</p>
       ) : null}
     </div>
