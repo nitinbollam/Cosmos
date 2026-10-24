@@ -63,6 +63,10 @@ export async function decideApprovalRequest(
   if (row.status !== ApprovalStatus.PENDING) {
     throw new ApiError(400, 'Approval request is already decided')
   }
+  // A second person has to sign off: otherwise the requester can approve past their own limit.
+  if (decision.approve && row.requestedBy === decision.decidedBy) {
+    throw new ApiError(403, "You can't approve your own request. Ask another manager or admin.")
+  }
 
   const updated = await tenantDb.approvalRequest.update({
     where: { id },
