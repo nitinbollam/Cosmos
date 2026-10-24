@@ -8,6 +8,7 @@ import { PodPhoto } from '@/components/pod/PodPhoto'
 import { SignaturePad, type CapturedSignature } from '@/components/pod/SignaturePad'
 import { COMMON_FAILURE_REASONS, MAX_FAILURE_REASON_LENGTH } from '@/components/pod/failure-reasons'
 import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
+import { IdScanPanel, idScanFailureTitle, type IdScan, type IdScanResult } from '@/components/id-scan/IdScanPanel'
 import { navigationUrl, routeProgress, routeSummary, telUrl } from '@/lib/driver-routes'
 
 type StopFailure = { reason: string; failedAt: string }
@@ -63,9 +64,13 @@ type RouteDetail = {
  * that would submit an empty POD over the real one.
  */
 /** What the driver records at the door, per stop. Never shared between stops. */
-type StopDetails = { recipientName: string; notes: string; ageConfirmed: boolean }
+type StopDetails = { recipientName: string; notes: string; idScan: IdScan | null }
 
-const EMPTY_DETAILS: StopDetails = { recipientName: '', notes: '', ageConfirmed: false }
+const EMPTY_DETAILS: StopDetails = { recipientName: '', notes: '', idScan: null }
+
+/** The server checks a scanned ID (PLR-35); the delivery itself re-checks the barcode. */
+const checkId = (barcode: string, minimumAge: number) =>
+  api.post<IdScanResult>('/compliance/id-scan', { barcode, minimumAge })
 
 function withStopDelivered(route: RouteDetail, stopId: string, pod: StopPod): RouteDetail {
   return {
@@ -179,7 +184,7 @@ export default function DeliveryRoutePage() {
     const missing = [
       !photos[stop.id] && 'photo',
       !signatures[stop.id] && 'signature',
-      stop.ageCheckRequired && !detailsFor(stop.id).ageConfirmed && 'age check',
+      stop.ageCheckRequired && detailsFor(stop.id).idScan?.result.status !== 'VERIFIED' && 'ID scan',
     ].filter((x): x is string => !!x)
     if (missing.length === 0) return null
     const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`
@@ -199,13 +204,14 @@ export default function DeliveryRoutePage() {
       // goes in here and what the server's POD check accepts.
       photoUrl: photos[stopId]?.dataUrl ?? null,
     }
-    const { recipientName, notes, ageConfirmed } = detailsFor(stopId)
+    const { recipientName, notes, idScan } = detailsFor(stopId)
     try {
       const updated = await api.post<RouteDetail>(`/dispatch/stops/${stopId}/pod`, {
         routeId: id,
         ...pod,
         notes: notes.trim() || undefined,
-        ageConfirmed,
+        // The raw barcode is checked by the server and never stored; only the result is kept.
+        idBarcode: idScan?.result.status === 'VERIFIED' ? idScan.barcode : undefined,
         recipientName: recipientName.trim() || undefined,
       })
       setRoute(withStopDelivered(updated, stopId, pod))
@@ -220,7 +226,9 @@ export default function DeliveryRoutePage() {
 
   function openFailForm(stopId: string) {
     setFailingStop(stopId)
-    setFailReason('')
+    // A failed ID check is the usual reason a 21+ stop can't be delivered.
+    const idFailure = idScanFailureTitle(detailsFor(stopId).idScan)
+    setFailReason(idFailure ? `ID check failed: ${idFailure}` : '')
   }
 
   // An in-page form rather than window.prompt: prompts are blocked in some in-app
@@ -370,20 +378,22 @@ export default function DeliveryRoutePage() {
                 style={{ width: '100%', marginBottom: 8 }}
                 disabled={submitting === s.id}
               />
-              {/* Only stops with age-restricted products ask for the age check. */}
+              {/* Only stops with age-restricted products ask for the ID scan. There is no manual option. */}
               {s.ageRestricted && (
-                <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={detailsFor(s.id).ageConfirmed}
-                    onChange={(e) => setDetail(s.id, { ageConfirmed: e.target.checked })}
-                    disabled={submitting === s.id}
+                <div style={{ marginBottom: 8 }}>
+                  <IdScanPanel
+                    minimumAge={s.minimumAge ?? 21}
+                    value={detailsFor(s.id).idScan}
+                    onChange={(scan) => setDetail(s.id, { idScan: scan })}
+                    checkId={checkId}
+                    prompt={`Scan the recipient’s ID${s.ageCheckRequired ? '' : ' (optional for this company)'}.`}
                   />
-                  <span>
-                    I checked the recipient’s ID: they are {s.minimumAge ?? 21} or older
-                    {s.ageCheckRequired ? ' (required)' : ''}
-                  </span>
-                </label>
+                  {idScanFailureTitle(detailsFor(s.id).idScan) && (
+                    <p style={{ fontSize: 12, margin: '6px 0 0' }}>
+                      Don’t hand over the 21+ items. Mark the stop Failed with this reason, or scan another ID.
+                    </p>
+                  )}
+                </div>
               )}
               <PhotoCapture
                 value={photos[s.id] ?? null}

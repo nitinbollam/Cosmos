@@ -537,7 +537,7 @@ function AgeVerificationCard() {
               checked={form.requirePosAttestation}
               onChange={(e) => setForm((f) => ({ ...f, requirePosAttestation: e.target.checked }))}
             />
-            Require POS ID / DOB attestation for restricted sales
+            Require an ID scan at the POS for restricted sales
           </label>
           <label className="flex items-center gap-2 cursor-pointer text-sm text-pleros-text">
             <input
@@ -545,7 +545,7 @@ function AgeVerificationCard() {
               checked={form.requireDeliveryConfirmation}
               onChange={(e) => setForm((f) => ({ ...f, requireDeliveryConfirmation: e.target.checked }))}
             />
-            Require delivery POD age confirmation for restricted orders
+            Require the driver to scan the recipient's ID for restricted deliveries
           </label>
           <button type="submit" className="btn-primary" disabled={!ageValid || saveMut.isPending}>
             {saveMut.isPending ? 'Saving…' : 'Save age verification'}

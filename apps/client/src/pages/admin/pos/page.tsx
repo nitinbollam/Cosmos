@@ -5,6 +5,7 @@ import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { ScanButton, useKeyboardWedge } from '@/components/scanner'
 import { authFetch } from '@/lib/auth-session'
+import { IdScanPanel, type IdScan, type IdScanResult } from '@/components/id-scan/IdScanPanel'
 import { orderLabel } from '@/lib/order-label'
 
 type Register = { id: string; name: string; warehouseId: string | null }
@@ -32,7 +33,12 @@ type CartLine = {
   minimumAge?: number | null
 }
 
-type AgeAttestationMethod = 'ID_CHECK' | 'DOB_ENTRY' | 'LICENSE_ON_FILE'
+/** PLR-35: scan the buyer's ID, or rely on the customer's regulated-product licence. No manual option. */
+type AgeAttestationMethod = 'ID_SCAN' | 'LICENSE_ON_FILE'
+
+/** The server checks a scanned ID; the sale itself re-checks the barcode. */
+const checkId = (barcode: string, minimumAge: number) =>
+  api.post<IdScanResult>('/compliance/id-scan', { barcode, minimumAge })
 
 function toPrice(n: string | number): number {
   if (typeof n === 'number') return n
@@ -67,8 +73,8 @@ export default function PosPage() {
   const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null)
   const [lastOrderNumber, setLastOrderNumber] = useState<number | null>(null)
   const [submitErr, setSubmitErr] = useState<string | null>(null)
-  const [ageMethod, setAgeMethod] = useState<AgeAttestationMethod>('ID_CHECK')
-  const [dob, setDob] = useState('')
+  const [ageMethod, setAgeMethod] = useState<AgeAttestationMethod>('ID_SCAN')
+  const [idScan, setIdScan] = useState<IdScan | null>(null)
   const [ageNotes, setAgeNotes] = useState('')
   const [openingFloat, setOpeningFloat] = useState('100')
   const [closingCount, setClosingCount] = useState('')
@@ -199,6 +205,11 @@ export default function PosPage() {
     policyQ.data?.minimumAge ?? 21,
     ...cart.filter((l) => l.ageRestricted).map((l) => l.minimumAge ?? policyQ.data?.minimumAge ?? 21),
   )
+  // Licence on file only applies to a customer who holds one; everyone else is scanned.
+  const effectiveAgeMethod: AgeAttestationMethod =
+    ageMethod === 'LICENSE_ON_FILE' && selectedCustomer?.isLicensedTobacco ? 'LICENSE_ON_FILE' : 'ID_SCAN'
+  // A scan only counts for the cart's current minimum age (adding a 25+ item needs a new check).
+  const idScanPasses = idScan?.result.status === 'VERIFIED' && idScan.result.minimumAge >= requiredMinAge
 
   const taxRate = taxQ.data?.salesTaxRate ?? 0
   const subtotal = cart.reduce((s, l) => s + l.quantity * l.unitPrice, 0)
@@ -290,8 +301,9 @@ export default function PosPage() {
         ...(cartNeedsAge
           ? {
               ageAttestation: {
-                method: ageMethod,
-                dateOfBirth: ageMethod === 'DOB_ENTRY' ? dob : undefined,
+                method: effectiveAgeMethod,
+                // The raw barcode is checked by the server and never stored.
+                barcode: effectiveAgeMethod === 'ID_SCAN' ? idScan?.barcode : undefined,
                 notes: ageNotes.trim() || undefined,
               },
             }
@@ -304,7 +316,7 @@ export default function PosPage() {
       setLastOrderTotal(order.totalAmount)
       setCart([])
       setSubmitErr(null)
-      setDob('')
+      setIdScan(null)
       setAgeNotes('')
       setDiscountCode('')
       setDiscountAmount(0)
@@ -741,40 +753,42 @@ export default function PosPage() {
                 <div>
                   <p className="text-sm font-medium text-pleros-white">Age verification (min {requiredMinAge})</p>
                   <p className="text-xs text-pleros-text-3 mt-1 leading-relaxed">
-                    Cart includes age-restricted items. Confirm customer ID before completing the sale.
+                    Cart includes age-restricted items. Scan the buyer’s ID before completing the sale.
                   </p>
                 </div>
-                <div>
-                  <label className="text-xs text-pleros-text-3 block">Verification method</label>
-                  <select
-                    className="pleros-input mt-1 w-full"
-                    value={ageMethod}
-                    onChange={(e) => setAgeMethod(e.target.value as AgeAttestationMethod)}
-                  >
-                    <option value="ID_CHECK">Government ID checked</option>
-                    <option value="DOB_ENTRY">Enter date of birth</option>
-                    <option value="LICENSE_ON_FILE" disabled={!selectedCustomer?.isLicensedTobacco}>
-                      License on file{selectedCustomer?.isLicensedTobacco ? '' : ' (unavailable)'}
-                    </option>
-                  </select>
-                </div>
-                {ageMethod === 'DOB_ENTRY' ? (
+                {selectedCustomer?.isLicensedTobacco ? (
                   <div>
-                    <label className="text-xs text-pleros-text-3 block">Date of birth</label>
-                    <input
+                    <label htmlFor="pos-age-method" className="text-xs text-pleros-text-3 block">
+                      Verification
+                    </label>
+                    <select
+                      id="pos-age-method"
                       className="pleros-input mt-1 w-full"
-                      type="date"
-                      value={dob}
-                      onChange={(e) => setDob(e.target.value)}
-                      required
-                    />
+                      value={ageMethod}
+                      onChange={(e) => setAgeMethod(e.target.value as AgeAttestationMethod)}
+                    >
+                      <option value="ID_SCAN">Scan the buyer’s ID</option>
+                      <option value="LICENSE_ON_FILE">Customer’s licence on file</option>
+                    </select>
                   </div>
                 ) : null}
+                {effectiveAgeMethod === 'ID_SCAN' ? (
+                  <IdScanPanel
+                    minimumAge={requiredMinAge}
+                    value={idScan}
+                    onChange={setIdScan}
+                    checkId={checkId}
+                    prompt="Scan the buyer’s ID."
+                  />
+                ) : null}
                 <div>
-                  <label className="text-xs text-pleros-text-3 block">Notes (optional)</label>
+                  <label htmlFor="pos-age-notes" className="text-xs text-pleros-text-3 block">
+                    Notes (optional)
+                  </label>
                   <input
+                    id="pos-age-notes"
                     className="pleros-input mt-1 w-full"
-                    placeholder="ID type, last 4…"
+                    placeholder="No ID numbers or dates of birth"
                     value={ageNotes}
                     onChange={(e) => setAgeNotes(e.target.value)}
                   />
@@ -795,7 +809,7 @@ export default function PosPage() {
                 cart.length === 0 ||
                 checkout.isPending ||
                 discountPending ||
-                (cartNeedsAge && ageMethod === 'DOB_ENTRY' && !dob) ||
+                (cartNeedsAge && effectiveAgeMethod === 'ID_SCAN' && !idScanPasses) ||
                 (splitTender &&
                   (!secondAmount.trim() || Number(secondAmount) <= 0 || Number(secondAmount) >= total))
               }

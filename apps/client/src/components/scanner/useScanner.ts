@@ -22,7 +22,16 @@ export type UseScannerOptions = {
   onError: (error: ScannerError) => void
   /** Milliseconds between decode attempts. Lower = snappier, more CPU. */
   scanIntervalMs?: number
+  /**
+   * Ask for a 1080p stream with continuous focus. Needed for dense 2D codes such as the PDF417
+   * on driver's licences: at the browser default (~640x480) its bars blur together. Off by
+   * default to keep warehouse 1D scanning light on CPU.
+   */
+  highResolution?: boolean
 }
+
+/** What the camera actually delivered, for on-screen diagnostics. */
+export type CameraInfo = { width: number; height: number; engine: string }
 
 export type UseScannerReturn = {
   // `| null` matters: React 19's useRef<T>(null) yields RefObject<T | null>.
@@ -37,6 +46,8 @@ export type UseScannerReturn = {
   /** >1 camera present -> offer a switch control. */
   canSwitchCamera: boolean
   switchCamera: () => void
+  /** Resolution and engine in use once scanning starts. */
+  cameraInfo: CameraInfo | null
   /** Halt/resume the decode loop without tearing down the stream. */
   pause: () => void
   resume: () => void
@@ -48,7 +59,7 @@ export type UseScannerReturn = {
  * rules — it just emits every raw decode. Composition over configuration.
  */
 export function useScanner(options: UseScannerOptions): UseScannerReturn {
-  const { active, formats, scanIntervalMs = 180 } = options
+  const { active, formats, scanIntervalMs = 180, highResolution = false } = options
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -68,6 +79,7 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
   const [error, setError] = useState<ScannerError | null>(null)
   const [torchSupported, setTorchSupported] = useState(false)
   const [torchOn, setTorchOn] = useState(false)
+  const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null)
   // The device list lives in a ref, NOT state: enumerating cameras must never
   // re-run the camera effect. It previously did, which restarted the stream on
   // deviceIds[0] — usually the FRONT camera — right after we'd correctly opened
@@ -105,6 +117,7 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
     canvasRef.current = null
     setTorchOn(false)
     setTorchSupported(false)
+    setCameraInfo(null)
   }, [stopLoop])
 
   const runLoop = useCallback(() => {
@@ -199,9 +212,13 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
         // actually forces the REAR camera — `ideal` is only a hint and phones
         // are free to ignore it. It throws OverconstrainedError on front-only
         // devices (laptops), so we degrade: exact rear -> preferred rear -> any.
-        const candidates: MediaTrackConstraints[] = selectedDeviceId
-          ? [{ deviceId: { exact: selectedDeviceId } }]
-          : [{ facingMode: { exact: 'environment' } }, { facingMode: 'environment' }, {}]
+        // `ideal` sizes never throw; the browser picks the closest it can do.
+        const size: MediaTrackConstraints = highResolution ? { width: { ideal: 1920 }, height: { ideal: 1080 } } : {}
+        const candidates: MediaTrackConstraints[] = (
+          selectedDeviceId
+            ? [{ deviceId: { exact: selectedDeviceId } }]
+            : [{ facingMode: { exact: 'environment' } }, { facingMode: 'environment' }, {}]
+        ).map((c) => ({ ...c, ...size }))
 
         let stream: MediaStream | null = null
         let lastErr: unknown = null
@@ -248,6 +265,11 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
         const caps = track?.getCapabilities?.() as
           (MediaTrackCapabilities & { torch?: boolean }) | undefined
         setTorchSupported(Boolean(caps?.torch))
+        if (highResolution && track) {
+          // Best effort: Android Chrome honours continuous focus; iOS autofocuses anyway.
+          const focus = { advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }
+          await track.applyConstraints(focus).catch(() => undefined) // swallow-ok: focus mode is a hint; cameras without it still scan
+        }
 
         const video = videoRef.current
         if (video) {
@@ -260,6 +282,9 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
 
         engineRef.current = await pickEngine(formats)
         if (cancelled) return
+        if (video) {
+          setCameraInfo({ width: video.videoWidth, height: video.videoHeight, engine: engineRef.current.name })
+        }
 
         setStatus('scanning')
         runLoop()
@@ -280,7 +305,7 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
     // formats is captured by value; changing it mid-session isn't a supported
     // live operation (close + reopen to change symbologies).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, selectedDeviceId, runLoop, teardown])
+  }, [active, selectedDeviceId, highResolution, runLoop, teardown])
 
   const pause = useCallback(() => {
     pausedRef.current = true
@@ -329,6 +354,7 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
     toggleTorch,
     canSwitchCamera: cameraCount > 1,
     switchCamera,
+    cameraInfo,
     pause,
     resume,
   }

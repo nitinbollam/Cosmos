@@ -145,9 +145,10 @@ export async function createPosOrder(
     paymentMethod?: 'CASH' | 'CARD' | 'CHECK'
     tenders?: PosTenderInput[]
     discountCode?: string
+    /** ID_SCAN with the barcode from the buyer's ID, or LICENSE_ON_FILE (PLR-35). */
     ageAttestation?: {
-      method: 'ID_CHECK' | 'DOB_ENTRY' | 'LICENSE_ON_FILE'
-      dateOfBirth?: string
+      method: 'ID_SCAN' | 'LICENSE_ON_FILE'
+      barcode?: string
       notes?: string
     } | null
   },

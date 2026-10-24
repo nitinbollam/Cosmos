@@ -67,6 +67,8 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
     allowManualEntry = true,
     title = 'Scan barcode',
     variant = 'sheet',
+    hint,
+    showCameraInfo = false,
   } = props
 
   const deduper = useMemo(() => new ScanDeduper(dedupeWindowMs), [dedupeWindowMs])
@@ -102,6 +104,8 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
   const scanner = useScanner({
     active: open && !showManual,
     formats,
+    // Dense 2D codes (the PDF417 on a licence) need more pixels than the browser default.
+    highResolution: formats.includes('pdf417'),
     onDecode: (raw, fmt) => accept(raw, fmt, 'camera'),
     onError: emitError,
   })
@@ -152,6 +156,16 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
           <ScanFrameOverlay scanning={scanner.status === 'scanning'} />
 
           {scanner.status === 'starting' && <div className="scanner-hint">Starting camera…</div>}
+          {scanner.status === 'scanning' && (hint || (showCameraInfo && scanner.cameraInfo)) && (
+            <div className="scanner-hint">
+              {hint}
+              {showCameraInfo && scanner.cameraInfo && (
+                <div style={{ opacity: 0.7, fontSize: 12, marginTop: hint ? 4 : 0 }}>
+                  Camera {scanner.cameraInfo.width}×{scanner.cameraInfo.height} · {scanner.cameraInfo.engine}
+                </div>
+              )}
+            </div>
+          )}
           {scanner.status === 'paused' && lastHit && (
             <div className="scanner-hint success">
               Captured: <code>{lastHit.rawValue}</code>

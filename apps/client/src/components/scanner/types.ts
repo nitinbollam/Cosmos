@@ -123,4 +123,8 @@ export type BarcodeScannerProps = {
    *    they scan. Best for high-volume receiving / counting.
    */
   variant?: 'sheet' | 'split'
+  /** Extra guidance shown while the camera is scanning (e.g. how to hold an ID). */
+  hint?: string
+  /** Show the camera resolution and engine in use — for field diagnostics. */
+  showCameraInfo?: boolean
 }
