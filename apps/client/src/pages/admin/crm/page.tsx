@@ -18,6 +18,7 @@ import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
 import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
+import { downloadCsv } from '@/lib/csv-download'
 
 const KANBAN_COLUMNS = [
   { id: 'NEW', label: 'New' },
@@ -156,22 +157,6 @@ export default function CrmPage() {
 }
 
 const CUSTOMERS_PAGE_SIZE = 25
-
-function csvEscape(value: unknown): string {
-  const s = value == null ? '' : String(value)
-  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
-}
-
-function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>): void {
-  const lines = [headers.join(','), ...rows.map((r) => r.map(csvEscape).join(','))]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 type CustomersPage = { items: CustomerRow[]; total: number; page: number; pageSize: number }
 
