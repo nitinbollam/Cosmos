@@ -17,6 +17,15 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+enum PurchaseRequisitionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CONVERTED
+  CANCELLED
+}
+
 enum VendorBillStatus {
   DRAFT
   ISSUED
@@ -42,6 +51,7 @@ model Supplier {
   updatedAt      DateTime        @updatedAt
   purchaseOrders PurchaseOrder[]
   vendorBills    VendorBill[]
+  requisitions   PurchaseRequisition[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -61,6 +71,13 @@ model PurchaseOrder {
   amountPaid        Decimal               @default(0)
   currency          String                @default("USD")
   fxRateToBase      Decimal               @default(1.0)
+  /// User who created the PO; null for POs created before this was recorded.
+  createdBy         String?
+  /// The requisition this PO was converted from; null for every PO not created by conversion.
+  /// Deliberately a plain column: a foreign key or unique index here makes `db push` rebuild or refuse on an
+  /// existing table. One PO per requisition is enforced by the conversion's conditional update (see
+  /// PurchaseRequisition.purchaseOrderId).
+  requisitionId     String?
   createdAt         DateTime              @default(now())
   updatedAt  DateTime              @updatedAt
   supplier   Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
@@ -69,6 +86,7 @@ model PurchaseOrder {
   @@unique([tenantId, number])
   @@index([tenantId, status])
   @@index([supplierId])
+  @@index([tenantId, requisitionId])
 }
 
 model PurchaseOrderLine {
@@ -84,6 +102,89 @@ model PurchaseOrderLine {
 
   @@unique([purchaseOrderId, lineNo])
   @@index([purchaseOrderId])
+}
+
+/// A request to buy, signed off by a manager before any PO is created from it.
+model PurchaseRequisition {
+  id                String                    @id @default(cuid())
+  tenantId          String
+  number            String
+  status            PurchaseRequisitionStatus @default(DRAFT)
+  requestedBy       String
+  supplierId        String?
+  currency          String                    @default("USD")
+  freightAmount     Decimal                   @default(0)
+  dutyAmount        Decimal                   @default(0)
+  otherLandedAmount Decimal                   @default(0)
+  notes             String?
+  /// Bumped on every submit. An approval is valid only for the revision it was requested for.
+  revision          Int                       @default(0)
+  /// sha256 of the purchasing details submitted in this revision (supplier, currency, landed amounts, lines).
+  /// Computed over a canonical form: lines sorted by lineNo, Decimals as fixed strings, never JS floats.
+  detailsHash       String?
+  /// The ApprovalRequest (tenant database) for the current revision: the approval link. Generated at submit and
+  /// stored here before the request exists, so a retried submit reuses it. The request decides; this link says which
+  /// request counts. Withdrawal clears it (invalidating any approval); cancellation and conversion freeze it.
+  approvalRequestId String?                   @unique
+  submittedAt       DateTime?
+  approvedBy        String?
+  approvedAt        DateTime?
+  rejectedBy        String?
+  rejectedAt        DateTime?
+  rejectReason      String?
+  cancelledBy       String?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  /// The PO converted from this requisition. Unique, but that alone does not stop a second PO being created:
+  /// conversion must move APPROVED -> CONVERTED conditionally and create the PO in the same transaction.
+  purchaseOrderId   String?                   @unique
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  supplier          Supplier?                 @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines             PurchaseRequisitionLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, requestedBy])
+  @@index([supplierId])
+}
+
+/// One row per tenant: the last requisition number handed out. Incremented in the transaction that creates the
+/// requisition, so two requisitions created at once cannot receive the same number.
+model PurchaseRequisitionCounter {
+  tenantId   String @id
+  lastNumber Int
+}
+
+/// Audit outbox for requisition changes whose audit event lives in the tenant database (withdrawn, cancelled,
+/// converted...). Written in the same purchasing transaction as the change, with the acting user, then copied to
+/// AuditEvent under the same id; deliveredAt is set once that copy exists. A lost copy is redelivered, never doubled.
+model PurchaseRequisitionEvent {
+  id            String    @id
+  tenantId      String
+  requisitionId String
+  action        String
+  userId        String?
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+  deliveredAt   DateTime?
+
+  @@index([tenantId, requisitionId])
+  @@index([deliveredAt, createdAt])
+}
+
+model PurchaseRequisitionLine {
+  id            String              @id @default(cuid())
+  requisitionId String
+  lineNo        Int
+  skuCode       String?
+  description   String
+  qtyRequested  Int
+  unitCost      Decimal?
+  requisition   PurchaseRequisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+
+  @@unique([requisitionId, lineNo])
+  @@index([requisitionId])
 }
 
 model VendorBill {

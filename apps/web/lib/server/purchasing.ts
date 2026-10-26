@@ -56,7 +56,26 @@ export async function getPurchaseOrderDetail(tenantId: string, id: string) {
   return { ...po, supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
 }
 
-export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+/**
+ * Purchase orders are created from approved purchase requisitions (requisition-conversion.ts). There is deliberately no
+ * exported general-purpose creator: POST /purchase-orders refuses, and the only other caller is drop-ship below.
+ */
+export const DIRECT_PO_CREATION_REFUSED =
+  'Purchase orders are no longer created directly. Raise a purchase requisition (POST /api/v1/purchase-requisitions); ' +
+  'once a manager or admin other than the requester approves it, convert it with ' +
+  'POST /api/v1/purchase-requisitions/{id}/convert.'
+
+/**
+ * Drop-ship POs for a sales order (drop-ship.ts only). UNRESOLVED APPROVAL BYPASS, not an approved exemption: these POs
+ * are created and submitted without a requisition or manager sign-off, automatically during order processing and
+ * manually via POST /orders/{id}/drop-ship/create-po (orders.write). Kept unchanged until the drop-ship approval policy
+ * is decided; do not add new callers.
+ */
+export async function createDropShipPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+  return insertPurchaseOrder(tenantId, dto)
+}
+
+async function insertPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
   const supplier = await purchasingDb.supplier.findFirst({ where: { id: dto.supplierId, tenantId } })
   if (!supplier) throw new ApiError(400, 'Unknown supplier for tenant')
 
@@ -129,6 +148,14 @@ export async function submitPurchaseOrder(tenantId: string, id: string, requeste
   const po = await getPurchaseOrder(tenantId, id)
   if (po.status !== PurchaseOrderStatus.DRAFT) {
     throw new ApiError(400, 'Only DRAFT orders can be submitted')
+  }
+
+  // Converted from an approved requisition: that approval covers this PO, so no threshold approval is asked for,
+  // once the approval and the PO's match with it are re-verified.
+  if (po.requisitionId) {
+    const { submitConvertedPurchaseOrder } = await import('./requisition-conversion')
+    await submitConvertedPurchaseOrder(tenantId, po)
+    return getPurchaseOrder(tenantId, id)
   }
 
   const total = computePurchaseOrderTotal(po)
@@ -217,6 +244,12 @@ export async function updatePurchaseOrderLandedCosts(
   const po = await getPurchaseOrder(tenantId, id)
   if (po.status === PurchaseOrderStatus.CANCELLED || po.status === PurchaseOrderStatus.CLOSED) {
     throw new ApiError(400, 'Cannot update landed costs on a closed/cancelled PO')
+  }
+  // A converted PO's landed costs stay within what its requisition approved.
+  if (po.requisitionId) {
+    const { updateConvertedLandedCosts } = await import('./requisition-conversion')
+    await updateConvertedLandedCosts(tenantId, po, patch)
+    return getPurchaseOrder(tenantId, id)
   }
   return purchasingDb.purchaseOrder.update({
     where: { id },

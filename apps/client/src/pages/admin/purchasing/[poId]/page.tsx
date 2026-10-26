@@ -7,6 +7,10 @@ import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
 import { showReceiptBillingResult, type ReceiptBilling } from '@/lib/receipt-billing'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { adminPath } from '@/lib/admin-path'
+import { formatAmount, lineAmount, parseAmountInput, sumAmounts } from '@/lib/decimal-amount'
+import { hasClientPermission, type Requisition } from '@/lib/requisitions'
+import { useUserNames, useViewer } from '@/components/purchasing/use-viewer'
 
 type PoLine = {
   id: string
@@ -27,6 +31,10 @@ type PurchaseOrder = {
   dutyAmount?: string | number
   otherLandedAmount?: string | number
   landedCostNotes?: string | null
+  currency?: string
+  createdBy?: string | null
+  /** Set when the PO was converted from an approved requisition. */
+  requisitionId?: string | null
   supplier?: { id: string; name: string; code: string }
   lines?: PoLine[]
   /** The current supplier bill for this PO, if one exists. */
@@ -66,6 +74,7 @@ export default function PurchaseOrderDetailPage() {
 
   const submit = useMutation({
     mutationFn: () => api.post(`/purchase-orders/${encodeURIComponent(poId)}/submit`, {}),
+    onError: () => void qc.invalidateQueries({ queryKey: ['purchase-order', poId] }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
@@ -89,15 +98,39 @@ export default function PurchaseOrderDetailPage() {
     setOtherLanded(String(po.data.otherLandedAmount ?? 0))
   }, [po.data])
 
+  // A converted PO sends exact decimal strings and is capped by its requisition; a direct PO keeps its old payload.
+  const converted = !!po.data?.requisitionId
   const saveLanded = useMutation({
     mutationFn: () =>
-      api.patch(`/purchase-orders/${encodeURIComponent(poId)}/landed-costs`, {
-        freightAmount: Number(freight) || 0,
-        dutyAmount: Number(duty) || 0,
-        otherLandedAmount: Number(otherLanded) || 0,
-      }),
+      api.patch(
+        `/purchase-orders/${encodeURIComponent(poId)}/landed-costs`,
+        converted
+          ? { freightAmount: freight.trim(), dutyAmount: duty.trim(), otherLandedAmount: otherLanded.trim() }
+          : { freightAmount: Number(freight) || 0, dutyAmount: Number(duty) || 0, otherLandedAmount: Number(otherLanded) || 0 },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['purchase-order', poId] }),
+    onError: async (e) => {
+      // Over the approved cap, or changed elsewhere: put the stored values back in the inputs. Set them directly, since
+      // an unchanged refetch keeps the same data object and the sync effect above would not run.
+      if ((e as { response?: { status?: number } }).response?.status !== 409) return
+      const fresh = await po.refetch()
+      if (fresh.data) {
+        setFreight(String(fresh.data.freightAmount ?? 0))
+        setDuty(String(fresh.data.dutyAmount ?? 0))
+        setOtherLanded(String(fresh.data.otherLandedAmount ?? 0))
+      }
+    },
   })
+  const landedInputError = converted
+    ? ([
+        ['Freight', freight],
+        ['Duty', duty],
+        ['Other', otherLanded],
+      ] as const)
+        .map(([label, v]) => parseAmountInput(v, label))
+        .map((r) => (r.ok ? null : r.error))
+        .find(Boolean) ?? null
+    : null
 
   type LandedPreview = {
     lines: Array<{ lineNo: number; landedUnitCost: number }>
@@ -229,6 +262,7 @@ export default function PurchaseOrderDetailPage() {
               {axiosMessage(submit.error ?? cancelPo.error ?? startReceiving.error)}
             </p>
           )}
+          {po.data.requisitionId ? <SourceRequisitionCard po={po.data} /> : null}
           {po.data.notes && (
             <p className="text-sm text-pleros-muted whitespace-pre-wrap">{po.data.notes}</p>
           )}
@@ -263,10 +297,25 @@ export default function PurchaseOrderDetailPage() {
                 />
               </label>
             </div>
+            {converted ? (
+              <p className="text-xs text-pleros-muted mt-2">
+                Converted from an approved requisition: these may move between each other, but their total cannot exceed the approved landed estimate.
+              </p>
+            ) : null}
+            {landedInputError ? (
+              <p className="text-xs text-red-400 mt-2" role="alert">
+                {landedInputError}
+              </p>
+            ) : null}
+            {saveLanded.error ? (
+              <p className="text-xs text-red-400 mt-2" role="alert">
+                {axiosMessage(saveLanded.error)}
+              </p>
+            ) : null}
             <button
               type="button"
               className="mt-3 h-9 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-50"
-              disabled={saveLanded.isPending}
+              disabled={saveLanded.isPending || !!landedInputError}
               onClick={() => saveLanded.mutate()}
             >
               {saveLanded.isPending ? 'Saving…' : 'Save landed costs'}
@@ -302,6 +351,9 @@ export default function PurchaseOrderDetailPage() {
                     const received = l.qtyReceived ?? 0
                     const open = Math.max(0, l.qtyOrdered - received)
                     const cost = l.unitCost != null && l.unitCost !== '' ? Number(l.unitCost) : null
+                    // A converted PO carries costs approved to 4 decimals: show them exactly, in this page's plain style.
+                    const exact = converted && l.unitCost != null && l.unitCost !== ''
+                    const plain = (v: string) => formatAmount(v, po.data?.currency ?? 'USD', { grouping: false })
                     return (
                       <tr key={l.id} className="border-b border-pleros-border/60">
                         <td className="py-2 pr-4 text-pleros-muted">{l.lineNo}</td>
@@ -310,8 +362,12 @@ export default function PurchaseOrderDetailPage() {
                         <td className="py-2 pr-4 text-pleros-white">{l.qtyOrdered}</td>
                         <td className="py-2 pr-4 text-pleros-muted">{received}</td>
                         <td className="py-2 pr-4 text-pleros-white">{open}</td>
-                        <td className="py-2 pr-4 text-pleros-text">{cost != null ? `$${cost.toFixed(2)}` : 'No price'}</td>
-                        <td className="py-2 text-pleros-white">{cost != null ? `$${(cost * l.qtyOrdered).toFixed(2)}` : '—'}</td>
+                        <td className="py-2 pr-4 text-pleros-text">
+                          {exact ? plain(String(l.unitCost)) : cost != null ? `$${cost.toFixed(2)}` : 'No price'}
+                        </td>
+                        <td className="py-2 text-pleros-white">
+                          {exact ? plain(lineAmount(String(l.unitCost), l.qtyOrdered)) : cost != null ? `$${(cost * l.qtyOrdered).toFixed(2)}` : '—'}
+                        </td>
                       </tr>
                     )
                   })}
@@ -342,6 +398,46 @@ export default function PurchaseOrderDetailPage() {
         </>
       )}
     </div>
+  )
+}
+
+/** Where a converted PO came from: its requisition, who approved it, and the landed-cost cap. */
+function SourceRequisitionCard({ po }: { po: PurchaseOrder }) {
+  const { viewer } = useViewer()
+  const nameOf = useUserNames(viewer)
+  const canRead = hasClientPermission(viewer, 'requisitions.read')
+  const req = useQuery<Requisition>({
+    queryKey: ['purchase-requisition', po.requisitionId],
+    queryFn: () => api.get(`/purchase-requisitions/${encodeURIComponent(po.requisitionId ?? '')}`),
+    enabled: canRead && !!po.requisitionId,
+    retry: false,
+  })
+  const r = req.data
+  return (
+    <Card>
+      <CardTitle>Source requisition</CardTitle>
+      {r ? (
+        <div className="mt-3 text-sm space-y-1">
+          <p>
+            <Link to={adminPath(`/purchasing/requisitions/${r.id}`)} className="text-pleros-accent font-mono">
+              {r.number}
+            </Link>{' '}
+            <span className="text-pleros-muted">
+              requested by {nameOf(r.requestedBy)}, approved by {nameOf(r.approvedBy)}
+              {r.approvedAt ? ` on ${new Date(r.approvedAt).toLocaleDateString()}` : ''}
+            </span>
+          </p>
+          <p className="text-xs text-pleros-muted">
+            Approved landed estimate {formatAmount(sumAmounts([r.freightAmount, r.dutyAmount, r.otherLandedAmount]), r.currency)}. Submitting this PO needs no further
+            approval while it still matches the requisition.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-pleros-muted">
+          {req.isLoading ? 'Loading…' : 'Converted from an approved requisition. Submitting it needs no further approval while it still matches.'}
+        </p>
+      )}
+    </Card>
   )
 }
 

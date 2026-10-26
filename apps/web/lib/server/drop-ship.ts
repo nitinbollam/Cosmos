@@ -42,7 +42,8 @@ export async function createDropShipPurchaseOrders(
       })
     }
 
-    const po = await purchasing.createPurchaseOrder(tenantId, {
+    // Unresolved approval bypass (no requisition): see createDropShipPurchaseOrder.
+    const po = await purchasing.createDropShipPurchaseOrder(tenantId, {
       supplierId,
       number: `DS-${orderId.slice(-8)}-${Date.now().toString(36)}`,
       notes: `Drop-ship for order ${orderId}. Ship to customer.`,

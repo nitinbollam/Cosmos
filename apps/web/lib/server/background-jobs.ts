@@ -15,6 +15,13 @@ const POSTING_SOURCE_SWEEP_MS = 10 * 60 * 1000
 const RECONCILIATION_MS = 24 * 60 * 60 * 1000
 const RECONCILIATION_FIRST_RUN_MS = 5 * 60 * 1000
 
+/**
+ * Finishes purchase-requisition approvals left half done between the purchasing and tenant databases
+ * (requisition-approval-sync.ts); set REQUISITION_RECONCILE_DISABLED=1 to turn it off.
+ */
+const REQUISITION_RECONCILE_MS = 5 * 60 * 1000
+const REQUISITION_RECONCILE_FIRST_RUN_MS = 60 * 1000
+
 let started = false
 
 export function startBackgroundJobs(): void {
@@ -117,6 +124,20 @@ export function startBackgroundJobs(): void {
       console.error('[jobs] reconciliation failed:', err)
     }
   }
+  // Skips itself while disabled or while its previous run is still going (see runRequisitionReconcileJob).
+  const reconcileRequisitions = async () => {
+    try {
+      const { runRequisitionReconcileJob } = await import('./requisition-approval-sync')
+      await runRequisitionReconcileJob()
+    } catch (err) {
+      console.error('[jobs] requisition reconcile failed:', err)
+    }
+  }
+  const requisitionFirst = setTimeout(() => void reconcileRequisitions(), REQUISITION_RECONCILE_FIRST_RUN_MS)
+  requisitionFirst.unref?.()
+  const requisitionTimer = setInterval(() => void reconcileRequisitions(), REQUISITION_RECONCILE_MS)
+  requisitionTimer.unref?.()
+
   const reconcileFirst = setTimeout(() => void reconcile(), RECONCILIATION_FIRST_RUN_MS)
   reconcileFirst.unref?.()
   const reconcileTimer = setInterval(() => void reconcile(), RECONCILIATION_MS)

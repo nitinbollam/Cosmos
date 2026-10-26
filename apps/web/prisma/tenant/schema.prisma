@@ -143,12 +143,15 @@ enum ApprovalType {
   CREDIT_LIMIT_OVERRIDE
   CREDIT_LIMIT_INCREASE
   EXPENSE_REPORT
+  PURCHASE_REQUISITION
 }
 
 enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+  /// Closed without a decision: the subject was cancelled, withdrawn or superseded.
+  CANCELLED
 }
 
 model ApprovalRequest {
@@ -162,6 +165,8 @@ model ApprovalRequest {
   decidedBy    String?
   decidedAt    DateTime?
   rejectReason String?
+  /// Why the request was closed as CANCELLED.
+  cancelReason String?
   createdAt    DateTime       @default(now())
 
   @@index([tenantId, status])
