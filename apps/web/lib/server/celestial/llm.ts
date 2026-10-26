@@ -1,6 +1,6 @@
 /**
- * Celestial model routing: Groq primary, then one hosted fallback chosen by CELESTIAL_FALLBACK —
- * OpenRouter (default) or Ollama Cloud (OLLAMA_API_KEY). Local Ollama is not part of the chain.
+ * Celestial model routing: Groq primary, Ollama Cloud fallback (OLLAMA_API_KEY), nothing else.
+ * CELESTIAL_FALLBACK=none turns the fallback off. Local Ollama is not part of the chain.
  *
  * - Cloud routing needs CELESTIAL_EXTERNAL_ROUTING_APPROVED=true. API keys alone never enable it.
  * - Sending ERP evidence or conversation history to a provider additionally needs
@@ -26,8 +26,7 @@ type FetchFn = typeof fetch
 export type LlmOptions = { env?: Env; fetch?: FetchFn; now?: () => number }
 
 export const DEFAULT_PRIMARY_MODEL = 'openai/gpt-oss-120b'
-export const DEFAULT_FALLBACK_MODEL = 'xingchen-agi/xing4.0-29b-a4b:free'
-export const DEFAULT_OLLAMA_FALLBACK_MODEL = 'gpt-oss:120b'
+export const DEFAULT_FALLBACK_MODEL = 'gpt-oss:120b'
 const DEFAULT_PRIMARY_TIMEOUT_MS = 8_000
 const DEFAULT_FALLBACK_TIMEOUT_MS = 25_000
 const DEFAULT_COOLDOWN_MS = 60_000
@@ -35,14 +34,11 @@ const DEFAULT_COOLDOWN_MS = 60_000
 const STREAM_TOTAL_TIMEOUT_MS = 90_000
 
 export type RouteStep = {
-  provider: 'groq' | 'openrouter' | 'ollama'
+  provider: 'groq' | 'ollama'
   model: string
   url: string
   apiKey: string
   timeoutMs: number
-  headers?: Record<string, string>
-  /** Extra request-body fields (OpenRouter provider routing / privacy preferences). */
-  extraBody?: Record<string, unknown>
 }
 
 export type ProviderErrorCategory = 'timeout' | 'rate_limited' | 'auth' | 'bad_request' | 'upstream' | 'empty' | 'network'
@@ -51,7 +47,7 @@ export class CelestialProviderError extends Error {
   constructor(
     readonly provider: string,
     readonly category: ProviderErrorCategory,
-    readonly meta: { status?: number; requestId?: string; retryAfterMs?: number; upstream?: string } = {},
+    readonly meta: { status?: number; requestId?: string; retryAfterMs?: number } = {},
   ) {
     super(`${provider} ${category}${meta.status ? ` (HTTP ${meta.status})` : ''}`)
     this.name = 'CelestialProviderError'
@@ -106,58 +102,19 @@ export function resolveRoute(env: Env = process.env): { steps: RouteStep[]; bloc
     })
   }
 
-  const fallback = fallbackKind(env)
-  const fallbackTimeoutMs = intEnv(env, 'CELESTIAL_FALLBACK_TIMEOUT_MS', DEFAULT_FALLBACK_TIMEOUT_MS)
-
+  const fallbackOff = env.CELESTIAL_FALLBACK?.trim().toLowerCase() === 'none'
   const ollamaKey = env.OLLAMA_API_KEY?.trim()
-  if (fallback === 'ollama' && ollamaKey) {
+  if (!fallbackOff && ollamaKey) {
     steps.push({
       provider: 'ollama',
-      model: env.CELESTIAL_FALLBACK_MODEL?.trim() || DEFAULT_OLLAMA_FALLBACK_MODEL,
+      model: env.CELESTIAL_FALLBACK_MODEL?.trim() || DEFAULT_FALLBACK_MODEL,
       url: env.OLLAMA_API_URL?.trim() || 'https://ollama.com/v1/chat/completions',
       apiKey: ollamaKey,
-      timeoutMs: fallbackTimeoutMs,
+      timeoutMs: intEnv(env, 'CELESTIAL_FALLBACK_TIMEOUT_MS', DEFAULT_FALLBACK_TIMEOUT_MS),
     })
   }
 
-  const orKey = env.OPENROUTER_API_KEY?.trim()
-  const fallbackModel = env.CELESTIAL_FALLBACK_MODEL?.trim() || DEFAULT_FALLBACK_MODEL
-  const freeOnly = flag(env, 'CELESTIAL_FALLBACK_FREE_ONLY', true)
-  if (fallback === 'openrouter' && orKey && (!freeOnly || fallbackModel.endsWith(':free'))) {
-    const only = (env.CELESTIAL_OPENROUTER_PROVIDERS ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    steps.push({
-      provider: 'openrouter',
-      model: fallbackModel,
-      url: env.OPENROUTER_API_URL?.trim() || 'https://openrouter.ai/api/v1/chat/completions',
-      apiKey: orKey,
-      timeoutMs: fallbackTimeoutMs,
-      headers: {
-        'HTTP-Referer': env.PLEROS_CLIENT_ORIGIN?.trim() || 'http://localhost:4000',
-        'X-Title': 'Pleros Celestial',
-      },
-      extraBody: {
-        provider: {
-          data_collection: 'deny',
-          zdr: true,
-          allow_fallbacks: false,
-          ...(only.length > 0 ? { only } : {}),
-        },
-      },
-    })
-  }
-
-  return steps.length > 0
-    ? { steps }
-    : { steps, blockedReason: 'no GROQ_API_KEY or fallback key (OPENROUTER_API_KEY / OLLAMA_API_KEY) configured' }
-}
-
-/** Which hosted fallback follows Groq: CELESTIAL_FALLBACK=openrouter (default) | ollama | none. */
-function fallbackKind(env: Env): 'openrouter' | 'ollama' | 'none' {
-  const v = env.CELESTIAL_FALLBACK?.trim().toLowerCase()
-  return v === 'ollama' || v === 'none' ? v : 'openrouter'
+  return steps.length > 0 ? { steps } : { steps, blockedReason: 'no GROQ_API_KEY or OLLAMA_API_KEY configured' }
 }
 
 /** Whether ERP evidence and history may go into the model prompt for this deployment. */
@@ -180,8 +137,7 @@ export function getCelestialModelInfo(env: Env = process.env) {
     suggestions: [
       'Set CELESTIAL_EXTERNAL_ROUTING_APPROVED=true to allow cloud model calls at all',
       `Primary: GROQ_API_KEY (+ optional CELESTIAL_PRIMARY_MODEL, default ${DEFAULT_PRIMARY_MODEL})`,
-      `Fallback (CELESTIAL_FALLBACK=openrouter): OPENROUTER_API_KEY (+ optional CELESTIAL_FALLBACK_MODEL, default ${DEFAULT_FALLBACK_MODEL})`,
-      `Fallback (CELESTIAL_FALLBACK=ollama): OLLAMA_API_KEY for Ollama Cloud (+ optional CELESTIAL_FALLBACK_MODEL, default ${DEFAULT_OLLAMA_FALLBACK_MODEL})`,
+      `Fallback: OLLAMA_API_KEY for Ollama Cloud (+ optional CELESTIAL_FALLBACK_MODEL, default ${DEFAULT_FALLBACK_MODEL}; CELESTIAL_FALLBACK=none to disable)`,
       'Set CELESTIAL_EXTERNAL_DATA_APPROVED=true only once sending ERP data to these providers is approved',
     ],
   }
@@ -197,7 +153,7 @@ export function resetProviderCooldowns(): void {
 
 /**
  * Milliseconds to wait from rate-limit headers. Handles `retry-after` (seconds or HTTP date) and
- * `x-ratelimit-reset` (epoch seconds or milliseconds, as OpenRouter sends). Undefined when absent.
+ * `x-ratelimit-reset` (epoch seconds or milliseconds). Undefined when absent.
  */
 export function parseRetryAfterMs(headers: Headers, now: number): number | undefined {
   const retryAfter = headers.get('retry-after')?.trim()
@@ -228,25 +184,12 @@ function requestIdOf(headers: Headers): string | undefined {
   return headers.get('x-request-id') ?? headers.get('x-groq-id') ?? headers.get('cf-ray') ?? undefined
 }
 
-/** Upstream provider name from an OpenRouter error body, without keeping the rest of the body. */
-async function upstreamOf(res: Response): Promise<string | undefined> {
-  try {
-    const json = (await res.json()) as { error?: { metadata?: { provider_name?: unknown } } }
-    const name = json?.error?.metadata?.provider_name
-    return typeof name === 'string' ? name.slice(0, 60) : undefined
-  } catch {
-    // Non-JSON or empty body: the HTTP status alone classifies it.
-    return undefined
-  }
-}
-
 function logProviderError(err: CelestialProviderError): void {
   const m = err.meta
   console.warn(
     `[celestial] provider=${err.provider} category=${err.category}` +
       (m.status ? ` status=${m.status}` : '') +
       (m.requestId ? ` request_id=${m.requestId}` : '') +
-      (m.upstream ? ` upstream=${m.upstream}` : '') +
       (m.retryAfterMs != null ? ` cooldown_ms=${m.retryAfterMs}` : ''),
   )
 }
@@ -260,7 +203,6 @@ async function openRequest(step: RouteStep, messages: ChatMessage[], stream: boo
         Authorization: `Bearer ${step.apiKey}`,
         'Content-Type': 'application/json',
         ...(stream ? { Accept: 'text/event-stream' } : {}),
-        ...step.headers,
       },
       body: JSON.stringify({
         model: step.model,
@@ -268,7 +210,6 @@ async function openRequest(step: RouteStep, messages: ChatMessage[], stream: boo
         temperature: 0.3,
         max_tokens: 800,
         ...(stream ? { stream: true } : {}),
-        ...step.extraBody,
       }),
       signal,
     })
@@ -280,7 +221,6 @@ async function openRequest(step: RouteStep, messages: ChatMessage[], stream: boo
     throw new CelestialProviderError(step.provider, category, {
       status: res.status,
       requestId: requestIdOf(res.headers),
-      upstream: await upstreamOf(res),
       ...(category === 'rate_limited' ? { retryAfterMs: parseRetryAfterMs(res.headers, now) ?? DEFAULT_COOLDOWN_MS } : {}),
     })
   }
