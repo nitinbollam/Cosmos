@@ -119,6 +119,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
         priority: ctx.priority,
         dateRange: ctx.dateRange,
         sort: ctx.sort,
+        page: ctx.page,
       })
       return {
         name,
@@ -159,6 +160,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
         status: ctx.poStatus,
         supplier: ctx.supplier,
         dateRange: ctx.dateRange,
+        page: ctx.page,
       })
       return {
         name,
@@ -183,6 +185,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
         pastDue: ctx.pastDue,
         supplier: ctx.supplier,
         dateRange: ctx.dateRange,
+        page: ctx.page,
       })
       const filters = filterLabels(
         ctx,
@@ -197,7 +200,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'quotes.list': {
-      const page = await erp.quotesList(tenantId, { status: ctx.quoteStatus, dateRange: ctx.dateRange })
+      const page = await erp.quotesList(tenantId, { status: ctx.quoteStatus, dateRange: ctx.dateRange, page: ctx.page })
       return {
         name,
         data: { ...page, filters: filterLabels(ctx, ctx.quoteStatus) },
@@ -239,7 +242,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
           notice: 'Which product are you looking for? Give me a name, SKU code or keyword (e.g. “cable”).',
         }
       }
-      const page = await erp.catalogSearch(tenantId, tokens)
+      const page = await erp.catalogSearch(tenantId, tokens, ctx.page)
       return {
         name,
         data: { ...page, search: tokens.join(' ') },

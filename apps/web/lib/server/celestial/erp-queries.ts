@@ -27,7 +27,12 @@ const STOCK_ROW_LIMIT = 24
 const STOCK_SKU_LIMIT = 50
 const BILL_TOTALS_CAP = 1000
 
-export type Page<T> = { rows: T[]; total: number; pageSize: number }
+export type Page<T> = { rows: T[]; total: number; page: number; pageSize: number }
+
+function skipFor(page?: number): { page: number; skip: number } {
+  const p = page && page > 1 ? Math.floor(page) : 1
+  return { page: p, skip: (p - 1) * PAGE_SIZE }
+}
 
 function num(v: unknown): number {
   return v == null ? 0 : Number(v)
@@ -162,7 +167,8 @@ export async function inventoryStock(
 export type CatalogRow = { id: string; code: string; name: string; unit: string; price: number; available: number | null }
 
 /** Active SKUs whose name or code contains every token, with stock summed across warehouses. */
-export async function catalogSearch(tenantId: string, tokens: string[]): Promise<Page<CatalogRow>> {
+export async function catalogSearch(tenantId: string, tokens: string[], pageNo?: number): Promise<Page<CatalogRow>> {
+  const { page, skip } = skipFor(pageNo)
   const where = {
     tenantId,
     isActive: true,
@@ -173,6 +179,7 @@ export async function catalogSearch(tenantId: string, tokens: string[]): Promise
       where,
       select: { id: true, code: true, name: true, unitOfMeasure: true, price: true },
       orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      skip,
       take: PAGE_SIZE,
     }),
     inventoryDb.sKU.count({ where }),
@@ -197,6 +204,7 @@ export async function catalogSearch(tenantId: string, tokens: string[]): Promise
       available: available.has(s.id) ? available.get(s.id)! : null,
     })),
     total,
+    page,
     pageSize: PAGE_SIZE,
   }
 }
@@ -209,6 +217,7 @@ export type OrderListFilters = {
   priority?: OrderPriorityFilter
   dateRange?: DateRange
   sort?: SortDirection
+  page?: number
 }
 
 export type OrderListRow = {
@@ -224,6 +233,7 @@ export type OrderListRow = {
 }
 
 export async function ordersList(tenantId: string, f: OrderListFilters): Promise<Page<OrderListRow>> {
+  const { page, skip } = skipFor(f.page)
   const where = {
     tenantId,
     ...(f.status ? { status: f.status } : {}),
@@ -247,6 +257,7 @@ export async function ordersList(tenantId: string, f: OrderListFilters): Promise
         _count: { select: { lineItems: true } },
       },
       orderBy: [{ createdAt: dir }, { id: dir }],
+      skip,
       take: PAGE_SIZE,
     }),
     orderDb.order.count({ where }),
@@ -265,6 +276,7 @@ export async function ordersList(tenantId: string, f: OrderListFilters): Promise
       lineCount: o._count.lineItems,
     })),
     total,
+    page,
     pageSize: PAGE_SIZE,
   }
 }
@@ -360,10 +372,11 @@ async function supplierIdsMatching(tenantId: string, supplier?: string): Promise
 
 export async function purchasingOrders(
   tenantId: string,
-  f: { status?: PoStatusFilter; supplier?: string; dateRange?: DateRange },
+  f: { status?: PoStatusFilter; supplier?: string; dateRange?: DateRange; page?: number },
 ): Promise<Page<PurchaseOrderListRow>> {
+  const { page, skip } = skipFor(f.page)
   const supplierIds = await supplierIdsMatching(tenantId, f.supplier)
-  if (supplierIds && supplierIds.length === 0) return { rows: [], total: 0, pageSize: PAGE_SIZE }
+  if (supplierIds && supplierIds.length === 0) return { rows: [], total: 0, page, pageSize: PAGE_SIZE }
   const where = {
     tenantId,
     ...(f.status ? { status: f.status } : {}),
@@ -383,6 +396,7 @@ export async function purchasingOrders(
         lines: { select: { qtyOrdered: true, qtyReceived: true, unitCost: true } },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip,
       take: PAGE_SIZE,
     }),
     purchasingDb.purchaseOrder.count({ where }),
@@ -405,6 +419,7 @@ export async function purchasingOrders(
       }
     }),
     total,
+    page,
     pageSize: PAGE_SIZE,
   }
 }
@@ -472,6 +487,7 @@ export type BillFilters = {
   pastDue?: boolean
   supplier?: string
   dateRange?: DateRange
+  page?: number
 }
 
 export type BillRow = {
@@ -492,9 +508,10 @@ export async function financeBills(
   f: BillFilters,
   now = new Date(),
 ): Promise<Page<BillRow> & { balanceByCurrency: Record<string, number>; totalsTruncated: boolean }> {
+  const { page, skip } = skipFor(f.page)
   const supplierIds = await supplierIdsMatching(tenantId, f.supplier)
   if (supplierIds && supplierIds.length === 0) {
-    return { rows: [], total: 0, pageSize: PAGE_SIZE, balanceByCurrency: {}, totalsTruncated: false }
+    return { rows: [], total: 0, page, pageSize: PAGE_SIZE, balanceByCurrency: {}, totalsTruncated: false }
   }
 
   let statusFilter: { status?: BillStatusFilter | { in: BillStatusFilter[] } } = {}
@@ -525,6 +542,7 @@ export async function financeBills(
         supplier: { select: { name: true } },
       },
       orderBy: f.pastDue || f.outstanding ? [{ dueAt: 'asc' }, { id: 'asc' }] : [{ issuedAt: 'desc' }, { id: 'desc' }],
+      skip,
       take: PAGE_SIZE,
     }),
     purchasingDb.vendorBill.count({ where }),
@@ -552,6 +570,7 @@ export async function financeBills(
       }
     }),
     total,
+    page,
     pageSize: PAGE_SIZE,
     balanceByCurrency: sumByCurrency(
       forTotals.map((b) => ({ currency: b.currency, amount: num(b.totalAmount) - num(b.amountPaid) })),
@@ -579,8 +598,9 @@ export type QuoteListRow = {
 
 export async function quotesList(
   tenantId: string,
-  f: { status?: QuoteStatusFilter; dateRange?: DateRange },
+  f: { status?: QuoteStatusFilter; dateRange?: DateRange; page?: number },
 ): Promise<Page<QuoteListRow>> {
+  const { page, skip } = skipFor(f.page)
   const where = {
     tenantId,
     ...(f.status ? { status: f.status } : {}),
@@ -598,6 +618,7 @@ export async function quotesList(
         lines: { select: { qty: true, unitPrice: true } },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip,
       take: PAGE_SIZE,
     }),
     storefrontDb.b2BQuote.count({ where }),
@@ -615,6 +636,7 @@ export async function quotesList(
       createdAt: q.createdAt,
     })),
     total,
+    page,
     pageSize: PAGE_SIZE,
   }
 }

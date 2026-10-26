@@ -45,7 +45,7 @@ test('composeFromToolResults lists orders with all-match count and filters', () 
   ])
   assert.match(reply, /ORD-1001/)
   assert.match(reply, /PENDING, last month/)
-  assert.match(reply, /Showing 1 of 12/)
+  assert.match(reply, /Showing 1–1 of 12 matches\. Say “show more”/)
   assert.match(reply, /249\.90/)
   // Orders carry no currency field, so no currency symbol is invented.
   assert.doesNotMatch(reply, /\$249/)

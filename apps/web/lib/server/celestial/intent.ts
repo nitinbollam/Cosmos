@@ -51,6 +51,8 @@ export type ToolParams = {
   pastDue?: boolean
   supplier?: string
   quoteStatus?: QuoteStatusFilter
+  /** 1-based page for list tools ("show more"). */
+  page?: number
 }
 
 export type DetectedIntent = ToolParams & { tools: CelestialToolName[] }

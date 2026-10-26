@@ -222,9 +222,15 @@ function filterSuffix(filters?: string[]): string {
   return filters && filters.length > 0 ? ` — ${filters.join(', ')}` : ''
 }
 
-/** "Showing 8 of 23" when the page is a subset of all matches. */
-function countLine(shown: number, total: number): string {
-  return total > shown ? `Showing ${shown} of ${total} matches.` : `${total} ${total === 1 ? 'match' : 'matches'}.`
+/** "Showing 9–16 of 23" when the page is a subset of all matches, with a hint when more remain. */
+function countLine(page: { rows: unknown[]; total: number; page?: number; pageSize?: number }): string {
+  const shown = page.rows.length
+  const total = page.total
+  if (total <= shown && (page.page ?? 1) === 1) return `${total} ${total === 1 ? 'match' : 'matches'}.`
+  const start = ((page.page ?? 1) - 1) * (page.pageSize ?? shown) + 1
+  const end = start + shown - 1
+  const more = end < total ? ' Say “show more” for the next page.' : ''
+  return `Showing ${start}–${end} of ${total} matches.${more}`
 }
 
 function formatWarehouses(result: ToolResult): string {
@@ -259,7 +265,7 @@ function formatOrders(page: Filtered<OrderListRow>): string {
   )
   return [
     `### Orders${filterSuffix(page.filters)}`,
-    countLine(page.rows.length, page.total),
+    countLine(page),
     '',
     '| Order # | Status | Customer | Total | Created | Lines |',
     '| :--- | :--- | :--- | :--- | :--- | :--- |',
@@ -294,6 +300,7 @@ function formatOrderDetail(o: OrderDetail): string {
     ...lineRows,
     '',
     '**Shipments**',
+    '',
     ...shipments,
     '',
     `*Open [${code}](/admin/orders/${o.id}) for the full timeline and invoice.*`,
@@ -333,7 +340,7 @@ function formatPurchaseOrders(page: Filtered<PurchaseOrderListRow>): string {
   )
   return [
     `### Purchase orders${filterSuffix(page.filters)}`,
-    countLine(page.rows.length, page.total),
+    countLine(page),
     '',
     '| PO # | Status | Supplier | Received / ordered | Goods cost | Created |',
     '| :--- | :--- | :--- | :--- | :--- | :--- |',
@@ -364,6 +371,7 @@ function formatPurchaseOrderDetail(po: PoDetail): string {
     ...lineRows,
     '',
     '**Vendor bills**',
+    '',
     ...bills,
     '',
     `*Open [${po.number}](/admin/purchasing/${po.id}) to receive goods or create a bill.*`,
@@ -381,7 +389,7 @@ function formatBills(d: BillsData): string {
     .map(([cur, amt]) => money(amt, cur === 'UNKNOWN' ? null : cur))
   return [
     `### Vendor bills (AP)${filterSuffix(d.filters)}`,
-    countLine(d.rows.length, d.total),
+    countLine(d),
     totals.length > 0
       ? `Open balance across all ${d.total} matches: **${totals.join(' + ')}**${totals.length > 1 ? ' (currencies kept separate)' : ''}${d.totalsTruncated ? ' — partial, too many bills to total' : ''}.`
       : null,
@@ -404,7 +412,7 @@ function formatQuotes(page: Filtered<QuoteListRow>): string {
   )
   return [
     `### Quotes${filterSuffix(page.filters)}`,
-    countLine(page.rows.length, page.total),
+    countLine(page),
     '',
     '| Quote # | Status | Customer | Lines | Total | Converted | Created |',
     '| :--- | :--- | :--- | :--- | :--- | :--- | :--- |',
@@ -481,7 +489,7 @@ function formatCatalog(page: Page<CatalogRow> & { search?: string }): string {
   )
   return [
     `### Products${subject}`,
-    countLine(page.rows.length, page.total),
+    countLine(page),
     '',
     '| SKU | Product | Available | Price |',
     '| :--- | :--- | :--- | :--- |',

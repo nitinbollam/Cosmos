@@ -9,8 +9,16 @@ import {
   listConversations,
   touchConversation,
 } from './conversations'
-import { detectIntent, isPlainLanguagePreferred } from './intent'
-import { completeChat, getCelestialModelInfo, streamChat, type ChatMessage } from './llm'
+import { detectIntent, isPlainLanguagePreferred, type DetectedIntent } from './intent'
+import { buildResultSets, intentForFollowUp, liveResultSets, resolveFollowUp, type ResultSet } from './result-sets'
+import {
+  CelestialStreamInterrupted,
+  completeChat,
+  getCelestialModelInfo,
+  shouldShareErpData,
+  streamChat,
+  type ChatMessage,
+} from './llm'
 import { buildContextPrompt, buildSystemPrompt } from './prompts'
 import { formatDocContext, retrievePlatformDocs } from './retrieval'
 import { formatToolResultsForPrompt, runTools } from './tools'
@@ -28,10 +36,13 @@ function buildContextBlock(
   toolResults: ToolResult[],
   docs: ReturnType<typeof retrievePlatformDocs>,
   page?: string,
+  shareErpData = true,
 ): string {
   const parts: string[] = []
 
-  if (toolResults.some(toolResultHasData)) {
+  if (!shareErpData) {
+    // Sending ERP records to the configured cloud provider is not approved.
+  } else if (toolResults.some(toolResultHasData)) {
     parts.push(`LIVE PLEROS DATA (use this in your answer):\n${composeFromToolResults(toolResults)}`)
   } else if (toolResults.length > 0) {
     parts.push(
@@ -84,6 +95,7 @@ type PreparedChat = {
   docs: ReturnType<typeof retrievePlatformDocs>
   directReply: string | null
   plainLanguage: boolean
+  resultSets: ResultSet[]
 }
 
 async function prepareChat(session: SessionUser, input: CelestialChatInput): Promise<PreparedChat> {
@@ -105,10 +117,28 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     input.conversationId,
   )
 
-  const intent = detectIntent(message, isBuyer, {
-    orderId: input.context?.orderId,
-    quoteId: input.context?.quoteId,
-  })
+  // A follow-up ("open the second order", "show more") selects from a recent list answer in this
+  // conversation; the selected record is still re-read through the permission-checked tools.
+  const scope = { tenantId: session.tenantId, userId: session.userId, role: session.role }
+  const recentSets = liveResultSets(
+    conversation.messages
+      .filter((m) => m.role === 'assistant')
+      .reverse()
+      .map((m) => m.metadata),
+    scope,
+  )
+  const followUp = resolveFollowUp(message, recentSets)
+  const followUpIntent = followUp ? intentForFollowUp(followUp) : undefined
+  const clarification = followUpIntent && 'clarify' in followUpIntent ? followUpIntent.clarify : null
+  const intent: DetectedIntent =
+    followUpIntent && !('clarify' in followUpIntent)
+      ? followUpIntent
+      : clarification
+        ? { tools: [] }
+        : detectIntent(message, isBuyer, {
+            orderId: input.context?.orderId,
+            quoteId: input.context?.quoteId,
+          })
 
   const plainLanguage = isPlainLanguagePreferred(message)
   const docs = retrievePlatformDocs(message, 6, plainLanguage)
@@ -120,12 +150,17 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     customerName: profile.customerName,
   })
 
-  const history: ChatMessage[] = conversation.messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .slice(-10)
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+  // Earlier answers can quote ERP records, so history is withheld along with live data when sending
+  // ERP data to the provider is not approved.
+  const shareErpData = shouldShareErpData()
+  const history: ChatMessage[] = shareErpData
+    ? conversation.messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .slice(-10)
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    : []
 
-  const contextBlock = buildContextBlock(message, toolResults, docs, input.context?.page)
+  const contextBlock = buildContextBlock(message, toolResults, docs, input.context?.page, shareErpData)
 
   const messages: ChatMessage[] = [
     { role: 'system', content: buildSystemPrompt(session, profile.customerName, plainLanguage) },
@@ -134,7 +169,8 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     { role: 'user', content: message },
   ]
 
-  const directReply = shouldUseDirectCompose(toolResults) ? composeFromToolResults(toolResults) : null
+  const directReply =
+    clarification ?? (shouldUseDirectCompose(toolResults) ? composeFromToolResults(toolResults) : null)
 
   return {
     conversationId: conversation.id,
@@ -146,6 +182,7 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     docs,
     directReply,
     plainLanguage,
+    resultSets: buildResultSets(toolResults, params, scope),
   }
 }
 
@@ -162,6 +199,7 @@ async function persistChatResult(
     model,
     toolsUsed: prepared.toolsUsed,
     links: prepared.links,
+    ...(prepared.resultSets.length > 0 ? { resultSets: prepared.resultSets } : {}),
   })
   await touchConversation(prepared.conversationId)
 
@@ -192,6 +230,7 @@ export async function chat(session: SessionUser, input: CelestialChatInput): Pro
   let provider: string
   let model: string
   try {
+    if (!getCelestialModelInfo().configured) throw new Error('no model route')
     const llm = await completeChat(prepared.messages)
     reply = finalizeReply(prepared.message, llm.content, prepared.docs, prepared.plainLanguage)
     provider = llm.provider
@@ -247,6 +286,15 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
           return
         }
 
+        if (!getCelestialModelInfo().configured) {
+          await streamText(
+            buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
+            'pleros',
+            'fallback',
+          )
+          return
+        }
+
         try {
           const gen = streamChat(prepared.messages)
           let result = await gen.next()
@@ -279,7 +327,24 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
             model: llm.model,
           })
           controller.close()
-        } catch {
+        } catch (e) {
+          if (e instanceof CelestialStreamInterrupted) {
+            // The user already saw part of an answer. Finish it with a note instead of appending a
+            // second, different answer, and persist exactly what was shown.
+            const note = '\n\n_The answer was cut off because the AI provider stopped responding. Please ask again._'
+            send('delta', { text: note })
+            const shown = e.partial + note
+            await persistChatResult(session, prepared, shown, e.cause.provider, 'interrupted')
+            send('done', {
+              conversationId: prepared.conversationId,
+              links: prepared.links,
+              toolsUsed: prepared.toolsUsed,
+              provider: e.cause.provider,
+              model: 'interrupted',
+            })
+            controller.close()
+            return
+          }
           await streamText(
             buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
             'pleros',
