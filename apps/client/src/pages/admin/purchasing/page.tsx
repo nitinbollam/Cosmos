@@ -7,6 +7,8 @@ import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { axiosErr } from '@/lib/axios-error'
+import { parseFormNumber, poLineProblems, type PoFormLine } from '@/lib/po-lines'
 
 type PoStatus = 'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'CLOSED' | 'CANCELLED'
 
@@ -324,15 +326,25 @@ function PoDrawer(props: {
   const [number, setNumber] = useState(`PO-${Date.now().toString(36).toUpperCase()}`)
   const [notes, setNotes] = useState(props.prefillLine ? 'Low-stock replenishment' : '')
   const [warehouseNote, setWarehouseNote] = useState('')
-  const [lines, setLines] = useState(() =>
+  const [lines, setLines] = useState<PoFormLine[]>(() =>
     props.prefillLine
-      ? [{ lineNo: 1, skuCode: props.prefillLine.skuCode, description: props.prefillLine.description, qtyOrdered: props.prefillLine.qtyOrdered, unitCost: '' }]
-      : [{ lineNo: 1, skuCode: '', description: '', qtyOrdered: 1, unitCost: '' }],
+      ? [{ key: 1, skuCode: props.prefillLine.skuCode, description: props.prefillLine.description, qtyOrdered: String(props.prefillLine.qtyOrdered), unitCost: '' }]
+      : [{ key: 1, skuCode: '', description: '', qtyOrdered: '1', unitCost: '' }],
   )
+  // Problems show once Create is pressed, so a fresh form isn't covered in red.
+  const [showProblems, setShowProblems] = useState(false)
   // Every line needs a price: the supplier bill is built from it when goods arrive.
-  const parsedCost = (v: string) => (v.trim() === '' ? NaN : Number(v))
-  const missingCost = lines.some((l) => !(parsedCost(l.unitCost) >= 0))
-  const poTotal = lines.reduce((sum, l) => sum + (parsedCost(l.unitCost) >= 0 ? parsedCost(l.unitCost) * l.qtyOrdered : 0), 0)
+  const lineProblems = poLineProblems(lines)
+  const formProblems = [!supplierId && 'Select a supplier', !number.trim() && 'Enter a PO number'].filter(Boolean) as string[]
+  const hasProblems = formProblems.length > 0 || lineProblems.some((p) => p.length > 0)
+  const lineTotal = (l: PoFormLine) => {
+    const cost = parseFormNumber(l.unitCost)
+    const qty = parseFormNumber(l.qtyOrdered)
+    return cost >= 0 && Number.isInteger(qty) && qty > 0 ? cost * qty : null
+  }
+  const poTotal = lines.reduce((sum, l) => sum + (lineTotal(l) ?? 0), 0)
+  const updateLine = (idx: number, patch: Partial<PoFormLine>) =>
+    setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, ...patch } : l)))
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -371,65 +383,83 @@ function PoDrawer(props: {
           value={number}
           onChange={(e) => setNumber(e.target.value)}
         />
-        {lines.map((ln, idx) => (
-          <div key={ln.lineNo} className="mt-4 grid grid-cols-2 gap-2 border border-pleros-border rounded-md p-3">
-            <input
-              placeholder="SKU code"
-              className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
-              value={ln.skuCode}
-              onChange={(e) => {
-                const next = [...lines]
-                next[idx] = { ...ln, skuCode: e.target.value }
-                setLines(next)
-              }}
-            />
-            <input
-              type="number"
-              min={1}
-              aria-label={`Line ${idx + 1} quantity`}
-              className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
-              value={ln.qtyOrdered}
-              onChange={(e) => {
-                const next = [...lines]
-                next[idx] = { ...ln, qtyOrdered: Number(e.target.value) || 1 }
-                setLines(next)
-              }}
-            />
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              placeholder="Unit cost ($)"
-              aria-label={`Line ${idx + 1} unit cost in dollars`}
-              className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
-              value={ln.unitCost}
-              onChange={(e) => {
-                const next = [...lines]
-                next[idx] = { ...ln, unitCost: e.target.value }
-                setLines(next)
-              }}
-            />
-            <span className="self-center text-xs text-pleros-muted">
-              {parsedCost(ln.unitCost) >= 0 ? `Line total $${(parsedCost(ln.unitCost) * ln.qtyOrdered).toFixed(2)}` : 'Enter a unit cost'}
-            </span>
-            <input
-              placeholder="Description"
-              className="col-span-2 rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
-              value={ln.description}
-              onChange={(e) => {
-                const next = [...lines]
-                next[idx] = { ...ln, description: e.target.value }
-                setLines(next)
-              }}
-            />
-          </div>
-        ))}
+        {lines.map((ln, idx) => {
+          const problems = showProblems ? lineProblems[idx]! : []
+          const total = lineTotal(ln)
+          return (
+            <div
+              key={ln.key}
+              className={`mt-4 grid grid-cols-2 gap-2 border rounded-md p-3 ${problems.length ? 'border-red-400/60' : 'border-pleros-border'}`}
+            >
+              <div className="col-span-2 flex items-center justify-between text-xs text-pleros-muted">
+                <span>Line {idx + 1}</span>
+                {lines.length > 1 && (
+                  <button
+                    type="button"
+                    className="text-pleros-muted hover:text-red-400"
+                    aria-label={`Remove line ${idx + 1}`}
+                    onClick={() => setLines((ls) => ls.filter((_, i) => i !== idx))}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <input
+                placeholder="SKU code"
+                aria-label={`Line ${idx + 1} SKU code`}
+                className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+                value={ln.skuCode}
+                onChange={(e) => updateLine(idx, { skuCode: e.target.value })}
+              />
+              <input
+                type="number"
+                min={1}
+                step={1}
+                placeholder="Quantity"
+                aria-label={`Line ${idx + 1} quantity`}
+                className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+                value={ln.qtyOrdered}
+                onChange={(e) => updateLine(idx, { qtyOrdered: e.target.value })}
+              />
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                placeholder="Unit cost ($)"
+                aria-label={`Line ${idx + 1} unit cost in dollars`}
+                className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+                value={ln.unitCost}
+                onChange={(e) => updateLine(idx, { unitCost: e.target.value })}
+              />
+              <span className="self-center text-xs text-pleros-muted">
+                {total != null ? `Line total $${total.toFixed(2)}` : 'Enter a quantity and unit cost'}
+              </span>
+              <input
+                placeholder="Description (defaults to the SKU name)"
+                aria-label={`Line ${idx + 1} description`}
+                className="col-span-2 rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+                value={ln.description}
+                onChange={(e) => updateLine(idx, { description: e.target.value })}
+              />
+              {problems.length > 0 && (
+                <ul className="col-span-2 text-xs text-red-400 list-disc pl-4">
+                  {problems.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })}
         <button
           type="button"
           className="mt-2 text-xs text-pleros-primary"
           onClick={() =>
-            setLines((l) => [...l, { lineNo: l.length + 1, skuCode: '', description: '', qtyOrdered: 1, unitCost: '' }])
+            setLines((ls) => [
+              ...ls,
+              { key: Math.max(0, ...ls.map((l) => l.key)) + 1, skuCode: '', description: '', qtyOrdered: '1', unitCost: '' },
+            ])
           }
         >
           + Add line
@@ -442,8 +472,13 @@ function PoDrawer(props: {
           onChange={(e) => setNotes(e.target.value)}
         />
         <p className="mt-3 text-sm text-pleros-white">PO total ${poTotal.toFixed(2)}</p>
-        {missingCost && <p className="text-xs text-pleros-muted mt-1">Enter a unit cost for every line (0 if it's free).</p>}
-        {props.error && <p className="text-red-400 text-xs mt-2">{props.error.message}</p>}
+        {showProblems && formProblems.map((p) => (
+          <p key={p} className="text-red-400 text-xs mt-1">{p}</p>
+        ))}
+        {showProblems && hasProblems && formProblems.length === 0 && (
+          <p className="text-red-400 text-xs mt-1">Fix the lines marked in red.</p>
+        )}
+        {props.error && <p className="text-red-400 text-xs mt-2">{axiosErr(props.error)}</p>}
         <div className="mt-6 flex gap-2">
           <button
             type="button"
@@ -454,21 +489,23 @@ function PoDrawer(props: {
           </button>
           <button
             type="button"
-            disabled={props.loading || !supplierId || missingCost}
+            disabled={props.loading || (showProblems && hasProblems)}
             className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() => {
+              setShowProblems(true)
+              if (hasProblems) return
               const wh = props.warehouses.find((w) => w.id === warehouseNote)
               const mergedNotes = [notes, wh ? `Warehouse: ${wh.name}` : ''].filter(Boolean).join('\n')
               props.onSubmit({
                 supplierId,
-                number,
+                number: number.trim(),
                 notes: mergedNotes || undefined,
                 lines: lines.map((l, i) => ({
                   lineNo: i + 1,
-                  skuCode: l.skuCode || undefined,
-                  description: l.description || `Line ${i + 1}`,
-                  qtyOrdered: l.qtyOrdered,
-                  unitCost: parsedCost(l.unitCost),
+                  skuCode: l.skuCode.trim(),
+                  description: l.description.trim(),
+                  qtyOrdered: parseFormNumber(l.qtyOrdered),
+                  unitCost: parseFormNumber(l.unitCost),
                 })),
               })
             }}
