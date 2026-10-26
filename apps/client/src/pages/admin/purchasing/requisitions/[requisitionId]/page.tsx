@@ -81,10 +81,22 @@ export default function RequisitionDetailPage() {
     onError: onFailure,
   })
   const decide = useMutation({
-    mutationFn: (v: { approve: boolean; rejectReason?: string }) =>
-      api.post(`/approvals/${encodeURIComponent(q.data?.approvalRequest?.id ?? '')}/decide`, v),
+    mutationFn: ({ approvalId, ...body }: { approvalId: string; approve: boolean; rejectReason?: string }) =>
+      api.post(`/approvals/${encodeURIComponent(approvalId)}/decide`, body),
     onSuccess: (_r, v) => succeed(v.approve ? 'Approved' : 'Rejected'),
-    onError: onFailure,
+    onError: async (e, v) => {
+      // The shared decide endpoint answers 400 both for a request that is no longer pending (withdrawn, cancelled or
+      // decided in another session) and for invalid input. Re-read the requisition to tell them apart.
+      const { status, message } = apiFailure(e)
+      if (status !== 400) return onFailure(e)
+      const fresh = (await q.refetch()).data
+      const stillPending =
+        fresh?.status === 'PENDING_APPROVAL' && fresh.approvalRequest?.id === v.approvalId && fresh.approvalRequest.status === 'PENDING'
+      if (stillPending) return setNotice({ kind: 'error', text: message })
+      setNotice({ kind: 'stale', text: `${message}: this requisition changed in another session. It has been reloaded with its current state.` })
+      setPanel(null)
+      refresh()
+    },
   })
   const convert = useMutation({
     mutationFn: () =>
@@ -149,7 +161,7 @@ export default function RequisitionDetailPage() {
             )}
             {can.decide && (
               <>
-                <button type="button" className="btn-primary" disabled={busy} aria-busy={decide.isPending} onClick={() => decide.mutate({ approve: true })}>
+                <button type="button" className="btn-primary" disabled={busy} aria-busy={decide.isPending} onClick={() => ar && decide.mutate({ approvalId: ar.id, approve: true })}>
                   {decide.isPending && decide.variables?.approve ? 'Approving…' : 'Approve'}
                 </button>
                 <button type="button" className="btn-ghost" disabled={busy} onClick={() => { setRejectReason(''); setPanel('reject') }}>
@@ -245,7 +257,7 @@ export default function RequisitionDetailPage() {
               danger
               busy={busy}
               disabled={!rejectReason.trim()}
-              onConfirm={() => decide.mutate({ approve: false, rejectReason: rejectReason.trim() })}
+              onConfirm={() => ar && decide.mutate({ approvalId: ar.id, approve: false, rejectReason: rejectReason.trim() })}
               onClose={() => setPanel(null)}
             >
               <label className="block text-xs text-pleros-muted mt-3" htmlFor="reject-reason">
