@@ -112,14 +112,12 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
 
   const plainLanguage = isPlainLanguagePreferred(message)
   const docs = retrievePlatformDocs(message, 6, plainLanguage)
-  const toolResults = await runTools(intent.tools, {
+  const { tools: intentToolNames, ...params } = intent
+  const toolResults = await runTools(intentToolNames, {
+    ...params,
     session,
     customerId,
     customerName: profile.customerName,
-    orderId: intent.orderId,
-    quoteId: intent.quoteId,
-    searchTerm: intent.searchTerm,
-    orderStatus: intent.orderStatus,
   })
 
   const history: ChatMessage[] = conversation.messages

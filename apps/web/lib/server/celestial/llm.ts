@@ -383,7 +383,7 @@ function mockComplete(messages: ChatMessage[], model: string): LlmResponse {
   const toolBlock = messages.find((m) => m.content.includes('Tool:'))?.content ?? ''
   const lines: string[] = []
 
-  if (toolBlock.includes('get_my_orders') || toolBlock.includes('get_order_detail')) {
+  if (toolBlock.includes('orders.list') || toolBlock.includes('orders.detail')) {
     lines.push('Here is what I found about your orders:')
     const match = toolBlock.match(/"status":\s*"([A-Z_]+)"/g)
     if (match?.length) {
@@ -396,7 +396,7 @@ function mockComplete(messages: ChatMessage[], model: string): LlmResponse {
   } else if (toolBlock.includes('search_catalog')) {
     lines.push('I searched the catalog for matching in-stock SKUs.')
     lines.push('Visit **Catalog** to add items to your cart.')
-  } else if (toolBlock.includes('list_my_quotes')) {
+  } else if (toolBlock.includes('quotes.list')) {
     lines.push('Here are your open quotes in Pleros.')
     lines.push('Open **Quotes** to accept, counter-offer, or convert to an order.')
   } else if (toolBlock.includes('global_search') || toolBlock.includes('list_low_stock')) {

@@ -1,4 +1,17 @@
 import type { ToolResult } from './tools'
+import type {
+  BillRow,
+  CatalogRow,
+  OrderListRow,
+  Page,
+  PurchaseOrderListRow,
+  QuoteListRow,
+  StockRow,
+  StockSummary,
+  ordersDetail,
+  purchasingOrderDetail,
+  quotesDetail,
+} from './erp-queries'
 
 type WarehouseRow = {
   code: string
@@ -8,26 +21,11 @@ type WarehouseRow = {
   isDefault?: boolean
 }
 
-type OrderRow = {
-  id: string
-  orderNumber?: number | null
-  status: string
-  total: number
-  createdAt: string | Date
-  lineCount?: number
-}
-
 type InvoiceRow = {
   invoiceNumber: string
   status: string
   total: number
   balance?: number
-}
-
-type QuoteRow = {
-  id: string
-  status: string
-  lineCount?: number
 }
 
 type SkuRow = {
@@ -39,11 +37,13 @@ type SkuRow = {
 }
 
 type GlobalSearchData = {
-  orders?: OrderRow[]
+  orders?: Array<{ id: string; status: string; totalAmount: unknown; createdAt: string | Date }>
   customers?: Array<{ id: string; name: string; email?: string | null }>
-  skus?: SkuRow[]
-  quotes?: QuoteRow[]
+  skus?: Array<{ code: string; name: string; price?: unknown }>
+  quotes?: Array<{ id: string; status: string }>
 }
+
+type Filtered<T> = Page<T> & { filters?: string[] }
 
 export function composeFromToolResults(toolResults: ToolResult[]): string {
   if (toolResults.length === 0) {
@@ -58,10 +58,15 @@ export function composeFromToolResults(toolResults: ToolResult[]): string {
   return sections.join('\n\n')
 }
 
+/**
+ * True when a result has something to show the user directly — records, an explicit "no matches"
+ * from a list query, or a notice (clarifying question / access explanation).
+ */
 export function toolResultHasData(result: ToolResult): boolean {
+  if (result.notice) return true
   if (result.error) return false
   if (result.name === 'global_search') {
-    const data = result.data as { orders?: unknown[]; customers?: unknown[]; skus?: unknown[]; quotes?: unknown[] }
+    const data = result.data as GlobalSearchData
     return (
       (data?.orders?.length ?? 0) > 0 ||
       (data?.customers?.length ?? 0) > 0 ||
@@ -69,11 +74,9 @@ export function toolResultHasData(result: ToolResult): boolean {
       (data?.quotes?.length ?? 0) > 0
     )
   }
-  if (result.name === 'get_order_detail') {
-    return result.data != null && typeof result.data === 'object'
-  }
   if (Array.isArray(result.data)) return result.data.length > 0
-  return false
+  // Paged list results and single-record details both answer the question, even with zero rows.
+  return result.data != null && typeof result.data === 'object'
 }
 
 function simplifyDocExcerpt(body: string, plainLanguage: boolean): string {
@@ -159,22 +162,40 @@ export function tryComposeDirectReply(toolResults: ToolResult[], _userMessage: s
   return reply || null
 }
 
+
+type OrderDetail = NonNullable<Awaited<ReturnType<typeof ordersDetail>>>
+type PoDetail = NonNullable<Awaited<ReturnType<typeof purchasingOrderDetail>>>
+type QuoteDetail = NonNullable<Awaited<ReturnType<typeof quotesDetail>>>
+type StockData = { rows: StockRow[]; totalRows: number; skuSummaries: StockSummary[]; matchedSkus: number; search?: string }
+type BillsData = Filtered<BillRow> & { balanceByCurrency: Record<string, number>; totalsTruncated: boolean }
+
 function formatToolSection(result: ToolResult): string | null {
+  if (result.notice) return result.notice
   switch (result.name) {
     case 'list_warehouses':
       return formatWarehouses(result)
-    case 'get_my_orders':
-      return formatOrders(result)
-    case 'get_order_detail':
-      return formatOrderDetail(result)
+    case 'orders.list':
+      return formatOrders(result.data as Filtered<OrderListRow>)
+    case 'orders.detail':
+      return formatOrderDetail(result.data as OrderDetail)
+    case 'inventory.stock':
+      return formatStock(result.data as StockData)
+    case 'purchasing.orders':
+      return formatPurchaseOrders(result.data as Filtered<PurchaseOrderListRow>)
+    case 'purchasing.order_detail':
+      return formatPurchaseOrderDetail(result.data as PoDetail)
+    case 'finance.bills':
+      return formatBills(result.data as BillsData)
+    case 'quotes.list':
+      return formatQuotes(result.data as Filtered<QuoteListRow>)
+    case 'quotes.detail':
+      return formatQuoteDetail(result.data as QuoteDetail)
     case 'list_my_invoices':
       return formatInvoices(result)
-    case 'list_my_quotes':
-      return formatQuotes(result)
     case 'list_low_stock':
       return formatLowStock(result)
     case 'search_catalog':
-      return formatCatalog(result)
+      return formatCatalog(result.data as Page<CatalogRow> & { search?: string })
     case 'global_search':
       return formatGlobalSearch(result)
     default:
@@ -189,10 +210,21 @@ function formatOrderCode(id: string, orderNumber?: number | null): string {
   return `ORD-${id.slice(-6).toUpperCase()}`
 }
 
-function formatQuoteCode(id: string): string {
-  if (!id) return ''
-  if (id.startsWith('seed_quote_')) return `Q-${id.replace('seed_quote_', '').toUpperCase()}`
-  return `Q-${id.slice(-6).toUpperCase()}`
+/** Amount with its currency. Without a recorded currency the bare amount is shown — never a guessed symbol. */
+function money(amount: number | null | undefined, currency?: string | null): string {
+  if (amount == null || Number.isNaN(amount)) return '—'
+  const fixed = Number(amount).toFixed(2)
+  if (!currency) return fixed
+  return currency.toUpperCase() === 'USD' ? `$${fixed}` : `${fixed} ${currency.toUpperCase()}`
+}
+
+function filterSuffix(filters?: string[]): string {
+  return filters && filters.length > 0 ? ` — ${filters.join(', ')}` : ''
+}
+
+/** "Showing 8 of 23" when the page is a subset of all matches. */
+function countLine(shown: number, total: number): string {
+  return total > shown ? `Showing ${shown} of ${total} matches.` : `${total} ${total === 1 ? 'match' : 'matches'}.`
 }
 
 function formatWarehouses(result: ToolResult): string {
@@ -217,43 +249,187 @@ function formatWarehouses(result: ToolResult): string {
     .join('\n')
 }
 
-function formatOrders(result: ToolResult): string {
-  const rows = result.data as OrderRow[]
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Orders:** No matching orders found in your workspace.'
+function formatOrders(page: Filtered<OrderListRow>): string {
+  if (page.rows.length === 0) {
+    return `**Orders${filterSuffix(page.filters)}:** No matching orders found.`
   }
-  const listPath = result.links[0]?.href?.replace(/\/[^/]+$/, '') ?? '/admin/orders'
-  const tableRows = rows.map((o) => {
-    const code = formatOrderCode(o.id, o.orderNumber)
-    const date = formatDate(o.createdAt)
-    return `| **#${code}** | \`${o.status}\` | $${o.total.toFixed(2)} | ${date} | ${o.lineCount ?? '—'} |`
-  })
+  const tableRows = page.rows.map(
+    (o) =>
+      `| **${formatOrderCode(o.id, o.orderNumber)}** | \`${o.status}\` | ${o.customerName ?? '—'} | ${money(o.totalAmount)} | ${formatDate(o.createdAt)} | ${o.lineCount} |`,
+  )
   return [
-    `### Orders (${rows.length} Found)`,
+    `### Orders${filterSuffix(page.filters)}`,
+    countLine(page.rows.length, page.total),
     '',
-    '| Order # | Status | Total Amount | Date | Items |',
-    '| :--- | :--- | :--- | :--- | :--- |',
+    '| Order # | Status | Customer | Total | Created | Lines |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- |',
     ...tableRows,
     '',
-    `*View and fulfill orders in [Orders Dashboard](${listPath}).*`,
+    '*View and fulfill orders in [Orders](/admin/orders).*',
   ].join('\n')
 }
 
-function formatOrderDetail(result: ToolResult): string {
-  const o = result.data as OrderRow & { amountPaid?: number; lines?: unknown[] }
-  if (!o?.id) return '**Order:** Not found.'
+function formatOrderDetail(o: OrderDetail): string {
   const code = formatOrderCode(o.id, o.orderNumber)
-  const detailHref = result.links[0]?.href ?? `/admin/orders/${o.id}`
+  const lineRows = o.lines.map(
+    (l) =>
+      `| ${l.skuCode ? `\`${l.skuCode}\`` : '—'} | ${l.skuName ?? '—'} | ${l.quantity} | ${l.allocated} | ${l.backordered} | ${money(l.unitPrice)} |`,
+  )
+  const shipments =
+    o.shipments.length === 0
+      ? ['No shipments recorded yet.']
+      : o.shipments.map(
+          (s) =>
+            `- Shipment ${s.shipmentNo}: \`${s.status}\`${s.carrier ? ` via ${s.carrier}` : ''}${s.trackingNumber ? ` (tracking ${s.trackingNumber})` : ''} — ${s.shippedAt ? `shipped ${formatDate(s.shippedAt)}` : 'no ship date recorded'}`,
+        )
   return [
-    `### Order Details (#${code})`,
-    `- **Status:** \`${o.status}\``,
-    `- **Total:** $${Number(o.total).toFixed(2)}`,
-    o.amountPaid != null ? `- **Paid to Date:** $${Number(o.amountPaid).toFixed(2)}` : '',
-    `- **Total Line Items:** ${Array.isArray(o.lines) ? o.lines.length : o.lineCount ?? '—'}`,
+    `### Order ${code}`,
+    `- **Status:** \`${o.status}\` · **Channel:** ${o.channel} · **Priority:** ${o.priority}`,
+    `- **Customer:** ${o.customerName ?? '—'}`,
+    `- **Total:** ${money(o.totalAmount)} · **Paid:** ${money(o.amountPaid)}`,
+    `- **Created:** ${formatDate(o.createdAt)}`,
     '',
-    `*Open [Full Order Details](${detailHref}) to view saga timeline, tracking, and invoices.*`,
+    '| SKU | Item | Qty | Allocated | Backordered | Unit price |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- |',
+    ...lineRows,
+    '',
+    '**Shipments**',
+    ...shipments,
+    '',
+    `*Open [${code}](/admin/orders/${o.id}) for the full timeline and invoice.*`,
+  ].join('\n')
+}
+
+function formatStock(d: StockData): string {
+  const subject = d.search ? `matching “${d.search}”` : ''
+  if (d.matchedSkus === 0) return `**Stock:** No products ${subject || 'found'}.`
+  if (d.rows.length === 0) return `**Stock:** ${d.matchedSkus} product(s) ${subject} found, but no stock is recorded in any warehouse.`
+  const tableRows = d.rows.map(
+    (r) =>
+      `| \`${r.code}\` | ${r.name} | ${r.warehouseName} | **${r.available}** ${r.unit} | ${r.onHand} | ${r.reserved} | ${r.reorderPoint || '—'} |`,
+  )
+  const summary =
+    d.skuSummaries.length > 1
+      ? ['', '**Total available by SKU:**', ...d.skuSummaries.map((s) => `- \`${s.code}\` ${s.name}: ${s.available} ${s.unit}`)]
+      : []
+  return [
+    `### Stock by warehouse${subject ? ` ${subject}` : ''}`,
+    d.totalRows > d.rows.length ? `Showing ${d.rows.length} of ${d.totalRows} SKU × warehouse rows.` : null,
+    '',
+    '| SKU | Item | Warehouse | Available | On hand | Reserved | Reorder point |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- | :--- |',
+    ...tableRows,
+    ...summary,
   ]
-    .filter(Boolean)
+    .filter((l) => l != null)
+    .join('\n')
+}
+
+function formatPurchaseOrders(page: Filtered<PurchaseOrderListRow>): string {
+  if (page.rows.length === 0) return `**Purchase orders${filterSuffix(page.filters)}:** No matching purchase orders found.`
+  const tableRows = page.rows.map(
+    (po) =>
+      `| **${po.number}** | \`${po.status}\` | ${po.supplierName} | ${po.qtyReceived}/${po.qtyOrdered} | ${po.goodsCost == null ? `unknown (${po.missingCostLines} line(s) without cost)` : money(po.goodsCost, po.currency)} | ${formatDate(po.createdAt)} |`,
+  )
+  return [
+    `### Purchase orders${filterSuffix(page.filters)}`,
+    countLine(page.rows.length, page.total),
+    '',
+    '| PO # | Status | Supplier | Received / ordered | Goods cost | Created |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- |',
+    ...tableRows,
+    '',
+    '*Manage purchase orders in [Purchasing](/admin/purchasing).*',
+  ].join('\n')
+}
+
+function formatPurchaseOrderDetail(po: PoDetail): string {
+  const lineRows = po.lines.map(
+    (l) =>
+      `| ${l.lineNo} | ${l.skuCode ? `\`${l.skuCode}\`` : '—'} | ${l.description} | ${l.qtyReceived}/${l.qtyOrdered} | ${l.unitCost == null ? 'not recorded' : money(l.unitCost, po.currency)} |`,
+  )
+  const bills =
+    po.bills.length === 0
+      ? ['No vendor bill recorded for this PO.']
+      : po.bills.map(
+          (b) => `- **${b.billNumber}** \`${b.status}\` — total ${money(b.totalAmount, b.currency)}, balance ${money(b.balance, b.currency)}${b.dueAt ? `, due ${formatDate(b.dueAt)}` : ''}`,
+        )
+  return [
+    `### Purchase order ${po.number}`,
+    `- **Supplier:** ${po.supplierName} · **Status:** \`${po.status}\``,
+    `- **Goods cost:** ${po.goodsCost == null ? `unknown — ${po.missingCostLines} line(s) have no unit cost` : money(po.goodsCost, po.currency)}`,
+    '',
+    '| Line | SKU | Description | Received / ordered | Unit cost |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    ...lineRows,
+    '',
+    '**Vendor bills**',
+    ...bills,
+    '',
+    `*Open [${po.number}](/admin/purchasing/${po.id}) to receive goods or create a bill.*`,
+  ].join('\n')
+}
+
+function formatBills(d: BillsData): string {
+  if (d.rows.length === 0) return `**Vendor bills${filterSuffix(d.filters)}:** No matching bills found.`
+  const tableRows = d.rows.map(
+    (b) =>
+      `| **${b.billNumber}** | \`${b.status}\` | ${b.supplierName} | ${money(b.totalAmount, b.currency)} | ${money(b.balance, b.currency)} | ${b.dueAt ? formatDate(b.dueAt) : '—'}${b.pastDue ? ' ⚠ past due' : ''} |`,
+  )
+  const totals = Object.entries(d.balanceByCurrency)
+    .filter(([, amt]) => amt !== 0)
+    .map(([cur, amt]) => money(amt, cur === 'UNKNOWN' ? null : cur))
+  return [
+    `### Vendor bills (AP)${filterSuffix(d.filters)}`,
+    countLine(d.rows.length, d.total),
+    totals.length > 0
+      ? `Open balance across all ${d.total} matches: **${totals.join(' + ')}**${totals.length > 1 ? ' (currencies kept separate)' : ''}${d.totalsTruncated ? ' — partial, too many bills to total' : ''}.`
+      : null,
+    '',
+    '| Bill # | Status | Supplier | Total | Balance | Due |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- |',
+    ...tableRows,
+    '',
+    '*Record payments in [Finance → Bills (AP)](/admin/finance).*',
+  ]
+    .filter((l) => l != null)
+    .join('\n')
+}
+
+function formatQuotes(page: Filtered<QuoteListRow>): string {
+  if (page.rows.length === 0) return `**Quotes${filterSuffix(page.filters)}:** No matching quotes found.`
+  const tableRows = page.rows.map(
+    (q) =>
+      `| **${q.quoteNumber}** | \`${q.status}\` | ${q.customerName ?? '—'} | ${q.lineCount} | ${money(q.quoteTotal)} | ${q.convertedOrderId ? 'Yes' : '—'} | ${formatDate(q.createdAt)} |`,
+  )
+  return [
+    `### Quotes${filterSuffix(page.filters)}`,
+    countLine(page.rows.length, page.total),
+    '',
+    '| Quote # | Status | Customer | Lines | Total | Converted | Created |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- | :--- |',
+    ...tableRows,
+    '',
+    '*Manage and approve quotes in [Quotes](/admin/quotes).*',
+  ].join('\n')
+}
+
+function formatQuoteDetail(q: QuoteDetail): string {
+  const lineRows = q.lines.map(
+    (l) => `| ${l.lineNo} | ${l.skuCode ? `\`${l.skuCode}\`` : '—'} | ${l.description} | ${l.qty} | ${money(l.unitPrice)} |`,
+  )
+  return [
+    `### Quote ${q.quoteNumber}`,
+    `- **Status:** \`${q.status}\` · **Customer:** ${q.customerName ?? '—'}`,
+    `- **Total:** ${money(q.quoteTotal)} · **Created:** ${formatDate(q.createdAt)}`,
+    q.convertedOrderId ? `- **Converted to order:** [open order](/admin/orders/${q.convertedOrderId})` : '- **Converted to order:** not converted',
+    q.rejectionReason ? `- **Rejection reason:** ${q.rejectionReason}` : null,
+    '',
+    '| Line | SKU | Description | Qty | Unit price |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    ...lineRows,
+  ]
+    .filter((l) => l != null)
     .join('\n')
 }
 
@@ -277,26 +453,6 @@ function formatInvoices(result: ToolResult): string {
   ].join('\n')
 }
 
-function formatQuotes(result: ToolResult): string {
-  const rows = result.data as QuoteRow[]
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Quotes:** No open quotes found.'
-  }
-  const tableRows = rows.map((q) => {
-    const code = formatQuoteCode(q.id)
-    return `| **#${code}** | \`${q.status}\` | ${q.lineCount ?? '—'} items |`
-  })
-  return [
-    `### Quotes (${rows.length} Active)`,
-    '',
-    '| Quote # | Status | Line Items |',
-    '| :--- | :--- | :--- |',
-    ...tableRows,
-    '',
-    '*Manage and approve customer quotes in [Quotes Approval](/admin/quotes).*',
-  ].join('\n')
-}
-
 function formatLowStock(result: ToolResult): string {
   const rows = result.data as SkuRow[]
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -316,22 +472,22 @@ function formatLowStock(result: ToolResult): string {
   ].join('\n')
 }
 
-function formatCatalog(result: ToolResult): string {
-  const rows = result.data as SkuRow[]
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Catalog:** No matching items found in the product catalog.'
-  }
-  const tableRows = rows.map(
-    (s) => `| \`${s.code}\` | **${s.name}** | ${s.available ?? '—'} units | ${s.price != null ? `$${s.price.toFixed(2)}` : '—'} |`,
+function formatCatalog(page: Page<CatalogRow> & { search?: string }): string {
+  const subject = page.search ? ` matching “${page.search}”` : ''
+  if (page.rows.length === 0) return `**Products${subject}:** No matching products found.`
+  const tableRows = page.rows.map(
+    (s) =>
+      `| \`${s.code}\` | **${s.name}** | ${s.available == null ? 'no stock recorded' : `${s.available} ${s.unit}`} | ${money(s.price)} |`,
   )
   return [
-    `### Product Catalog (${rows.length} Matches)`,
+    `### Products${subject}`,
+    countLine(page.rows.length, page.total),
     '',
-    '| SKU Code | Product Name | Available Stock | Wholesale Price |',
+    '| SKU | Product | Available | Price |',
     '| :--- | :--- | :--- | :--- |',
     ...tableRows,
     '',
-    '*Browse full catalog and add items in [B2B Storefront](/catalog).*',
+    '*See full product details in [Inventory](/admin/inventory).*',
   ].join('\n')
 }
 
@@ -340,17 +496,20 @@ function formatGlobalSearch(result: ToolResult): string {
   const parts: string[] = []
 
   if (data.orders?.length) {
-    parts.push(formatOrders({ ...result, name: 'get_my_orders', data: data.orders }))
+    const rows = data.orders.map((o) => `| ${formatOrderCode(o.id)} | \`${o.status}\` | ${money(Number(o.totalAmount))} | ${formatDate(o.createdAt)} |`)
+    parts.push(['**Orders found:**', '', '| Order | Status | Total | Created |', '| --- | --- | --- | --- |', ...rows].join('\n'))
   }
   if (data.customers?.length) {
     const rows = data.customers.map((c) => `| ${c.name} | ${c.email ?? '—'} |`)
     parts.push(['**Customers found:**', '', '| Name | Email |', '| --- | --- |', ...rows].join('\n'))
   }
   if (data.skus?.length) {
-    parts.push(formatCatalog({ ...result, name: 'search_catalog', data: data.skus }))
+    const rows = data.skus.map((s) => `| \`${s.code}\` | ${s.name} | ${money(s.price == null ? null : Number(s.price))} |`)
+    parts.push(['**Products found:**', '', '| SKU | Name | Price |', '| --- | --- | --- |', ...rows].join('\n'))
   }
   if (data.quotes?.length) {
-    parts.push(formatQuotes({ ...result, name: 'list_my_quotes', data: data.quotes }))
+    const rows = data.quotes.map((q) => `| Q-${q.id.slice(-8).toUpperCase()} | \`${q.status}\` |`)
+    parts.push(['**Quotes found:**', '', '| Quote | Status |', '| --- | --- |', ...rows].join('\n'))
   }
 
   if (parts.length === 0) return '**Search:** No matching orders, customers, SKUs, or quotes found.'
@@ -360,5 +519,5 @@ function formatGlobalSearch(result: ToolResult): string {
 function formatDate(value: string | Date): string {
   const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }

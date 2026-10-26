@@ -1,21 +1,17 @@
 import * as inv from '../inventory'
 import * as invoices from '../invoices'
-import * as orders from '../orders'
-import * as quotes from '../quotes'
 import * as search from '../search'
 import { isPortalBuyer } from '../buyer-context'
+import { hasPermission } from '../permissions'
 import { ApiError, type SessionUser } from '../session'
-import type { CelestialToolName } from './intent'
+import type { CelestialToolName, ToolParams } from './intent'
 import { orderCodeOf } from '../order-number'
+import * as erp from './erp-queries'
 
-export type ToolContext = {
+export type ToolContext = ToolParams & {
   session: SessionUser
   customerId?: string | null
   customerName?: string | null
-  orderId?: string
-  quoteId?: string
-  searchTerm?: string
-  orderStatus?: string
 }
 
 export type ToolResult = {
@@ -23,78 +19,200 @@ export type ToolResult = {
   data: unknown
   links: Array<{ label: string; href: string }>
   error?: string
+  /** Shown to the user instead of data: a clarifying question or an access explanation. */
+  notice?: string
+}
+
+/**
+ * Module permission each tool reads under. Any one listed permission is enough. Checked on every
+ * request against the live session, so revoking a grant takes effect immediately.
+ */
+export const TOOL_PERMISSIONS: Record<CelestialToolName, string[]> = {
+  'orders.list': ['orders.read'],
+  'orders.detail': ['orders.read'],
+  'inventory.stock': ['inventory.read'],
+  'purchasing.orders': ['purchasing.read'],
+  'purchasing.order_detail': ['purchasing.read'],
+  'finance.bills': ['finance.read'],
+  'quotes.list': ['quotes.read'],
+  'quotes.detail': ['quotes.read'],
+  list_my_invoices: ['finance.read'],
+  search_catalog: ['inventory.read'],
+  global_search: ['crm.read'],
+  list_low_stock: ['inventory.read'],
+  list_warehouses: ['inventory.read', 'wms.read'],
+}
+
+const TOOL_LABELS: Record<CelestialToolName, string> = {
+  'orders.list': 'orders',
+  'orders.detail': 'order details',
+  'inventory.stock': 'stock levels',
+  'purchasing.orders': 'purchase orders',
+  'purchasing.order_detail': 'purchase order details',
+  'finance.bills': 'vendor bills',
+  'quotes.list': 'quotes',
+  'quotes.detail': 'quote details',
+  list_my_invoices: 'invoices',
+  search_catalog: 'products',
+  global_search: 'customer search',
+  list_low_stock: 'low-stock alerts',
+  list_warehouses: 'warehouses',
+}
+
+export function canUseTool(session: SessionUser, name: CelestialToolName): boolean {
+  // Celestial is employee-only: the ERP tools read tenant-wide data and carry no buyer scoping.
+  if (isPortalBuyer(session.role)) return false
+  return TOOL_PERMISSIONS[name].some((p) => hasPermission(session, p))
 }
 
 export async function runTools(names: CelestialToolName[], ctx: ToolContext): Promise<ToolResult[]> {
   const results: ToolResult[] = []
   for (const name of names) {
+    if (!canUseTool(ctx.session, name)) {
+      results.push({
+        name,
+        data: null,
+        links: [],
+        notice: `You don't have access to ${TOOL_LABELS[name]} in Pleros (needs ${TOOL_PERMISSIONS[name].join(' or ')}). Ask an admin if you need it.`,
+      })
+      continue
+    }
     try {
       const result = await runTool(name, ctx)
       if (result) results.push(result)
     } catch (e) {
-      const message =
-        e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Tool query failed'
-      results.push({ name, data: null, links: [], error: message })
+      // Raw database errors carry file paths and schema details: log them here, and give the user
+      // (and any model) only a plain statement that this part of the answer is missing.
+      console.error(`[celestial] tool ${name} failed (tenant=${ctx.session.tenantId}):`, e)
+      const message = e instanceof ApiError ? e.message : 'lookup failed'
+      results.push({
+        name,
+        data: null,
+        links: [],
+        error: message,
+        notice: `I couldn’t read ${TOOL_LABELS[name]} just now (${message}), so they are missing from this answer.`,
+      })
     }
   }
   return results
 }
 
+/** Human-readable list of the filters applied, so answers say what subset they describe. */
+function filterLabels(ctx: ToolContext, ...extra: Array<string | false | null | undefined>): string[] {
+  const labels = extra.filter((x): x is string => Boolean(x))
+  if (ctx.dateRange) labels.push(ctx.dateRange.label)
+  if (ctx.sort === 'asc') labels.push('oldest first')
+  return labels
+}
+
 async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolResult | null> {
   const { session } = ctx
+  const tenantId = session.tenantId
   const isBuyer = isPortalBuyer(session.role)
   const buyerOpts = isBuyer && ctx.customerId ? { buyerCustomerId: ctx.customerId } : undefined
 
   switch (name) {
-    case 'get_my_orders': {
-      const filters: { status?: string } = {}
-      if (ctx.orderStatus) filters.status = ctx.orderStatus
-      const page = await orders.listOrders(session.tenantId, 1, 10, filters, buyerOpts)
-      const links = page.items.map((o) => ({
-        label: `Order ${orderCodeOf(o)} (${o.status})`,
-        href: isBuyer ? `/orders/${o.id}` : `/admin/orders/${o.id}`,
-      }))
-      return {
-        name,
-        data: page.items.map((o) => ({
-          id: o.id,
-          orderNumber: o.orderNumber,
-          status: o.status,
-          total: Number(o.totalAmount),
-          createdAt: o.createdAt,
-          lineCount: o.lineItems.length,
-        })),
-        links,
-      }
-    }
-    case 'get_order_detail': {
-      if (!ctx.orderId) return null
-      const order = await orders.findOrderById(session.tenantId, ctx.orderId, buyerOpts)
+    case 'orders.list': {
+      const page = await erp.ordersList(tenantId, {
+        status: ctx.orderStatus,
+        channel: ctx.channel,
+        priority: ctx.priority,
+        dateRange: ctx.dateRange,
+        sort: ctx.sort,
+      })
       return {
         name,
         data: {
-          id: order.id,
-          orderNumber: order.orderNumber,
-          status: order.status,
-          total: Number(order.totalAmount),
-          amountPaid: Number(order.amountPaid),
-          paymentMethod: order.paymentMethod,
-          lines: order.lineItems.map((l) => ({
-            skuId: l.skuId,
-            qty: l.quantity,
-            unitPrice: Number(l.unitPrice),
-          })),
+          ...page,
+          filters: filterLabels(ctx, ctx.orderStatus, ctx.channel, ctx.priority),
         },
-        links: [
-          {
-            label: `Order ${orderCodeOf(order)}`,
-            href: isBuyer ? `/orders/${order.id}` : `/admin/orders/${order.id}`,
-          },
-        ],
+        links: page.rows.map((o) => ({
+          label: `Order ${orderCodeOf(o)} (${o.status})`,
+          href: `/admin/orders/${o.id}`,
+        })),
       }
     }
+    case 'orders.detail': {
+      const order = await erp.ordersDetail(tenantId, { id: ctx.orderId, orderNumber: ctx.orderNumber })
+      if (!order) {
+        return { name, data: null, links: [], notice: 'I couldn’t find that order. Check the order number (e.g. ORD-1001).' }
+      }
+      return {
+        name,
+        data: order,
+        links: [{ label: `Order ${orderCodeOf(order)}`, href: `/admin/orders/${order.id}` }],
+      }
+    }
+    case 'inventory.stock': {
+      const stock = await erp.inventoryStock(tenantId, { tokens: ctx.searchTokens ?? [] })
+      return {
+        name,
+        data: { ...stock, search: (ctx.searchTokens ?? []).join(' ') },
+        links: stock.skuSummaries.slice(0, 6).map((s) => {
+          const row = stock.rows.find((r) => r.code === s.code)
+          return { label: s.code, href: row ? `/admin/inventory/${row.skuId}` : '/admin/inventory' }
+        }),
+      }
+    }
+    case 'purchasing.orders': {
+      const page = await erp.purchasingOrders(tenantId, {
+        status: ctx.poStatus,
+        supplier: ctx.supplier,
+        dateRange: ctx.dateRange,
+      })
+      return {
+        name,
+        data: {
+          ...page,
+          filters: filterLabels(ctx, ctx.poStatus, ctx.supplier && `supplier “${ctx.supplier}”`),
+        },
+        links: page.rows.map((po) => ({ label: po.number, href: `/admin/purchasing/${po.id}` })),
+      }
+    }
+    case 'purchasing.order_detail': {
+      const po = await erp.purchasingOrderDetail(tenantId, { number: ctx.poRef })
+      if (!po) {
+        return { name, data: null, links: [], notice: `I couldn’t find purchase order ${ctx.poRef ?? ''}. Check the PO number.` }
+      }
+      return { name, data: po, links: [{ label: po.number, href: `/admin/purchasing/${po.id}` }] }
+    }
+    case 'finance.bills': {
+      const page = await erp.financeBills(tenantId, {
+        status: ctx.billStatus,
+        outstanding: ctx.outstanding,
+        pastDue: ctx.pastDue,
+        supplier: ctx.supplier,
+        dateRange: ctx.dateRange,
+      })
+      const filters = filterLabels(
+        ctx,
+        ctx.billStatus,
+        ctx.pastDue ? 'past due' : ctx.outstanding === true ? 'outstanding' : ctx.outstanding === false ? 'paid' : undefined,
+        ctx.supplier && `supplier “${ctx.supplier}”`,
+      )
+      return {
+        name,
+        data: { ...page, filters },
+        links: page.rows.length > 0 ? [{ label: 'Bills (AP)', href: '/admin/finance' }] : [],
+      }
+    }
+    case 'quotes.list': {
+      const page = await erp.quotesList(tenantId, { status: ctx.quoteStatus, dateRange: ctx.dateRange })
+      return {
+        name,
+        data: { ...page, filters: filterLabels(ctx, ctx.quoteStatus) },
+        links: page.rows.length > 0 ? [{ label: 'Quotes', href: '/admin/quotes' }] : [],
+      }
+    }
+    case 'quotes.detail': {
+      const quote = await erp.quotesDetail(tenantId, { id: ctx.quoteId, idSuffix: ctx.quoteRef })
+      if (!quote) return { name, data: null, links: [], notice: 'I couldn’t find that quote. Check the quote number (e.g. Q-AB12CD34).' }
+      const links = [{ label: quote.quoteNumber, href: '/admin/quotes' }]
+      if (quote.convertedOrderId) links.push({ label: 'Converted order', href: `/admin/orders/${quote.convertedOrderId}` })
+      return { name, data: quote, links }
+    }
     case 'list_my_invoices': {
-      const page = await invoices.listInvoices(session.tenantId, 1, 8, {}, buyerOpts)
+      const page = await invoices.listInvoices(tenantId, 1, 8, {}, buyerOpts)
       return {
         name,
         data: page.items.map((invRow) => ({
@@ -112,43 +230,26 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'search_catalog': {
-      const term = ctx.searchTerm?.trim() || 'energy'
-      const page = await inv.listSkus(session.tenantId, 1, 8, term, {
-        inStockOnly: true,
-        customerId: ctx.customerId ?? undefined,
-      })
-      return {
-        name,
-        data: page.items.map((s) => ({
-          code: s.code,
-          name: s.name,
-          price: Number(s.price),
-          available: s.quantityAvailable,
-          id: s.id,
-        })),
-        links: [{ label: 'Browse catalog', href: '/catalog' }],
+      const tokens = ctx.searchTokens ?? []
+      if (tokens.length === 0) {
+        return {
+          name,
+          data: null,
+          links: [],
+          notice: 'Which product are you looking for? Give me a name, SKU code or keyword (e.g. “cable”).',
+        }
       }
-    }
-    case 'list_my_quotes': {
-      const rows = await quotes.listQuotes(session.tenantId, undefined, buyerOpts)
-      const slice = rows.slice(0, 8)
+      const page = await erp.catalogSearch(tenantId, tokens)
       return {
         name,
-        data: slice.map((q) => ({
-          id: q.id,
-          status: q.status,
-          lineCount: q.lines.length,
-          createdAt: q.createdAt,
-        })),
-        links: slice.map((q) => ({
-          label: `Quote …${q.id.slice(-8)}`,
-          href: isBuyer ? `/quotes/${q.id}` : `/admin/quotes`,
-        })),
+        data: { ...page, search: tokens.join(' ') },
+        links: page.rows.map((s) => ({ label: s.code, href: isBuyer ? '/catalog' : `/admin/inventory/${s.id}` })),
       }
     }
     case 'global_search': {
-      const term = ctx.searchTerm?.trim() || 'acme'
-      const data = await search.globalSearch(session.tenantId, term, 6)
+      const term = ctx.searchTerm?.trim()
+      if (!term) return null
+      const data = await search.globalSearch(tenantId, term, 6)
       return {
         name,
         data,
@@ -160,7 +261,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'list_low_stock': {
-      const { lowStock } = await inv.lowStockAlerts(session.tenantId)
+      const { lowStock } = await inv.lowStockAlerts(tenantId)
       return {
         name,
         data: lowStock.map((s) => ({
@@ -176,7 +277,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'list_warehouses': {
-      const rows = await inv.listWarehouses(session.tenantId)
+      const rows = await inv.listWarehouses(tenantId)
       const active = rows.filter((w) => w.isActive)
       return {
         name,
@@ -205,6 +306,7 @@ export function formatToolResultsForPrompt(results: ToolResult[]): string {
   if (results.length === 0) return '(No live data was fetched for this question.)'
   return results
     .map((r) => {
+      if (r.notice) return `Tool: ${r.name} (notice: ${r.notice})`
       if (r.error) return `Tool: ${r.name} (error: ${r.error})`
       return `Tool: ${r.name}\n${JSON.stringify(r.data, null, 2)}`
     })
