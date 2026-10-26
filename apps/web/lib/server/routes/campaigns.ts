@@ -63,6 +63,12 @@ export async function routeCampaigns(method: string, seg: string[], req: Request
     return Response.json(await campaigns.sendCampaign(session.tenantId, seg[1]!))
   }
 
+  // Send again after a failure; customers already emailed are skipped (PLR-100).
+  if (seg.length === 3 && seg[2] === 'retry' && method === 'POST') {
+    await requirePermission(req, 'campaigns.write')
+    return Response.json(await campaigns.sendCampaign(session.tenantId, seg[1]!, { retry: true }))
+  }
+
   throw new ApiError(404, 'Campaign route not found')
 }
 

@@ -51,6 +51,18 @@ test('stripeAccountOpts formats connected account request headers', () => {
   assert.deepEqual(opts, { stripeAccount: 'acct_12345' })
 })
 
+test('stripeAccountOpts gives no options object for a direct charge without Connect', () => {
+  // stripe-node throws "Unknown arguments" on an empty {}
+  assert.equal(stripeAccountOpts({ connectedAccountId: '', tenantId: 't1' }), undefined)
+  assert.deepEqual(stripeAccountOpts({ connectedAccountId: '', tenantId: 't1' }, { idempotencyKey: 'k1' }), {
+    idempotencyKey: 'k1',
+  })
+  assert.deepEqual(stripeAccountOpts({ connectedAccountId: 'acct_1', tenantId: 't1' }, { idempotencyKey: 'k1' }), {
+    stripeAccount: 'acct_1',
+    idempotencyKey: 'k1',
+  })
+})
+
 test('assertRealStripePaymentMethodId validates real vs demo payment methods', () => {
   assert.doesNotThrow(() => assertRealStripePaymentMethodId('pm_1OabCdEfGhIjKlMnOpQrStUv'))
   assert.throws(() => assertRealStripePaymentMethodId('pm_demo_4242'), /Demo payment methods cannot be used/)
