@@ -150,6 +150,8 @@ export class ApiError extends Error {
     message: string,
     /** Extra response headers, e.g. Retry-After on a 429. */
     public headers?: Record<string, string>,
+    /** Extra fields merged into the JSON error body, e.g. `{ errors: [{ line, field, message }] }`. */
+    public details?: Record<string, unknown>,
   ) {
     super(message)
   }
@@ -173,7 +175,7 @@ export async function requireRole(req: Request, allowed: readonly string[]): Pro
 
 export function toJsonError(e: unknown): Response {
   if (e instanceof ApiError) {
-    return Response.json({ message: e.message }, { status: e.status, headers: e.headers })
+    return Response.json({ ...e.details, message: e.message }, { status: e.status, headers: e.headers })
   }
   if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') {
     return Response.json({ message: 'Conflict' }, { status: 409 })

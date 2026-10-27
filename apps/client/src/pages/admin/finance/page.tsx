@@ -12,6 +12,8 @@ import {
   YAxis,
 } from 'recharts'
 import { api } from '@/lib/api-admin'
+import { axiosErr } from '@/lib/axios-error'
+import { paymentAmountError } from '@/lib/payment-amount'
 import { adminPath } from '@/lib/admin-path'
 import { downloadCsv } from '@/lib/csv-download'
 import { StatusBadge } from '@/components/pleros/status-badge'
@@ -259,6 +261,7 @@ export default function FinancePage() {
   const [invoicePage, setInvoicePage] = useState(1)
   const [exportingInvoices, setExportingInvoices] = useState(false)
   const [payUseStripe, setPayUseStripe] = useState(false)
+  const [payError, setPayError] = useState<string | null>(null)
   const { stripePromise, chargesEnabled } = useStripeConnect(api.get.bind(api), 'finance-stripe')
 
   const fixedAssetsQ = useQuery({
@@ -441,17 +444,20 @@ export default function FinancePage() {
   const payOrderMut = useMutation({
     mutationFn: async () => {
       if (!payOrder) return
+      // Sent as typed: the server rejects malformed amounts rather than reading "10abc" as 10.
       await api.post(`/orders/${payOrder.orderId}/payments`, {
-        amount: parseFloat(payAmount),
+        amount: payAmount.trim(),
         method: payMethod,
       })
     },
+    onMutate: () => setPayError(null),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
       void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar-summary'] })
       setPayOrder(null)
       setPayAmount('')
     },
+    onError: (e) => setPayError(axiosErr(e)),
   })
 
   const payBillMut = useMutation({
@@ -462,11 +468,13 @@ export default function FinancePage() {
         method: payMethod,
       })
     },
+    onMutate: () => setPayError(null),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['finance', 'bills-ap'] })
       setPayBill(null)
       setPayAmount('')
     },
+    onError: (e) => setPayError(axiosErr(e)),
   })
 
   const reconcileMut = useMutation({
@@ -663,10 +671,11 @@ export default function FinancePage() {
                         <td className="font-mono font-bold text-pleros-white">{money(inv.balance)}</td>
                         <td><StatusBadge status={inv.displayStatus} /></td>
                         <td className="space-x-2">
-                          {inv.balance > 0.01 && inv.order?.status !== 'CANCELLED' && inv.order?.status !== 'FAILED' && (
+                          {inv.balance > 0 && inv.order?.status !== 'CANCELLED' && inv.order?.status !== 'FAILED' && (
                             <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
                               setPayOrder(inv)
                               setPayAmount(String(inv.balance.toFixed(2)))
+                              setPayError(null)
                             }}>Record payment</button>
                           )}
                           <Link to={adminPath(`/orders/${inv.orderId}`)} className="text-sm" style={{ color: 'var(--c-accent)' }}>View</Link>
@@ -772,6 +781,7 @@ export default function FinancePage() {
                           <button type="button" className="btn-primary !py-1 !px-2 !text-xs" onClick={() => {
                             setPayBill(bill)
                             setPayAmount(String(bill.balance.toFixed(2)))
+                            setPayError(null)
                           }}>Mark paid</button>
                         )}
                         {bill.purchaseOrderId ? (
@@ -1185,7 +1195,16 @@ export default function FinancePage() {
               {payOrder ? 'Receive payment' : 'Record payment'}
             </h3>
             <label className="block text-sm" style={{ color: 'var(--c-text-2)' }}>Amount</label>
-            <input className="pleros-input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            <input
+              className="pleros-input"
+              aria-label="Payment amount"
+              inputMode="decimal"
+              value={payAmount}
+              onChange={(e) => {
+                setPayAmount(e.target.value)
+                setPayError(null)
+              }}
+            />
             {payOrder && stripePromise && chargesEnabled ? (
               <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--c-text-2)' }}>
                 <input type="checkbox" checked={payUseStripe} onChange={(e) => setPayUseStripe(e.target.checked)} />
@@ -1205,7 +1224,9 @@ export default function FinancePage() {
               <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>
                 <FinanceInvoiceStripePay
                   invoiceId={payOrder.id}
-                  amount={parseFloat(payAmount) || payOrder.balance}
+                  amount={payAmount.trim()}
+                  balance={payOrder.balance}
+                  onError={setPayError}
                   onDone={() => {
                     void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar'] })
                     void qc.invalidateQueries({ queryKey: ['finance', 'invoices-ar-summary'] })
@@ -1216,8 +1237,9 @@ export default function FinancePage() {
                 />
               </Elements>
             ) : null}
+            {payError ? <p role="alert" className="text-sm text-red-400">{payError}</p> : null}
             <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null); setPayUseStripe(false) }}>Cancel</button>
+              <button type="button" className="btn-ghost" onClick={() => { setPayOrder(null); setPayBill(null); setPayUseStripe(false); setPayError(null) }}>Cancel</button>
               {!payUseStripe ? (
                 <button
                   type="button"
@@ -1227,7 +1249,7 @@ export default function FinancePage() {
                     if (payOrder) void payOrderMut.mutate()
                     else void payBillMut.mutate()
                   }}
-                >Submit</button>
+                >{payOrderMut.isPending || payBillMut.isPending ? 'Submitting…' : 'Submit'}</button>
               ) : null}
             </div>
           </div>
@@ -1437,26 +1459,44 @@ function CreateFixedAssetModal(props: { onClose: () => void; onCreated: () => vo
 function FinanceInvoiceStripePay({
   invoiceId,
   amount,
+  balance,
   onDone,
+  onError,
 }: {
   invoiceId: string
-  amount: number
+  /** The amount as typed: checked here before the card is tokenized, and again by the server. */
+  amount: string
+  balance: number
   onDone: () => void
+  onError: (message: string | null) => void
 }) {
   async function pay(paymentMethodId: string) {
     const correlationId =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2)
-    await api.post(
-      `/invoices/${encodeURIComponent(invoiceId)}/pay/stripe`,
-      { paymentMethodId, amount, correlationId },
-      { 'Idempotency-Key': correlationId },
-    )
+    onError(null)
+    try {
+      await api.post(
+        `/invoices/${encodeURIComponent(invoiceId)}/pay/stripe`,
+        { paymentMethodId, amount, correlationId },
+        { 'Idempotency-Key': correlationId },
+      )
+    } catch (e) {
+      onError(axiosErr(e))
+      return
+    }
     onDone()
   }
 
-  return <AdminStripeCardForm submitLabel={`Charge ${money(amount)}`} onSubmit={(r) => pay(r.paymentMethodId)} />
+  const shown = Number(amount)
+  return (
+    <AdminStripeCardForm
+      submitLabel={amount && Number.isFinite(shown) ? `Charge ${money(shown)}` : 'Charge card'}
+      validate={() => paymentAmountError(amount, balance)}
+      onSubmit={(r) => pay(r.paymentMethodId)}
+    />
+  )
 }
 
 function loadPlaidScript(): Promise<void> {

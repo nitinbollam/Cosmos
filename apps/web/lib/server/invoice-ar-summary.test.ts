@@ -6,11 +6,12 @@ function empty(): ArAgingBuckets {
   return { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 }
 }
 
-test('bucketArAging ignores near-zero balances', () => {
+test('bucketArAging ignores settled balances but ages a single cent still owed', () => {
   const b = empty()
   bucketArAging(10, 0, b)
-  bucketArAging(10, 0.01, b)
   assert.deepEqual(b, empty())
+  bucketArAging(10, 0.01, b)
+  assert.deepEqual(b, { ...empty(), current: 0.01 })
 })
 
 test('bucketArAging maps days to finance buckets', () => {

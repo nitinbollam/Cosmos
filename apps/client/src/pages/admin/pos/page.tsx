@@ -7,6 +7,7 @@ import { ScanButton, useKeyboardWedge } from '@/components/scanner'
 import { authFetch } from '@/lib/auth-session'
 import { IdScanPanel, type IdScan, type IdScanResult } from '@/components/id-scan/IdScanPanel'
 import { orderLabel } from '@/lib/order-label'
+import { cashDue, changeDue, checkoutBlocker, nextRegisterName, sortRegisters } from '@/lib/pos-checkout'
 
 type Register = { id: string; name: string; warehouseId: string | null }
 type Customer = { id: string; name: string; email?: string | null; isLicensedTobacco?: boolean }
@@ -85,6 +86,9 @@ export default function PosPage() {
   const [splitTender, setSplitTender] = useState(false)
   const [secondMethod, setSecondMethod] = useState<'CASH' | 'CARD' | 'CHECK' | 'GIFT_CARD'>('CARD')
   const [secondAmount, setSecondAmount] = useState('')
+  const [cashReceived, setCashReceived] = useState('')
+  const [lastChange, setLastChange] = useState<number | null>(null)
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
 
   const policyQ = useQuery({
     queryKey: ['age-verification-policy'],
@@ -148,7 +152,11 @@ export default function PosPage() {
 
   const createRegister = useMutation({
     mutationFn: (name: string) => api.post<Register>('/pos/registers', { name }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-registers'] }),
+    onSuccess: (reg) => {
+      setNotice({ ok: true, text: `Added ${reg?.name ?? 'a new register'}.` })
+      return qc.invalidateQueries({ queryKey: ['pos-registers'] })
+    },
+    onError: (e) => setNotice({ ok: false, text: `Could not add the register: ${errMsg(e)}` }),
   })
 
   const clockIn = useMutation({
@@ -158,7 +166,11 @@ export default function PosPage() {
 
   const clockOut = useMutation({
     mutationFn: (force?: boolean) => api.post('/pos/shift/clock-out', { force }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pos-shift'] }),
+    onSuccess: () => {
+      setNotice({ ok: true, text: 'Clocked out.' })
+      void qc.invalidateQueries({ queryKey: ['pos-shift'] })
+    },
+    onError: (e) => setNotice({ ok: false, text: `Could not clock out: ${errMsg(e)}` }),
   })
 
   const openTill = useMutation({
@@ -172,16 +184,29 @@ export default function PosPage() {
 
   const closeTill = useMutation({
     mutationFn: () =>
-      api.post(`/pos/till/${encodeURIComponent(shiftQ.data!.till!.id)}/close`, {
-        closingCount: Number(closingCount),
-      }),
-    onSuccess: () => {
+      api.post<{ expectedTotal?: string | number | null; variance?: string | number | null }>(
+        `/pos/till/${encodeURIComponent(shiftQ.data!.till!.id)}/close`,
+        { closingCount: Number(closingCount) },
+      ),
+    onSuccess: (res) => {
+      const variance = res?.variance != null ? Number(res.variance) : null
+      setNotice({
+        ok: true,
+        text:
+          `Till closed. Counted ${money(Number(closingCount))}` +
+          (res?.expectedTotal != null ? `, expected ${money(Number(res.expectedTotal))}` : '') +
+          (variance != null ? `, ${variance === 0 ? 'no variance' : `variance ${variance > 0 ? '+' : '-'}${money(Math.abs(variance))}`}` : '') +
+          '. You can now clock out.',
+      })
       setClosingCount('')
       void qc.invalidateQueries({ queryKey: ['pos-shift'] })
     },
+    onError: (e) => setNotice({ ok: false, text: `Could not close the till: ${errMsg(e)}` }),
   })
 
-  const selectedRegister = registersQ.data?.find((r) => r.id === registerId)
+  // The sale always uses the register of the open shift, so a reload cannot lose it.
+  const effectiveRegisterId = shiftQ.data?.shift?.registerId ?? registerId
+  const selectedRegister = registersQ.data?.find((r) => r.id === effectiveRegisterId)
   const warehouseId =
     selectedRegister?.warehouseId ??
     warehousesQ.data?.find((w) => w.isDefault)?.id ??
@@ -220,6 +245,25 @@ export default function PosPage() {
   const activeShift = shiftQ.data?.shift
   const openTillSession = shiftQ.data?.till
   const posReady = Boolean(activeShift && openTillSession)
+
+  const cashRequired = cashDue({ total, method: paymentMethod, split: splitTender, secondMethod, secondAmount })
+  const change = changeDue(cashReceived, cashRequired)
+  const splitIncomplete =
+    splitTender && (!secondAmount.trim() || Number(secondAmount) <= 0 || Number(secondAmount) >= total)
+  const blocker = checkoutBlocker({
+    hasShift: Boolean(activeShift),
+    hasOpenTill: Boolean(openTillSession),
+    hasRegister: Boolean(effectiveRegisterId),
+    hasWarehouse: Boolean(warehouseId),
+    hasCustomer: Boolean(effectiveCustomerId),
+    cartCount: cart.length,
+    discountPending,
+    needsIdScan: cartNeedsAge && effectiveAgeMethod === 'ID_SCAN' && !idScanPasses,
+    splitIncomplete,
+    secondMax: total - 0.01,
+    cashRequired,
+    cashReceived,
+  })
 
   async function validatePosDiscount() {
     if (!discountCode.trim()) return
@@ -288,7 +332,7 @@ export default function PosPage() {
         ]
       }
       return api.post<{ id: string; orderNumber?: number | null; totalAmount: number }>('/pos/orders', {
-        registerId,
+        registerId: effectiveRegisterId,
         customerId: effectiveCustomerId,
         tenders,
         ...(discountAmount > 0 && !discountPending ? { discountCode: discountCode.trim() } : {}),
@@ -314,6 +358,9 @@ export default function PosPage() {
       setLastOrderId(order.id)
       setLastOrderNumber(order.orderNumber ?? null)
       setLastOrderTotal(order.totalAmount)
+      setLastChange(change)
+      setCashReceived('')
+      setNotice(null)
       setCart([])
       setSubmitErr(null)
       setIdScan(null)
@@ -388,7 +435,7 @@ export default function PosPage() {
     setCart((prev) => prev.map((l) => (l.skuId === skuId ? { ...l, quantity } : l)))
   }
 
-  const registers = registersQ.data ?? []
+  const registers = sortRegisters<Register>(registersQ.data ?? [])
 
   return (
     <div className="pos-page p-6 space-y-6 max-w-6xl">
@@ -400,12 +447,22 @@ export default function PosPage() {
         <button
           type="button"
           className="btn-ghost !text-sm shrink-0"
-          onClick={() => createRegister.mutate(`Register ${registers.length + 1}`)}
+          onClick={() => createRegister.mutate(nextRegisterName(registers.map((r) => r.name)))}
           disabled={createRegister.isPending}
         >
-          Add register
+          {createRegister.isPending ? 'Adding…' : 'Add register'}
         </button>
       </div>
+
+      {notice ? (
+        <p
+          role="status"
+          className={`text-sm rounded-lg px-3 py-2 ${notice.ok ? 'text-emerald-400' : 'text-red-400'}`}
+          style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}
+        >
+          {notice.text}
+        </p>
+      ) : null}
 
       {!activeShift ? (
         <div className="pleros-card border border-amber-500/30 space-y-4">
@@ -484,6 +541,11 @@ export default function PosPage() {
             >
               Close till
             </button>
+            {!closingCount.trim() ? (
+              <span className="basis-full text-xs text-pleros-text-3 text-right">
+                Count the drawer and enter the cash to close the till, then clock out.
+              </span>
+            ) : null}
             <button type="button" className="btn-ghost !text-xs" disabled={clockOut.isPending} onClick={() => clockOut.mutate(false)}>
               Clock out
             </button>
@@ -499,6 +561,7 @@ export default function PosPage() {
           <p className="text-sm text-pleros-text-2 mt-1">
             Order <span className="font-mono font-semibold text-pleros-white">#{orderLabel(lastOrderId, lastOrderNumber)}</span>
             {lastOrderTotal != null ? ` · ${money(lastOrderTotal)}` : ''}
+            {lastChange != null && lastChange > 0 ? ` · Change due ${money(lastChange)}` : ''}
           </p>
           <div className="flex flex-wrap gap-3 mt-3">
             <button type="button" className="btn-primary !text-sm" onClick={() => void printReceipt(lastOrderId)}>
@@ -518,7 +581,9 @@ export default function PosPage() {
               <label className="text-xs text-pleros-text-3 block">Register</label>
               <select
                 className="pleros-input mt-1 w-full"
-                value={registerId}
+                value={effectiveRegisterId}
+                disabled={Boolean(activeShift)}
+                title={activeShift ? 'Sales use the register you clocked in on.' : undefined}
                 onChange={(e) => setRegisterId(e.target.value)}
               >
                 <option value="">Select register…</option>
@@ -745,6 +810,32 @@ export default function PosPage() {
               </div>
             ) : null}
 
+            {cashRequired > 0 ? (
+              <div className="space-y-1.5">
+                <label htmlFor="pos-cash-received" className="text-xs text-pleros-text-3 block">
+                  Cash received ($) · {money(cashRequired)} due in cash
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="pos-cash-received"
+                    className="pleros-input flex-1"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                    value={cashReceived}
+                    onChange={(e) => setCashReceived(e.target.value)}
+                  />
+                  <button type="button" className="btn-ghost !text-xs shrink-0" onClick={() => setCashReceived(cashRequired.toFixed(2))}>
+                    Exact
+                  </button>
+                </div>
+                {change != null && cashReceived.trim() && Number(cashReceived) >= cashRequired ? (
+                  <p className="text-sm font-semibold text-emerald-400">Change due: {money(change)}</p>
+                ) : null}
+              </div>
+            ) : null}
+
             {cartNeedsAge ? (
               <div
                 className="rounded-lg p-3 space-y-3"
@@ -801,22 +892,16 @@ export default function PosPage() {
             <button
               type="button"
               className="btn-primary w-full"
-              disabled={
-                !posReady ||
-                !registerId ||
-                !warehouseId ||
-                !effectiveCustomerId ||
-                cart.length === 0 ||
-                checkout.isPending ||
-                discountPending ||
-                (cartNeedsAge && effectiveAgeMethod === 'ID_SCAN' && !idScanPasses) ||
-                (splitTender &&
-                  (!secondAmount.trim() || Number(secondAmount) <= 0 || Number(secondAmount) >= total))
-              }
+              disabled={Boolean(blocker) || checkout.isPending}
               onClick={() => checkout.mutate()}
             >
               {checkout.isPending ? 'Processing…' : `Complete sale · ${money(total)}`}
             </button>
+            {blocker ? (
+              <p className="text-xs text-amber-400" role="status">
+                {blocker}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
