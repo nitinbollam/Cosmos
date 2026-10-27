@@ -10,12 +10,13 @@ export async function getOrCreateConversation(
   conversationId?: string,
 ) {
   if (conversationId) {
+    // Newest 20 messages, returned oldest-first: history and follow-ups need the recent end.
     const existing = await analyticsDb.celestialConversation.findFirst({
       where: { id: conversationId, tenantId, userId },
-      include: { messages: { orderBy: { createdAt: 'asc' }, take: 20 } },
+      include: { messages: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 20 } },
     })
     if (!existing) throw new ApiError(404, 'Conversation not found')
-    return existing
+    return { ...existing, messages: existing.messages.reverse() }
   }
 
   return analyticsDb.celestialConversation.create({

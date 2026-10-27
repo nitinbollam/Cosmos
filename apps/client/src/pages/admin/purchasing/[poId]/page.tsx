@@ -7,6 +7,7 @@ import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
 import { showReceiptBillingResult, type ReceiptBilling } from '@/lib/receipt-billing'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { axiosErr } from '@/lib/axios-error'
 import { adminPath } from '@/lib/admin-path'
 import { formatAmount, lineAmount, parseAmountInput, sumAmounts } from '@/lib/decimal-amount'
 import { hasClientPermission, type Requisition } from '@/lib/requisitions'
@@ -106,7 +107,11 @@ export default function PurchaseOrderDetailPage() {
         `/purchase-orders/${encodeURIComponent(poId)}/landed-costs`,
         converted
           ? { freightAmount: freight.trim(), dutyAmount: duty.trim(), otherLandedAmount: otherLanded.trim() }
-          : { freightAmount: Number(freight) || 0, dutyAmount: Number(duty) || 0, otherLandedAmount: Number(otherLanded) || 0 },
+          : {
+              freightAmount: Number(freight.trim() || 0),
+              dutyAmount: Number(duty.trim() || 0),
+              otherLandedAmount: Number(otherLanded.trim() || 0),
+            },
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['purchase-order', poId] }),
     onError: async (e) => {
@@ -131,6 +136,8 @@ export default function PurchaseOrderDetailPage() {
         .map((r) => (r.ok ? null : r.error))
         .find(Boolean) ?? null
     : null
+  // Direct PO: a blank box counts as 0; anything else must be a number of 0 or more (the server enforces this too).
+  const landedInvalid = !converted && [freight, duty, otherLanded].some((v) => v.trim() !== '' && !(Number(v) >= 0))
 
   type LandedPreview = {
     lines: Array<{ lineNo: number; landedUnitCost: number }>
@@ -277,7 +284,12 @@ export default function PurchaseOrderDetailPage() {
                 <input
                   className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm"
                   value={freight}
-                  onChange={(e) => setFreight(e.target.value)}
+                  inputMode="decimal"
+                  disabled={isPendingApproval}
+                  onChange={(e) => {
+                    saveLanded.reset()
+                    setFreight(e.target.value)
+                  }}
                 />
               </label>
               <label className="text-xs text-pleros-muted">
@@ -285,7 +297,12 @@ export default function PurchaseOrderDetailPage() {
                 <input
                   className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm"
                   value={duty}
-                  onChange={(e) => setDuty(e.target.value)}
+                  inputMode="decimal"
+                  disabled={isPendingApproval}
+                  onChange={(e) => {
+                    saveLanded.reset()
+                    setDuty(e.target.value)
+                  }}
                 />
               </label>
               <label className="text-xs text-pleros-muted">
@@ -293,7 +310,12 @@ export default function PurchaseOrderDetailPage() {
                 <input
                   className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm"
                   value={otherLanded}
-                  onChange={(e) => setOtherLanded(e.target.value)}
+                  inputMode="decimal"
+                  disabled={isPendingApproval}
+                  onChange={(e) => {
+                    saveLanded.reset()
+                    setOtherLanded(e.target.value)
+                  }}
                 />
               </label>
             </div>
@@ -307,19 +329,28 @@ export default function PurchaseOrderDetailPage() {
                 {landedInputError}
               </p>
             ) : null}
-            {saveLanded.error ? (
-              <p className="text-xs text-red-400 mt-2" role="alert">
-                {axiosMessage(saveLanded.error)}
-              </p>
-            ) : null}
             <button
               type="button"
               className="mt-3 h-9 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-50"
-              disabled={saveLanded.isPending || !!landedInputError}
+              disabled={saveLanded.isPending || !!landedInputError || landedInvalid || isPendingApproval}
               onClick={() => saveLanded.mutate()}
             >
               {saveLanded.isPending ? 'Saving…' : 'Save landed costs'}
             </button>
+            {isPendingApproval ? (
+              <p className="mt-2 text-xs text-pleros-muted">
+                Waiting for approval, so landed costs are locked. If the approver rejects it, the order returns to draft and you can edit them.
+              </p>
+            ) : null}
+            {landedInvalid ? (
+              <p className="mt-2 text-xs text-red-400">Freight, duty and other must each be a number of 0 or more.</p>
+            ) : null}
+            {saveLanded.isError ? (
+              <p className="mt-2 text-xs text-red-400" role="alert">
+                {axiosErr(saveLanded.error)}
+              </p>
+            ) : null}
+            {saveLanded.isSuccess ? <p className="mt-2 text-xs text-emerald-400">Landed costs saved.</p> : null}
             {landedPreviewQ.data?.lines?.length ? (
               <div className="mt-4 text-xs text-pleros-muted space-y-1">
                 {landedPreviewQ.data.lines.map((l) => (

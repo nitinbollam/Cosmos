@@ -529,7 +529,11 @@ test('existing POs keep their workflow: threshold approval, rejection, landed co
   assert.equal((await decide(mgrA, ar.id, true)).status, 403, 'self-approval block')
   assert.equal((await decide(mgrB, ar.id, true)).status, 200)
   assert.equal((await purchasingDb.purchaseOrder.findUniqueOrThrow({ where: { id: big.body.id } })).status, 'SUBMITTED')
-  assert.equal((await landed(big.body.id, { freightAmount: 999999 })).status, 200, 'no cap without a requisition')
+  // No requisition cap applies, but the PO's own approved total still does.
+  assert.equal((await landed(big.body.id, { freightAmount: 0 })).status, 200, 'no requisition cap: an unchanged total is accepted')
+  const raised = await landed(big.body.id, { freightAmount: 999999 })
+  assert.equal(raised.status, 400, 'raising past the approved total is refused')
+  assert.match(String(raised.body.message), /above the \$5000\.00 it was approved for/)
 
   const small = { body: await existingPo('SMALL', 1, '10') }
   assert.equal((await call(mgrA, 'POST', `/purchase-orders/${small.body.id}/submit`)).body.status, 'SUBMITTED')
