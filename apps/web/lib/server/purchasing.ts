@@ -1,9 +1,10 @@
 import { Prisma, PurchaseOrderStatus, VendorBillStatus } from '@/generated/prisma-purchasing'
-import { inventoryDb, purchasingDb } from './db'
+import { inventoryDb, purchasingDb, tenantDb } from './db'
+import { landedCostChangeBlocker } from './po-landed-cost-rules'
 import { ApiError } from './session'
 import * as poReceiving from './po-receiving'
 import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
-import { ApprovalType } from '@/generated/prisma-tenant'
+import { ApprovalStatus, ApprovalType } from '@/generated/prisma-tenant'
 import { getTenantWorkflowSettings } from './tenant-workflow-settings'
 
 // NOTE: This module mirrors the legacy Nest purchasing-service behavior
@@ -349,6 +350,37 @@ export async function updatePurchaseOrderLandedCosts(
   }
   const problems = landedCostProblems(patch ?? {})
   if (problems.length > 0) throw poValidationError(problems)
+
+  // The approval total is fixed when the PO is submitted, so the charges may not be changed behind it.
+  const pick = (next: number | undefined, current: Prisma.Decimal | null) =>
+    next !== undefined ? new Prisma.Decimal(next) : current
+  const afterChange = {
+    lines: po.lines,
+    freightAmount: pick(patch.freightAmount, po.freightAmount),
+    dutyAmount: pick(patch.dutyAmount, po.dutyAmount),
+    otherLandedAmount: pick(patch.otherLandedAmount, po.otherLandedAmount),
+  }
+  const settled = po.status === PurchaseOrderStatus.SUBMITTED || po.status === PurchaseOrderStatus.PARTIALLY_RECEIVED
+  let approvedTotal: number | null = null
+  if (settled) {
+    const approved = await tenantDb.approvalRequest.findMany({
+      where: { tenantId, type: ApprovalType.PURCHASE_ORDER, subjectId: id, status: ApprovalStatus.APPROVED },
+      select: { context: true },
+    })
+    const totals = approved
+      .map((a) => Number((a.context as { total?: unknown } | null)?.total))
+      .filter((t) => Number.isFinite(t))
+    approvedTotal = totals.length > 0 ? Math.max(...totals) : null
+  }
+  const blocked = landedCostChangeBlocker({
+    status: po.status,
+    currentTotal: computePurchaseOrderTotal(po),
+    newTotal: computePurchaseOrderTotal(afterChange),
+    threshold: (await getTenantWorkflowSettings(tenantId)).poApprovalThreshold,
+    approvedTotal,
+  })
+  if (blocked) throw new ApiError(400, blocked)
+
   return purchasingDb.purchaseOrder.update({
     where: { id },
     data: {
