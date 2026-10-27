@@ -44,7 +44,8 @@ export async function sellFromVan(
     throw new ApiError(409, 'This stop already has an outcome; sell before completing it')
   }
   const baseOrderId = orderIdFromStopAddress(stop.address)
-  if (!baseOrderId) throw new ApiError(400, 'This stop has no order, so there is no customer to sell to')
+  if (!baseOrderId)
+    throw new ApiError(400, 'This stop has no order, so there is no customer to sell to')
   const baseOrder = await orderDb.order.findFirst({ where: { id: baseOrderId, tenantId } })
   if (!baseOrder) throw new ApiError(404, 'Order not found')
 
@@ -64,7 +65,8 @@ export async function sellFromVan(
 
   // The customer's own catalog price, never a number the driver types in.
   const priced: Array<{ skuId: string; quantity: number; unitPrice: number }> = []
-  for (const l of lines) priced.push({ ...l, unitPrice: await resolveUnitPrice(tenantId, customer.id, l.skuId) })
+  for (const l of lines)
+    priced.push({ ...l, unitPrice: await resolveUnitPrice(tenantId, customer.id, l.skuId) })
   const cents = priced.reduce((sum, l) => sum + Math.round(l.unitPrice * 100) * l.quantity, 0)
 
   const { vanSaleThreshold } = await getTenantWorkflowSettings(tenantId)
@@ -77,8 +79,11 @@ export async function sellFromVan(
     where: { tenantId, warehouseId: van.id, skuId: { in: lines.map((l) => l.skuId) } },
   })
   for (const l of lines) {
-    const have = onVan.filter((x) => x.skuId === l.skuId).reduce((s, x) => s + x.quantityAvailable, 0)
-    if (have < l.quantity) throw new ApiError(409, 'The van does not have enough of one of those items')
+    const have = onVan
+      .filter((x) => x.skuId === l.skuId)
+      .reduce((s, x) => s + x.quantityAvailable, 0)
+    if (have < l.quantity)
+      throw new ApiError(409, 'The van does not have enough of one of those items')
   }
 
   const orders = await import('./orders')
@@ -94,19 +99,35 @@ export async function sellFromVan(
     },
     { awaitPipeline: true, userId: actor.userId },
   )
-  const created = await orderDb.order.findFirst({ where: { id: order.id, tenantId }, include: { lineItems: true } })
+  const created = await orderDb.order.findFirst({
+    where: { id: order.id, tenantId },
+    include: { lineItems: true },
+  })
   if (!created) throw new ApiError(500, 'Order not found after creation')
 
   const { cancelOrderWithCompensation } = await import('./order-orchestration')
   if (created.status === 'AWAITING_APPROVAL') {
-    await cancelOrderWithCompensation(tenantId, order.id, 'Van sale cancelled: over the credit limit')
-    throw new ApiError(409, 'This sale is over the customer\'s credit limit. Ask a manager, or take cash')
+    await cancelOrderWithCompensation(
+      tenantId,
+      order.id,
+      'Van sale cancelled: over the credit limit',
+    )
+    throw new ApiError(
+      409,
+      "This sale is over the customer's credit limit. Ask a manager, or take cash",
+    )
   }
   if (created.lineItems.some((li) => li.quantityBackordered > 0)) {
-    await cancelOrderWithCompensation(tenantId, order.id, 'Van sale cancelled: not enough on the van')
+    await cancelOrderWithCompensation(
+      tenantId,
+      order.id,
+      'Van sale cancelled: not enough on the van',
+    )
     throw new ApiError(409, 'The van does not have enough of one of those items')
   }
 
+  const { withOrderFulfillmentLock } = await import('./order-orchestration')
+  return withOrderFulfillmentLock(tenantId, order.id, async () => {
   const total = Number(created.totalAmount)
   if (collectsMoneyOnTheRoad(paymentMethod)) {
     // The order's own exact total, so the paid amount equals it to the cent.
@@ -123,12 +144,17 @@ export async function sellFromVan(
   await serials.enforceAndShipSerialsForOrder(
     tenantId,
     order.id,
-    created.lineItems.map((li) => ({ skuId: li.skuId, warehouseId: li.warehouseId, quantity: li.quantity })),
+      created.lineItems.map((li) => ({
+        skuId: li.skuId,
+        warehouseId: li.warehouseId,
+        quantity: li.quantity,
+      })),
   )
   const { shipped } = await inv.commitShipmentForOrder(tenantId, order.id, actor.userId)
-  const { transitionOrderStatus, onFulfillmentDispatched, onDeliveryStopDelivered } = await import('./order-orchestration')
-  await transitionOrderStatus(tenantId, order.id, 'PACKED')
-  await onFulfillmentDispatched(tenantId, order.id, shipped)
+    const { transitionOrderStatus, onFulfillmentDispatched, onDeliveryStopDelivered } =
+      await import('./order-orchestration')
+    await transitionOrderStatus(tenantId, order.id, 'PACKED', undefined, { coordinationHeld: true })
+  await onFulfillmentDispatched(tenantId, order.id, shipped, undefined, { coordinationHeld: true })
   await onDeliveryStopDelivered(tenantId, order.id)
 
   const fresh = await dispatchDb.routeStop.findFirst({ where: { id: stopId } })
@@ -146,5 +172,11 @@ export async function sellFromVan(
     },
   })
 
-  return { orderId: order.id, total, paymentMethod, route: await getRouteDetail(tenantId, routeId) }
+    return {
+      orderId: order.id,
+      total,
+      paymentMethod,
+      route: await getRouteDetail(tenantId, routeId),
+    }
+  })
 }

@@ -8,6 +8,9 @@ import * as invoices from '../invoices'
 import * as quotes from '../quotes'
 import * as crm from '../crm'
 import * as orderPaymentAdmin from '../order-payment-admin'
+import * as approvals from '../approvals'
+import { ApprovalType } from '@/generated/prisma-tenant'
+import { isOrderCancellationEligible } from '../order-status'
 import { ApiError, requireSession, requirePermission, assertPermission, assertRole, ADMIN_ROLES, requireIdempotencyKey } from './common'
 
 export async function routeOrders(method: string, seg: string[], req: Request): Promise<Response> {
@@ -24,6 +27,38 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
     ? await requirePortalCustomerId(session)
     : undefined
   const buyerOpts = buyerCustomerId ? { buyerCustomerId } : undefined
+
+  if (seg.length === 3 && seg[2] === 'cancellation-requests') {
+    if (!buyerCustomerId || !isPortalBuyer(session.role)) {
+      throw new ApiError(403, 'Only an authenticated buyer can request cancellation')
+    }
+    const order = await orders.findOrderById(session.tenantId, seg[1], buyerOpts)
+    if (method === 'GET') {
+      return Response.json({
+        request: await approvals.findLatestApprovalForSubject(
+          session.tenantId,
+          ApprovalType.ORDER_CANCELLATION,
+          order.id,
+        ),
+      })
+    }
+    if (method === 'POST') {
+      const body = (await req.json()) as { reason?: string }
+      const reason = body.reason?.trim()
+      if (!reason) throw new ApiError(400, 'Please provide a reason for your cancellation request')
+      if (reason.length > 500) throw new ApiError(400, 'Cancellation reason must be 500 characters or fewer')
+      if (!isOrderCancellationEligible(order.status)) {
+        throw new ApiError(400, `Cancellation requests are unavailable once an order is ${order.status.toLowerCase()}`)
+      }
+      const result = await approvals.createPendingApprovalRequest(session.tenantId, {
+        type: ApprovalType.ORDER_CANCELLATION,
+        subjectId: order.id,
+        requestedBy: session.userId,
+        context: { reason, orderNumber: order.orderNumber, orderStatus: order.status },
+      })
+      return Response.json(result, { status: result.duplicate ? 200 : 201 })
+    }
+  }
 
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as orders.CreateOrderInput

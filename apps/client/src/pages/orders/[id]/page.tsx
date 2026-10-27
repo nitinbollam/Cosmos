@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { storefrontAdminHref } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/status-badge'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
 import { useCartStore } from '@/stores/cart.store'
@@ -38,6 +38,13 @@ type InvoiceChip = {
   balance: number
 }
 
+type CancellationRequest = {
+  id: string
+  status: string
+  context: { reason?: string }
+  rejectReason?: string | null
+}
+
 type TrackingShipment = {
   id: string
   shipmentNo: number
@@ -64,6 +71,16 @@ type TrackingData = {
 const TRACKABLE_STATUSES = ['PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED']
 
 const ORDER_FLOW = ['PENDING', 'CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED'] as const
+const CANCELLATION_ELIGIBLE = ['PENDING', 'AWAITING_APPROVAL', 'CONFIRMED', 'BACKORDERED', 'PROCESSING']
+
+function isAuthenticationError(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'response' in error &&
+      (error as { response?: { status?: number } }).response?.status === 401,
+  )
+}
 
 function trackingUrl(carrier: string | null | undefined, trackingNumber: string | null | undefined): string | null {
   if (!trackingNumber?.trim()) return null
@@ -92,14 +109,25 @@ export default function StorefrontOrderDetailPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
+  const [cancellationRequest, setCancellationRequest] = useState<CancellationRequest | null>(null)
+  const [cancellationReason, setCancellationReason] = useState('')
+  const [cancellationError, setCancellationError] = useState<string | null>(null)
+  const [cancellationNeedsSignIn, setCancellationNeedsSignIn] = useState(false)
+  const [cancellationBusy, setCancellationBusy] = useState(false)
+  const [errNeedsSignIn, setErrNeedsSignIn] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
     setLoading(true)
     setErr(null)
+    setErrNeedsSignIn(false)
     try {
       const o = await api.get<OrderDetail>(`/orders/${encodeURIComponent(id)}`)
       setOrder(o)
+      const cancellation = await api.get<{ request: CancellationRequest | null }>(
+        `/orders/${encodeURIComponent(id)}/cancellation-requests`,
+      )
+      setCancellationRequest(cancellation.request)
       if (['SHIPPED', 'DELIVERED', 'RETURNED'].includes(o.status)) {
         try {
           const inv = await api.get<InvoiceChip>(`/orders/${encodeURIComponent(id)}/invoice`)
@@ -122,6 +150,7 @@ export default function StorefrontOrderDetailPage() {
       }
     } catch (e: unknown) {
       setErr(axiosErr(e))
+      setErrNeedsSignIn(isAuthenticationError(e))
       setOrder(null)
       setInvoice(null)
       setTracking(null)
@@ -167,29 +196,39 @@ export default function StorefrontOrderDetailPage() {
     if (!id) return
     setActionBusy(true)
     setErr(null)
+    setErrNeedsSignIn(false)
     try {
       await api.post(`/orders/${encodeURIComponent(id)}/confirm`, {})
       await load()
     } catch (e: unknown) {
       setErr(axiosErr(e))
+      setErrNeedsSignIn(isAuthenticationError(e))
     } finally {
       setActionBusy(false)
     }
   }
 
-  async function cancel() {
-    if (!id) return
-    const reason = window.prompt('Cancellation reason (required)')?.trim()
-    if (!reason) return
-    setActionBusy(true)
-    setErr(null)
+  async function requestCancellation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!id || !cancellationReason.trim()) {
+      setCancellationError('Please provide a reason for your cancellation request.')
+      return
+    }
+    setCancellationBusy(true)
+    setCancellationError(null)
+    setCancellationNeedsSignIn(false)
     try {
-      await api.post(`/orders/${encodeURIComponent(id)}/cancel`, { reason })
-      await load()
+      const result = await api.post<{ request: CancellationRequest }>(
+        `/orders/${encodeURIComponent(id)}/cancellation-requests`,
+        { reason: cancellationReason.trim() },
+      )
+      setCancellationRequest(result.request)
+      setCancellationReason('')
     } catch (e: unknown) {
-      setErr(axiosErr(e))
+      setCancellationError(axiosErr(e))
+      setCancellationNeedsSignIn(isAuthenticationError(e))
     } finally {
-      setActionBusy(false)
+      setCancellationBusy(false)
     }
   }
 
@@ -205,9 +244,11 @@ export default function StorefrontOrderDetailPage() {
       {err ? (
         <p className="pleros-shop-error" style={{ marginTop: 24 }}>
           {err}{' '}
-          <Link to="/login" className="pleros-shop-link-accent">
-            Sign in
-          </Link>
+          {errNeedsSignIn ? (
+            <Link to="/login" className="pleros-shop-link-accent">
+              Sign in
+            </Link>
+          ) : null}
         </p>
       ) : null}
       {o ? (
@@ -370,12 +411,55 @@ export default function StorefrontOrderDetailPage() {
                 {actionBusy ? '…' : 'Confirm order'}
               </button>
             ) : null}
-            {o.status !== 'CANCELLED' && o.status !== 'DELIVERED' ? (
-              <button type="button" disabled={actionBusy} onClick={() => void cancel()} className="btn-ghost" style={{ color: 'var(--c-danger)', borderColor: 'var(--c-danger)' }}>
-                Request cancel
-              </button>
-            ) : null}
           </div>
+          {CANCELLATION_ELIGIBLE.includes(o.status) ? (
+            <section className="pleros-card" aria-labelledby="cancellation-request-title" style={{ marginTop: 20, padding: 16 }}>
+              <h2 id="cancellation-request-title" style={{ fontSize: 16, margin: '0 0 8px', color: 'var(--c-heading)' }}>
+                Cancellation request
+              </h2>
+              {cancellationRequest?.status === 'PENDING' ? (
+                <p role="status" className="pleros-shop-muted" style={{ margin: 0 }}>
+                  Your request is pending staff approval. Reason: {cancellationRequest.context?.reason}
+                </p>
+              ) : (
+                <form onSubmit={(event) => void requestCancellation(event)}>
+                  {cancellationRequest?.status === 'REJECTED' ? (
+                    <p role="status" className="pleros-shop-muted" style={{ margin: '0 0 10px' }}>
+                      Your previous request was rejected{cancellationRequest.rejectReason ? `: ${cancellationRequest.rejectReason}` : '.'}
+                    </p>
+                  ) : null}
+                  <label htmlFor="cancellation-reason" style={{ display: 'block', marginBottom: 6, color: 'var(--c-text-2)' }}>
+                    Reason <span aria-hidden="true">*</span>
+                  </label>
+                  <textarea
+                    id="cancellation-reason"
+                    required
+                    maxLength={500}
+                    value={cancellationReason}
+                    onChange={(event) => setCancellationReason(event.target.value)}
+                    aria-describedby={cancellationError ? 'cancellation-request-error' : undefined}
+                    className="pleros-input"
+                    rows={3}
+                    style={{ width: '100%', resize: 'vertical' }}
+                  />
+                  <button type="submit" className="btn-ghost" disabled={cancellationBusy || !cancellationReason.trim()} style={{ marginTop: 10 }}>
+                    {cancellationBusy ? 'Submitting…' : 'Request cancellation'}
+                  </button>
+                </form>
+              )}
+              {cancellationError ? (
+                <p id="cancellation-request-error" role="alert" className="pleros-shop-error" style={{ margin: '10px 0 0' }}>
+                  {cancellationError}{' '}
+                  {cancellationNeedsSignIn ? <Link to="/login" className="pleros-shop-link-accent">Sign in</Link> : null}
+                </p>
+              ) : null}
+            </section>
+          ) : cancellationRequest ? (
+            <p role="status" className="pleros-shop-muted" style={{ marginTop: 20 }}>
+              Cancellation request status: {cancellationRequest.status.toLowerCase().replace(/_/g, ' ')}
+              {cancellationRequest.rejectReason ? ` · ${cancellationRequest.rejectReason}` : ''}
+            </p>
+          ) : null}
           <h2 style={{ fontSize: 16, marginTop: 28, color: 'var(--c-heading)' }}>Line items</h2>
           <table className="pleros-shop-table">
             <thead>

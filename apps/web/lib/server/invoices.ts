@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import * as crm from './crm'
-import { deriveInvoiceStatus, formatCreditMemoNumber, formatInvoiceNumber, invoiceBalance, toStoredInvoiceStatus } from './invoice-status'
+import {
+  deriveInvoiceStatus,
+  formatCreditMemoNumber,
+  formatInvoiceNumber,
+  invoiceBalance,
+  toStoredInvoiceStatus,
+} from './invoice-status'
 import { enqueuePostingJob } from './posting-outbox'
 import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
@@ -30,6 +36,22 @@ function invoiceDueDate(paymentTermsDays: number | null | undefined, issuedAt: D
   const due = new Date(issuedAt)
   due.setDate(due.getDate() + days)
   return due
+}
+
+function invoiceDisplayStatus(input: {
+  storedStatus: string
+  orderStatus: string
+  totalAmount: number
+  amountPaid: number
+  amountCredited: number
+  paymentMethod?: string
+  issuedAt?: Date | string
+}) {
+  // A paid cancellation is represented by a credit memo. Preserve that accounting status when
+  // the order's terminal status would otherwise make every invoice appear merely void.
+  if (['CANCELLED', 'FAILED'].includes(input.orderStatus) && input.storedStatus === 'CREDITED')
+    return 'CREDITED' as const
+  return deriveInvoiceStatus(input)
 }
 
 export async function issueInvoiceForOrder(
@@ -203,7 +225,10 @@ export async function invoiceShipmentForOrder(
   const markInvoiced = (tx: Prisma.TransactionClient) =>
     Promise.all(
       allocations.map((a) =>
-        tx.orderLineItem.update({ where: { id: a.lineId }, data: { quantityInvoiced: { increment: a.quantity } } }),
+        tx.orderLineItem.update({
+          where: { id: a.lineId },
+          data: { quantityInvoiced: { increment: a.quantity } },
+        }),
       ),
     )
 
@@ -238,7 +263,11 @@ export async function invoiceShipmentForOrder(
   const newTax = existingInvoice.taxAmount.add(taxAmount)
   const newTotal = existingInvoice.totalAmount.add(totalAmount)
   const paidApplied = Prisma.Decimal.min(order.amountPaid ?? new Prisma.Decimal(0), newTotal)
-  const extension = splitBaseAmounts(totalAmount.toNumber(), taxAmount.toNumber(), Number(existingInvoice.fxRateToBase))
+  const extension = splitBaseAmounts(
+    totalAmount.toNumber(),
+    taxAmount.toNumber(),
+    Number(existingInvoice.fxRateToBase),
+  )
 
   const updated = await orderDb.$transaction(async (tx) => {
     const row = await tx.invoice.update({
@@ -289,7 +318,8 @@ export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
   const total = Number(invoice.totalAmount)
   const paid = Number(order.amountPaid ?? 0)
   const credited = Number(invoice.amountCredited)
-  const status = deriveInvoiceStatus({
+  const status = invoiceDisplayStatus({
+    storedStatus: invoice.status,
     orderStatus: order.status,
     totalAmount: total,
     amountPaid: paid,
@@ -304,6 +334,91 @@ export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
       amountPaid: new Prisma.Decimal(paid),
       status: toStoredInvoiceStatus(status) as never,
     },
+  })
+}
+
+/**
+ * Reconcile an invoice when an order is cancelled before packing. A credit memo reverses the
+ * invoice's AR/revenue posting; unpaid invoices are marked VOID, while paid invoices are marked
+ * CREDITED. The cancellation saga handles card refunds separately.
+ */
+export async function reconcileCancelledOrderInvoice(
+  tenantId: string,
+  orderId: string,
+  refundedAmount = 0,
+) {
+  const marker = `Order cancellation: ${orderId}`
+  return orderDb.$transaction(async (tx) => {
+    const order = await tx.order.findFirst({
+      where: { id: orderId, tenantId },
+      select: { amountPaid: true },
+    })
+    const invoice = await tx.invoice.findFirst({
+      where: { tenantId, orderId },
+      include: { creditMemos: true },
+    })
+    if (!invoice) return null
+    const recordedPayment = Math.max(Number(invoice.amountPaid), Number(order?.amountPaid ?? 0))
+    const priorCancellationMemo = invoice.creditMemos.find((memo) => memo.reason === marker)
+    const creditedBefore = Number(invoice.amountCredited)
+    const total = Number(invoice.totalAmount)
+    const creditAmount = Math.max(0, +(total - creditedBefore).toFixed(2))
+    let creditedAfter = creditedBefore
+
+    if (priorCancellationMemo) {
+      creditedAfter = Math.min(
+        total,
+        Math.max(creditedBefore, creditedBefore + Number(priorCancellationMemo.totalAmount)),
+      )
+    } else if (creditAmount > 0.009) {
+      const taxRate = total > 0 ? Number(invoice.taxAmount) / total : 0
+      const creditTax = Math.min(Number(invoice.taxAmount), +(creditAmount * taxRate).toFixed(2))
+      const creditSubtotal = Math.max(0, +(creditAmount - creditTax).toFixed(2))
+      const seq = invoice.creditMemos.length + 1
+      const memo = await tx.creditMemo.create({
+        data: {
+          tenantId,
+          orderId,
+          invoiceId: invoice.id,
+          memoNumber: formatCreditMemoNumber(orderId, seq),
+          customerId: invoice.customerId,
+          totalAmount: new Prisma.Decimal(creditAmount),
+          reason: marker,
+          lines: [
+            {
+              kind: 'ORDER_CANCELLATION',
+              subtotal: creditSubtotal,
+              taxAmount: creditTax,
+              totalAmount: creditAmount,
+            },
+          ] as never,
+        },
+      })
+      const base = splitBaseAmounts(creditAmount, creditTax, Number(invoice.fxRateToBase))
+      const cashRefundBase = splitBaseAmounts(
+        Math.min(creditAmount, Math.max(0, refundedAmount)),
+        0,
+        Number(invoice.fxRateToBase),
+      ).baseTotal
+      await enqueuePostingJob(tx, {
+        tenantId,
+        kind: 'CREDIT_MEMO_JOURNAL',
+        sourceType: 'CreditMemo',
+        sourceId: memo.id,
+        amount: base.baseTotal.toFixed(2),
+        taxAmount: base.baseTax.toFixed(2),
+        cashAmount: cashRefundBase.toFixed(2),
+      })
+      creditedAfter = Math.min(total, creditedBefore + creditAmount)
+    }
+
+    return tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        amountCredited: new Prisma.Decimal(creditedAfter),
+        status: recordedPayment <= 0 ? 'VOID' : 'CREDITED',
+      },
+    })
   })
 }
 
@@ -411,8 +526,17 @@ export async function listInvoices(
       where.order = { status: 'FAILED' }
     } else if (status === 'OVERDUE') {
       const raw = await orderDb.invoice.findMany({
-        where: { ...where, status: { in: ['ISSUED', 'PARTIALLY_PAID'] }, order: { status: { notIn: ['CANCELLED', 'FAILED'] } } },
-        include: { order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } }, creditMemos: true },
+        where: {
+          ...where,
+          status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
+          order: { status: { notIn: ['CANCELLED', 'FAILED'] } },
+        },
+        include: {
+          order: {
+            select: { orderNumber: true, status: true, paymentMethod: true, channel: true },
+          },
+          creditMemos: true,
+        },
         orderBy: { issuedAt: 'desc' },
         take: 2000,
       })
@@ -431,7 +555,11 @@ export async function listInvoices(
       return {
         items: slice.map((inv) => ({
           ...inv,
-          balance: invoiceBalance(Number(inv.totalAmount), Number(inv.amountPaid), Number(inv.amountCredited)),
+          balance: invoiceBalance(
+            Number(inv.totalAmount),
+            Number(inv.amountPaid),
+            Number(inv.amountCredited),
+          ),
           displayStatus: 'OVERDUE' as const,
         })),
         total: overdue.length,
@@ -441,7 +569,12 @@ export async function listInvoices(
       }
     } else {
       where.status = status as never
-      where.order = { status: { notIn: ['CANCELLED', 'FAILED'] } }
+      // Cancelled orders now retain a CREDITED invoice when a credit memo was issued. Keep that
+      // result discoverable while preserving the existing exclusion rules for every other status.
+      where.order =
+        status === 'CREDITED'
+          ? { status: { not: 'FAILED' } }
+          : { status: { notIn: ['CANCELLED', 'FAILED'] } }
     }
   } else if (filters?.excludeCancelled) {
     where.order = { status: { not: 'CANCELLED' } }
@@ -450,7 +583,10 @@ export async function listInvoices(
   const [items, total] = await Promise.all([
     orderDb.invoice.findMany({
       where,
-      include: { order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } }, creditMemos: true },
+      include: {
+        order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } },
+        creditMemos: true,
+      },
       orderBy: { issuedAt: 'desc' },
       skip: (safePage - 1) * safePageSize,
       take: safePageSize,
@@ -461,8 +597,13 @@ export async function listInvoices(
   return {
     items: items.map((inv) => ({
       ...inv,
-      balance: invoiceBalance(Number(inv.totalAmount), Number(inv.amountPaid), Number(inv.amountCredited)),
-      displayStatus: deriveInvoiceStatus({
+      balance: invoiceBalance(
+        Number(inv.totalAmount),
+        Number(inv.amountPaid),
+        Number(inv.amountCredited),
+      ),
+      displayStatus: invoiceDisplayStatus({
+        storedStatus: inv.status,
         orderStatus: inv.order.status,
         totalAmount: Number(inv.totalAmount),
         amountPaid: Number(inv.amountPaid),
@@ -478,7 +619,11 @@ export async function listInvoices(
   }
 }
 
-export async function getInvoice(tenantId: string, id: string, opts?: { buyerCustomerId?: string }) {
+export async function getInvoice(
+  tenantId: string,
+  id: string,
+  opts?: { buyerCustomerId?: string },
+) {
   const row = await orderDb.invoice.findFirst({
     where: { id, tenantId },
     include: {
@@ -492,8 +637,13 @@ export async function getInvoice(tenantId: string, id: string, opts?: { buyerCus
   }
   return {
     ...row,
-    balance: invoiceBalance(Number(row.totalAmount), Number(row.amountPaid), Number(row.amountCredited)),
-    displayStatus: deriveInvoiceStatus({
+    balance: invoiceBalance(
+      Number(row.totalAmount),
+      Number(row.amountPaid),
+      Number(row.amountCredited),
+    ),
+    displayStatus: invoiceDisplayStatus({
+      storedStatus: row.status,
       orderStatus: row.order.status,
       totalAmount: Number(row.totalAmount),
       amountPaid: Number(row.amountPaid),
@@ -504,7 +654,11 @@ export async function getInvoice(tenantId: string, id: string, opts?: { buyerCus
   }
 }
 
-export async function getInvoiceByOrderId(tenantId: string, orderId: string, opts?: { buyerCustomerId?: string }) {
+export async function getInvoiceByOrderId(
+  tenantId: string,
+  orderId: string,
+  opts?: { buyerCustomerId?: string },
+) {
   const row = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
   if (!row) throw new ApiError(404, 'Invoice not found')
   return getInvoice(tenantId, row.id, opts)
@@ -531,11 +685,7 @@ export async function recordInvoicePayment(
 
 type InvoiceDocOpts = { buyerCustomerId?: string }
 
-async function invoiceToDocInput(
-  tenantId: string,
-  invoiceId: string,
-  opts?: InvoiceDocOpts,
-) {
+async function invoiceToDocInput(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
   const inv = await getInvoice(tenantId, invoiceId, opts)
   return {
     invoiceNumber: inv.invoiceNumber,
@@ -561,13 +711,21 @@ async function invoiceToDocInput(
   }
 }
 
-export async function getInvoiceHtmlDocument(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
+export async function getInvoiceHtmlDocument(
+  tenantId: string,
+  invoiceId: string,
+  opts?: InvoiceDocOpts,
+) {
   const input = await invoiceToDocInput(tenantId, invoiceId, opts)
   const { buildInvoiceHtml } = await import('./invoice-document')
   return buildInvoiceHtml(tenantId, input)
 }
 
-export async function getInvoicePdfDocument(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
+export async function getInvoicePdfDocument(
+  tenantId: string,
+  invoiceId: string,
+  opts?: InvoiceDocOpts,
+) {
   const input = await invoiceToDocInput(tenantId, invoiceId, opts)
   const { buildInvoicePdf } = await import('./invoice-document')
   const pdf = await buildInvoicePdf(tenantId, input)

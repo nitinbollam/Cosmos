@@ -37,8 +37,8 @@ export async function routeApprovals(method: string, seg: string[], req: Request
       rejectReason: body.rejectReason,
     })
     const { onApprovalDecided } = await import('../approval-hooks')
-    await onApprovalDecided(session.tenantId, updated)
-    return Response.json(updated)
+    const finalRequest = await onApprovalDecided(session.tenantId, updated)
+    return Response.json(finalRequest ?? updated)
   }
 
   throw new ApiError(404, 'Approval route not found')

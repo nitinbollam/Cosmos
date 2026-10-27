@@ -77,8 +77,9 @@ export async function markDropShipLinesShipped(
   const dropLines = order.lineItems.filter((li) => li.fulfillmentType === 'DROP_SHIP')
   if (dropLines.length === 0) throw new ApiError(400, 'No drop-ship lines on order')
 
-  const shipmentNo =
-    (await orderDb.orderShipment.count({ where: { tenantId, orderId } })) + 1
+  const { withOrderFulfillmentLock } = await import('./order-orchestration')
+  return withOrderFulfillmentLock(tenantId, orderId, async () => {
+    const shipmentNo = (await orderDb.orderShipment.count({ where: { tenantId, orderId } })) + 1
 
   const shipmentId = randomUUID()
   await orderDb.orderShipment.create({
@@ -100,7 +101,7 @@ export async function markDropShipLinesShipped(
     },
   })
 
-  await transitionOrderStatus(tenantId, orderId, 'SHIPPED')
+    await transitionOrderStatus(tenantId, orderId, 'SHIPPED', undefined, { coordinationHeld: true })
   // Drop-shipped by the supplier, so it doesn't pass through warehouse dispatch: one event per shipment.
   const { emitOrderEvent } = await import('./domain-events')
   void emitOrderEvent(
@@ -124,13 +125,20 @@ export async function markDropShipLinesShipped(
     tenantId,
     orderId,
     dropLines.map((l) => ({ skuId: l.skuId, quantity: l.quantity })),
-  ).catch((err) => console.error(`[orders] drop-ship invoicing failed for order ${orderId}:`, err))
+    ).catch((err) =>
+      console.error(`[orders] drop-ship invoicing failed for order ${orderId}:`, err),
+    )
 
   if (dto.carrier?.trim() && dto.trackingNumber?.trim()) {
     void import('./sales-channels/fulfillment-sync')
-      .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
-      .catch((err) => console.error(`[sales-channels] fulfillment sync failed for order ${orderId}:`, err))
+        .then(({ syncChannelFulfillmentForOrder }) =>
+          syncChannelFulfillmentForOrder(tenantId, orderId),
+        )
+        .catch((err) =>
+          console.error(`[sales-channels] fulfillment sync failed for order ${orderId}:`, err),
+        )
   }
 
   return { orderId, shipmentNo }
+  })
 }
