@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { complianceDb, inventoryDb, orderDb, wmsDb, crmDb } from './db'
 import { ApiError } from './session'
 import { emitDomainEvent } from './domain-events'
+import { orderCodeOf } from './order-number'
 
 export type InitiateRecallInput = {
   skuId: string
@@ -375,7 +376,7 @@ export async function getBatchRecallImpactReport(
 
     return {
       orderId: task.orderId,
-      orderNumber: order ? `ORD-${order.id.slice(-6).toUpperCase()}` : task.orderId.slice(0, 8),
+      orderNumber: order ? orderCodeOf(order) : task.orderId.slice(0, 8),
       customerId: order?.customerId ?? 'UNKNOWN',
       customerName: cust?.name ?? order?.customerId ?? 'Unknown Customer',
       orderDate: order?.createdAt ?? task.createdAt,
@@ -434,7 +435,7 @@ export async function getBatchRecallImpactReport(
 
     return {
       orderId: order.id,
-      orderNumber: `ORD-${order.id.slice(-6).toUpperCase()}`,
+      orderNumber: orderCodeOf(order),
       customerId: order.customerId,
       customerName: cust?.name ?? order.customerId,
       customerEmail: cust?.email ?? null,

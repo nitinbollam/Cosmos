@@ -1,5 +1,6 @@
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js'
 import { useCallback, useState } from 'react'
+import { submitCard } from '@/lib/card-submit'
 
 const cardStyle = {
   style: {
@@ -22,9 +23,11 @@ type Props = {
   onSubmit: (result: StripeCardSubmitResult) => void | Promise<void>
   submitLabel?: string
   disabled?: boolean
+  /** Checked before the card is sent to Stripe; a returned message is shown and nothing is sent. */
+  validate?: () => string | null
 }
 
-export function AdminStripeCardForm({ onSubmit, submitLabel = 'Save card', disabled }: Props) {
+export function AdminStripeCardForm({ onSubmit, submitLabel = 'Save card', disabled, validate }: Props) {
   const stripe = useStripe()
   const elements = useElements()
   const [err, setErr] = useState<string | null>(null)
@@ -41,18 +44,17 @@ export function AdminStripeCardForm({ onSubmit, submitLabel = 'Save card', disab
       return
     }
     setBusy(true)
-    setErr(null)
     try {
-      const { error, paymentMethod } = await stripe.createPaymentMethod({ type: 'card', card })
-      if (error) {
-        setErr(error.message ?? 'Card error')
-        return
-      }
-      if (paymentMethod) await onSubmit({ paymentMethodId: paymentMethod.id })
+      await submitCard({
+        validate,
+        createPaymentMethod: () => stripe.createPaymentMethod({ type: 'card', card }),
+        onSubmit,
+        setErr,
+      })
     } finally {
       setBusy(false)
     }
-  }, [stripe, elements, onSubmit])
+  }, [stripe, elements, onSubmit, validate])
 
   return (
     <div>

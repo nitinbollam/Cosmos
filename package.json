@@ -37,6 +37,8 @@
     "infra:docker:logs": "docker compose -f docker-compose.yml logs -f",
     "seed": "tsx scripts/seed-db.ts",
     "tax:backfill": "node --import ./apps/web/server/register-paths.mjs --import tsx scripts/backfill-tenant-sales-tax.ts",
+    "orders:backfill-numbers": "node --import ./apps/web/server/register-paths.mjs --import tsx scripts/backfill-order-numbers.ts",
+    "pos:dedupe-registers": "node --import ./apps/web/server/register-paths.mjs --import tsx scripts/dedupe-pos-registers.ts",
     "tax:reclass": "node --import ./apps/web/server/register-paths.mjs --import tsx scripts/backfill-tax-reclass.ts",
     "reconcile": "node --import ./apps/web/server/register-paths.mjs --import tsx scripts/reconcile.ts",
     "users": "node --import ./apps/web/server/register-paths.mjs --import tsx scripts/users.ts",

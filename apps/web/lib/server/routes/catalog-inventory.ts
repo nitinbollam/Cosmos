@@ -6,6 +6,7 @@ import * as inventoryLots from '../inventory-lots'
 import * as inventorySerials from '../inventory-serials'
 import * as binLocations from '../bin-locations'
 import * as pricing from '../pricing'
+import { toBuyerSku } from '../buyer-sku'
 import { ApiError, requireSession, requirePermission, assertPermission } from './common'
 
 export async function routeSkus(method: string, seg: string[], req: Request): Promise<Response> {
@@ -64,21 +65,25 @@ export async function routeSkus(method: string, seg: string[], req: Request): Pr
     if (isPortalBuyer(session.role)) {
       customerId = await requirePortalCustomerId(session)
     }
-    return Response.json(
-      await inv.listSkus(session.tenantId, page, pageSize, term, {
-        category: url.searchParams.get('category') ?? undefined,
-        warehouseId: url.searchParams.get('warehouseId') ?? undefined,
-        inStockOnly: url.searchParams.get('inStock') === 'true',
-        customerId,
-      }),
-    )
+    const list = await inv.listSkus(session.tenantId, page, pageSize, term, {
+      category: url.searchParams.get('category') ?? undefined,
+      warehouseId: url.searchParams.get('warehouseId') ?? undefined,
+      inStockOnly: url.searchParams.get('inStock') === 'true',
+      customerId,
+    })
+    if (!isPortalBuyer(session.role)) return Response.json(list)
+    return Response.json({ ...list, items: list.items.map(toBuyerSku) })
   }
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as inv.CreateSkuInput
     return Response.json(await inv.createSku(session.tenantId, body))
   }
   if (seg.length === 2 && method === 'GET') {
-    return Response.json(await inv.findSkuById(session.tenantId, seg[1]))
+    const sku = await inv.findSkuById(session.tenantId, seg[1])
+    if (!isPortalBuyer(session.role)) return Response.json(sku)
+    // A buyer sees the product at their own price, without cost or internal stock figures.
+    const [priced] = await pricing.enrichSkusWithCustomerPrices(session.tenantId, await requirePortalCustomerId(session), [sku])
+    return Response.json(toBuyerSku(priced))
   }
   if (seg.length === 3 && seg[2] === 'reorder-suggestion' && method === 'GET') {
     const warehouseId = url.searchParams.get('warehouseId') ?? undefined

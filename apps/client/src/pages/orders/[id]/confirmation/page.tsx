@@ -3,16 +3,13 @@ import { useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
+import { orderLabel } from '@/lib/order-label'
 
 type Line = { skuId: string; skuCode?: string | null; skuName?: string | null; quantity: number; unitPrice: string | number }
-type OrderDetail = { id: string; status: string; totalAmount: string | number; lineItems: Line[]; notes?: string | null }
+type OrderDetail = { id: string; orderNumber?: number | null; status: string; totalAmount: string | number; lineItems: Line[]; notes?: string | null }
 
-function formatOrderNumber(id: string): string {
-  if (!id) return ''
-  if (id.startsWith('seed_ord_')) {
-    return `#ORD-${id.replace('seed_ord_', '').toUpperCase()}`
-  }
-  return `#ORD-${id.slice(-8).toUpperCase()}`
+function formatOrderNumber(id: string, orderNumber?: number | null): string {
+  return id ? `#${orderLabel(id, orderNumber)}` : ''
 }
 
 export default function OrderConfirmationPage() {
@@ -56,7 +53,7 @@ export default function OrderConfirmationPage() {
         <>
           <p style={{ color: 'var(--c-text-2)', marginTop: 12 }}>Order number</p>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--c-accent)' }}>
-            {formatOrderNumber(order.id)}
+            {formatOrderNumber(order.id, order.orderNumber)}
           </p>
           <div className="pleros-card mt-6 text-left">
             <h3 style={{ marginTop: 0 }}>Summary</h3>

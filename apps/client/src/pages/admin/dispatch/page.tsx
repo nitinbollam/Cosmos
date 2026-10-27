@@ -16,7 +16,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { StatusBadge } from '@/components/pleros/status-badge'
@@ -26,6 +26,7 @@ import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
 import { api } from '@/lib/api-admin'
 import { isForbidden } from '@/lib/axios-error'
 import { useQueryParams } from '@/lib/use-query-params'
+import { orderLabel } from '@/lib/order-label'
 
 type RouteStop = {
   id: string
@@ -174,6 +175,12 @@ function routeMapEmbedUrl(route: DeliveryRoute): string {
 }
 
 export default function DispatchPage() {
+  // Drivers work their own routes from the mobile app; the planning board is for managers (PLR-165).
+  const { data: me } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => api.get<{ role?: string }>('/auth/me'),
+  })
+  if ((me?.role ?? '').toUpperCase() === 'DRIVER') return <Navigate to="/m/delivery" replace />
   return (
     <Suspense fallback={<div className="p-8 text-pleros-muted text-sm flex items-center gap-2"><span>🚚</span> Loading fleet dispatch…</div>}>
       <DispatchDashboard />
@@ -972,6 +979,7 @@ function CreateRouteDrawer(props: {
   const shippedOrders = useQuery<
     Array<{
       id: string
+      orderNumber?: number | null
       customerId: string
       status: string
       totalAmount: string | number
@@ -1105,7 +1113,7 @@ function CreateRouteDrawer(props: {
                 <ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {(shippedOrders.data ?? []).map((o) => {
                     const isChecked = selectedOrderIds.includes(o.id)
-                    const code = o.id.startsWith('seed_ord_') ? `ORD-${o.id.replace('seed_ord_', '').toUpperCase()}` : `ORD-${o.id.slice(-6).toUpperCase()}`
+                    const code = orderLabel(o.id, o.orderNumber)
 
                     return (
                       <li key={o.id}>

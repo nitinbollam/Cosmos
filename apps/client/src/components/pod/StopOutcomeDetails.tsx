@@ -4,6 +4,15 @@ import { PodSignature } from './PodSignature'
 
 export type StopFailureRecord = { reason: string; failedAt: string; failedBy?: string | null }
 
+/** The server's record of a scanned ID (PLR-35): the result only, no name or date of birth. */
+export type StopAgeCheck = {
+  result: string
+  minimumAge: number
+  idExpiryOk?: boolean
+  issuingState?: string | null
+  checkedAt?: string
+}
+
 /** What `RouteStop.pod` can hold: delivery evidence, a failure, or both (failed, then redelivered). */
 export type StopOutcomePod = {
   photoUrl?: string | null
@@ -11,7 +20,9 @@ export type StopOutcomePod = {
   deliveredAt?: string | null
   recipientName?: string | null
   notes?: string | null
+  /** Older deliveries: the driver ticked "age checked". */
   ageConfirmed?: boolean | null
+  ageCheck?: StopAgeCheck | null
   failure?: StopFailureRecord | null
 }
 
@@ -20,6 +31,18 @@ type StopOutcomeDetailsProps = {
   pod?: StopOutcomePod | null
   /** Resolves a user id to a display name; returns null when it can't (e.g. no users.read). */
   nameFor?: (userId: string) => string | null
+}
+
+/** "ID scanned · 21+ verified · TX", or the older ticked confirmation, or "No". */
+function ageCheckText(pod?: StopOutcomePod | null): string {
+  const check = pod?.ageCheck
+  if (check) {
+    const verified = check.result === 'VERIFIED'
+    return [`ID scanned · ${check.minimumAge}+ ${verified ? 'verified' : 'not verified'}`, check.issuingState]
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return pod?.ageConfirmed ? 'Yes (confirmed by driver, no scan)' : 'No'
 }
 
 function when(iso?: string | null): string | null {
@@ -75,7 +98,7 @@ export function StopOutcomeDetails({ status, pod, nameFor }: StopOutcomeDetailsP
         {!hasEvidence && <Row label="Proof">No photo or signature captured</Row>}
         <Row label="Received by">{pod?.recipientName || 'Not recorded'}</Row>
         {when(pod?.deliveredAt) && <Row label="Delivered at">{when(pod?.deliveredAt)}</Row>}
-        <Row label="Age checked">{pod?.ageConfirmed ? 'Yes' : 'No'}</Row>
+        <Row label="Age check">{ageCheckText(pod)}</Row>
         {pod?.notes && <Row label="Notes">{pod.notes}</Row>}
         {failureRows}
       </dl>

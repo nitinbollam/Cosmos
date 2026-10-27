@@ -1,6 +1,6 @@
 import type { CycleCountType } from '@/generated/prisma-wms'
 import { randomUUID } from 'node:crypto'
-import { wmsDb } from './db'
+import { inventoryDb, wmsDb } from './db'
 import * as inv from './inventory'
 import { computeCycleCountDelta, cycleCountLineNeedsAdjustment } from './cycle-count-adjust'
 import { ApiError } from './session'
@@ -105,6 +105,36 @@ export async function getCycleCount(tenantId: string, id: string) {
   })
   if (!row) throw new ApiError(404, 'Cycle count not found')
   return row
+}
+
+/**
+ * A count for the count sheet: each line also carries the SKU code and name and the bin code, so
+ * nobody has to read internal ids. Lines store the bin's id as `locationLabel`; a label that is not
+ * a known bin id is shown as it is.
+ */
+export async function getCycleCountSheet(tenantId: string, id: string) {
+  const row = await getCycleCount(tenantId, id)
+  const skuIds = [...new Set(row.lines.map((l) => l.skuId))]
+  const binIds = [...new Set(row.lines.map((l) => l.locationLabel).filter((v): v is string => !!v))]
+  const [skus, bins] = await Promise.all([
+    skuIds.length
+      ? inventoryDb.sKU.findMany({ where: { tenantId, id: { in: skuIds } }, select: { id: true, code: true, name: true } })
+      : [],
+    binIds.length
+      ? inventoryDb.binLocation.findMany({ where: { tenantId, id: { in: binIds } }, select: { id: true, code: true } })
+      : [],
+  ])
+  const skuById = new Map(skus.map((s) => [s.id, s]))
+  const binById = new Map(bins.map((b) => [b.id, b.code]))
+  return {
+    ...row,
+    lines: row.lines.map((l) => ({
+      ...l,
+      skuCode: skuById.get(l.skuId)?.code ?? null,
+      skuName: skuById.get(l.skuId)?.name ?? null,
+      binCode: l.locationLabel ? (binById.get(l.locationLabel) ?? l.locationLabel) : null,
+    })),
+  }
 }
 
 export async function importCycleLineCounts(

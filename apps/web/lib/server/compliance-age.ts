@@ -2,6 +2,7 @@ import { crmDb, inventoryDb, orderDb, tenantDb } from './db'
 import { auditLog } from './audit-log'
 import { ApiError } from './session'
 import { effectiveRestricted, type RestrictedSkuInfo } from './age-restriction-rule'
+import { checkIdBarcode, type IdCheckRecord, type IdCheckResult } from './id-barcode'
 
 import { swallowed } from './fire-and-forget'
 export type { RestrictedSkuInfo }
@@ -17,16 +18,37 @@ export type AgeVerificationPolicy = {
   requireDeliveryConfirmation: boolean
 }
 
+/**
+ * How a POS sale proves the buyer's age (PLR-35). ID_SCAN: the PDF417 barcode from the back of
+ * their licence or state ID, checked here. LICENSE_ON_FILE: the selected customer holds a
+ * regulated-product licence. There is no manual option ("ID checked", typed date of birth).
+ */
 export type PosAgeAttestation = {
-  method: 'ID_CHECK' | 'DOB_ENTRY' | 'LICENSE_ON_FILE'
-  dateOfBirth?: string
+  method: 'ID_SCAN' | 'LICENSE_ON_FILE'
+  /** Raw barcode text for ID_SCAN. Checked, never stored. */
+  barcode?: string
   notes?: string
 }
 
+/** The longest barcode text accepted; real AAMVA barcodes are well under 1,500 characters. */
+export const MAX_ID_BARCODE_LENGTH = 4000
+
 export type DeliveryAgeAttestation = {
-  ageConfirmed: boolean
+  /** Raw barcode text from the recipient's ID. Checked, never stored. */
+  idBarcode?: string
   recipientName?: string
   notes?: string
+}
+
+/** The company's time zone: it decides which calendar day a birthday or an ID expiry falls on. */
+async function tenantTimeZone(tenantId: string): Promise<string | undefined> {
+  const org = await tenantDb.tenantOrganization.findUnique({ where: { id: tenantId }, select: { timeZone: true } })
+  return org?.timeZone || undefined
+}
+
+/** Check a scanned ID against a minimum age in the company's time zone. Never throws. */
+export async function checkScannedId(tenantId: string, barcode: string, minimumAge: number): Promise<IdCheckResult> {
+  return checkIdBarcode(barcode.slice(0, MAX_ID_BARCODE_LENGTH), { minimumAge, timeZone: await tenantTimeZone(tenantId) })
 }
 
 const DEFAULT_POLICY: AgeVerificationPolicy = {
@@ -212,26 +234,28 @@ export async function assertAgeComplianceForOrder(
       }).catch(swallowed('compliance-age.channel2'))
       throw new ApiError(
         403,
-        `Age verification required for restricted items (minimum age ${requiredMinAge}). Confirm customer ID or enter date of birth.`,
+        `Age verification required for restricted items (minimum age ${requiredMinAge}). Scan the customer's ID.`,
       )
     }
 
-    if (att.method === 'DOB_ENTRY') {
-      if (!att.dateOfBirth) {
-        throw new ApiError(400, 'dateOfBirth is required when using DOB_ENTRY verification')
-      }
-      const age = ageFromDob(att.dateOfBirth)
-      if (age == null) throw new ApiError(400, 'dateOfBirth must be YYYY-MM-DD')
-      if (age < requiredMinAge) {
+    let idCheck: IdCheckRecord | null = null
+    if (att.method === 'ID_SCAN') {
+      if (!att.barcode?.trim()) throw new ApiError(400, "Scan the barcode on the back of the customer's ID")
+      const result = await checkScannedId(tenantId, att.barcode, requiredMinAge)
+      if (result.status !== 'VERIFIED') {
         void auditLog(tenantId, {
           action: 'age_verification.blocked',
           entityType: 'Customer',
           entityId: customer.id,
           userId: input.userId,
-          metadata: { reason: 'underage', age, requiredMinAge, channel: 'POS' },
+          metadata: { reason: 'id_scan', channel: 'POS', idCheck: result.record },
         }).catch(swallowed('compliance-age.channel3'))
-        throw new ApiError(403, `Customer does not meet the minimum age of ${requiredMinAge}`)
+        throw new ApiError(403, `ID check failed: ${result.message}`)
       }
+      idCheck = result.record
+    } else if (att.method !== 'LICENSE_ON_FILE') {
+      // "ID checked" and typed dates of birth were manual and are no longer accepted.
+      throw new ApiError(400, "Scan the customer's ID to sell age-restricted items")
     }
 
     if (att.method === 'LICENSE_ON_FILE') {
@@ -240,7 +264,7 @@ export async function assertAgeComplianceForOrder(
       if (!licensed) {
         throw new ApiError(
           403,
-          'Selected customer has no regulated-product license on file. Use ID check or DOB entry instead.',
+          "Selected customer has no regulated-product license on file. Scan the customer's ID instead.",
         )
       }
     }
@@ -255,6 +279,7 @@ export async function assertAgeComplianceForOrder(
         method: att.method,
         requiredMinAge,
         skuIds: restrictedSkus.map((s) => s.id),
+        idCheck,
         notes: att.notes ?? null,
       },
     }).catch(swallowed('compliance-age.channel4'))
@@ -276,31 +301,36 @@ export async function assertAgeComplianceForOrder(
   return { restrictedSkus, requiredMinAge }
 }
 
+/**
+ * A delivery with age-restricted items needs the recipient's ID scanned (PLR-35). Returns what to
+ * store with the proof of delivery (no name, date of birth or licence number), or null when the
+ * delivery needs no age check.
+ */
 export async function assertDeliveryAgeCompliance(
   tenantId: string,
   orderId: string,
   pod: Record<string, unknown> | undefined,
   userId?: string,
-): Promise<void> {
+): Promise<IdCheckRecord | null> {
   const policy = await getAgeVerificationPolicy(tenantId)
-  if (!policy.enabled || !policy.requireDeliveryConfirmation) return
+  if (!policy.enabled || !policy.requireDeliveryConfirmation) return null
 
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
     include: { lineItems: true },
   })
-  if (!order) return
+  if (!order) return null
 
   const restrictedSkus = await loadRestrictedSkusForLines(
     tenantId,
     order.lineItems.map((li) => ({ skuId: li.skuId })),
     policy.minimumAge,
   )
-  if (restrictedSkus.length === 0) return
+  if (restrictedSkus.length === 0) return null
 
   const requiredMinAge = Math.max(policy.minimumAge, ...restrictedSkus.map((s) => s.minimumAge))
-  const ageConfirmed = Boolean(pod?.ageConfirmed)
-  if (!ageConfirmed) {
+  const barcode = typeof pod?.idBarcode === 'string' ? pod.idBarcode : ''
+  if (!barcode.trim()) {
     void auditLog(tenantId, {
       action: 'age_verification.blocked',
       entityType: 'Order',
@@ -314,8 +344,20 @@ export async function assertDeliveryAgeCompliance(
     }).catch(swallowed('compliance-age.assertDeliveryAgeCompliance'))
     throw new ApiError(
       403,
-      `This delivery includes age-restricted items (minimum age ${requiredMinAge}). Confirm recipient age before marking delivered.`,
+      `This delivery includes age-restricted items (minimum age ${requiredMinAge}). Scan the recipient's ID before marking delivered.`,
     )
+  }
+
+  const result = await checkScannedId(tenantId, barcode, requiredMinAge)
+  if (result.status !== 'VERIFIED') {
+    void auditLog(tenantId, {
+      action: 'age_verification.blocked',
+      entityType: 'Order',
+      entityId: orderId,
+      userId,
+      metadata: { reason: 'id_scan', channel: 'DELIVERY', idCheck: result.record },
+    }).catch(swallowed('compliance-age.assertDeliveryAgeCompliance3'))
+    throw new ApiError(403, `ID check failed: ${result.message}`)
   }
 
   void auditLog(tenantId, {
@@ -325,11 +367,13 @@ export async function assertDeliveryAgeCompliance(
     userId,
     metadata: {
       channel: 'DELIVERY',
-      method: 'RECIPIENT_CONFIRMATION',
+      method: 'ID_SCAN',
       requiredMinAge,
+      idCheck: result.record,
       recipientName: typeof pod?.recipientName === 'string' ? pod.recipientName : null,
     },
   }).catch(swallowed('compliance-age.assertDeliveryAgeCompliance2'))
+  return result.record
 }
 
 /** Preview helper for clients — does not throw. */

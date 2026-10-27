@@ -19,6 +19,9 @@ import { fromZXingFormat, toZXingFormats } from './formats'
 export class ZXingEngine implements ScanEngine {
   readonly name = 'ZXing'
   private reader: BrowserMultiFormatReader
+  /** ZXing's PDF417 reader doesn't search rotated codes, so ID scans also try the frame turned 90°. */
+  private readonly tryRotated: boolean
+  private rotated: HTMLCanvasElement | null = null
 
   constructor(formats: BarcodeFormat[]) {
     const hints = new Map<DecodeHintType, unknown>()
@@ -30,9 +33,31 @@ export class ZXingEngine implements ScanEngine {
     // low-contrast 1D labels — the realistic warehouse condition.
     hints.set(DecodeHintType.TRY_HARDER, true)
     this.reader = new BrowserMultiFormatReader(hints)
+    this.tryRotated = formats.includes('pdf417')
   }
 
   async decode(canvas: HTMLCanvasElement): Promise<RawDetection | null> {
+    const hit = this.decodeOnce(canvas)
+    if (hit || !this.tryRotated) return hit
+    // A licence held sideways in a portrait view: retry the frame turned 90°.
+    return this.decodeOnce(this.rotate90(canvas))
+  }
+
+  private rotate90(source: HTMLCanvasElement): HTMLCanvasElement {
+    const out = this.rotated ?? document.createElement('canvas')
+    this.rotated = out
+    out.width = source.height
+    out.height = source.width
+    const ctx = out.getContext('2d', { willReadFrequently: true })
+    if (ctx) {
+      ctx.setTransform(0, 1, -1, 0, source.height, 0)
+      ctx.drawImage(source, 0, 0)
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+    }
+    return out
+  }
+
+  private decodeOnce(canvas: HTMLCanvasElement): RawDetection | null {
     try {
       const result = this.reader.decodeFromCanvas(canvas)
       const raw = result.getText()

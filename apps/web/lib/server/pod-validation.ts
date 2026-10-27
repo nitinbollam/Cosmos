@@ -9,8 +9,12 @@ export type ProofOfDelivery = {
   photoUrl: string | null
   signatureDataUrl: string | null
   notes?: string
-  ageConfirmed?: boolean
   recipientName?: string
+  /**
+   * Raw barcode text from the recipient's ID (PLR-35). Checked by the server and never stored:
+   * the stop keeps only `ageCheck`, the result without name, date of birth or licence number.
+   */
+  idBarcode?: string
 }
 
 /**
@@ -64,7 +68,7 @@ export function sanitizeProofOfDelivery(body: Record<string, unknown>): ProofOfD
     photoUrl: safeImage(body.photoUrl, 'photoUrl'),
     signatureDataUrl: safeImage(body.signatureDataUrl, 'signatureDataUrl'),
     notes: boundedText(body.notes, 'notes', 2000),
-    ageConfirmed: body.ageConfirmed === true,
     recipientName: boundedText(body.recipientName, 'recipientName', 200),
+    idBarcode: boundedText(body.idBarcode, 'idBarcode', 4000),
   }
 }

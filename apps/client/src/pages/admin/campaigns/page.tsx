@@ -6,7 +6,23 @@ import { StatusBadge } from '@/components/pleros/status-badge'
 import { axiosErr } from '@/lib/axios-error'
 
 type Segment = { id: string; name: string; filterCriteria: Record<string, unknown> }
-type Campaign = { id: string; name: string; subject: string; status: string; sentCount: number; segmentId: string; scheduledAt?: string | null }
+type Campaign = {
+  id: string
+  name: string
+  subject: string
+  status: string
+  /** Emails delivered. */
+  sentCount: number
+  /** Emails that failed on the last send. */
+  failedCount?: number
+  /** Why the last send failed or partly failed. */
+  lastError?: string | null
+  segmentId: string
+  scheduledAt?: string | null
+}
+
+/** Retry applies to a failed send, or a sent campaign some customers didn't get (PLR-100). */
+const canRetry = (c: Campaign) => c.status === 'FAILED' || (c.status === 'SENT' && (c.failedCount ?? 0) > 0)
 
 export default function CampaignsPage() {
   const qc = useQueryClient()
@@ -70,7 +86,13 @@ export default function CampaignsPage() {
 
   const send = useMutation({
     mutationFn: (id: string) => api.post(`/campaigns/${encodeURIComponent(id)}/send`, {}),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['campaigns'] }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['campaigns'] }),
+  })
+
+  // Customers already emailed are skipped; only the ones who didn't get it are sent again.
+  const retry = useMutation({
+    mutationFn: (id: string) => api.post(`/campaigns/${encodeURIComponent(id)}/retry`, {}),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['campaigns'] }),
   })
 
   return (
@@ -155,6 +177,9 @@ export default function CampaignsPage() {
         {send.isError ? (
           <p className="text-xs text-red-400 mt-2">{axiosErr(send.error)}</p>
         ) : null}
+        {retry.isError ? (
+          <p className="text-xs text-red-400 mt-2">{axiosErr(retry.error)}</p>
+        ) : null}
         <div className="mt-4 space-y-3">
           {(campaignsQ.data ?? []).map((c) => (
             <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-pleros-border/60 pb-3">
@@ -166,13 +191,25 @@ export default function CampaignsPage() {
                     Scheduled for: {new Date(c.scheduledAt).toLocaleString()}
                   </p>
                 ) : null}
+                {c.lastError ? (
+                  <p className="text-[11px] mt-0.5" style={{ color: c.status === 'FAILED' ? 'var(--c-danger)' : 'var(--c-warning)' }}>
+                    {c.lastError}
+                  </p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge status={c.status} />
-                <span className="text-xs text-pleros-muted">{c.sentCount} sent</span>
+                <span className="text-xs text-pleros-muted">
+                  {c.sentCount} delivered{(c.failedCount ?? 0) > 0 ? ` · ${c.failedCount} failed` : ''}
+                </span>
                 {c.status === 'DRAFT' || c.status === 'SCHEDULED' ? (
                   <button type="button" className="btn-primary !text-xs !py-1" disabled={send.isPending} onClick={() => send.mutate(c.id)}>
                     Send now
+                  </button>
+                ) : null}
+                {canRetry(c) ? (
+                  <button type="button" className="btn-ghost !text-xs !py-1" disabled={retry.isPending} onClick={() => retry.mutate(c.id)}>
+                    {retry.isPending && retry.variables === c.id ? 'Retrying…' : 'Retry'}
                   </button>
                 ) : null}
               </div>

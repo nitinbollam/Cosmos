@@ -19,8 +19,10 @@ import { assertAgeComplianceForOrder, type PosAgeAttestation } from './complianc
 import { defersFulfillmentUntilPayment } from './order-payment-sync'
 import { buildPaymentSummary, findPrimaryPaymentIntent } from './order-payment-admin'
 import { emitDomainEvent, emitOrderEvent } from './domain-events'
+import { allocateOrderNumber, parseOrderNumberQuery } from './order-number'
 
 import { swallowed } from './fire-and-forget'
+import { assertWithinBalance, parsePaymentAmount } from './payment-amount'
 async function enrichOrderWithPaymentDetails<
   T extends { id: string; paymentIntentId: string | null; totalAmount: unknown; amountPaid: unknown },
 >(tenantId: string, order: T) {
@@ -147,9 +149,11 @@ export async function createOrder(
   const creditCheck = await checkCreditLimitForOrder(tenantId, customerId, remainingAmountToFinance, dto.paymentMethod)
   const needsCreditApproval = !creditCheck.ok && creditCheck.requiresApproval
 
+  const orderNumber = await allocateOrderNumber(tenantId)
   const order = await orderDb.order.create({
     data: {
       tenantId,
+      orderNumber,
       customerId,
       channel: channel as never,
       status: needsCreditApproval ? OrderStatus.AWAITING_APPROVAL : undefined,
@@ -277,7 +281,12 @@ export async function listOrders(
 
   if (filters?.search?.trim()) {
     const s = filters.search.trim()
-    where.OR = [{ id: { contains: s } }, { customerId: { contains: s } }]
+    const byNumber = parseOrderNumberQuery(s)
+    where.OR = [
+      { id: { contains: s } },
+      { customerId: { contains: s } },
+      ...(byNumber != null ? [{ orderNumber: byNumber }] : []),
+    ]
   }
 
   const st = filters?.status?.trim()
@@ -366,6 +375,7 @@ export async function listShippedOrdersForDispatch(tenantId: string) {
     take: 100,
     select: {
       id: true,
+      orderNumber: true,
       customerId: true,
       status: true,
       totalAmount: true,
@@ -379,21 +389,28 @@ export async function listShippedOrdersForDispatch(tenantId: string) {
 export async function recordOrderPayment(
   tenantId: string,
   id: string,
-  body: { amount: number; method: string; reference?: string },
+  body: { amount: number | string; method: string; reference?: string },
 ) {
+  const apply = parsePaymentAmount(body.amount)
   const order = await findOrderById(tenantId, id)
   const total = new Prisma.Decimal(order.totalAmount)
   const paidSoFar = new Prisma.Decimal(order.amountPaid ?? 0)
   const remaining = total.minus(paidSoFar)
-  const want = new Prisma.Decimal(body.amount)
   if (remaining.lte(0)) throw new ApiError(400, 'Order is already fully paid')
-  const apply = Prisma.Decimal.min(want, remaining)
+  assertWithinBalance(apply, remaining)
 
-  const updated = await orderDb.order.update({
-    where: { id },
+  // Compare-and-set on the total and paid amount the checks above used. If another payment or a
+  // credit memo changed either one since, nothing is written, and none of the side effects below run.
+  const moved = await orderDb.order.updateMany({
+    where: { id, tenantId, totalAmount: total, amountPaid: paidSoFar },
     data: { amountPaid: paidSoFar.plus(apply) },
-    include: { lineItems: true },
   })
+  if (moved.count !== 1) {
+    throw new ApiError(409, 'The balance changed while this payment was being recorded. Refresh and try again.')
+  }
+  // From here on the payment is recorded. The follow-up work lives in other databases (or the
+  // outbox) and cannot share this write; each step retries on its own rather than undoing it.
+  const updated = await orderDb.order.findFirstOrThrow({ where: { id, tenantId }, include: { lineItems: true } })
 
   if (order.paymentMethod === 'NET_TERMS') {
     await attemptOrQueue(

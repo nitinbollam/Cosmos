@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/pleros/empty-state'
 import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-panel'
 import { rowNumber, rowValue, type BulkImportResult } from '@/lib/spreadsheet-import'
 import { PlerosDialogModal } from '@/components/pleros/radix-overlays'
+import { downloadCsv } from '@/lib/csv-download'
 
 type MsaStatus = 'GENERATED' | 'SUBMITTED' | 'SUBMISSION_FAILED' | 'ACCEPTED'
 
@@ -260,26 +261,18 @@ export default function CompliancePage() {
       'Address',
     ]
     const rows = report.customerTraceability.map((c) => [
-      `"${(c.customerName || '').replace(/"/g, '""')}"`,
-      `"${(c.customerEmail || '').replace(/"/g, '""')}"`,
-      `"${(c.customerPhone || '').replace(/"/g, '""')}"`,
-      `"${c.orderNumber}"`,
+      c.customerName || '',
+      c.customerEmail || '',
+      c.customerPhone || '',
+      c.orderNumber,
       c.shippedQuantity,
       c.shippedAt ? new Date(c.shippedAt).toLocaleDateString() : '',
-      `"${(c.carrier || '').replace(/"/g, '""')}"`,
-      `"${(c.trackingNumber || '').replace(/"/g, '""')}"`,
-      `"${(c.shippingAddressStr || '').replace(/"/g, '""')}"`,
+      c.carrier || '',
+      c.trackingNumber || '',
+      c.shippingAddressStr || '',
     ])
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `Recall_Traceability_${report.recall.recallCode}_Customers.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    downloadCsv(`Recall_Traceability_${report.recall.recallCode}_Customers.csv`, headers, rows)
   }
 
   return (

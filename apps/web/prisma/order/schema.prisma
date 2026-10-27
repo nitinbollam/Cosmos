@@ -11,6 +11,9 @@ datasource db {
 model Order {
   id              String          @id @default(cuid())
   tenantId        String
+  /// Human-facing number, sequential per tenant and shown as ORD-<n>. Null only for orders created before
+  /// numbering existed, until the backfill (scripts/backfill-order-numbers.ts) assigns one.
+  orderNumber     Int?
   customerId      String
   channel         OrderChannel
   status          OrderStatus     @default(PENDING)
@@ -33,9 +36,16 @@ model Order {
   invoice         Invoice?
   shipments       OrderShipment[]
 
+  @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
   @@index([tenantId, customerId])
   @@index([tenantId, createdAt])
+}
+
+/// One row per tenant: the last order number handed out. Incremented atomically when an order is created.
+model OrderCounter {
+  tenantId   String @id
+  lastNumber Int
 }
 
 model OrderLineItem {

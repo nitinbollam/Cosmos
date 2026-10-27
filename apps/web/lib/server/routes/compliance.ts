@@ -77,6 +77,22 @@ export async function routeCompliance(method: string, seg: string[], req: Reques
     }>
     return Response.json(await age.updateAgeVerificationPolicy(session.tenantId, body))
   }
+  // PLR-35: check a scanned ID for the driver or cashier. Only the result comes back; nothing is
+  // stored here — the delivery or sale re-checks the barcode and keeps the record without PII.
+  if (seg.length === 2 && seg[1] === 'id-scan' && method === 'POST') {
+    assertNotBuyer(session)
+    assertPermission(session, ['dispatch.write', 'pos.write', 'compliance.read'])
+    const body = (await req.json().catch(() => ({}))) as { barcode?: unknown; minimumAge?: unknown }
+    if (typeof body.barcode !== 'string' || !body.barcode.trim()) {
+      throw new ApiError(400, "Scan the barcode on the back of the customer's ID")
+    }
+    if (body.barcode.length > age.MAX_ID_BARCODE_LENGTH) throw new ApiError(400, 'That barcode is too long to be an ID')
+    const policy = await age.getAgeVerificationPolicy(session.tenantId)
+    const asked = Number(body.minimumAge)
+    const minimumAge = Number.isFinite(asked) && asked >= policy.minimumAge && asked <= 99 ? Math.round(asked) : policy.minimumAge
+    const result = await age.checkScannedId(session.tenantId, body.barcode, minimumAge)
+    return Response.json({ status: result.status, message: result.message, minimumAge, record: result.record })
+  }
   if (seg.length === 2 && seg[1] === 'age-check' && method === 'POST') {
     const body = (await req.json()) as {
       customerId?: string

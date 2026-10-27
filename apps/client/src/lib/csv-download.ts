@@ -1,7 +1,17 @@
 /** Shared CSV helpers for admin exports. */
 
+/**
+ * Spreadsheet apps run a cell that starts with = + - @ (or a tab or carriage return) as a formula,
+ * so customer-typed text like "=1+1" or a phone number like "+1-555-1424" would be calculated.
+ * Such cells get a leading apostrophe, which Excel and Sheets show as plain text. Plain numbers
+ * ("-12.50") are left alone so they stay numbers.
+ */
+export function neutralizeFormula(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s) ? `'${s}` : s
+}
+
 export function csvEscape(value: unknown): string {
-  const s = value == null ? '' : String(value)
+  const s = neutralizeFormula(value == null ? '' : String(value))
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
 }
 
@@ -20,6 +30,9 @@ export function downloadCsvText(filename: string, csv: string): void {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  // Revoking straight after click() cancels the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

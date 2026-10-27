@@ -63,6 +63,9 @@ export default function ApprovalsPage() {
     },
   })
 
+  // Shared with the sidebar's query, so this costs no extra request.
+  const { data: me } = useQuery({ queryKey: ['auth-me'], queryFn: () => api.get<{ userId?: string }>('/auth/me') })
+
   const decide = useMutation({
     mutationFn: ({ id, approve, rejectReason: reason }: { id: string; approve: boolean; rejectReason?: string }) =>
       api.post(`/approvals/${encodeURIComponent(id)}/decide`, { approve, rejectReason: reason }),
@@ -207,14 +210,18 @@ export default function ApprovalsPage() {
                           </div>
                         ) : (
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="btn-primary !text-xs !py-1"
-                              disabled={decide.isPending}
-                              onClick={() => decide.mutate({ id: row.id, approve: true })}
-                            >
-                              Approve
-                            </button>
+                            {row.requestedBy === me?.userId ? (
+                              <span className="text-xs text-pleros-text-3 self-center">Your request: another approver decides</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn-primary !text-xs !py-1"
+                                disabled={decide.isPending}
+                                onClick={() => decide.mutate({ id: row.id, approve: true })}
+                              >
+                                Approve
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="btn-ghost !text-xs !py-1"
