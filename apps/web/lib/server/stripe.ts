@@ -258,7 +258,7 @@ export async function capturePayment(
       {
         ...(amount != null ? { amount_to_capture: Math.round(amount * 100) } : {}),
       },
-      { ...stripeAccountOpts(ctx), ...(idempotencyKey ? { idempotencyKey } : {}) },
+      stripeAccountOpts(ctx, idempotencyKey ? { idempotencyKey } : undefined),
     )
     return { success: true, paymentIntentId: intent.id, status: intent.status }
   } catch (error) {
@@ -275,7 +275,7 @@ export async function voidPayment(
   await stripe.paymentIntents.cancel(
     paymentIntentId,
     {},
-    { ...stripeAccountOpts(ctx), ...(idempotencyKey ? { idempotencyKey } : {}) },
+    stripeAccountOpts(ctx, idempotencyKey ? { idempotencyKey } : undefined),
   )
 }
 
@@ -292,7 +292,7 @@ export async function refundPayment(
         payment_intent: paymentIntentId,
         ...(amount != null ? { amount: Math.round(amount * 100) } : {}),
       },
-      { ...stripeAccountOpts(ctx), ...(idempotencyKey ? { idempotencyKey } : {}) },
+      stripeAccountOpts(ctx, idempotencyKey ? { idempotencyKey } : undefined),
     )
     return { success: true, refundId: refund.id }
   } catch (error) {

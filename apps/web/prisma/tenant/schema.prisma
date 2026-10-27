@@ -382,6 +382,8 @@ enum CampaignStatus {
   SCHEDULED
   SENDING
   SENT
+  /// The send stopped or no email was delivered; lastError says why. Retry resends to the rest.
+  FAILED
 }
 
 model Campaign {
@@ -393,7 +395,13 @@ model Campaign {
   body        String
   scheduledAt DateTime?
   status      CampaignStatus @default(DRAFT)
+  /// Emails delivered.
   sentCount   Int            @default(0)
+  /// Emails that failed to deliver on the last send.
+  failedCount Int            @default(0)
+  lastError   String?
+  /// When the current or last send started; a SENDING campaign long past this was interrupted.
+  sendStartedAt DateTime?
   createdAt   DateTime       @default(now())
 
   @@index([tenantId, status])

@@ -1,5 +1,5 @@
 import { Prisma, PurchaseOrderStatus, VendorBillStatus } from '@/generated/prisma-purchasing'
-import { purchasingDb } from './db'
+import { inventoryDb, purchasingDb } from './db'
 import { ApiError } from './session'
 import * as poReceiving from './po-receiving'
 import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
@@ -75,23 +75,75 @@ export async function createDropShipPurchaseOrder(tenantId: string, dto: CreateP
   return insertPurchaseOrder(tenantId, dto)
 }
 
+/** Largest quantity a single PO line may carry; far above any real wholesale order. */
+export const MAX_PO_LINE_QUANTITY = 1_000_000
+
+/**
+ * Every PO line needs a SKU code and a whole quantity of at least 1. A line without a SKU is never
+ * put into stock when it's received ("PO updated only"), so it can't be left blank. The same SKU
+ * twice is refused too: scan receiving books a SKU against its first line only.
+ */
+export function assertValidPurchaseOrderLines(lines: unknown): asserts lines is CreatePurchaseOrderInput['lines'] {
+  if (!Array.isArray(lines) || lines.length === 0) throw new ApiError(400, 'A purchase order needs at least one line')
+  const lineNos = new Set<number>()
+  const lineBySku = new Map<string, number>()
+  for (const [i, raw] of lines.entries()) {
+    const l = raw as Partial<CreatePurchaseOrderInput['lines'][number]> | null
+    if (!l || !Number.isInteger(l.lineNo) || (l.lineNo as number) < 1) {
+      throw new ApiError(400, `Line ${i + 1}: line number must be a whole number of 1 or more`)
+    }
+    const lineNo = l.lineNo as number
+    const where = `Line ${lineNo}`
+    if (lineNos.has(lineNo)) throw new ApiError(400, `${where}: duplicate line number`)
+    lineNos.add(lineNo)
+    const code = typeof l.skuCode === 'string' ? l.skuCode.trim() : ''
+    if (!code) throw new ApiError(400, `${where}: SKU code is required`)
+    const earlier = lineBySku.get(code)
+    if (earlier != null) throw new ApiError(400, `${where}: SKU ${code} is already on line ${earlier}; change the quantity there instead`)
+    lineBySku.set(code, lineNo)
+    if (!Number.isInteger(l.qtyOrdered) || (l.qtyOrdered as number) < 1 || (l.qtyOrdered as number) > MAX_PO_LINE_QUANTITY) {
+      throw new ApiError(400, `${where}: quantity must be a whole number from 1 to ${MAX_PO_LINE_QUANTITY}`)
+    }
+    if (l.description != null && typeof l.description !== 'string') throw new ApiError(400, `${where}: description must be text`)
+    if (l.unitCost != null && (typeof l.unitCost !== 'number' || !Number.isFinite(l.unitCost) || l.unitCost < 0)) {
+      throw new ApiError(400, `${where}: unit cost must be a number of 0 or more`)
+    }
+  }
+}
+
 async function insertPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+  const number = typeof dto.number === 'string' ? dto.number.trim() : ''
+  if (!number) throw new ApiError(400, 'PO number is required')
+  if (typeof dto.supplierId !== 'string' || !dto.supplierId) throw new ApiError(400, 'Supplier is required')
+  assertValidPurchaseOrderLines(dto.lines)
+
   const supplier = await purchasingDb.supplier.findFirst({ where: { id: dto.supplierId, tenantId } })
   if (!supplier) throw new ApiError(400, 'Unknown supplier for tenant')
 
-  const lineNos = new Set(dto.lines.map((l) => l.lineNo))
-  if (lineNos.size !== dto.lines.length) throw new ApiError(400, 'Duplicate line numbers')
-  for (const l of dto.lines) {
-    if (l.unitCost != null && (typeof l.unitCost !== 'number' || !Number.isFinite(l.unitCost) || l.unitCost < 0)) {
-      throw new ApiError(400, `Line ${l.lineNo}: unit cost must be a number of 0 or more`)
-    }
+  // Each line must name a real, active SKU. Receiving looks the SKU up by this exact code; a blank
+  // description falls back to the SKU's name.
+  const skus = await inventoryDb.sKU.findMany({
+    where: { tenantId, code: { in: dto.lines.map((l) => l.skuCode!.trim()) } },
+    select: { code: true, name: true, isActive: true },
+  })
+  const skuByCode = new Map(skus.map((s) => [s.code, s]))
+  const lines = dto.lines.map((l) => {
+    const code = l.skuCode!.trim()
+    const sku = skuByCode.get(code)
+    if (!sku) throw new ApiError(400, `Line ${l.lineNo}: SKU ${code} doesn't exist`)
+    if (!sku.isActive) throw new ApiError(400, `Line ${l.lineNo}: SKU ${code} is inactive`)
+    return { ...l, skuCode: code, description: l.description?.trim() || sku.name }
+  })
+
+  if (await purchasingDb.purchaseOrder.findFirst({ where: { tenantId, number }, select: { id: true } })) {
+    throw new ApiError(409, `PO number ${number} is already used`)
   }
 
   const po = await purchasingDb.purchaseOrder.create({
     data: {
       tenantId,
       supplierId: dto.supplierId,
-      number: dto.number,
+      number,
       notes: dto.notes,
       freightAmount: new Prisma.Decimal(dto.freightAmount ?? 0),
       dutyAmount: new Prisma.Decimal(dto.dutyAmount ?? 0),
@@ -99,7 +151,7 @@ async function insertPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInp
       landedCostNotes: dto.landedCostNotes ?? null,
       status: PurchaseOrderStatus.DRAFT,
       lines: {
-        create: dto.lines.map((l) => ({
+        create: lines.map((l) => ({
           lineNo: l.lineNo,
           skuCode: l.skuCode,
           description: l.description,
