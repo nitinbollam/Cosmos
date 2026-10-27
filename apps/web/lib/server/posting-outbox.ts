@@ -62,11 +62,15 @@ export type EnqueueInput = {
    * revenue. Omitted on jobs queued before tax was split out; those post the whole amount to revenue.
    */
   taxAmount?: string
+  /** Cancellation credit amount refunded to cash; any remainder reduces accounts receivable. */
+  cashAmount?: string
   /** Id shown in the journal description when it differs from `sourceId` (the gift card for a card transaction). */
   ref?: string
 }
 
-export function postingDedupeKey(i: Pick<EnqueueInput, 'tenantId' | 'kind' | 'sourceType' | 'sourceId' | 'variant'>) {
+export function postingDedupeKey(
+  i: Pick<EnqueueInput, 'tenantId' | 'kind' | 'sourceType' | 'sourceId' | 'variant'>,
+) {
   return `${i.tenantId}:${i.kind}:${i.sourceType}:${i.sourceId}:${i.variant ?? ''}`
 }
 
@@ -88,6 +92,9 @@ export async function enqueuePostingJob(tx: OrderTx, input: EnqueueInput) {
       payload: {
         amount: input.amount,
         ...(input.taxAmount && Number(input.taxAmount) > 0 ? { taxAmount: input.taxAmount } : {}),
+        ...(input.cashAmount && Number(input.cashAmount) > 0
+          ? { cashAmount: input.cashAmount }
+          : {}),
         ...(input.ref ? { ref: input.ref } : {}),
       },
     },
@@ -141,7 +148,13 @@ function taxOf(job: JobRow, total: Prisma.Decimal): Prisma.Decimal {
  */
 export async function postJob(job: JobRow): Promise<string | null> {
   if (isWorkKind(job.kind)) {
-    await runWork({ tenantId: job.tenantId, kind: job.kind, sourceType: job.sourceType, sourceId: job.sourceId, payload: job.payload as Record<string, unknown> | undefined })
+    await runWork({
+      tenantId: job.tenantId,
+      kind: job.kind,
+      sourceType: job.sourceType,
+      sourceId: job.sourceId,
+      payload: job.payload as Record<string, unknown> | undefined,
+    })
     return null
   }
   if (job.kind === 'PO_RECEIPT_JOURNAL') return postPoReceiptToBillTotal(job)
@@ -159,7 +172,12 @@ export async function postJob(job: JobRow): Promise<string | null> {
       const tax = taxOf(job, total)
       const lines = [
         { accountId: a.get('1200')!.id, memo: 'Accounts receivable', debit: total, credit: ZERO },
-        { accountId: a.get('4000')!.id, memo: 'Sales revenue', debit: ZERO, credit: total.minus(tax) },
+        {
+          accountId: a.get('4000')!.id,
+          memo: 'Sales revenue',
+          debit: ZERO,
+          credit: total.minus(tax),
+        },
       ]
       if (tax.gt(0)) {
         const payable = await requireSalesTaxPayable(job.tenantId)
@@ -168,21 +186,60 @@ export async function postJob(job: JobRow): Promise<string | null> {
       return createJournalOnce(
         job.tenantId,
         source,
-        job.kind === 'INVOICE_JOURNAL' ? `Invoice ${short} — AR recognition` : `Invoice ${short} — shipment extension`,
+        job.kind === 'INVOICE_JOURNAL'
+          ? `Invoice ${short} — AR recognition`
+          : `Invoice ${short} — shipment extension`,
         lines.filter((l) => l.debit.gt(0) || l.credit.gt(0)),
       )
     }
     case 'CREDIT_MEMO_JOURNAL': {
-      const a = await requireAccounts(job.tenantId, ['1200', '4000'])
       const total = dec(amount)
       const tax = taxOf(job, total)
+      const cashAmount = dec(String((job.payload as { cashAmount?: string })?.cashAmount ?? '0'))
+      if (cashAmount.lt(0) || cashAmount.gt(total))
+        throw new Error(`Invalid cash refund amount on credit memo job ${job.id}`)
+      const a = await requireAccounts(job.tenantId, [
+        ...(cashAmount.gt(0) ? ['1000'] : []),
+        '1200',
+        '4000',
+      ])
+      const arAmount = total.minus(cashAmount)
       const lines = [
-        { accountId: a.get('4000')!.id, memo: 'Sales revenue reversal', debit: total.minus(tax), credit: ZERO },
-        { accountId: a.get('1200')!.id, memo: 'Accounts receivable reduction', debit: ZERO, credit: total },
+        {
+          accountId: a.get('4000')!.id,
+          memo: 'Sales revenue reversal',
+          debit: total.minus(tax),
+          credit: ZERO,
+        },
+        ...(arAmount.gt(0)
+          ? [
+              {
+                accountId: a.get('1200')!.id,
+                memo: 'Accounts receivable reduction',
+                debit: ZERO,
+                credit: arAmount,
+              },
+            ]
+          : []),
+        ...(cashAmount.gt(0)
+          ? [
+              {
+                accountId: a.get('1000')!.id,
+                memo: 'Cash refunded to customer',
+                debit: ZERO,
+                credit: cashAmount,
+              },
+            ]
+          : []),
       ]
       if (tax.gt(0)) {
         const payable = await requireSalesTaxPayable(job.tenantId)
-        lines.push({ accountId: payable.id, memo: 'Sales tax payable reversal', debit: tax, credit: ZERO })
+        lines.push({
+          accountId: payable.id,
+          memo: 'Sales tax payable reversal',
+          debit: tax,
+          credit: ZERO,
+        })
       }
       return createJournalOnce(
         job.tenantId,
@@ -195,28 +252,58 @@ export async function postJob(job: JobRow): Promise<string | null> {
       const a = await requireAccounts(job.tenantId, ['1000', '1200'])
       return createJournalOnce(job.tenantId, source, `AR payment ${short}`, [
         { accountId: a.get('1000')!.id, memo: 'Cash received', debit: dec(amount), credit: ZERO },
-        { accountId: a.get('1200')!.id, memo: 'Accounts receivable reduction', debit: ZERO, credit: dec(amount) },
+        {
+          accountId: a.get('1200')!.id,
+          memo: 'Accounts receivable reduction',
+          debit: ZERO,
+          credit: dec(amount),
+        },
       ])
     }
     case 'AP_PAYMENT_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['2100', '1000'])
       return createJournalOnce(job.tenantId, source, `AP payment ${short}`, [
-        { accountId: a.get('2100')!.id, memo: 'Accounts payable reduction', debit: dec(amount), credit: ZERO },
+        {
+          accountId: a.get('2100')!.id,
+          memo: 'Accounts payable reduction',
+          debit: dec(amount),
+          credit: ZERO,
+        },
         { accountId: a.get('1000')!.id, memo: 'Cash paid', debit: ZERO, credit: dec(amount) },
       ])
     }
     case 'COGS_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['5000', '1100'])
       return createJournalOnce(job.tenantId, source, `COGS on ship ${short}`, [
-        { accountId: a.get('5000')!.id, memo: 'Cost of goods sold', debit: dec(amount), credit: ZERO },
-        { accountId: a.get('1100')!.id, memo: 'Inventory reduction', debit: ZERO, credit: dec(amount) },
+        {
+          accountId: a.get('5000')!.id,
+          memo: 'Cost of goods sold',
+          debit: dec(amount),
+          credit: ZERO,
+        },
+        {
+          accountId: a.get('1100')!.id,
+          memo: 'Inventory reduction',
+          debit: ZERO,
+          credit: dec(amount),
+        },
       ])
     }
     case 'COGS_REVERSAL_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['5000', '1100'])
       return createJournalOnce(job.tenantId, source, `COGS reversal on return ${short}`, [
-        { accountId: a.get('1100')!.id, memo: 'Inventory restored', debit: dec(amount), credit: ZERO },
-        { accountId: a.get('5000')!.id, memo: 'Cost of goods sold reversal', debit: ZERO, credit: dec(amount) },
+        {
+          accountId: a.get('1100')!.id,
+          memo: 'Inventory restored',
+          debit: dec(amount),
+          credit: ZERO,
+        },
+        {
+          accountId: a.get('5000')!.id,
+          memo: 'Cost of goods sold reversal',
+          debit: ZERO,
+          credit: dec(amount),
+        },
       ])
     }
     case 'STOCK_WRITE_OFF_JOURNAL':
@@ -224,7 +311,11 @@ export async function postJob(job: JobRow): Promise<string | null> {
       await ensureShrinkageAccount(job.tenantId)
       const a = await requireAccounts(job.tenantId, [SHRINKAGE_ACCOUNT.code, '1100'])
       const lost = job.kind === 'STOCK_WRITE_OFF_JOURNAL'
-      return createJournalOnce(job.tenantId, source, `${lost ? 'Stock written off' : 'Stock found'} ${short}`, [
+      return createJournalOnce(
+        job.tenantId,
+        source,
+        `${lost ? 'Stock written off' : 'Stock found'} ${short}`,
+        [
         {
           accountId: (lost ? a.get(SHRINKAGE_ACCOUNT.code)! : a.get('1100')!).id,
           memo: lost ? 'Inventory shrinkage' : 'Inventory found',
@@ -237,7 +328,8 @@ export async function postJob(job: JobRow): Promise<string | null> {
           debit: ZERO,
           credit: dec(amount),
         },
-      ])
+        ],
+      )
     }
     case 'EXPENSE_APPROVAL_JOURNAL': {
       const { expense, payable } = await ensureExpenseAccounts(job.tenantId)
@@ -249,7 +341,12 @@ export async function postJob(job: JobRow): Promise<string | null> {
     case 'EXPENSE_PAID_JOURNAL': {
       const a = await requireAccounts(job.tenantId, ['2160', '1000'])
       return createJournalOnce(job.tenantId, source, `Expense reimbursement paid ${short}`, [
-        { accountId: a.get('2160')!.id, memo: 'Clear reimbursement payable', debit: dec(amount), credit: ZERO },
+        {
+          accountId: a.get('2160')!.id,
+          memo: 'Clear reimbursement payable',
+          debit: dec(amount),
+          credit: ZERO,
+        },
         { accountId: a.get('1000')!.id, memo: 'Cash paid', debit: ZERO, credit: dec(amount) },
       ])
     }
@@ -257,16 +354,36 @@ export async function postJob(job: JobRow): Promise<string | null> {
       await ensureGiftCardLiabilityAccount(job.tenantId)
       const a = await requireAccounts(job.tenantId, ['1000', '2150'])
       return createJournalOnce(job.tenantId, source, `Gift card issued ${refShort}`, [
-        { accountId: a.get('1000')!.id, memo: 'Cash received for gift card', debit: dec(amount), credit: ZERO },
-        { accountId: a.get('2150')!.id, memo: 'Gift card liability', debit: ZERO, credit: dec(amount) },
+        {
+          accountId: a.get('1000')!.id,
+          memo: 'Cash received for gift card',
+          debit: dec(amount),
+          credit: ZERO,
+        },
+        {
+          accountId: a.get('2150')!.id,
+          memo: 'Gift card liability',
+          debit: ZERO,
+          credit: dec(amount),
+        },
       ])
     }
     case 'GIFT_CARD_REDEEM_JOURNAL': {
       await ensureGiftCardLiabilityAccount(job.tenantId)
       const a = await requireAccounts(job.tenantId, ['2150', '4000'])
       return createJournalOnce(job.tenantId, source, `Gift card redeemed ${refShort}`, [
-        { accountId: a.get('2150')!.id, memo: 'Gift card liability reduction', debit: dec(amount), credit: ZERO },
-        { accountId: a.get('4000')!.id, memo: 'Gift card revenue recognition', debit: ZERO, credit: dec(amount) },
+        {
+          accountId: a.get('2150')!.id,
+          memo: 'Gift card liability reduction',
+          debit: dec(amount),
+          credit: ZERO,
+        },
+        {
+          accountId: a.get('4000')!.id,
+          memo: 'Gift card revenue recognition',
+          debit: ZERO,
+          credit: dec(amount),
+        },
       ])
     }
     default:
@@ -277,17 +394,27 @@ export async function postJob(job: JobRow): Promise<string | null> {
 /** Inventory (1100) already posted for a bill's receipts, including a journal posted before the outbox. */
 async function postedReceiptNet(tenantId: string, billId: string, billJournalId: string | null) {
   const entries = await ledgerDb.journalEntry.findMany({
-    where: { tenantId, sourceType: 'VendorBill', sourceId: billId, variant: { startsWith: 'receipt' } },
+    where: {
+      tenantId,
+      sourceType: 'VendorBill',
+      sourceId: billId,
+      variant: { startsWith: 'receipt' },
+    },
     select: { id: true },
   })
   const ids = entries.map((e) => e.id)
   if (billJournalId && !ids.includes(billJournalId)) {
     // Bills created before the outbox carry a journal without a source key.
-    const legacy = await ledgerDb.journalEntry.findFirst({ where: { id: billJournalId, tenantId, sourceType: null }, select: { id: true } })
+    const legacy = await ledgerDb.journalEntry.findFirst({
+      where: { id: billJournalId, tenantId, sourceType: null },
+      select: { id: true },
+    })
     if (legacy) ids.push(legacy.id)
   }
   if (!ids.length) return ZERO
-  const lines = await ledgerDb.journalLine.findMany({ where: { entryId: { in: ids }, account: { code: '1100' } } })
+  const lines = await ledgerDb.journalLine.findMany({
+    where: { entryId: { in: ids }, account: { code: '1100' } },
+  })
   return lines.reduce((n, l) => n.plus(l.debit).minus(l.credit), ZERO)
 }
 
@@ -298,10 +425,16 @@ async function postedReceiptNet(tenantId: string, billId: string, billJournalId:
  */
 async function postPoReceiptToBillTotal(job: JobRow): Promise<string | null> {
   const load = async () => {
-    const bill = await purchasingDb.vendorBill.findFirst({ where: { id: job.sourceId, tenantId: job.tenantId } })
+    const bill = await purchasingDb.vendorBill.findFirst({
+      where: { id: job.sourceId, tenantId: job.tenantId },
+    })
     if (!bill) throw new Error(`Vendor bill ${job.sourceId} not found`)
     const target = toBaseDecimal(bill.totalAmount, bill.fxRateToBase)
-    return { bill, target, posted: await postedReceiptNet(job.tenantId, bill.id, bill.journalEntryId) }
+    return {
+      bill,
+      target,
+      posted: await postedReceiptNet(job.tenantId, bill.id, bill.journalEntryId),
+    }
   }
   const { bill, target, posted } = await load()
   const diff = target.minus(posted)
@@ -312,37 +445,72 @@ async function postPoReceiptToBillTotal(job: JobRow): Promise<string | null> {
   const payable = a.get('2100')!.id
   const short = bill.id.slice(-8)
   // Keyed by the state it corrects, so two workers seeing the same state post it once.
-  const source = { sourceType: 'VendorBill', sourceId: bill.id, variant: `receipt:${target}:${posted}` }
+  const source = {
+    sourceType: 'VendorBill',
+    sourceId: bill.id,
+    variant: `receipt:${target}:${posted}`,
+  }
   const journalEntryId = diff.gt(0)
-    ? await createJournalOnce(job.tenantId, source, posted.isZero() ? `PO receipt ${short} — inventory accrual` : `PO receipt ${short} — re-bill adjustment`, [
+    ? await createJournalOnce(
+        job.tenantId,
+        source,
+        posted.isZero()
+          ? `PO receipt ${short} — inventory accrual`
+          : `PO receipt ${short} — re-bill adjustment`,
+        [
         { accountId: inventory, memo: 'Inventory received', debit: diff, credit: ZERO },
         { accountId: payable, memo: 'Accounts payable', debit: ZERO, credit: diff },
-      ])
+        ],
+      )
     : await createJournalOnce(job.tenantId, source, `PO receipt ${short} — re-bill reversal`, [
-        { accountId: payable, memo: 'Accounts payable reduction', debit: diff.negated(), credit: ZERO },
-        { accountId: inventory, memo: 'Inventory received reversal', debit: ZERO, credit: diff.negated() },
+        {
+          accountId: payable,
+          memo: 'Accounts payable reduction',
+          debit: diff.negated(),
+          credit: ZERO,
+        },
+        {
+          accountId: inventory,
+          memo: 'Inventory received reversal',
+          debit: ZERO,
+          credit: diff.negated(),
+        },
       ])
-  await purchasingDb.vendorBill.updateMany({ where: { id: bill.id, tenantId: job.tenantId, journalEntryId: null }, data: { journalEntryId } })
+  await purchasingDb.vendorBill.updateMany({
+    where: { id: bill.id, tenantId: job.tenantId, journalEntryId: null },
+    data: { journalEntryId },
+  })
 
   // A re-bill or another worker may have moved things while this posted; retry until they agree.
   const check = await load()
   if (!check.target.equals(check.posted)) {
-    throw new Error(`Vendor bill ${bill.id} changed while posting (bill ${check.target}, posted ${check.posted}); retrying`)
+    throw new Error(
+      `Vendor bill ${bill.id} changed while posting (bill ${check.target}, posted ${check.posted}); retrying`,
+    )
   }
   return journalEntryId
 }
 
 /** Stores the journal id on a source record that lives outside the order database. */
-async function writeBackOutsideOrderDb(job: { tenantId: string; kind: string; sourceId: string }, journalEntryId: string) {
+async function writeBackOutsideOrderDb(
+  job: { tenantId: string; kind: string; sourceId: string },
+  journalEntryId: string,
+) {
   const where = { id: job.sourceId, journalEntryId: null }
   switch (job.kind) {
     case 'EXPENSE_APPROVAL_JOURNAL':
       // The report keeps its approval journal; the payment journal is found by its source key.
-      await ledgerDb.expenseReport.updateMany({ where: { ...where, tenantId: job.tenantId }, data: { journalEntryId } })
+      await ledgerDb.expenseReport.updateMany({
+        where: { ...where, tenantId: job.tenantId },
+        data: { journalEntryId },
+      })
       break
     case 'GIFT_CARD_ISSUE_JOURNAL':
     case 'GIFT_CARD_REDEEM_JOURNAL':
-      await tenantDb.giftCardTransaction.updateMany({ where: { ...where, giftCard: { tenantId: job.tenantId } }, data: { journalEntryId } })
+      await tenantDb.giftCardTransaction.updateMany({
+        where: { ...where, giftCard: { tenantId: job.tenantId } },
+        data: { journalEntryId },
+      })
       break
   }
 }
@@ -353,7 +521,9 @@ export type RunResult = { claimed: number; done: number; failed: number; dead: n
  * Claims due jobs with a compare-and-set (so parallel workers never run the same job) and posts them.
  * A RUNNING job whose lease expired (worker crashed) is claimable again.
  */
-export async function runPostingJobs(opts: { now?: Date; limit?: number; tenantId?: string } = {}): Promise<RunResult> {
+export async function runPostingJobs(
+  opts: { now?: Date; limit?: number; tenantId?: string } = {},
+): Promise<RunResult> {
   const now = opts.now ?? new Date()
   const result: RunResult = { claimed: 0, done: 0, failed: 0, dead: 0 }
   const due = await orderDb.postingJob.findMany({
@@ -377,7 +547,11 @@ export async function runPostingJobs(opts: { now?: Date; limit?: number; tenantI
           { status: 'RUNNING', leaseUntil: { lte: now } },
         ],
       },
-      data: { status: 'RUNNING', leaseUntil: new Date(now.getTime() + LEASE_MS), attempts: { increment: 1 } },
+      data: {
+        status: 'RUNNING',
+        leaseUntil: new Date(now.getTime() + LEASE_MS),
+        attempts: { increment: 1 },
+      },
     })
     if (claim.count !== 1) continue
     result.claimed++
@@ -399,7 +573,13 @@ export async function runPostingJobs(opts: { now?: Date; limit?: number; tenantI
       await orderDb.$transaction(async (tx) => {
         await tx.postingJob.update({
           where: { id: candidate.id },
-          data: { status: 'DONE', journalEntryId: journalEntryId ?? undefined, doneAt: new Date(), leaseUntil: null, lastError: null },
+          data: {
+            status: 'DONE',
+            journalEntryId: journalEntryId ?? undefined,
+            doneAt: new Date(),
+            leaseUntil: null,
+            lastError: null,
+          },
         })
         if (journalEntryId && candidate.kind === 'INVOICE_JOURNAL') {
           await tx.invoice.updateMany({
@@ -415,7 +595,10 @@ export async function runPostingJobs(opts: { now?: Date; limit?: number; tenantI
       })
       result.done++
     } catch (err) {
-      const message = (err instanceof Error ? `${err.name}: ${err.message}` : String(err)).slice(0, 1000)
+      const message = (err instanceof Error ? `${err.name}: ${err.message}` : String(err)).slice(
+        0,
+        1000,
+      )
       const dead = attempts >= MAX_POSTING_ATTEMPTS
       await orderDb.postingJob.update({
         where: { id: candidate.id },
@@ -423,16 +606,22 @@ export async function runPostingJobs(opts: { now?: Date; limit?: number; tenantI
           status: dead ? 'DEAD' : 'PENDING',
           lastError: message,
           leaseUntil: null,
-          nextAttemptAt: dead ? candidate.nextAttemptAt : new Date(now.getTime() + postingBackoffMs(attempts)),
+          nextAttemptAt: dead
+            ? candidate.nextAttemptAt
+            : new Date(now.getTime() + postingBackoffMs(attempts)),
         },
       })
       if (dead) {
         result.dead++
-        console.error(`[gl] posting job ${candidate.id} (${candidate.kind}) is DEAD after ${attempts} attempts: ${message}`)
+        console.error(
+          `[gl] posting job ${candidate.id} (${candidate.kind}) is DEAD after ${attempts} attempts: ${message}`,
+        )
         console.error('[metric] posting_jobs_dead 1')
       } else {
         result.failed++
-        console.warn(`[gl] posting job ${candidate.id} (${candidate.kind}) failed attempt ${attempts}: ${message}`)
+        console.warn(
+          `[gl] posting job ${candidate.id} (${candidate.kind}) failed attempt ${attempts}: ${message}`,
+        )
       }
     }
   }
@@ -455,11 +644,16 @@ export async function postingQueueStats(tenantId?: string, now = new Date()) {
     pending,
     running,
     dead,
-    oldestPendingAgeSeconds: oldest ? Math.max(0, Math.round((now.getTime() - oldest.createdAt.getTime()) / 1000)) : 0,
+    oldestPendingAgeSeconds: oldest
+      ? Math.max(0, Math.round((now.getTime() - oldest.createdAt.getTime()) / 1000))
+      : 0,
   }
 }
 
-export async function listPostingJobs(tenantId: string, statuses: Array<'PENDING' | 'RUNNING' | 'DONE' | 'DEAD'> = ['PENDING', 'DEAD']) {
+export async function listPostingJobs(
+  tenantId: string,
+  statuses: Array<'PENDING' | 'RUNNING' | 'DONE' | 'DEAD'> = ['PENDING', 'DEAD'],
+) {
   return orderDb.postingJob.findMany({
     where: { tenantId, status: { in: statuses } },
     orderBy: { createdAt: 'asc' },
@@ -481,7 +675,9 @@ export async function retryPostingJob(tenantId: string, id: string) {
  * Invoices older than `olderThanMs` whose AR journal has not been recorded. A non-empty result means a
  * posting job is stuck, dead, or the invoice pre-dates the outbox.
  */
-export async function findInvoicesMissingPosting(opts: { tenantId?: string; olderThanMs?: number; now?: Date; limit?: number } = {}) {
+export async function findInvoicesMissingPosting(
+  opts: { tenantId?: string; olderThanMs?: number; now?: Date; limit?: number } = {},
+) {
   const cutoff = new Date((opts.now ?? new Date()).getTime() - (opts.olderThanMs ?? 15 * 60_000))
   return orderDb.invoice.findMany({
     where: {

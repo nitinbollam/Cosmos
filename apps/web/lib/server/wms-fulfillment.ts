@@ -498,11 +498,16 @@ export async function markFulfillmentPacked(tenantId: string, taskId: string) {
     }
   }
 
-  const updated = await wmsDb.fulfillmentTask.update({
-    where: { id: t.id },
+  const updated = await wmsDb.fulfillmentTask.updateMany({
+    where: { id: t.id, tenantId, status: t.status as never, dispatchClaimedAt: null },
     data: { status: 'PACKED' },
   })
-  return { taskId: updated.id, orderId: t.orderId, status: updated.status }
+  if (updated.count !== 1) {
+    const current = await wmsDb.fulfillmentTask.findFirst({ where: { id: t.id, tenantId } })
+    if (current?.status === 'PACKED') return { taskId: t.id, orderId: t.orderId, status: current.status }
+    throw new ApiError(409, 'Task changed while packing or cancellation was starting. Refresh and try again.')
+  }
+  return { taskId: t.id, orderId: t.orderId, status: 'PACKED' }
 }
 
 /** Raw task + pick lines (incl. batch) for dispatch processing. */

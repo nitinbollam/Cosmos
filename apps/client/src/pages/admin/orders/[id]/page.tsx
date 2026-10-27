@@ -96,6 +96,8 @@ type ShipmentDraft = {
   qtyByLineId: Record<string, number>
 }
 
+const CANCELLATION_ELIGIBLE = ['PENDING', 'AWAITING_APPROVAL', 'CONFIRMED', 'BACKORDERED', 'PROCESSING']
+
 function formatAddress(addr: Record<string, unknown> | null | undefined): string[] {
   if (!addr) return []
   const parts: string[] = []
@@ -353,7 +355,7 @@ export default function OrderDetailPage() {
                   Confirm & fulfill
                 </button>
               )}
-              {!['CANCELLED', 'DELIVERED'].includes(data.status) && (
+              {CANCELLATION_ELIGIBLE.includes(data.status) && (
                 <button
                   type="button"
                   className="btn-ghost !text-sm"
@@ -610,6 +612,9 @@ export default function OrderDetailPage() {
         >
           <div className="pleros-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-pleros-white font-display mb-3">Cancel order</h3>
+            {cancelMut.isError ? (
+              <p role="alert" className="text-sm text-red-400 mb-3">{cancelMut.error.message}</p>
+            ) : null}
             <label className="text-xs text-pleros-text-3">Reason</label>
             <input className="pleros-input mb-4" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
             <div className="flex gap-2 justify-end">

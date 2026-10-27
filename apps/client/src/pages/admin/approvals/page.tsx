@@ -28,6 +28,9 @@ function contextSummary(type: string, ctx: Record<string, unknown>): string {
   if (type === 'CREDIT_LIMIT_OVERRIDE') {
     return `Customer · projected $${Number(ctx.projectedTotal ?? 0).toFixed(2)} / limit $${Number(ctx.creditLimit ?? 0).toFixed(2)}`
   }
+  if (type === 'ORDER_CANCELLATION') {
+    return `Order ${String(ctx.orderNumber ?? '')} · ${String(ctx.reason ?? 'Buyer requested cancellation')}`
+  }
   if (type === 'EXPENSE_REPORT') {
     const lines = Array.isArray(ctx.lines) ? ctx.lines : []
     return `Expense report · $${Number(ctx.total ?? 0).toFixed(2)} · ${lines.length} line(s)`
@@ -83,7 +86,7 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-pleros-white">Approvals</h1>
         <p className="text-pleros-muted text-sm mt-1">
-          Purchase orders over threshold, high discounts, and credit-limit overrides awaiting manager decision.
+          Purchase orders, order cancellation requests, discounts, and credit-limit overrides awaiting manager decision.
         </p>
       </div>
 
@@ -91,6 +94,7 @@ export default function ApprovalsPage() {
         <select className="pleros-input !w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
           <option value="PURCHASE_ORDER">Purchase orders</option>
+          <option value="ORDER_CANCELLATION">Order cancellations</option>
           <option value="DISCOUNT">Discounts</option>
           <option value="CREDIT_LIMIT_OVERRIDE">Credit limit</option>
           <option value="EXPENSE_REPORT">Expense reports</option>
@@ -132,7 +136,7 @@ export default function ApprovalsPage() {
                       {new Date(row.createdAt).toLocaleString()}
                     </td>
                     <td className="py-3 pr-4">
-                      <StatusBadge status={row.type} />
+                      <StatusBadge status={row.type === 'ORDER_CANCELLATION' ? 'Order cancellation' : row.type} />
                     </td>
                     <td className="py-3 pr-4 text-pleros-text">
                       {contextSummary(row.type, row.context ?? {})}
@@ -145,6 +149,14 @@ export default function ApprovalsPage() {
                         </Link>
                       ) : null}
                       {row.type === 'CREDIT_LIMIT_OVERRIDE' ? (
+                        <Link
+                          to={`/admin/orders/${encodeURIComponent(row.subjectId)}`}
+                          className="block text-xs text-pleros-accent mt-1"
+                        >
+                          View order →
+                        </Link>
+                      ) : null}
+                      {row.type === 'ORDER_CANCELLATION' ? (
                         <Link
                           to={`/admin/orders/${encodeURIComponent(row.subjectId)}`}
                           className="block text-xs text-pleros-accent mt-1"
@@ -237,7 +249,7 @@ export default function ApprovalsPage() {
                       ) : (
                         '—'
                       )}
-                      {decide.isError && rejectId === row.id ? (
+                      {decide.isError && decide.variables?.id === row.id ? (
                         <p className="text-xs text-red-400 mt-1">{errMsg(decide.error)}</p>
                       ) : null}
                     </td>

@@ -15,7 +15,10 @@ export async function listPosRegisters(tenantId: string) {
   })
 }
 
-export async function createPosRegister(tenantId: string, dto: { name: string; warehouseId?: string }) {
+export async function createPosRegister(
+  tenantId: string,
+  dto: { name: string; warehouseId?: string },
+) {
   return tenantDb.posRegister.create({
     data: { tenantId, name: dto.name.trim(), warehouseId: dto.warehouseId },
   })
@@ -171,8 +174,7 @@ export async function createPosOrder(
   if (!dto.lineItems?.length) throw new ApiError(400, 'lineItems required')
   if (!dto.customerId?.trim()) throw new ApiError(400, 'customerId required')
 
-  const tenders: PosTenderInput[] =
-    dto.tenders?.length
+  const tenders: PosTenderInput[] = dto.tenders?.length
       ? dto.tenders
       : dto.paymentMethod
         ? [{ method: dto.paymentMethod, amount: 0 }]
@@ -217,7 +219,8 @@ export async function createPosOrder(
 
   for (const t of resolvedTenders) {
     if (t.method === 'GIFT_CARD') {
-      if (!t.giftCardCode?.trim()) throw new ApiError(400, 'giftCardCode required for GIFT_CARD tender')
+      if (!t.giftCardCode?.trim())
+        throw new ApiError(400, 'giftCardCode required for GIFT_CARD tender')
       const redeem = await giftCards.redeemGiftCard(tenantId, t.giftCardCode, {
         amount: t.amount > 0 ? t.amount : totalAmount - giftApplied,
         orderRef: order.id,
@@ -246,6 +249,8 @@ export async function createPosOrder(
     throw new ApiError(400, 'Insufficient stock for POS sale')
   }
 
+  const { withOrderFulfillmentLock } = await import('./order-orchestration')
+  return withOrderFulfillmentLock(tenantId, order.id, async () => {
   const cashOrCheck = resolvedTenders.some((t) => t.method === 'CASH' || t.method === 'CHECK')
   const giftOnly =
     giftApplied >= totalAmount - 0.02 && !resolvedTenders.some((t) => t.method === 'CARD')
@@ -279,11 +284,10 @@ export async function createPosOrder(
   await serials.enforceAndShipSerialsForOrder(tenantId, order.id, shipLines)
   const { shipped } = await inv.commitShipmentForOrder(tenantId, order.id, userId)
 
-  const { transitionOrderStatus, onFulfillmentDispatched, onDeliveryStopDelivered } = await import(
-    './order-orchestration'
-  )
-  await transitionOrderStatus(tenantId, order.id, 'PACKED')
-  await onFulfillmentDispatched(tenantId, order.id, shipped)
+    const { transitionOrderStatus, onFulfillmentDispatched, onDeliveryStopDelivered } =
+      await import('./order-orchestration')
+    await transitionOrderStatus(tenantId, order.id, 'PACKED', undefined, { coordinationHeld: true })
+  await onFulfillmentDispatched(tenantId, order.id, shipped, undefined, { coordinationHeld: true })
   await onDeliveryStopDelivered(tenantId, order.id)
 
   void auditLog(tenantId, {
@@ -295,6 +299,7 @@ export async function createPosOrder(
   }).catch(swallowed('pos.createPosOrder'))
 
   return { ...order, status: 'DELIVERED', totalAmount, taxAmount, tenders: resolvedTenders }
+  })
 }
 
 export async function createPosReturn(
