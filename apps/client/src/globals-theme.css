@@ -478,6 +478,18 @@ body:has(.pos-page) .celestial-fab,
   font-size: 12px;
   line-height: 1.45;
 }
+.celestial-md-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.65em 0;
+}
+
+.celestial-md-table-wrap table {
+  margin: 0;
+  min-width: 100%;
+  width: max-content;
+}
+
 .celestial-md table {
   width: 100%;
   border-collapse: collapse;

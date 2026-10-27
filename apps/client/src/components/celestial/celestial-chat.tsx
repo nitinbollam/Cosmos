@@ -4,6 +4,7 @@ import { api as shopApi, gatewayApiBaseUrl as shopGateway } from '@/lib/api'
 import { api as adminApi, gatewayApiBaseUrl as adminGateway } from '@/lib/api-admin'
 import { axiosErr } from '@/lib/axios-error'
 import { CelestialMarkdown } from '@/components/celestial/celestial-markdown'
+import { approvedCelestialLinks } from '@/components/celestial/celestial-links'
 import { streamCelestialChat } from '@/components/celestial/celestial-stream'
 import { useCelestialStore, type CelestialSurface } from '@/stores/celestial-store'
 import { getAccessToken } from '@/lib/auth-session'
@@ -354,9 +355,9 @@ export function CelestialChat({
             ) : (
               <p className="celestial-user-text">{m.content}</p>
             )}
-            {m.links && m.links.length > 0 ? (
+            {approvedCelestialLinks(m.links).length > 0 ? (
               <div className="celestial-links">
-                {m.links.map((l) => (
+                {approvedCelestialLinks(m.links).map((l) => (
                   <Link key={`${l.href}-${l.label}`} to={l.href} className="celestial-link-chip">
                     {l.label} →
                   </Link>

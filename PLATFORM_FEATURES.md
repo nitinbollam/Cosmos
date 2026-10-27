@@ -437,18 +437,18 @@ Summary of major work completed in the current development cycle.
 
 | Item | What was added |
 |------|----------------|
-| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — hybrid RAG + live-data tools + LLM synthesis (OpenRouter, Groq, Gemini, Ollama, mock) |
+| **15.1 Celestial module** | `apps/web/lib/server/celestial/` — hybrid RAG + live-data tools + LLM synthesis (Groq primary, Ollama Cloud fallback; offline mode without approval) |
 | **15.2 Knowledge base (RAG)** | `docs/celestial/*.md` (6 LLM-optimized files) + `PLATFORM_FEATURES.md` · chunked `##`/`###` retrieval with synonym scoring |
 | **15.3 Chat API** | `POST /celestial/chat` (JSON or SSE via `Accept: text/event-stream` / `X-Celestial-Stream: 1`), `POST /celestial/chat/stream`, `GET /celestial/status` (`enabled` + provider/model) · gated by `celestial` feature flag |
 | **15.4 Conversation history API** | `GET /celestial/conversations?surface=&limit=`, `GET /celestial/conversations/:id` — server-side thread restore across devices |
 | **15.5 Buyer + admin UI** | Floating ✦ panel on shop/admin layouts · full page `/admin/celestial` · shared Zustand store `pleros-celestial-v1` |
-| **15.6 Live data tools** | `get_my_orders`, `get_order_detail`, `list_my_invoices`, `search_catalog`, `list_my_quotes`, `list_warehouses`, `global_search`, `list_low_stock` — buyer-scoped where applicable |
+| **15.6 Live data tools** | `orders.list`, `orders.detail`, `inventory.stock`, `purchasing.orders`, `purchasing.order_detail`, `finance.bills`, `quotes.list`, `quotes.detail`, `list_my_invoices`, `search_catalog`, `list_warehouses`, `global_search`, `list_low_stock` — read-only, each checked against the employee's module permission |
 | **15.7 Answer pipeline** | Intent detection → tools + doc retrieval → direct Markdown tables when data exists → LLM synthesis for how-to/general → doc fallback if LLM empty/fails (always returns an answer) |
 | **15.8 Streaming UI** | SSE token streaming · `react-markdown` + GFM + syntax highlighting · contextual deep links from tool results |
 | **15.9 Conversation store** | `CelestialConversation` / `CelestialMessage` in analytics DB · links/metadata on assistant messages · audit `celestial.chat` events |
 | **15.10 Feature gating** | Settings → Features tab · sidebar Celestial link hidden when disabled · shop FAB hidden until login |
 
-**LLM env vars:** `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, or `CELESTIAL_PROVIDER=ollama`. Set `CELESTIAL_MODEL` as needed. Runs in **mock mode** without keys (tool-backed structured answers still work).
+**LLM env vars:** `CELESTIAL_EXTERNAL_ROUTING_APPROVED=true` to allow cloud models, `GROQ_API_KEY` (primary, `openai/gpt-oss-120b`), `OLLAMA_API_KEY` (Ollama Cloud fallback, `gpt-oss:120b`), and `CELESTIAL_EXTERNAL_DATA_APPROVED=true` only once sending ERP records to them is approved. Without approval and keys Celestial runs offline (tool-backed structured answers still work).
 
 **Knowledge base files (`docs/celestial/`):**
 
