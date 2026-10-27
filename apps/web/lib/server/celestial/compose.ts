@@ -8,6 +8,12 @@ import type {
   QuoteListRow,
   StockRow,
   StockSummary,
+  SalesSummary,
+  SalesForecastResult,
+  ProductSales,
+  CustomerSalesRow,
+  SupplierRow,
+  WarehouseStockRow,
   ordersDetail,
   purchasingOrderDetail,
   quotesDetail,
@@ -166,11 +172,29 @@ export function tryComposeDirectReply(toolResults: ToolResult[], _userMessage: s
 type OrderDetail = NonNullable<Awaited<ReturnType<typeof ordersDetail>>>
 type PoDetail = NonNullable<Awaited<ReturnType<typeof purchasingOrderDetail>>>
 type QuoteDetail = NonNullable<Awaited<ReturnType<typeof quotesDetail>>>
-type StockData = { rows: StockRow[]; totalRows: number; skuSummaries: StockSummary[]; matchedSkus: number; search?: string }
+type StockData = {
+  warehouse?: string
+  rows: StockRow[]
+  totalRows: number
+  skuSummaries: StockSummary[]
+  matchedSkus: number
+  search?: string
+  rank?: 'asc' | 'desc'
+  noStockRecorded?: number
+  rankTruncated?: boolean
+  limit?: number
+}
 type BillsData = Filtered<BillRow> & { balanceByCurrency: Record<string, number>; totalsTruncated: boolean }
 
 function formatToolSection(result: ToolResult): string | null {
   if (result.notice) return result.notice
+  const body = formatToolBody(result)
+  // A record picked from a list ("the biggest order") says how it was picked.
+  const selection = (result.data as { selection?: unknown } | null)?.selection
+  return body && typeof selection === 'string' ? `**${selection}**\n\n${body}` : body
+}
+
+function formatToolBody(result: ToolResult): string | null {
   switch (result.name) {
     case 'list_warehouses':
       return formatWarehouses(result)
@@ -190,12 +214,24 @@ function formatToolSection(result: ToolResult): string | null {
       return formatQuotes(result.data as Filtered<QuoteListRow>)
     case 'quotes.detail':
       return formatQuoteDetail(result.data as QuoteDetail)
+    case 'sales.summary':
+      return formatSalesSummary(result.data as SalesSummary)
+    case 'sales.forecast':
+      return formatSalesForecast(result.data as SalesForecastResult)
+    case 'sales.by_product':
+      return formatProductSales(result.data as ProductSales & { search?: string; limit?: number })
     case 'list_my_invoices':
       return formatInvoices(result)
     case 'list_low_stock':
       return formatLowStock(result)
     case 'search_catalog':
-      return formatCatalog(result.data as Page<CatalogRow> & { search?: string })
+      return formatCatalog(result.data as CatalogData)
+    case 'sales.by_customer':
+      return formatCustomerSales(result.data as CustomerSalesData)
+    case 'purchasing.suppliers':
+      return formatSuppliers(result.data as { rows: SupplierRow[]; total: number })
+    case 'inventory.by_warehouse':
+      return formatWarehouseStock(result.data as WarehouseStockData)
     case 'global_search':
       return formatGlobalSearch(result)
     default:
@@ -309,8 +345,17 @@ function formatOrderDetail(o: OrderDetail): string {
 
 function formatStock(d: StockData): string {
   const subject = d.search ? `matching “${d.search}”` : ''
-  if (d.matchedSkus === 0) return `**Stock:** No products ${subject || 'found'}.`
-  if (d.rows.length === 0) return `**Stock:** ${d.matchedSkus} product(s) ${subject} found, but no stock is recorded in any warehouse.`
+  if (d.matchedSkus === 0) {
+    return d.search
+      ? `**Stock:** I couldn’t find a product whose name or SKU matches “${d.search}”. This is a name search, not a stock check — try another word from the product name.`
+      : '**Stock:** no products found.'
+  }
+  if (d.rank) return formatStockRanking(d, subject)
+  if (d.rows.length === 0) {
+    return d.warehouse
+      ? `**Stock in ${d.warehouse}:** nothing is recorded there${subject ? ` ${subject}` : ''} — no stock levels exist for ${d.matchedSkus} matching product(s) in that warehouse.`
+      : `**Stock:** ${d.matchedSkus} product(s) ${subject} found, but no stock is recorded in any warehouse.`
+  }
   const tableRows = d.rows.map(
     (r) =>
       `| \`${r.code}\` | ${r.name} | ${r.warehouseName} | **${r.available}** ${r.unit} | ${r.onHand} | ${r.reserved} | ${r.reorderPoint || '—'} |`,
@@ -320,7 +365,7 @@ function formatStock(d: StockData): string {
       ? ['', '**Total available by SKU:**', ...d.skuSummaries.map((s) => `- \`${s.code}\` ${s.name}: ${s.available} ${s.unit}`)]
       : []
   return [
-    `### Stock by warehouse${subject ? ` ${subject}` : ''}`,
+    d.warehouse ? `### Stock in ${d.warehouse}${subject ? ` ${subject}` : ''}` : `### Stock by warehouse${subject ? ` ${subject}` : ''}`,
     d.totalRows > d.rows.length ? `Showing ${d.rows.length} of ${d.totalRows} SKU × warehouse rows.` : null,
     '',
     '| SKU | Item | Warehouse | Available | On hand | Reserved | Reorder point |',
@@ -330,6 +375,118 @@ function formatStock(d: StockData): string {
   ]
     .filter((l) => l != null)
     .join('\n')
+}
+
+/** Products ranked by total available across warehouses ("least stock" / "most stock"). */
+function ordinalWord(rank: 'asc' | 'desc' | undefined, kind: 'stock' | 'sales'): string {
+  if (kind === 'stock') return rank === 'asc' ? 'Least stock' : 'Most stock'
+  return rank === 'asc' ? 'Lowest seller' : 'Best seller'
+}
+
+function formatStockRanking(d: StockData, subject: string): string {
+  const order = d.rank === 'asc' ? 'lowest' : 'highest'
+  if (d.skuSummaries.length === 0) {
+    return `**Stock${subject ? ` ${subject}` : ''}:** none of the ${d.matchedSkus} product(s) have stock recorded in any warehouse.`
+  }
+  const ranked = d.matchedSkus - (d.noStockRecorded ?? 0)
+  if (d.limit === 1) {
+    const s = d.skuSummaries[0]
+    return [
+      `**${ordinalWord(d.rank, 'stock')}${subject ? ` (${subject})` : ''}:** **${s.name}** (\`${s.code}\`) — ${s.available} ${s.unit} available across all warehouses (${s.onHand} on hand).`,
+      '',
+      `*${d.rank === 'asc' ? 'Lowest' : 'Highest'} of ${ranked} product(s) with stock recorded. Ask “show the full ranking” to see the rest.*`,
+    ].join('\n')
+  }
+  const tableRows = d.skuSummaries.map(
+    (s, i) => `| ${i + 1} | \`${s.code}\` | ${s.name} | **${s.available}** ${s.unit} | ${s.onHand} |`,
+  )
+  const notes = [
+    d.noStockRecorded ? `${d.noStockRecorded} product(s) have no stock recorded at all and are not ranked.` : null,
+    d.rankTruncated ? `Only the first 1,000 of ${d.matchedSkus} matching products were compared; narrow the search for a complete ranking.` : null,
+  ].filter((n): n is string => n != null)
+  return [
+    `### Products by available stock, ${order} first${subject ? ` (${subject})` : ''}`,
+    `Total available across all warehouses. Showing ${d.skuSummaries.length} of ${d.matchedSkus - (d.noStockRecorded ?? 0)} ranked product(s).`,
+    '',
+    '| # | SKU | Product | Available | On hand |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    ...tableRows,
+    ...(notes.length ? ['', ...notes.map((n) => `*${n}*`)] : []),
+    '',
+    '*Adjust stock or reorder in [Inventory](/admin/inventory).*',
+  ].join('\n')
+}
+
+function salesBasisNote(excluded: string[]): string {
+  return `*Sales = order totals as recorded, excluding ${excluded.map((s) => s.toLowerCase()).join(', ')} orders. Orders store no currency.*`
+}
+
+function formatSalesSummary(d: SalesSummary): string {
+  if (d.periods.length === 0) return `**Sales — ${d.label}:** that period hasn't started yet, so there are no sales to show.`
+  const rows = d.periods.map((p) => `| ${p.label} | ${p.orders} | ${money(p.revenue)} |`)
+  return [
+    `### Sales — ${d.label}`,
+    `Total: **${money(d.totalRevenue)}** from **${d.totalOrders}** order(s)${d.truncated ? ' (partial: too many orders to total)' : ''}.`,
+    d.averageOrderValue != null ? `Average order value: **${money(d.averageOrderValue)}**.` : 'Average order value: no orders in this period.',
+    '',
+    `| ${d.granularity === 'month' ? 'Month' : 'Quarter'} | Orders | Revenue |`,
+    '| :--- | :--- | :--- |',
+    ...rows,
+    '',
+    salesBasisNote(d.excludedStatuses),
+  ].join('\n')
+}
+
+function formatSalesForecast(d: SalesForecastResult): string {
+  const current = `${d.currentQuarter.label}: ${money(d.currentQuarter.revenue)} from ${d.currentQuarter.orders} order(s).`
+  if (d.estimate == null) {
+    return [
+      `### Sales forecast — ${d.target}`,
+      `**No forecast.** ${d.reason}`,
+      '',
+      `For reference, ${current}`,
+      '',
+      salesBasisNote(d.excludedStatuses),
+    ].join('\n')
+  }
+  const rows = d.basis.map((p) => `| ${p.label} | ${p.orders} | ${money(p.revenue)} |`)
+  return [
+    `### Sales forecast — ${d.target}`,
+    `Estimated revenue: **${money(d.estimate.revenue)}** from about **${d.estimate.orders}** order(s).`,
+    `This is a simple estimate (${d.method}), not a guarantee.`,
+    '',
+    '| Quarter | Orders | Revenue |',
+    '| :--- | :--- | :--- |',
+    ...rows,
+    '',
+    `For comparison, ${current}`,
+    '',
+    salesBasisNote(d.excludedStatuses),
+  ].join('\n')
+}
+
+function formatProductSales(d: ProductSales & { search?: string; limit?: number }): string {
+  const subject = d.search ? ` matching “${d.search}”` : ''
+  if (d.rows.length === 0) return `**Sales by product${subject} — ${d.label}:** no products sold in this period.`
+  if (d.limit === 1) {
+    const r = d.rows[0]
+    return [
+      `**${ordinalWord(d.rank, 'sales')}${subject} — ${d.label}:** **${r.name}** (\`${r.code}\`) — ${r.units} ${r.unit} sold, ${money(r.revenue)} revenue.`,
+      '',
+      `*${d.rank === 'asc' ? 'Lowest' : 'Highest'} of ${d.ranked} product(s) by revenue. Ask “show the full ranking” to see the rest.*`,
+    ].join('\n')
+  }
+  const rows = d.rows.map((r, i) => `| ${i + 1} | \`${r.code}\` | ${r.name} | ${r.units} ${r.unit} | ${money(r.revenue)} |`)
+  return [
+    `### Products by sales${subject}, ${d.rank === 'asc' ? 'lowest' : 'highest'} first — ${d.label}`,
+    `${d.limit ? `Top ${d.rows.length}` : `Showing ${d.rows.length}`} of ${d.ranked} product(s)${d.truncated ? ' (partial: too many order lines to total)' : ''}.`,
+    '',
+    '| # | SKU | Product | Units sold | Revenue |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    ...rows,
+    '',
+    `*Revenue = units × unit price on order lines, net of returned units, before tax; excludes ${d.excludedStatuses.map((s) => s.toLowerCase()).join(', ')} orders. Orders store no currency.*`,
+  ].join('\n')
 }
 
 function formatPurchaseOrders(page: Filtered<PurchaseOrderListRow>): string {
@@ -442,16 +599,22 @@ function formatQuoteDetail(q: QuoteDetail): string {
 }
 
 function formatInvoices(result: ToolResult): string {
-  const rows = result.data as InvoiceRow[]
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return '**Invoices:** No open or historical invoices found.'
+  const data = result.data as InvoiceRow[] | { rows: InvoiceRow[]; total: number; filters?: string[]; outstandingOnly?: boolean }
+  const rows = Array.isArray(data) ? data : data.rows
+  const filters = Array.isArray(data) ? [] : (data.filters ?? [])
+  if (rows.length === 0) {
+    if (!Array.isArray(data) && data.outstandingOnly) return `**Invoices${filterSuffix(filters)}:** none — every matching invoice is fully paid.`
+    return `**Invoices${filterSuffix(filters)}:** no invoices found.`
   }
+  const total = Array.isArray(data) ? rows.length : data.total
+  const owed = rows.reduce((a, r) => a + (Number(r.balance) || 0), 0)
   const tableRows = rows.map(
     (inv) =>
       `| **${inv.invoiceNumber}** | \`${inv.status}\` | $${inv.total.toFixed(2)} | ${inv.balance != null ? `$${inv.balance.toFixed(2)}` : '—'} |`,
   )
   return [
-    `### Invoices (${rows.length} Found)`,
+    `### Invoices${filterSuffix(filters)}`,
+    `${total > rows.length ? `Showing ${rows.length} of ${total}` : `${total} invoice(s)`}; remaining balance on these: **${money(owed, 'USD')}**.`,
     '',
     '| Invoice # | Status | Total Amount | Remaining Balance |',
     '| :--- | :--- | :--- | :--- |',
@@ -480,9 +643,104 @@ function formatLowStock(result: ToolResult): string {
   ].join('\n')
 }
 
-function formatCatalog(page: Page<CatalogRow> & { search?: string }): string {
+type CatalogData = Page<CatalogRow> & { search?: string; priceRank?: 'asc' | 'desc'; limit?: number }
+type CustomerSalesData = {
+  label: string
+  rank: 'asc' | 'desc'
+  rows: CustomerSalesRow[]
+  ranked: number
+  excludedStatuses: string[]
+  limit?: number
+}
+type WarehouseStockData = { rows: WarehouseStockRow[]; units: string[]; rank: 'asc' | 'desc'; limit?: number; warehouses: number }
+
+function formatCustomerSales(d: CustomerSalesData): string {
+  if (d.rows.length === 0) return `**Customers by sales — ${d.label}:** no sales in this period.`
+  const basis = `*Revenue = order totals, excluding ${d.excludedStatuses.map((x) => x.toLowerCase()).join(', ')} orders. Orders store no currency.*`
+  if (d.limit === 1) {
+    const r = d.rows[0]
+    return [
+      `**${d.rank === 'asc' ? 'Smallest customer' : 'Top customer'} — ${d.label}:** **${r.name}** — ${money(r.revenue)} from ${r.orders} order(s).`,
+      '',
+      `*${d.rank === 'asc' ? 'Lowest' : 'Highest'} of ${d.ranked} customer(s) with orders.* ${basis}`,
+    ].join('\n')
+  }
+  return [
+    `### Customers by sales, ${d.rank === 'asc' ? 'lowest' : 'highest'} first — ${d.label}`,
+    `Showing ${d.rows.length} of ${d.ranked} customer(s).`,
+    '',
+    '| # | Customer | Orders | Revenue |',
+    '| :--- | :--- | :--- | :--- |',
+    ...d.rows.map((r, i) => `| ${i + 1} | ${r.name} | ${r.orders} | ${money(r.revenue)} |`),
+    '',
+    basis,
+  ].join('\n')
+}
+
+function formatSuppliers(d: { rows: SupplierRow[]; total: number }): string {
+  if (d.rows.length === 0) return '**Suppliers:** none set up yet.'
+  const owed = (r: SupplierRow) => {
+    const parts = Object.entries(r.openBalanceByCurrency).filter(([, v]) => v !== 0)
+    return parts.length ? parts.map(([c, v]) => money(v, c === 'UNKNOWN' ? null : c)).join(' + ') : '—'
+  }
+  return [
+    `### Suppliers`,
+    d.total > d.rows.length ? `Showing ${d.rows.length} of ${d.total}.` : `${d.total} supplier(s).`,
+    '',
+    '| Supplier | Code | Email | Phone | Purchase orders (open) | Owed on bills |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- |',
+    ...d.rows.map((r) => `| **${r.name}** | \`${r.code}\` | ${r.email ?? '—'} | ${r.phone ?? '—'} | ${r.purchaseOrders} (${r.openPurchaseOrders}) | ${owed(r)} |`),
+    '',
+    '*Manage suppliers in [Purchasing](/admin/purchasing).*',
+  ].join('\n')
+}
+
+function formatWarehouseStock(d: WarehouseStockData): string {
+  if (d.rows.length === 0) return '**Stock per warehouse:** no active warehouses.'
+  const unitsNote = d.units.length > 1 ? ` Units are summed across ${d.units.join(', ')}.` : ''
+  if (d.limit === 1) {
+    const r = d.rows[0]
+    return [
+      `**${d.rank === 'asc' ? 'Least stock' : 'Most stock'}:** **${r.name}** (\`${r.code}\`) — ${r.available} units available across ${r.skus} product(s) (${r.onHand} on hand).`,
+      '',
+      `*${d.rank === 'asc' ? 'Lowest' : 'Highest'} of ${d.warehouses} warehouse(s).${unitsNote}*`,
+    ].join('\n')
+  }
+  return [
+    `### Stock per warehouse, ${d.rank === 'asc' ? 'lowest' : 'highest'} first`,
+    '',
+    '| Warehouse | Code | Products in stock | Available | On hand |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    ...d.rows.map((r) => `| **${r.name}** | \`${r.code}\` | ${r.skus} | ${r.available} | ${r.onHand} |`),
+    unitsNote ? `\n*${unitsNote.trim()}*` : '',
+  ].join('\n')
+}
+
+function formatCatalog(page: CatalogData): string {
   const subject = page.search ? ` matching “${page.search}”` : ''
-  if (page.rows.length === 0) return `**Products${subject}:** No matching products found.`
+  if (page.rows.length === 0) {
+    return page.search
+      ? `**Products:** I couldn’t find a product whose name or SKU matches “${page.search}”. Try another word from the product name.`
+      : '**Products:** none found.'
+  }
+  if (page.priceRank && page.limit === 1) {
+    const s = page.rows[0]
+    return [
+      `**${page.priceRank === 'asc' ? 'Cheapest' : 'Most expensive'} product${subject}:** **${s.name}** (\`${s.code}\`) — ${money(s.price)} each, ${s.available == null ? 'no stock recorded' : `${s.available} ${s.unit} available`}.`,
+      '',
+      `*${page.priceRank === 'asc' ? 'Lowest' : 'Highest'} list price of ${page.total} active product(s).*`,
+    ].join('\n')
+  }
+  if (page.priceRank) {
+    return [
+      `### Products by price, ${page.priceRank === 'asc' ? 'cheapest' : 'most expensive'} first${subject}`,
+      `Showing ${page.rows.length} of ${page.total}.`,
+      '',
+      '| SKU | Product | Price | Available |',
+      '| :--- | :--- | :--- | :--- |',
+      ...page.rows.map((s) => `| \`${s.code}\` | **${s.name}** | ${money(s.price)} | ${s.available == null ? 'no stock recorded' : `${s.available} ${s.unit}`} |`),
+    ].join('\n')
+  }
   const tableRows = page.rows.map(
     (s) =>
       `| \`${s.code}\` | **${s.name}** | ${s.available == null ? 'no stock recorded' : `${s.available} ${s.unit}`} | ${money(s.price)} |`,

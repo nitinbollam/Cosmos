@@ -36,6 +36,12 @@ export const TOOL_PERMISSIONS: Record<CelestialToolName, string[]> = {
   'finance.bills': ['finance.read'],
   'quotes.list': ['quotes.read'],
   'quotes.detail': ['quotes.read'],
+  'sales.summary': ['reports.read', 'finance.read'],
+  'sales.forecast': ['reports.read', 'finance.read'],
+  'sales.by_product': ['reports.read', 'finance.read'],
+  'sales.by_customer': ['reports.read', 'finance.read'],
+  'purchasing.suppliers': ['purchasing.read'],
+  'inventory.by_warehouse': ['inventory.read', 'wms.read'],
   list_my_invoices: ['finance.read'],
   search_catalog: ['inventory.read'],
   global_search: ['crm.read'],
@@ -52,6 +58,12 @@ const TOOL_LABELS: Record<CelestialToolName, string> = {
   'finance.bills': 'vendor bills',
   'quotes.list': 'quotes',
   'quotes.detail': 'quote details',
+  'sales.summary': 'sales totals',
+  'sales.forecast': 'sales forecasts',
+  'sales.by_product': 'sales by product',
+  'sales.by_customer': 'sales by customer',
+  'purchasing.suppliers': 'suppliers',
+  'inventory.by_warehouse': 'stock per warehouse',
   list_my_invoices: 'invoices',
   search_catalog: 'products',
   global_search: 'customer search',
@@ -101,8 +113,22 @@ export async function runTools(names: CelestialToolName[], ctx: ToolContext): Pr
 function filterLabels(ctx: ToolContext, ...extra: Array<string | false | null | undefined>): string[] {
   const labels = extra.filter((x): x is string => Boolean(x))
   if (ctx.dateRange) labels.push(ctx.dateRange.label)
-  if (ctx.sort === 'asc') labels.push('oldest first')
+  if (ctx.byAmount) labels.push(ctx.sort === 'asc' ? 'smallest first' : 'largest first')
+  else if (ctx.sort === 'asc') labels.push('oldest first')
   return labels
+}
+
+/** Mark a single record picked from a list ("Biggest order of 5 matching orders"). */
+function withSelection(result: ToolResult | null, selection: string): ToolResult | null {
+  if (result?.data && typeof result.data === 'object') (result.data as Record<string, unknown>).selection = selection
+  return result
+}
+
+/** Customer ids for a named customer, or a notice when nobody matches. */
+async function customerFilter(tenantId: string, name?: string): Promise<{ ids?: string[]; notice?: string }> {
+  if (!name) return {}
+  const ids = await erp.resolveCustomerIds(tenantId, name)
+  return ids.length > 0 ? { ids } : { notice: `I couldn’t find a customer named “${name}”. Check the spelling or try part of the name.` }
 }
 
 async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolResult | null> {
@@ -113,19 +139,39 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
 
   switch (name) {
     case 'orders.list': {
+      const cust = await customerFilter(tenantId, ctx.customer)
+      if (cust.notice) return { name, data: null, links: [], notice: cust.notice }
       const page = await erp.ordersList(tenantId, {
         status: ctx.orderStatus,
+        statuses: ctx.orderStatuses,
+        customerIds: cust.ids,
+        byAmount: ctx.byAmount,
         channel: ctx.channel,
         priority: ctx.priority,
         dateRange: ctx.dateRange,
         sort: ctx.sort,
         page: ctx.page,
       })
+      // "The latest order" is one record: answer with its details rather than a list.
+      if (ctx.limit === 1 && page.rows[0]) {
+        const pick = ctx.byAmount ? (ctx.sort === 'asc' ? 'Smallest order' : 'Biggest order') : ctx.sort === 'asc' ? 'Oldest order' : 'Latest order'
+        return withSelection(
+          await runTool('orders.detail', { ...ctx, orderId: page.rows[0].id, orderNumber: undefined }),
+          `${pick} of ${page.total} matching order(s)${ctx.byAmount ? ', by order total' : ''}.`,
+        )
+      }
       return {
         name,
         data: {
           ...page,
-          filters: filterLabels(ctx, ctx.orderStatus, ctx.channel, ctx.priority),
+          filters: filterLabels(
+            ctx,
+            ctx.orderStatus,
+            ctx.orderStatuses && 'not yet shipped',
+            ctx.channel,
+            ctx.priority,
+            ctx.customer && `customer “${ctx.customer}”`,
+          ),
         },
         links: page.rows.map((o) => ({
           label: `Order ${orderCodeOf(o)} (${o.status})`,
@@ -145,28 +191,59 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'inventory.stock': {
-      const stock = await erp.inventoryStock(tenantId, { tokens: ctx.searchTokens ?? [] })
+      let warehouses: Array<{ id: string; name: string }> | undefined
+      if (ctx.warehouse) {
+        warehouses = await erp.resolveWarehouses(tenantId, ctx.warehouse)
+        if (warehouses.length === 0) {
+          return { name, data: null, links: [], notice: `I couldn’t find a warehouse named “${ctx.warehouse}”. Ask “what warehouses do we have?” to see them.` }
+        }
+      }
+      const stock = await erp.inventoryStock(tenantId, {
+        tokens: ctx.searchTokens ?? [],
+        rank: ctx.stockRank,
+        warehouseIds: warehouses?.map((w) => w.id),
+      })
+      const limit = stock.rank ? ctx.limit : undefined
+      const skuSummaries = limit ? stock.skuSummaries.slice(0, limit) : stock.skuSummaries
       return {
         name,
-        data: { ...stock, search: (ctx.searchTokens ?? []).join(' ') },
-        links: stock.skuSummaries.slice(0, 6).map((s) => {
-          const row = stock.rows.find((r) => r.code === s.code)
-          return { label: s.code, href: row ? `/admin/inventory/${row.skuId}` : '/admin/inventory' }
-        }),
+        data: {
+          ...stock,
+          skuSummaries,
+          limit,
+          search: (ctx.searchTokens ?? []).join(' '),
+          warehouse: warehouses?.map((w) => w.name).join(', '),
+        },
+        links: skuSummaries.slice(0, 6).map((s) => ({
+          label: s.code,
+          href: s.skuId ? `/admin/inventory/${s.skuId}` : '/admin/inventory',
+        })),
       }
     }
     case 'purchasing.orders': {
       const page = await erp.purchasingOrders(tenantId, {
         status: ctx.poStatus,
+        statuses: ctx.poStatuses,
         supplier: ctx.supplier,
         dateRange: ctx.dateRange,
         page: ctx.page,
       })
+      if (ctx.limit === 1 && page.rows[0]) {
+        return withSelection(
+          await runTool('purchasing.order_detail', { ...ctx, poRef: page.rows[0].number }),
+          `${ctx.sort === 'asc' ? 'Oldest' : 'Latest'} of ${page.total} matching purchase order(s).`,
+        )
+      }
       return {
         name,
         data: {
           ...page,
-          filters: filterLabels(ctx, ctx.poStatus, ctx.supplier && `supplier “${ctx.supplier}”`),
+          filters: filterLabels(
+            ctx,
+            ctx.poStatus,
+            ctx.poStatuses && 'still to be received',
+            ctx.supplier && `supplier “${ctx.supplier}”`,
+          ),
         },
         links: page.rows.map((po) => ({ label: po.number, href: `/admin/purchasing/${po.id}` })),
       }
@@ -200,10 +277,23 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'quotes.list': {
-      const page = await erp.quotesList(tenantId, { status: ctx.quoteStatus, dateRange: ctx.dateRange, page: ctx.page })
+      const cust = await customerFilter(tenantId, ctx.customer)
+      if (cust.notice) return { name, data: null, links: [], notice: cust.notice }
+      const page = await erp.quotesList(tenantId, {
+        status: ctx.quoteStatus,
+        dateRange: ctx.dateRange,
+        page: ctx.page,
+        customerIds: cust.ids,
+      })
+      if (ctx.limit === 1 && page.rows[0]) {
+        return withSelection(
+          await runTool('quotes.detail', { ...ctx, quoteId: page.rows[0].id, quoteRef: undefined }),
+          `${ctx.sort === 'asc' ? 'Oldest' : 'Latest'} of ${page.total} matching quote(s).`,
+        )
+      }
       return {
         name,
-        data: { ...page, filters: filterLabels(ctx, ctx.quoteStatus) },
+        data: { ...page, filters: filterLabels(ctx, ctx.quoteStatus, ctx.customer && `customer “${ctx.customer}”`) },
         links: page.rows.length > 0 ? [{ label: 'Quotes', href: '/admin/quotes' }] : [],
       }
     }
@@ -214,19 +304,82 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       if (quote.convertedOrderId) links.push({ label: 'Converted order', href: `/admin/orders/${quote.convertedOrderId}` })
       return { name, data: quote, links }
     }
-    case 'list_my_invoices': {
-      const page = await invoices.listInvoices(tenantId, 1, 8, {}, buyerOpts)
+    case 'sales.summary': {
+      const summary = await erp.salesSummary(tenantId, { dateRange: ctx.dateRange })
       return {
         name,
-        data: page.items.map((invRow) => ({
-          id: invRow.id,
-          invoiceNumber: invRow.invoiceNumber,
-          status: invRow.displayStatus ?? invRow.status,
-          total: Number(invRow.totalAmount),
-          balance: invRow.balance,
-          orderId: invRow.orderId,
-        })),
-        links: page.items.map((invRow) => ({
+        data: summary,
+        links: [{ label: 'Reports', href: '/admin/reports' }],
+      }
+    }
+    case 'sales.forecast': {
+      const forecast = await erp.salesForecast(tenantId)
+      return {
+        name,
+        data: forecast,
+        links: [{ label: 'Reports', href: '/admin/reports' }],
+      }
+    }
+    case 'sales.by_product': {
+      const ranking = await erp.salesByProduct(tenantId, {
+        dateRange: ctx.dateRange,
+        rank: ctx.salesRank,
+        tokens: ctx.searchTokens,
+      })
+      const rows = ctx.limit ? ranking.rows.slice(0, ctx.limit) : ranking.rows
+      return {
+        name,
+        data: { ...ranking, rows, limit: ctx.limit, search: (ctx.searchTokens ?? []).join(' ') },
+        links: rows.slice(0, 6).map((r) => ({ label: r.code, href: `/admin/inventory/${r.skuId}` })),
+      }
+    }
+    case 'sales.by_customer': {
+      const ranking = await erp.salesByCustomer(tenantId, { dateRange: ctx.dateRange, rank: ctx.salesRank })
+      const rows = ctx.limit ? ranking.rows.slice(0, ctx.limit) : ranking.rows
+      return {
+        name,
+        data: { ...ranking, rows, limit: ctx.limit },
+        links: rows.slice(0, 6).map((r) => ({ label: r.name, href: `/admin/crm/customers/${r.customerId}` })),
+      }
+    }
+    case 'purchasing.suppliers': {
+      const list = await erp.suppliersList(tenantId)
+      return { name, data: list, links: list.rows.length ? [{ label: 'Purchasing', href: '/admin/purchasing' }] : [] }
+    }
+    case 'inventory.by_warehouse': {
+      const totals = await erp.stockByWarehouse(tenantId, ctx.stockRank ?? 'desc')
+      const rows = ctx.limit ? totals.rows.slice(0, ctx.limit) : totals.rows
+      return {
+        name,
+        data: { ...totals, rows, rank: ctx.stockRank ?? 'desc', limit: ctx.limit, warehouses: totals.rows.length },
+        links: [{ label: 'Warehouse', href: '/admin/warehouse' }],
+      }
+    }
+    case 'list_my_invoices': {
+      const cust = isBuyer ? {} : await customerFilter(tenantId, ctx.customer)
+      if (cust.notice) return { name, data: null, links: [], notice: cust.notice }
+      const page = await invoices.listInvoices(tenantId, 1, 50, cust.ids?.length === 1 ? { customerId: cust.ids[0] } : {}, buyerOpts)
+      // "Unpaid" = still has a balance and isn't void or credited.
+      const matching = ctx.outstanding
+        ? page.items.filter((i) => Number(i.balance) > 0 && !['VOID', 'CREDITED'].includes(String(i.status)))
+        : page.items
+      const shown = matching.slice(0, 8)
+      return {
+        name,
+        data: {
+          rows: shown.map((invRow) => ({
+            id: invRow.id,
+            invoiceNumber: invRow.invoiceNumber,
+            status: invRow.displayStatus ?? invRow.status,
+            total: Number(invRow.totalAmount),
+            balance: invRow.balance,
+            orderId: invRow.orderId,
+          })),
+          total: matching.length,
+          filters: filterLabels(ctx, ctx.outstanding && 'unpaid', ctx.customer && `customer “${ctx.customer}”`),
+          outstandingOnly: Boolean(ctx.outstanding),
+        },
+        links: shown.map((invRow) => ({
           label: invRow.invoiceNumber,
           href: isBuyer ? `/invoices/${invRow.id}` : `/admin/finance`,
         })),
@@ -234,7 +387,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
     }
     case 'search_catalog': {
       const tokens = ctx.searchTokens ?? []
-      if (tokens.length === 0) {
+      if (tokens.length === 0 && !ctx.priceRank) {
         return {
           name,
           data: null,
@@ -242,10 +395,11 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
           notice: 'Which product are you looking for? Give me a name, SKU code or keyword (e.g. “cable”).',
         }
       }
-      const page = await erp.catalogSearch(tenantId, tokens, ctx.page)
+      const page = await erp.catalogSearch(tenantId, tokens, ctx.page, ctx.priceRank)
+      const rows = ctx.limit ? page.rows.slice(0, ctx.limit) : page.rows
       return {
         name,
-        data: { ...page, search: tokens.join(' ') },
+        data: { ...page, rows, search: tokens.join(' '), priceRank: ctx.priceRank, limit: ctx.limit },
         links: page.rows.map((s) => ({ label: s.code, href: isBuyer ? '/catalog' : `/admin/inventory/${s.id}` })),
       }
     }

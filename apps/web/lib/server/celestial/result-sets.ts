@@ -59,7 +59,7 @@ function refsFor(result: ToolResult, kind: RefKind): ResultRef[] {
   })
 }
 
-function storeParams(params: ToolParams): StoredParams {
+export function storeParams(params: ToolParams): StoredParams {
   const { dateRange, ...rest } = params
   return {
     ...rest,
@@ -67,7 +67,7 @@ function storeParams(params: ToolParams): StoredParams {
   }
 }
 
-function loadParams(params: StoredParams): ToolParams {
+export function loadParams(params: StoredParams): ToolParams {
   const { dateRange, ...rest } = params
   return {
     ...rest,

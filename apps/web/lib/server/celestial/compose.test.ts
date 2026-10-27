@@ -158,3 +158,101 @@ test('buildDocFallbackReply uses plain language intro for overview questions', (
   assert.match(reply, /wholesale businesses/i)
   assert.doesNotMatch(reply, /npm run/)
 })
+
+test('composeFromToolResults ranks products by available stock', () => {
+  const reply = composeFromToolResults([
+    {
+      name: 'inventory.stock',
+      data: {
+        rows: [],
+        totalRows: 3,
+        skuSummaries: [
+          { skuId: 's1', code: 'ACC-CBL-USB', name: 'USB-C Cable 3ft', unit: 'EACH', available: 8, onHand: 8 },
+          { skuId: 's2', code: 'ACC-STAND-01', name: 'Display Stand', unit: 'EACH', available: 64, onHand: 64 },
+        ],
+        matchedSkus: 3,
+        rank: 'asc',
+        noStockRecorded: 1,
+        rankTruncated: false,
+        search: '',
+      },
+      links: [],
+    },
+  ])
+  assert.match(reply, /lowest first/)
+  assert.match(reply, /\| 1 \| `ACC-CBL-USB` \| USB-C Cable 3ft \| \*\*8\*\* EACH/)
+  assert.match(reply, /1 product\(s\) have no stock recorded/)
+  assert.doesNotMatch(reply, /least/)
+})
+
+test('sales forecast with too little history says so and gives no number', () => {
+  const reply = composeFromToolResults([
+    {
+      name: 'sales.forecast',
+      data: {
+        estimate: null,
+        reason: 'Not enough history: a forecast needs 3 full quarters of sales, and sales here start in Q4 2026 (0 full quarters so far).',
+        basis: [],
+        target: 'Q1 2027',
+        currentQuarter: { label: 'Q4 2026 so far', from: new Date(), to: new Date(), orders: 4, revenue: 621.78 },
+        excludedStatuses: ['CANCELLED', 'FAILED', 'RETURNED'],
+      },
+      links: [],
+    },
+  ])
+  assert.match(reply, /Sales forecast — Q1 2027/)
+  assert.match(reply, /No forecast\.\*\* Not enough history/)
+  assert.match(reply, /Q4 2026 so far: 621\.78 from 4 order/)
+  assert.doesNotMatch(reply, /Estimated revenue/)
+})
+
+test('a single-answer ranking is one line, not a table', () => {
+  const reply = composeFromToolResults([
+    {
+      name: 'sales.by_product',
+      data: {
+        label: 'last 4 quarters and this quarter so far',
+        rank: 'desc',
+        rows: [{ skuId: 's1', code: 'VAP-POD-001', name: 'Premium Nicotine Pod 5pk', unit: 'EACH', units: 10, revenue: 249.9 }],
+        ranked: 4,
+        truncated: false,
+        excludedStatuses: ['CANCELLED'],
+        limit: 1,
+        search: '',
+      },
+      links: [],
+    },
+  ])
+  assert.match(reply, /^\*\*Best seller — last 4 quarters and this quarter so far:\*\* \*\*Premium Nicotine Pod 5pk\*\* \(`VAP-POD-001`\) — 10 EACH sold, 249\.90 revenue\./)
+  assert.match(reply, /Highest of 4 product\(s\)/)
+  assert.doesNotMatch(reply, /\|/)
+})
+
+test('unpaid invoice filter with no matches answers plainly', () => {
+  const reply = composeFromToolResults([
+    { name: 'list_my_invoices', data: { rows: [], total: 0, filters: ['unpaid'], outstandingOnly: true }, links: [] },
+  ])
+  assert.equal(reply, '**Invoices — unpaid:** none — every matching invoice is fully paid.')
+})
+
+test('a name search with no match says it is a name search, not a stock check', () => {
+  const reply = composeFromToolResults([
+    { name: 'inventory.stock', data: { rows: [], totalRows: 0, skuSummaries: [], matchedSkus: 0, search: 'widgets' }, links: [] },
+  ])
+  assert.match(reply, /couldn’t find a product whose name or SKU matches “widgets”/)
+  assert.match(reply, /not a stock check/)
+})
+
+test('a record picked from a list says how it was picked', () => {
+  const reply = composeFromToolResults([
+    {
+      name: 'quotes.detail',
+      data: {
+        id: 'q1', quoteNumber: 'Q-1', status: 'OPEN', customerName: 'Acme', convertedOrderId: null, rejectionReason: null,
+        approvedAt: null, createdAt: new Date('2026-10-08Z'), lines: [], quoteTotal: 0, selection: '#2 from your last list (Q-1).',
+      },
+      links: [],
+    },
+  ])
+  assert.match(reply, /^\*\*#2 from your last list \(Q-1\)\.\*\*/)
+})

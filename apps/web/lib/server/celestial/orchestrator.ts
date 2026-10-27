@@ -9,8 +9,25 @@ import {
   listConversations,
   touchConversation,
 } from './conversations'
-import { detectIntent, isPlainLanguagePreferred, type DetectedIntent } from './intent'
-import { buildResultSets, intentForFollowUp, liveResultSets, resolveFollowUp, type ResultSet } from './result-sets'
+import { detectIntent, isHowToQuestion, isPlainLanguagePreferred, type DetectedIntent } from './intent'
+import {
+  clarifyReply,
+  describeLookup,
+  planQuestion,
+  routingDoubt,
+  unsupportedReply,
+  type Plan,
+  type PlannerTurn,
+} from './planner'
+import {
+  buildResultSets,
+  intentForFollowUp,
+  liveResultSets,
+  resolveFollowUp,
+  loadParams,
+  storeParams,
+  type ResultSet,
+} from './result-sets'
 import {
   CelestialStreamInterrupted,
   completeChat,
@@ -23,6 +40,8 @@ import { buildContextPrompt, buildSystemPrompt } from './prompts'
 import { formatDocContext, retrievePlatformDocs } from './retrieval'
 import { formatToolResultsForPrompt, runTools } from './tools'
 import { buildDocFallbackReply, composeFromToolResults, toolResultHasData } from './compose'
+import { smallTalkReply } from './smalltalk'
+import { acceptSummary, buildSummaryMessages, shouldSummarize, summaryTimeoutMs, withDeadline } from './record-summary'
 import type { ToolResult } from './tools'
 import type { CelestialToolName } from './intent'
 
@@ -94,8 +113,13 @@ type PreparedChat = {
   toolsUsed: string[]
   docs: ReturnType<typeof retrievePlatformDocs>
   directReply: string | null
+  /** Add an AI-written summary above the server-built records answer. */
+  summarize: boolean
   plainLanguage: boolean
   resultSets: ResultSet[]
+  /** Lookups run for this answer (settings only), so the router can read follow-ups in context. */
+  lookups: Array<{ tool: string; params: ReturnType<typeof storeParams> }>
+  routedBy: 'keywords' | 'ai' | 'follow-up'
 }
 
 async function prepareChat(session: SessionUser, input: CelestialChatInput): Promise<PreparedChat> {
@@ -130,25 +154,80 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
   const followUp = resolveFollowUp(message, recentSets)
   const followUpIntent = followUp ? intentForFollowUp(followUp) : undefined
   const clarification = followUpIntent && 'clarify' in followUpIntent ? followUpIntent.clarify : null
-  const intent: DetectedIntent =
+  const smallTalk = followUpIntent ? null : smallTalkReply(message, session)
+  const keywordIntent: DetectedIntent =
     followUpIntent && !('clarify' in followUpIntent)
       ? followUpIntent
-      : clarification
+      : clarification || smallTalk
         ? { tools: [] }
         : detectIntent(message, isBuyer, {
             orderId: input.context?.orderId,
             quoteId: input.context?.quoteId,
           })
 
+  // Keyword rules answer first. When they are unsure (no match, several matches, a follow-up that
+  // refines the last question, ambiguous wording), the AI router decides instead; it sees only the
+  // question, the lookups this employee may run and earlier lookup settings — never records.
+  const earlier = earlierTurns(conversation.messages)
+  const canPlan =
+    !isBuyer && !followUpIntent && !clarification && !smallTalk && !isHowToQuestion(message) && getCelestialModelInfo().configured
+  let calls: DetectedIntent[] = keywordIntent.tools.length > 0 ? [keywordIntent] : []
+  let routedBy: PreparedChat['routedBy'] = followUpIntent ? 'follow-up' : 'keywords'
+  let unsupported: string | null = null
+  let askBack: string | null = null
+  let planned = false
+
+  const applyPlan = (plan: Plan | null): boolean => {
+    planned = true
+    if (!plan) return false
+    routedBy = 'ai'
+    calls = plan.type === 'tools' ? plan.calls : []
+    if (plan.type === 'clarify') askBack = clarifyReply(plan)
+    if (plan.type === 'unsupported') unsupported = unsupportedReply(message, session)
+    return true
+  }
+
+  if (canPlan && routingDoubt(message, keywordIntent, earlier.length > 0)) {
+    const plan = await planQuestion(message, session, {}, earlier)
+    // A follow-up that points back ("when is it due?", "only the unpaid ones") and that the router
+    // couldn't place reuses the previous lookup; the answer then carries the detail asked for.
+    const previous = lastLookups(conversation.messages)
+    const lower = message.toLowerCase()
+    // With no keyword match any back-reference counts; when a keyword did match, only a pronoun
+    // ("when is it due?") clearly points at the previous answer rather than a new lookup.
+    const pointsBack = previous.length > 0 && (keywordIntent.tools.length === 0 ? POINTS_BACK : PRONOUN).test(lower)
+    if (plan?.type !== 'tools' && pointsBack) {
+      planned = true
+      routedBy = 'ai'
+      calls = previous.map((c) => (OUTSTANDING_WORDS.test(lower) ? { ...c, outstanding: true } : c))
+    } else {
+      applyPlan(plan)
+    }
+  }
+
+  const runCall = (call: DetectedIntent) => {
+    const { tools: names, ...callParams } = call
+    return runTools(names, { ...callParams, session, customerId, customerName: profile.customerName })
+  }
+  let perCall = await Promise.all(calls.map(runCall))
+
+  // AI check after the fact: a name search that found nothing may mean the words were misread
+  // (e.g. "least" taken as a product name). Ask the router once and rerun if it routes differently.
+  if (canPlan && !planned && searchFoundNothing(calls, perCall.flat())) {
+    const before = JSON.stringify(calls)
+    if (applyPlan(await planQuestion(message, session, {}, earlier)) && JSON.stringify(calls) !== before) {
+      perCall = await Promise.all(calls.map(runCall))
+    }
+  }
+  const toolResults = perCall.flat()
+  const intentTools = calls.flatMap((c) => c.tools)
+  // "Open the second one" — say which pick this is, so the answer and summary read it that way.
+  if (followUp?.type === 'select' && toolResults[0]?.data && typeof toolResults[0].data === 'object') {
+    ;(toolResults[0].data as Record<string, unknown>).selection = `#${followUp.position} from your last list (${followUp.ref.label}).`
+  }
+
   const plainLanguage = isPlainLanguagePreferred(message)
   const docs = retrievePlatformDocs(message, 6, plainLanguage)
-  const { tools: intentToolNames, ...params } = intent
-  const toolResults = await runTools(intentToolNames, {
-    ...params,
-    session,
-    customerId,
-    customerName: profile.customerName,
-  })
 
   // Earlier answers can quote ERP records, so history is withheld along with live data when sending
   // ERP data to the provider is not approved.
@@ -170,20 +249,90 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
   ]
 
   const directReply =
-    clarification ?? (shouldUseDirectCompose(toolResults) ? composeFromToolResults(toolResults) : null)
+    smallTalk ??
+    clarification ??
+    askBack ??
+    unsupported ??
+    (shouldUseDirectCompose(toolResults) ? composeFromToolResults(toolResults) : null)
 
   return {
     conversationId: conversation.id,
     message,
-    intentTools: intent.tools,
+    intentTools,
     messages,
-    links: toolResults.flatMap((t) => t.links).slice(0, 8),
+    links: toolResults
+      .flatMap((t) => t.links)
+      .filter((l, i, all) => all.findIndex((o) => o.href === l.href && o.label === l.label) === i)
+      .slice(0, 8),
     toolsUsed: toolResults.map((t) => t.name),
     docs,
     directReply,
+    summarize:
+      directReply != null &&
+      shouldSummarize(toolResults, {
+        modelConfigured: getCelestialModelInfo().configured,
+        shareErpData,
+        clarification: clarification != null || askBack != null || unsupported != null || smallTalk != null,
+      }),
     plainLanguage,
-    resultSets: buildResultSets(toolResults, params, scope),
+    resultSets: calls.flatMap((call, i) => {
+      const { tools: _names, ...callParams } = call
+      return buildResultSets(perCall[i] ?? [], callParams, scope)
+    }),
+    lookups: calls.map((call) => {
+      const { tools: names, ...callParams } = call
+      return { tool: names.join('+'), params: storeParams(callParams) }
+    }),
+    routedBy,
   }
+}
+
+const POINTS_BACK =
+  /\b(it|its|it's|that|this|those|these|them|they|ones?|same|instead|only|just|also|again|more|less|due|when|who|why)\b|^(and|but|now|then|so|great|ok|okay)\b/
+const PRONOUN = /\b(it|its|it's|that|this|those|these|them|they)\b/
+const OUTSTANDING_WORDS = /\b(unpaid|outstanding|open|owed?|owing|overdue|not (yet )?paid)\b/
+
+/** The lookups behind the most recent answer, ready to run again. */
+function lastLookups(messages: Array<{ role: string; metadata: unknown }>): DetectedIntent[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role !== 'assistant') continue
+    const lookups = (messages[i].metadata as { lookups?: Array<{ tool: string; params: Parameters<typeof loadParams>[0] }> } | null)?.lookups
+    if (!lookups?.length) return []
+    return lookups.map((l) => ({ ...loadParams(l.params), tools: l.tool.split('+') as DetectedIntent['tools'] }))
+  }
+  return []
+}
+
+/** Earlier questions with the lookups they ran, oldest first, for the router's context. */
+function earlierTurns(messages: Array<{ role: string; content: string; metadata: unknown }>): PlannerTurn[] {
+  const turns: PlannerTurn[] = []
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i].role !== 'user') continue
+    const next = messages[i + 1]
+    const lookups = next?.role === 'assistant' ? (next.metadata as { lookups?: Array<{ tool: string; params: Record<string, unknown> }> } | null)?.lookups : undefined
+    turns.push({
+      question: messages[i].content.slice(0, 200),
+      lookups: (lookups ?? []).map((l) => describeLookup(l.tool, l.params)).join('; '),
+    })
+  }
+  return turns.slice(-3)
+}
+
+/** True when a name/product search ran with search words and matched nothing. */
+function searchFoundNothing(calls: DetectedIntent[], results: ToolResult[]): boolean {
+  const searched = calls.some((c) => (c.searchTokens?.length ?? 0) > 0 || Boolean(c.searchTerm))
+  if (!searched) return false
+  return results.some((r) => {
+    if (r.notice || r.error || !r.data) return false
+    const d = r.data as Record<string, unknown>
+    if (r.name === 'inventory.stock') return d.matchedSkus === 0
+    if (r.name === 'search_catalog') return d.total === 0
+    if (r.name === 'sales.by_product') return Array.isArray(d.rows) && d.rows.length === 0 && Boolean(d.search)
+    if (r.name === 'global_search') {
+      return ['orders', 'customers', 'skus', 'quotes'].every((k) => !Array.isArray(d[k]) || (d[k] as unknown[]).length === 0)
+    }
+    return false
+  })
 }
 
 async function persistChatResult(
@@ -200,6 +349,8 @@ async function persistChatResult(
     toolsUsed: prepared.toolsUsed,
     links: prepared.links,
     ...(prepared.resultSets.length > 0 ? { resultSets: prepared.resultSets } : {}),
+    ...(prepared.lookups.length > 0 ? { lookups: prepared.lookups } : {}),
+    routedBy: prepared.routedBy,
   })
   await touchConversation(prepared.conversationId)
 
@@ -212,17 +363,34 @@ async function persistChatResult(
   }).catch(swallowed('orchestrator.persistChatResult'))
 }
 
+/**
+ * The records answer, with an AI summary on top when allowed. The server-built evidence is always
+ * kept verbatim; a slow, failed or unsupported summary just leaves the evidence on its own.
+ */
+async function recordsReply(prepared: PreparedChat): Promise<{ reply: string; provider: string; model: string }> {
+  const evidence = prepared.directReply ?? ''
+  if (!prepared.summarize) return { reply: evidence, provider: 'pleros', model: 'structured' }
+  const llm = await withDeadline(
+    completeChat(buildSummaryMessages(prepared.message, evidence)),
+    summaryTimeoutMs(),
+  )
+  const summary = acceptSummary(llm?.content, evidence, prepared.message)
+  if (!llm || !summary) return { reply: evidence, provider: 'pleros', model: 'structured' }
+  return { reply: `${summary}\n\n${evidence}`, provider: llm.provider, model: llm.model }
+}
+
 export async function chat(session: SessionUser, input: CelestialChatInput): Promise<CelestialChatResult> {
   const prepared = await prepareChat(session, input)
   if (prepared.directReply) {
-    await persistChatResult(session, prepared, prepared.directReply, 'pleros', 'structured')
+    const { reply, provider, model } = await recordsReply(prepared)
+    await persistChatResult(session, prepared, reply, provider, model)
     return {
       conversationId: prepared.conversationId,
-      reply: prepared.directReply,
+      reply,
       links: prepared.links,
       toolsUsed: prepared.toolsUsed,
-      provider: 'pleros',
-      model: 'structured',
+      provider,
+      model,
     }
   }
 
@@ -282,7 +450,10 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
 
       try {
         if (prepared.directReply) {
-          await streamText(prepared.directReply, 'pleros', 'structured')
+          // The summary is checked against the evidence before anything is shown, so it is
+          // fetched whole (bounded by the summary deadline) rather than streamed token by token.
+          const { reply, provider, model } = await recordsReply(prepared)
+          await streamText(reply, provider, model)
           return
         }
 
