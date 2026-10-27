@@ -4,6 +4,8 @@ import { poLineProblems, type PoFormLine } from './po-lines'
 
 const line = (over: Partial<PoFormLine> = {}): PoFormLine => ({
   key: 1,
+  skuId: 'sku-1',
+  skuIsActive: true,
   skuCode: 'COLA-12',
   description: '',
   qtyOrdered: '10',
@@ -19,6 +21,11 @@ test('a blank line names every field that is missing', () => {
   assert.deepEqual(poLineProblems([line({ skuCode: '  ', qtyOrdered: '', unitCost: '' })]), [
     ['SKU code is required', 'Quantity must be a whole number of 1 or more', "Enter a unit cost (0 if it's free)"],
   ])
+})
+
+test('a typed SKU code must be selected from search results before the line is valid', () => {
+  assert.deepEqual(poLineProblems([line({ skuId: undefined, skuIsActive: undefined })]), [['Select an active SKU from the search results']])
+  assert.deepEqual(poLineProblems([line({ skuIsActive: false })]), [['Select an active SKU from the search results']])
 })
 
 test('quantity must be a whole number of at least 1', () => {

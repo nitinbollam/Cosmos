@@ -1,5 +1,13 @@
 /** A line in the New purchase order form, as typed (numbers are kept as text until saved). */
-export type PoFormLine = { key: number; skuCode: string; description: string; qtyOrdered: string; unitCost: string }
+export type PoFormLine = {
+  key: number
+  skuId?: string
+  skuIsActive?: boolean
+  skuCode: string
+  description: string
+  qtyOrdered: string
+  unitCost: string
+}
 
 /** Blank text is "not entered", never 0. */
 export function parseFormNumber(v: string): number {
@@ -16,6 +24,7 @@ export function poLineProblems(lines: PoFormLine[]): string[][] {
     const problems: string[] = []
     const code = l.skuCode.trim()
     if (!code) problems.push('SKU code is required')
+    else if (!l.skuId || l.skuIsActive !== true) problems.push('Select an active SKU from the search results')
     else if (firstLineBySku.has(code)) problems.push(`SKU ${code} is already on line ${firstLineBySku.get(code)}`)
     else firstLineBySku.set(code, i + 1)
     const qty = parseFormNumber(l.qtyOrdered)

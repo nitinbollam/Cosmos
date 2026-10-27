@@ -7,6 +7,7 @@ import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
 import { showReceiptBillingResult, type ReceiptBilling } from '@/lib/receipt-billing'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { purchaseOrderStatusLabel, type PurchaseOrderStatus } from '@/lib/purchasing-status'
 
 type PoLine = {
   id: string
@@ -21,7 +22,7 @@ type PoLine = {
 type PurchaseOrder = {
   id: string
   number: string
-  status: string
+  status: PurchaseOrderStatus
   notes?: string | null
   freightAmount?: string | number
   dutyAmount?: string | number
@@ -160,7 +161,9 @@ export default function PurchaseOrderDetailPage() {
               <h1 className="text-2xl font-bold text-pleros-white">PO {po.data.number}</h1>
               <p className="text-pleros-muted text-sm mt-1">{po.data.supplier?.name}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <StatusBadge status={po.data.status} />
+                <span className="inline-flex rounded-md border border-pleros-border px-2.5 py-1 text-xs font-semibold text-pleros-text">
+                  {purchaseOrderStatusLabel(po.data.status)}
+                </span>
                 {isPendingApproval ? (
                   <span className="text-xs px-2 py-0.5 rounded font-medium bg-amber-500/20 text-amber-300">
                     Awaiting manager approval

@@ -5,12 +5,12 @@ import { useSearchParams } from 'react-router-dom'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
-import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { axiosErr } from '@/lib/axios-error'
 import { parseFormNumber, poLineProblems, type PoFormLine } from '@/lib/po-lines'
+import { purchaseOrderStatusLabel, type PurchaseOrderStatus } from '@/lib/purchasing-status'
 
-type PoStatus = 'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'CLOSED' | 'CANCELLED'
+type PoStatus = PurchaseOrderStatus
 
 type PurchaseOrder = {
   id: string
@@ -31,12 +31,13 @@ type Supplier = {
 }
 
 const FILTERS: Array<{ label: string; value: '' | PoStatus }> = [
-  { label: 'ALL', value: '' },
-  { label: 'DRAFT', value: 'DRAFT' },
-  { label: 'SUBMITTED', value: 'SUBMITTED' },
-  { label: 'PARTIALLY_RECEIVED', value: 'PARTIALLY_RECEIVED' },
-  { label: 'CLOSED', value: 'CLOSED' },
-  { label: 'CANCELLED', value: 'CANCELLED' },
+  { label: 'All', value: '' },
+  { label: 'Draft', value: 'DRAFT' },
+  { label: 'Pending Approval', value: 'PENDING_APPROVAL' },
+  { label: 'Submitted', value: 'SUBMITTED' },
+  { label: 'Partially Received', value: 'PARTIALLY_RECEIVED' },
+  { label: 'Closed', value: 'CLOSED' },
+  { label: 'Cancelled', value: 'CANCELLED' },
 ]
 
 export default function PurchasingPage() {
@@ -47,23 +48,35 @@ export default function PurchasingPage() {
   const [statusFilter, setStatusFilter] = useState<'' | PoStatus>('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [supplierDrawer, setSupplierDrawer] = useState(false)
-  const [prefillLine, setPrefillLine] = useState<{ skuCode: string; description: string; qtyOrdered: number } | null>(null)
+  const [prefillLine, setPrefillLine] = useState<{ skuId: string; skuCode: string; description: string; qtyOrdered: number } | null>(null)
 
   useEffect(() => {
+    setPrefillLine(null)
     if (!prefillSkuId) return
     void (async () => {
       try {
         const suggestion = await api.get<{
-          sku: { code: string; name: string }
           suggestedQty: number
         }>(`/skus/${encodeURIComponent(prefillSkuId)}/reorder-suggestion`)
+        const sku = await api.get<{ id: string; code: string; name: string; isActive: boolean }>(
+          `/skus/${encodeURIComponent(prefillSkuId)}`,
+        )
+        if (!sku.isActive) {
+          createPo.reset()
+          setDrawerOpen(true)
+          return
+        }
         setPrefillLine({
-          skuCode: suggestion.sku.code,
-          description: suggestion.sku.name,
+          skuId: sku.id,
+          skuCode: sku.code,
+          description: sku.name,
           qtyOrdered: suggestion.suggestedQty,
         })
+        createPo.reset()
         setDrawerOpen(true)
       } catch {
+        setPrefillLine(null)
+        createPo.reset()
         setDrawerOpen(true)
       }
     })()
@@ -114,6 +127,23 @@ export default function PurchasingPage() {
     },
   })
 
+  const openPoDrawer = () => {
+    createPo.reset()
+    setDrawerOpen(true)
+  }
+  const closePoDrawer = () => {
+    createPo.reset()
+    setDrawerOpen(false)
+  }
+  const openSupplierDrawer = () => {
+    createSupplier.reset()
+    setSupplierDrawer(true)
+  }
+  const closeSupplierDrawer = () => {
+    createSupplier.reset()
+    setSupplierDrawer(false)
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -158,7 +188,7 @@ export default function PurchasingPage() {
             ))}
             <button
               type="button"
-              onClick={() => setDrawerOpen(true)}
+              onClick={openPoDrawer}
               className="ml-auto h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
             >
               New PO
@@ -179,7 +209,7 @@ export default function PurchasingPage() {
                 action={
                   <button
                     type="button"
-                    onClick={() => setDrawerOpen(true)}
+                    onClick={openPoDrawer}
                     className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
                   >
                     New PO
@@ -204,7 +234,9 @@ export default function PurchasingPage() {
                         <td className="py-2 pr-4 font-mono text-pleros-white">{po.number}</td>
                         <td className="py-2 pr-4 text-pleros-text">{po.supplier?.name ?? '—'}</td>
                         <td className="py-2 pr-4">
-                          <StatusBadge status={po.status} />
+                          <span className="inline-flex rounded-md border border-pleros-border px-2.5 py-1 text-xs font-semibold text-pleros-text">
+                            {purchaseOrderStatusLabel(po.status)}
+                          </span>
                         </td>
                         <td className="py-2 pr-4 text-pleros-muted">
                           {new Date(po.createdAt).toLocaleDateString()}
@@ -229,7 +261,7 @@ export default function PurchasingPage() {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => setSupplierDrawer(true)}
+              onClick={openSupplierDrawer}
               className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
             >
               New supplier
@@ -249,7 +281,7 @@ export default function PurchasingPage() {
                 action={
                   <button
                     type="button"
-                    onClick={() => setSupplierDrawer(true)}
+                  onClick={openSupplierDrawer}
                     className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm"
                   >
                     New supplier
@@ -289,7 +321,7 @@ export default function PurchasingPage() {
           suppliers={suppliers.data ?? []}
           warehouses={warehouses.data ?? []}
           prefillLine={prefillLine}
-          onClose={() => setDrawerOpen(false)}
+          onClose={closePoDrawer}
           onSubmit={(payload) => createPo.mutate(payload)}
           loading={createPo.isPending}
           error={createPo.error as Error | undefined}
@@ -298,7 +330,7 @@ export default function PurchasingPage() {
 
       {supplierDrawer && (
         <SupplierDrawer
-          onClose={() => setSupplierDrawer(false)}
+          onClose={closeSupplierDrawer}
           onSubmit={(b) => createSupplier.mutate(b)}
           loading={createSupplier.isPending}
           error={createSupplier.error as Error | undefined}
@@ -311,7 +343,7 @@ export default function PurchasingPage() {
 function PoDrawer(props: {
   suppliers: Supplier[]
   warehouses: Array<{ id: string; name: string }>
-  prefillLine?: { skuCode: string; description: string; qtyOrdered: number } | null
+  prefillLine?: { skuId: string; skuCode: string; description: string; qtyOrdered: number } | null
   onClose: () => void
   onSubmit: (body: {
     supplierId: string
@@ -328,15 +360,14 @@ function PoDrawer(props: {
   const [warehouseNote, setWarehouseNote] = useState('')
   const [lines, setLines] = useState<PoFormLine[]>(() =>
     props.prefillLine
-      ? [{ key: 1, skuCode: props.prefillLine.skuCode, description: props.prefillLine.description, qtyOrdered: String(props.prefillLine.qtyOrdered), unitCost: '' }]
+      ? [{ key: 1, skuId: props.prefillLine.skuId, skuIsActive: true, skuCode: props.prefillLine.skuCode, description: props.prefillLine.description, qtyOrdered: String(props.prefillLine.qtyOrdered), unitCost: '' }]
       : [{ key: 1, skuCode: '', description: '', qtyOrdered: '1', unitCost: '' }],
   )
   // Problems show once Create is pressed, so a fresh form isn't covered in red.
   const [showProblems, setShowProblems] = useState(false)
   // Every line needs a price: the supplier bill is built from it when goods arrive.
   const lineProblems = poLineProblems(lines)
-  const formProblems = [!supplierId && 'Select a supplier', !number.trim() && 'Enter a PO number'].filter(Boolean) as string[]
-  const hasProblems = formProblems.length > 0 || lineProblems.some((p) => p.length > 0)
+  const hasProblems = !supplierId || !number.trim() || lineProblems.some((p) => p.length > 0)
   const lineTotal = (l: PoFormLine) => {
     const cost = parseFormNumber(l.unitCost)
     const qty = parseFormNumber(l.qtyOrdered)
@@ -351,11 +382,14 @@ function PoDrawer(props: {
       <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
       <div className="w-full max-w-lg bg-pleros-surface border-l border-pleros-border p-6 overflow-y-auto">
         <h2 className="text-lg font-semibold text-pleros-white">New purchase order</h2>
-        <label className="block mt-4 text-xs text-pleros-muted">Supplier</label>
+        <label className="block mt-4 text-xs text-pleros-muted" htmlFor="po-supplier">Supplier</label>
         <select
+          id="po-supplier"
           className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={supplierId}
           onChange={(e) => setSupplierId(e.target.value)}
+          aria-invalid={showProblems && !supplierId}
+          aria-describedby={showProblems && !supplierId ? 'po-supplier-error' : undefined}
         >
           <option value="">Select…</option>
           {props.suppliers.map((s) => (
@@ -364,6 +398,7 @@ function PoDrawer(props: {
             </option>
           ))}
         </select>
+        {showProblems && !supplierId && <p id="po-supplier-error" className="mt-1 text-xs text-red-400">Select a supplier.</p>}
         <label className="block mt-4 text-xs text-pleros-muted">Warehouse (for notes)</label>
         <select
           className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
@@ -377,12 +412,16 @@ function PoDrawer(props: {
             </option>
           ))}
         </select>
-        <label className="block mt-4 text-xs text-pleros-muted">PO number</label>
+        <label className="block mt-4 text-xs text-pleros-muted" htmlFor="po-number">PO number</label>
         <input
+          id="po-number"
           className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={number}
           onChange={(e) => setNumber(e.target.value)}
+          aria-invalid={showProblems && !number.trim()}
+          aria-describedby={showProblems && !number.trim() ? 'po-number-error' : undefined}
         />
+        {showProblems && !number.trim() && <p id="po-number-error" className="text-red-400 text-xs mt-1">Enter a PO number.</p>}
         {lines.map((ln, idx) => {
           const problems = showProblems ? lineProblems[idx]! : []
           const total = lineTotal(ln)
@@ -404,23 +443,33 @@ function PoDrawer(props: {
                   </button>
                 )}
               </div>
-              <input
-                placeholder="SKU code"
-                aria-label={`Line ${idx + 1} SKU code`}
-                className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
-                value={ln.skuCode}
-                onChange={(e) => updateLine(idx, { skuCode: e.target.value })}
+              <PoSkuSelector
+                lineNumber={idx + 1}
+                skuId={ln.skuId}
+                skuCode={ln.skuCode}
+                error={showProblems ? problems.find((p) => p.includes('SKU')) : undefined}
+                onSelect={(sku) => updateLine(idx, {
+                  skuId: sku.id,
+                  skuIsActive: sku.isActive,
+                  skuCode: sku.code,
+                  description: ln.description.trim() ? ln.description : sku.name,
+                })}
+                onClear={() => updateLine(idx, { skuId: undefined, skuIsActive: undefined, skuCode: '', description: '' })}
               />
-              <input
-                type="number"
-                min={1}
-                step={1}
-                placeholder="Quantity"
-                aria-label={`Line ${idx + 1} quantity`}
-                className="rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
-                value={ln.qtyOrdered}
-                onChange={(e) => updateLine(idx, { qtyOrdered: e.target.value })}
-              />
+              <div>
+                <label htmlFor={`po-line-${idx + 1}-quantity`} className="mb-1 block text-xs text-pleros-muted">Quantity</label>
+                <input
+                  id={`po-line-${idx + 1}-quantity`}
+                  type="number"
+                  min={1}
+                  step={1}
+                  aria-label={`Line ${idx + 1} quantity`}
+                  aria-invalid={showProblems && problems.some((p) => p.startsWith('Quantity'))}
+                  className="w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+                  value={ln.qtyOrdered}
+                  onChange={(e) => updateLine(idx, { qtyOrdered: e.target.value })}
+                />
+              </div>
               <input
                 type="number"
                 min={0}
@@ -472,13 +521,8 @@ function PoDrawer(props: {
           onChange={(e) => setNotes(e.target.value)}
         />
         <p className="mt-3 text-sm text-pleros-white">PO total ${poTotal.toFixed(2)}</p>
-        {showProblems && formProblems.map((p) => (
-          <p key={p} className="text-red-400 text-xs mt-1">{p}</p>
-        ))}
-        {showProblems && hasProblems && formProblems.length === 0 && (
-          <p className="text-red-400 text-xs mt-1">Fix the lines marked in red.</p>
-        )}
-        {props.error && <p className="text-red-400 text-xs mt-2">{axiosErr(props.error)}</p>}
+        {showProblems && hasProblems && <p role="alert" className="text-red-400 text-xs mt-2">Fix the fields marked above before creating the purchase order.</p>}
+        {props.error && <p role="alert" className="text-red-400 text-xs mt-2">Could not create purchase order: {axiosErr(props.error)}</p>}
         <div className="mt-6 flex gap-2">
           <button
             type="button"
@@ -489,7 +533,7 @@ function PoDrawer(props: {
           </button>
           <button
             type="button"
-            disabled={props.loading || (showProblems && hasProblems)}
+            disabled={props.loading}
             className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
             onClick={() => {
               setShowProblems(true)
@@ -518,6 +562,92 @@ function PoDrawer(props: {
   )
 }
 
+type SkuSearchResult = { id: string; code: string; name: string; isActive: boolean }
+
+function PoSkuSelector(props: {
+  lineNumber: number
+  skuId?: string
+  skuCode: string
+  error?: string
+  onSelect: (sku: SkuSearchResult) => void
+  onClear: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const results = useQuery<{ items: SkuSearchResult[] }>({
+    queryKey: ['purchase-order-sku-search', search],
+    enabled: search.trim().length > 0,
+    queryFn: () => {
+      const params = new URLSearchParams({ page: '1', pageSize: '12', search: search.trim() })
+      return api.get(`/skus?${params.toString()}`)
+    },
+  })
+  const listId = `po-line-${props.lineNumber}-sku-options`
+  const activeSkus = (results.data?.items ?? []).filter((sku) => sku.isActive)
+
+  return (
+    <div className="col-span-2 relative">
+      <label htmlFor={`po-line-${props.lineNumber}-sku-search`} className="mb-1 block text-xs text-pleros-muted">
+        SKU
+      </label>
+      {props.skuId ? (
+        <div className="flex items-center justify-between rounded-md border border-pleros-border bg-pleros-surface-2 px-2 py-2 text-xs text-pleros-text">
+          <span>{props.skuCode} selected</span>
+          <button type="button" className="text-pleros-primary" onClick={props.onClear}>
+            Change SKU
+          </button>
+        </div>
+      ) : (
+        <input
+          id={`po-line-${props.lineNumber}-sku-search`}
+          role="combobox"
+          aria-label={`Line ${props.lineNumber} SKU`}
+          aria-autocomplete="list"
+          aria-expanded={search.trim().length > 0}
+          aria-controls={listId}
+          aria-invalid={Boolean(props.error)}
+          aria-describedby={props.error ? `po-line-${props.lineNumber}-sku-error` : undefined}
+          autoComplete="off"
+          placeholder="Search SKU by code or name…"
+          className="w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-2 py-1.5 text-xs text-pleros-text"
+          value={search}
+          onChange={(e) => {
+            props.onClear()
+            setSearch(e.target.value)
+          }}
+        />
+      )}
+      {props.error && <p id={`po-line-${props.lineNumber}-sku-error`} className="mt-1 text-xs text-red-400">{props.error}</p>}
+      {!props.skuId && search.trim() && (
+        <div id={listId} role="listbox" className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-pleros-border bg-pleros-surface shadow-lg">
+          {results.isLoading ? (
+            <p className="px-3 py-2 text-xs text-pleros-muted">Searching…</p>
+          ) : results.isError ? (
+            <p role="alert" className="px-3 py-2 text-xs text-red-400">Could not search SKUs.</p>
+          ) : activeSkus.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-pleros-muted">No matching SKUs.</p>
+          ) : (
+            activeSkus.map((sku) => (
+              <button
+                key={sku.id}
+                type="button"
+                role="option"
+                aria-selected={false}
+                className="block w-full px-3 py-2 text-left text-xs text-pleros-text hover:bg-pleros-surface-2"
+                onClick={() => {
+                  props.onSelect(sku)
+                  setSearch('')
+                }}
+              >
+                <span className="font-mono">{sku.code}</span><span className="ml-2">{sku.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SupplierDrawer(props: {
   onClose: () => void
   onSubmit: (body: { code: string; name: string; email?: string; phone?: string }) => void
@@ -528,36 +658,54 @@ function SupplierDrawer(props: {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [showProblems, setShowProblems] = useState(false)
+  const fieldErrors = {
+    code: showProblems && !code.trim() ? 'Enter a supplier code.' : '',
+    name: showProblems && !name.trim() ? 'Enter a supplier name.' : '',
+  }
+  const hasProblems = Boolean(fieldErrors.code || fieldErrors.name)
   return (
     <div className="fixed inset-0 z-50 flex">
       <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
       <div className="w-full max-w-md bg-pleros-surface border-l border-pleros-border p-6">
         <h2 className="text-lg font-semibold text-pleros-white">New supplier</h2>
+        <label htmlFor="supplier-code" className="mt-4 block text-xs text-pleros-muted">Supplier code</label>
         <input
-          placeholder="Code"
+          id="supplier-code"
           className="mt-4 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={code}
           onChange={(e) => setCode(e.target.value)}
+          aria-invalid={Boolean(fieldErrors.code)}
+          aria-describedby={fieldErrors.code ? 'supplier-code-error' : undefined}
         />
+        {fieldErrors.code && <p id="supplier-code-error" className="mt-1 text-xs text-red-400">{fieldErrors.code}</p>}
+        <label htmlFor="supplier-name" className="mt-3 block text-xs text-pleros-muted">Supplier name</label>
         <input
-          placeholder="Name"
+          id="supplier-name"
           className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          aria-invalid={Boolean(fieldErrors.name)}
+          aria-describedby={fieldErrors.name ? 'supplier-name-error' : undefined}
         />
+        {fieldErrors.name && <p id="supplier-name-error" className="mt-1 text-xs text-red-400">{fieldErrors.name}</p>}
+        <label htmlFor="supplier-email" className="mt-3 block text-xs text-pleros-muted">Email (optional)</label>
         <input
-          placeholder="Email"
+          id="supplier-email"
+          type="email"
           className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+        <label htmlFor="supplier-phone" className="mt-3 block text-xs text-pleros-muted">Phone (optional)</label>
         <input
-          placeholder="Phone (optional)"
+          id="supplier-phone"
           className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
-        {props.error && <p className="text-red-400 text-xs mt-2">{props.error.message}</p>}
+        {hasProblems && <p role="alert" className="text-red-400 text-xs mt-2">Complete the required supplier fields.</p>}
+        {props.error && <p role="alert" className="text-red-400 text-xs mt-2">Could not create supplier: {axiosErr(props.error)}</p>}
         <div className="mt-6 flex gap-2">
           <button
             type="button"
@@ -568,16 +716,18 @@ function SupplierDrawer(props: {
           </button>
           <button
             type="button"
-            disabled={props.loading || !code || !name}
+            disabled={props.loading}
             className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
-            onClick={() =>
+            onClick={() => {
+              setShowProblems(true)
+              if (!code.trim() || !name.trim()) return
               props.onSubmit({
-                code,
-                name,
-                email: email || undefined,
-                phone: phone || undefined,
+                code: code.trim(),
+                name: name.trim(),
+                email: email.trim() || undefined,
+                phone: phone.trim() || undefined,
               })
-            }
+            }}
           >
             {props.loading ? 'Saving…' : 'Create'}
           </button>
