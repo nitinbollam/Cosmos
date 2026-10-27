@@ -11,7 +11,7 @@ type RolePortal = {
   title: string
   subtitle: string
   badge: string
-  icon: string
+  icon: ReactNode
   href: string
   loginHref: string
   demoRole: string
@@ -218,7 +218,7 @@ const ROLE_PORTALS: RolePortal[] = [
     title: 'Celestial AI Copilot',
     subtitle: 'Natural Language Tenant ERP Intelligence',
     badge: 'AI Intelligence',
-    icon: '✦',
+    icon: <PlerosLogo variant="mark" size="sm" title="" className="pleros-mark-em mx-auto" />,
     href: '/admin/celestial',
     loginHref: '/admin/login',
     demoRole: 'ERP Analyst / Executive',
@@ -890,7 +890,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7 space-y-4">
               <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-mono font-bold">
-                ✦ EMBEDDED COPILOT INTELLIGENCE
+                <PlerosLogo variant="mark" size="sm" title="" className="pleros-mark-em" /> EMBEDDED COPILOT INTELLIGENCE
               </div>
               <h2 className="text-2xl sm:text-3xl font-black uppercase text-[var(--c-heading)]">
                 Meet Celestial AI Copilot
@@ -915,7 +915,8 @@ export default function HomePage() {
             <div className="lg:col-span-5 flex flex-col gap-3">
               <div className="p-4 rounded bg-[var(--c-bg)] border-2 border-black font-mono text-xs shadow-[3px_3px_0px_#000]">
                 <div className="flex items-center gap-2 pb-2 mb-2 border-b border-[var(--c-border)] text-purple-400 font-bold">
-                  <span>✦ Celestial Terminal</span>
+                  <PlerosLogo variant="mark" size="sm" title="" className="pleros-mark-em" />
+                  <span>Celestial Terminal</span>
                   <span className="text-[10px] text-emerald-400 ml-auto">Connected</span>
                 </div>
                 <div className="text-[var(--c-text-3)] text-[11px] mb-2">&gt; query: &quot;Show AR aging bucket &gt; 60 days&quot;</div>
