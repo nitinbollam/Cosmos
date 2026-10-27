@@ -4,6 +4,7 @@ import { api as shopApi, gatewayApiBaseUrl as shopGateway } from '@/lib/api'
 import { api as adminApi, gatewayApiBaseUrl as adminGateway } from '@/lib/api-admin'
 import { axiosErr } from '@/lib/axios-error'
 import { CelestialMarkdown } from '@/components/celestial/celestial-markdown'
+import { PlerosLogo } from '@/components/pleros-logo'
 import { approvedCelestialLinks } from '@/components/celestial/celestial-links'
 import { streamCelestialChat } from '@/components/celestial/celestial-stream'
 import { useCelestialStore, type CelestialSurface } from '@/stores/celestial-store'
@@ -277,7 +278,9 @@ export function CelestialChat({
         aria-label="Open Celestial assistant"
         onClick={() => setFloatingOpen(surface, true)}
       >
-        <span aria-hidden>✦</span>
+        <span aria-hidden className="celestial-fab-mark">
+          <PlerosLogo variant="mark" size="sm" title="" className="pleros-mark-em" />
+        </span>
         <span className="celestial-fab-label">Celestial</span>
         {messages.length > 0 ? <span className="celestial-fab-dot" aria-hidden /> : null}
       </button>
@@ -326,7 +329,7 @@ export function CelestialChat({
         {messages.length === 0 ? (
           <div className="celestial-empty">
             <div className="celestial-empty-icon" aria-hidden>
-              ✦
+              <PlerosLogo variant="mark" size="lg" title="" className="pleros-mark-em" />
             </div>
             <h3 className="celestial-empty-title">How can I help?</h3>
             <p className="celestial-empty-text">
