@@ -676,7 +676,7 @@ export async function importStatementCsv(
   const peek = await findRecon(ledgerDb, actor.tenantId, id)
   const parsed = parseStatementCsv(body.csvText, body.mapping, { periodStart: peek.periodStart, periodEnd: peek.periodEnd })
   if (parsed.errors.length) {
-    throw new ApiError(400, `${parsed.errors.length} row(s) failed validation; nothing was imported`, undefined, parsed.errors)
+    throw new ApiError(400, `${parsed.errors.length} row(s) failed validation; nothing was imported`, undefined, { errors: parsed.errors })
   }
   const fileName = typeof body.fileName === 'string' ? body.fileName.trim().slice(0, 200) || null : null
 
@@ -970,7 +970,7 @@ export async function signOff(actor: ReconActor, id: string, body: { version?: u
       }
       const ws = await computeWorkspace(tx, recon)
       const blockers = signOffBlockers(recon, ws)
-      if (blockers.length) throw new ApiError(409, blockers[0]!, undefined, blockers)
+      if (blockers.length) throw new ApiError(409, blockers[0]!, undefined, { errors: blockers })
 
       const now = new Date()
       const res = await tx.bankReconciliation.updateMany({

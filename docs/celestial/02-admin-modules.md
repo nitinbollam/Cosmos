@@ -144,3 +144,10 @@ Comprehensive reference and how-to guides for all Pleros ERP admin modules. Inde
   - Stripe Connect: Configure payouts and merchant payment processing.
   - Webhooks & API Keys: Configure outbound webhooks and secure developer API tokens.
   - Audit Log: Immutable security log of all tenant actions, logins, and data modifications.
+
+### Adding a new user (team member)
+1. Open **Settings** and choose the **Users** tab.
+2. Click **Invite user**, enter their email address and pick a role (for example Manager, Accountant, Warehouse staff, Sales rep or Driver). Only an administrator can invite another administrator.
+3. Send the invite. The person gets an email with a link, and Pleros also shows the invite link so you can share it yourself.
+4. They open the link, set their password and sign in. Pending invites are listed on the same tab, where you can cancel them.
+5. To change what someone can do later, change their **role** in the Users table, or use **Permissions** to grant or remove individual modules.

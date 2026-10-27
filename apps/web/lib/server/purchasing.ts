@@ -1,9 +1,10 @@
 import { Prisma, PurchaseOrderStatus, VendorBillStatus } from '@/generated/prisma-purchasing'
-import { inventoryDb, purchasingDb } from './db'
+import { inventoryDb, purchasingDb, tenantDb } from './db'
+import { landedCostChangeBlocker } from './po-landed-cost-rules'
 import { ApiError } from './session'
 import * as poReceiving from './po-receiving'
 import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
-import { ApprovalType } from '@/generated/prisma-tenant'
+import { ApprovalStatus, ApprovalType } from '@/generated/prisma-tenant'
 import { getTenantWorkflowSettings } from './tenant-workflow-settings'
 
 // NOTE: This module mirrors the legacy Nest purchasing-service behavior
@@ -59,43 +60,118 @@ export async function getPurchaseOrderDetail(tenantId: string, id: string) {
 /** Largest quantity a single PO line may carry; far above any real wholesale order. */
 export const MAX_PO_LINE_QUANTITY = 1_000_000
 
+/** Largest unit cost or order-level charge; keeps absurd values from overflowing the database. */
+export const MAX_PO_AMOUNT = 1_000_000_000
+
+/** One problem with a purchase order, tied to the line and field it belongs to (line is null for the order as a whole). */
+export type PoProblem = {
+  line: number | null
+  field: 'lines' | 'lineNo' | 'skuCode' | 'description' | 'qtyOrdered' | 'unitCost' | 'freightAmount' | 'dutyAmount' | 'otherLandedAmount' | 'landedCostNotes'
+  message: string
+}
+
+/** One 400 for every problem found: the message lists them all, `errors` gives line and field for each. */
+export function poValidationError(problems: PoProblem[]): ApiError {
+  return new ApiError(400, problems.map((p) => p.message).join('; '), undefined, { errors: problems })
+}
+
 /**
  * Every PO line needs a SKU code and a whole quantity of at least 1. A line without a SKU is never
  * put into stock when it's received ("PO updated only"), so it can't be left blank. The same SKU
- * twice is refused too: scan receiving books a SKU against its first line only.
+ * twice is refused too: scan receiving books a SKU against its first line only. Unit cost is 0 or
+ * more (never negative) and bounded. All problems are collected, not just the first.
  */
-export function assertValidPurchaseOrderLines(lines: unknown): asserts lines is CreatePurchaseOrderInput['lines'] {
-  if (!Array.isArray(lines) || lines.length === 0) throw new ApiError(400, 'A purchase order needs at least one line')
+export function purchaseOrderLineProblems(lines: unknown): PoProblem[] {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return [{ line: null, field: 'lines', message: 'A purchase order needs at least one line' }]
+  }
+  const problems: PoProblem[] = []
   const lineNos = new Set<number>()
   const lineBySku = new Map<string, number>()
   for (const [i, raw] of lines.entries()) {
     const l = raw as Partial<CreatePurchaseOrderInput['lines'][number]> | null
     if (!l || !Number.isInteger(l.lineNo) || (l.lineNo as number) < 1) {
-      throw new ApiError(400, `Line ${i + 1}: line number must be a whole number of 1 or more`)
+      problems.push({ line: i + 1, field: 'lineNo', message: `Line ${i + 1}: line number must be a whole number of 1 or more` })
+      continue
     }
     const lineNo = l.lineNo as number
     const where = `Line ${lineNo}`
-    if (lineNos.has(lineNo)) throw new ApiError(400, `${where}: duplicate line number`)
+    if (lineNos.has(lineNo)) problems.push({ line: lineNo, field: 'lineNo', message: `${where}: duplicate line number` })
     lineNos.add(lineNo)
     const code = typeof l.skuCode === 'string' ? l.skuCode.trim() : ''
-    if (!code) throw new ApiError(400, `${where}: SKU code is required`)
-    const earlier = lineBySku.get(code)
-    if (earlier != null) throw new ApiError(400, `${where}: SKU ${code} is already on line ${earlier}; change the quantity there instead`)
-    lineBySku.set(code, lineNo)
-    if (!Number.isInteger(l.qtyOrdered) || (l.qtyOrdered as number) < 1 || (l.qtyOrdered as number) > MAX_PO_LINE_QUANTITY) {
-      throw new ApiError(400, `${where}: quantity must be a whole number from 1 to ${MAX_PO_LINE_QUANTITY}`)
+    if (!code) {
+      problems.push({ line: lineNo, field: 'skuCode', message: `${where}: SKU code is required` })
+    } else {
+      const earlier = lineBySku.get(code)
+      if (earlier != null) {
+        problems.push({
+          line: lineNo,
+          field: 'skuCode',
+          message: `${where}: SKU ${code} is already on line ${earlier}; change the quantity there instead`,
+        })
+      } else {
+        lineBySku.set(code, lineNo)
+      }
     }
-    if (l.description != null && typeof l.description !== 'string') throw new ApiError(400, `${where}: description must be text`)
-    if (l.unitCost != null && (typeof l.unitCost !== 'number' || !Number.isFinite(l.unitCost) || l.unitCost < 0)) {
-      throw new ApiError(400, `${where}: unit cost must be a number of 0 or more`)
+    if (!Number.isInteger(l.qtyOrdered) || (l.qtyOrdered as number) < 1 || (l.qtyOrdered as number) > MAX_PO_LINE_QUANTITY) {
+      problems.push({ line: lineNo, field: 'qtyOrdered', message: `${where}: quantity must be a whole number from 1 to ${MAX_PO_LINE_QUANTITY}` })
+    }
+    if (l.description != null && typeof l.description !== 'string') {
+      problems.push({ line: lineNo, field: 'description', message: `${where}: description must be text` })
+    }
+    if (l.unitCost != null) {
+      if (typeof l.unitCost !== 'number' || !Number.isFinite(l.unitCost) || l.unitCost < 0) {
+        problems.push({ line: lineNo, field: 'unitCost', message: `${where}: unit cost must be a number of 0 or more` })
+      } else if (l.unitCost > MAX_PO_AMOUNT) {
+        problems.push({ line: lineNo, field: 'unitCost', message: `${where}: unit cost must be ${MAX_PO_AMOUNT} or less` })
+      }
     }
   }
+  return problems
+}
+
+export function assertValidPurchaseOrderLines(lines: unknown): asserts lines is CreatePurchaseOrderInput['lines'] {
+  const problems = purchaseOrderLineProblems(lines)
+  if (problems.length > 0) throw poValidationError(problems)
+}
+
+const LANDED_AMOUNT_LABELS = {
+  freightAmount: 'Freight amount',
+  dutyAmount: 'Duty amount',
+  otherLandedAmount: 'Other landed amount',
+} as const
+
+/** Freight, duty and other landed charges: each 0 or more (never negative), a real number, bounded; notes must be text. */
+export function landedCostProblems(input: {
+  freightAmount?: unknown
+  dutyAmount?: unknown
+  otherLandedAmount?: unknown
+  landedCostNotes?: unknown
+}): PoProblem[] {
+  const problems: PoProblem[] = []
+  for (const field of ['freightAmount', 'dutyAmount', 'otherLandedAmount'] as const) {
+    const v = input[field]
+    if (v == null) continue
+    const name = LANDED_AMOUNT_LABELS[field]
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) {
+      problems.push({ line: null, field, message: `${name} must be a number of 0 or more` })
+    } else if (v > MAX_PO_AMOUNT) {
+      problems.push({ line: null, field, message: `${name} must be ${MAX_PO_AMOUNT} or less` })
+    }
+  }
+  if (input.landedCostNotes != null && typeof input.landedCostNotes !== 'string') {
+    problems.push({ line: null, field: 'landedCostNotes', message: 'Landed cost notes must be text' })
+  }
+  return problems
 }
 
 export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+  if (!dto || typeof dto !== 'object') throw new ApiError(400, 'A purchase order is required')
   const number = typeof dto.number === 'string' ? dto.number.trim() : ''
   if (!number) throw new ApiError(400, 'PO number is required')
   if (typeof dto.supplierId !== 'string' || !dto.supplierId) throw new ApiError(400, 'Supplier is required')
+  const problems = [...purchaseOrderLineProblems(dto.lines), ...landedCostProblems(dto)]
+  if (problems.length > 0) throw poValidationError(problems)
   assertValidPurchaseOrderLines(dto.lines)
 
   const supplier = await purchasingDb.supplier.findFirst({ where: { id: dto.supplierId, tenantId } })
@@ -108,13 +184,15 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
     select: { code: true, name: true, isActive: true },
   })
   const skuByCode = new Map(skus.map((s) => [s.code, s]))
+  const skuProblems: PoProblem[] = []
   const lines = dto.lines.map((l) => {
     const code = l.skuCode!.trim()
     const sku = skuByCode.get(code)
-    if (!sku) throw new ApiError(400, `Line ${l.lineNo}: SKU ${code} doesn't exist`)
-    if (!sku.isActive) throw new ApiError(400, `Line ${l.lineNo}: SKU ${code} is inactive`)
-    return { ...l, skuCode: code, description: l.description?.trim() || sku.name }
+    if (!sku) skuProblems.push({ line: l.lineNo, field: 'skuCode', message: `Line ${l.lineNo}: SKU ${code} doesn't exist` })
+    else if (!sku.isActive) skuProblems.push({ line: l.lineNo, field: 'skuCode', message: `Line ${l.lineNo}: SKU ${code} is inactive` })
+    return { ...l, skuCode: code, description: l.description?.trim() || sku?.name || '' }
   })
+  if (skuProblems.length > 0) throw poValidationError(skuProblems)
 
   if (await purchasingDb.purchaseOrder.findFirst({ where: { tenantId, number }, select: { id: true } })) {
     throw new ApiError(409, `PO number ${number} is already used`)
@@ -270,6 +348,39 @@ export async function updatePurchaseOrderLandedCosts(
   if (po.status === PurchaseOrderStatus.CANCELLED || po.status === PurchaseOrderStatus.CLOSED) {
     throw new ApiError(400, 'Cannot update landed costs on a closed/cancelled PO')
   }
+  const problems = landedCostProblems(patch ?? {})
+  if (problems.length > 0) throw poValidationError(problems)
+
+  // The approval total is fixed when the PO is submitted, so the charges may not be changed behind it.
+  const pick = (next: number | undefined, current: Prisma.Decimal | null) =>
+    next !== undefined ? new Prisma.Decimal(next) : current
+  const afterChange = {
+    lines: po.lines,
+    freightAmount: pick(patch.freightAmount, po.freightAmount),
+    dutyAmount: pick(patch.dutyAmount, po.dutyAmount),
+    otherLandedAmount: pick(patch.otherLandedAmount, po.otherLandedAmount),
+  }
+  const settled = po.status === PurchaseOrderStatus.SUBMITTED || po.status === PurchaseOrderStatus.PARTIALLY_RECEIVED
+  let approvedTotal: number | null = null
+  if (settled) {
+    const approved = await tenantDb.approvalRequest.findMany({
+      where: { tenantId, type: ApprovalType.PURCHASE_ORDER, subjectId: id, status: ApprovalStatus.APPROVED },
+      select: { context: true },
+    })
+    const totals = approved
+      .map((a) => Number((a.context as { total?: unknown } | null)?.total))
+      .filter((t) => Number.isFinite(t))
+    approvedTotal = totals.length > 0 ? Math.max(...totals) : null
+  }
+  const blocked = landedCostChangeBlocker({
+    status: po.status,
+    currentTotal: computePurchaseOrderTotal(po),
+    newTotal: computePurchaseOrderTotal(afterChange),
+    threshold: (await getTenantWorkflowSettings(tenantId)).poApprovalThreshold,
+    approvedTotal,
+  })
+  if (blocked) throw new ApiError(400, blocked)
+
   return purchasingDb.purchaseOrder.update({
     where: { id },
     data: {

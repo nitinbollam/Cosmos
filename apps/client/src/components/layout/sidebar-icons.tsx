@@ -119,11 +119,13 @@ const icons: Record<SidebarIconName, ReactNode> = {
       <path d="M9 12h6M9 15h6M9 9h3" {...stroke} />
     </>
   ),
+  // Pleros orbital mark, drawn on the 24px icon grid.
   celestial: (
     <>
-      <path d="M12 3 13.5 8.5 19 10l-5.5 1.5L12 17l-1.5-5.5 7-1.5-5.5-1.5L12 3Z" {...stroke} />
-      <path d="M5 5l.9 2.1L8 8l-2.1.9L5 11l-.9-2.1L2 8l2.1-.9L5 5Z" {...stroke} />
-      <path d="M18 16l.7 1.6 1.7.7-1.7.7-.7 1.6-.7-1.6-1.7-.7 1.7-.7.7-1.6Z" {...stroke} />
+      <circle cx="12" cy="12" r="5.5" {...stroke} />
+      <ellipse cx="12" cy="12" rx="9" ry="3.2" transform="rotate(-30 12 12)" {...stroke} />
+      <circle cx="12" cy="12" r="1.1" fill="currentColor" />
+      <circle cx="19" cy="7.5" r="0.9" fill="currentColor" />
     </>
   ),
   notifications: (

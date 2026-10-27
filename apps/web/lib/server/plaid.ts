@@ -313,7 +313,7 @@ async function applyPlaidPage(
         `${e.changes.length} Plaid transaction(s) fall in the signed-off reconciliation period through ${through}. ` +
           'Nothing from this sync page was saved and the sync position was kept; reopen that period with a reason, then sync again.',
         undefined,
-        e.changes,
+        { errors: e.changes },
       )
     }
     if (e instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(e.code)) {

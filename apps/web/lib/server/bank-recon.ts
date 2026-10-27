@@ -137,7 +137,7 @@ export async function importStatementLines(
       return { row: i + 1, postedAt: row.postedAt, description: row.description, amount: row.amount, reference: row.reference }
     }),
   )
-  if (errors.length) throw new ApiError(400, `${errors.length} line(s) failed validation; nothing was imported`, undefined, errors)
+  if (errors.length) throw new ApiError(400, `${errors.length} line(s) failed validation; nothing was imported`, undefined, { errors })
 
   const keyed = withDedupeKeys(bankAccountId, valid)
   try {
