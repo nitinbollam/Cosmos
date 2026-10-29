@@ -39,6 +39,9 @@ export async function createDropShipPurchaseOrders(
         skuCode: sku.code,
         description: sku.name,
         qtyOrdered: line.quantity,
+        // A PO line needs a price: it sets the PO total (approval limit) and the value of received stock.
+        // A missing or odd product cost becomes 0 rather than refusing the whole drop-ship order.
+        unitCost: Math.max(0, Number(sku.cost) || 0),
       })
     }
 

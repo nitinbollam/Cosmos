@@ -20,6 +20,8 @@ type PurchaseOrder = {
   createdAt: string
   supplier?: { id: string; name: string; code: string }
   lines?: Array<{ id: string; lineNo: number; description: string; qtyOrdered: number; skuCode?: string | null }>
+  /** Lines plus freight, duty and other charges, each counted once (from the server). */
+  total?: number
 }
 
 type Supplier = {
@@ -194,6 +196,7 @@ export default function PurchasingPage() {
                       <th className="pb-2 pr-4">PO #</th>
                       <th className="pb-2 pr-4">Supplier</th>
                       <th className="pb-2 pr-4">Status</th>
+                      <th className="pb-2 pr-4 text-right">Total</th>
                       <th className="pb-2 pr-4">Created</th>
                       <th className="pb-2">Actions</th>
                     </tr>
@@ -205,6 +208,9 @@ export default function PurchasingPage() {
                         <td className="py-2 pr-4 text-pleros-text">{po.supplier?.name ?? '—'}</td>
                         <td className="py-2 pr-4">
                           <StatusBadge status={po.status} />
+                        </td>
+                        <td className="py-2 pr-4 text-right tabular-nums text-pleros-white">
+                          {po.total != null ? `$${po.total.toFixed(2)}` : '—'}
                         </td>
                         <td className="py-2 pr-4 text-pleros-muted">
                           {new Date(po.createdAt).toLocaleDateString()}

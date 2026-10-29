@@ -28,13 +28,14 @@ export type ReceiveGoodsInput = {
 
 export type RecordPoPaymentInput = { amount: number; method: string; reference?: string }
 
-export function listPurchaseOrders(tenantId: string, status?: string) {
+export async function listPurchaseOrders(tenantId: string, status?: string) {
   const st = (status ? (status as PurchaseOrderStatus) : undefined) ?? undefined
-  return purchasingDb.purchaseOrder.findMany({
+  const rows = await purchasingDb.purchaseOrder.findMany({
     where: { tenantId, ...(st ? { status: st } : {}) },
     include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
     orderBy: { createdAt: 'desc' },
   })
+  return rows.map((po) => ({ ...po, ...purchaseOrderTotals(po) }))
 }
 
 export async function getPurchaseOrder(tenantId: string, id: string) {
@@ -54,7 +55,7 @@ export async function getPurchaseOrderDetail(tenantId: string, id: string) {
     orderBy: { createdAt: 'desc' },
     select: { id: true, billNumber: true, totalAmount: true, status: true },
   })
-  return { ...po, supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
+  return { ...po, ...purchaseOrderTotals(po), supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
 }
 
 /** Largest quantity a single PO line may carry; far above any real wholesale order. */
@@ -119,7 +120,9 @@ export function purchaseOrderLineProblems(lines: unknown): PoProblem[] {
     if (l.description != null && typeof l.description !== 'string') {
       problems.push({ line: lineNo, field: 'description', message: `${where}: description must be text` })
     }
-    if (l.unitCost != null) {
+    if (l.unitCost == null) {
+      problems.push({ line: lineNo, field: 'unitCost', message: `${where}: unit cost is required (enter 0 if there is no charge)` })
+    } else {
       if (typeof l.unitCost !== 'number' || !Number.isFinite(l.unitCost) || l.unitCost < 0) {
         problems.push({ line: lineNo, field: 'unitCost', message: `${where}: unit cost must be a number of 0 or more` })
       } else if (l.unitCost > MAX_PO_AMOUNT) {
@@ -238,21 +241,30 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
   return po
 }
 
-export function computePurchaseOrderTotal(po: {
+type PoAmounts = {
   lines: Array<{ qtyOrdered: number; unitCost: Prisma.Decimal | null }>
   freightAmount: Prisma.Decimal | null
   dutyAmount: Prisma.Decimal | null
   otherLandedAmount: Prisma.Decimal | null
-}): number {
-  const linesTotal = po.lines.reduce(
-    (s, l) => s + l.qtyOrdered * (l.unitCost != null ? Number(l.unitCost) : 0),
-    0,
-  )
-  const landed =
-    (po.freightAmount != null ? Number(po.freightAmount) : 0) +
-    (po.dutyAmount != null ? Number(po.dutyAmount) : 0) +
-    (po.otherLandedAmount != null ? Number(po.otherLandedAmount) : 0)
-  return +(linesTotal + landed).toFixed(2)
+}
+
+/** What a PO is worth, shown on the PO list and page: the lines, each landed charge once, and the total. */
+export function purchaseOrderTotals(po: PoAmounts) {
+  const round = (n: number) => +n.toFixed(2)
+  const linesTotal = po.lines.reduce((s, l) => s + l.qtyOrdered * (l.unitCost != null ? Number(l.unitCost) : 0), 0)
+  const freight = po.freightAmount != null ? Number(po.freightAmount) : 0
+  const duty = po.dutyAmount != null ? Number(po.dutyAmount) : 0
+  const other = po.otherLandedAmount != null ? Number(po.otherLandedAmount) : 0
+  return {
+    linesTotal: round(linesTotal),
+    landedTotal: round(freight + duty + other),
+    total: round(linesTotal + freight + duty + other),
+  }
+}
+
+/** The total the approval limit is checked against. */
+export function computePurchaseOrderTotal(po: PoAmounts): number {
+  return purchaseOrderTotals(po).total
 }
 
 export async function submitPurchaseOrder(tenantId: string, id: string, requestedBy?: string) {
