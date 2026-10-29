@@ -146,8 +146,9 @@ export async function routePurchaseOrders(method: string, seg: string[], req: Re
     return Response.json(await purchasing.listPurchaseOrders(session.tenantId, url.searchParams.get('status') ?? undefined))
   }
   if (seg.length === 1 && method === 'POST') {
-    const body = (await req.json()) as purchasing.CreatePurchaseOrderInput
-    return Response.json(await purchasing.createPurchaseOrder(session.tenantId, body), { status: 201 })
+    // Direct creation would bypass manager sign-off, for every role including admins. Refused after the session and
+    // permission checks above and before the body is read; POs come from approved requisitions.
+    throw new ApiError(405, purchasing.DIRECT_PO_CREATION_REFUSED, { Allow: 'GET' })
   }
   if (seg.length === 2 && method === 'GET') {
     return Response.json(await purchasing.getPurchaseOrderDetail(session.tenantId, seg[1]))

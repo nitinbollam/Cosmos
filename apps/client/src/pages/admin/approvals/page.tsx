@@ -5,6 +5,9 @@ import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { adminPath } from '@/lib/admin-path'
+import { formatAmount } from '@/lib/decimal-amount'
+import { APPROVER_ROLES, apiFailure } from '@/lib/requisitions'
 
 type ApprovalRequest = {
   id: string
@@ -14,6 +17,7 @@ type ApprovalRequest = {
   context: Record<string, unknown>
   status: string
   rejectReason?: string | null
+  cancelReason?: string | null
   createdAt: string
 }
 
@@ -27,6 +31,12 @@ function contextSummary(type: string, ctx: Record<string, unknown>): string {
   }
   if (type === 'CREDIT_LIMIT_OVERRIDE') {
     return `Customer · projected $${Number(ctx.projectedTotal ?? 0).toFixed(2)} / limit $${Number(ctx.creditLimit ?? 0).toFixed(2)}`
+  }
+  if (type === 'PURCHASE_REQUISITION') {
+    const total = ctx.total != null ? formatAmount(String(ctx.total), typeof ctx.currency === 'string' ? ctx.currency : 'USD') : '—'
+    const lines = typeof ctx.lineCount === 'number' ? ` · ${ctx.lineCount} line(s)` : ''
+    const supplier = typeof ctx.supplierName === 'string' ? ` · ${ctx.supplierName}` : ''
+    return `Requisition ${String(ctx.number ?? '')} · ${total}${supplier}${lines}`
   }
   if (type === 'EXPENSE_REPORT') {
     const lines = Array.isArray(ctx.lines) ? ctx.lines : []
@@ -51,6 +61,7 @@ export default function ApprovalsPage() {
   const [statusFilter, setStatusFilter] = useState('PENDING')
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [decidingId, setDecidingId] = useState<string | null>(null)
 
   const q = useQuery<ApprovalRequest[]>({
     queryKey: ['approvals', typeFilter, statusFilter],
@@ -64,17 +75,28 @@ export default function ApprovalsPage() {
   })
 
   // Shared with the sidebar's query, so this costs no extra request.
-  const { data: me } = useQuery({ queryKey: ['auth-me'], queryFn: () => api.get<{ userId?: string }>('/auth/me') })
+  const { data: me } = useQuery({ queryKey: ['auth-me'], queryFn: () => api.get<{ userId?: string; role?: string }>('/auth/me') })
+  // The decide endpoint is gated by role, not permission: only these roles see Approve / Reject.
+  const isApprover = APPROVER_ROLES.includes(me?.role ?? '')
 
   const decide = useMutation({
-    mutationFn: ({ id, approve, rejectReason: reason }: { id: string; approve: boolean; rejectReason?: string }) =>
-      api.post(`/approvals/${encodeURIComponent(id)}/decide`, { approve, rejectReason: reason }),
+    mutationFn: ({ id, approve, rejectReason: reason }: { id: string; approve: boolean; rejectReason?: string }) => {
+      setDecidingId(id)
+      return api.post(`/approvals/${encodeURIComponent(id)}/decide`, { approve, rejectReason: reason })
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['approvals'] })
       void qc.invalidateQueries({ queryKey: ['purchase-order'] })
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
+      void qc.invalidateQueries({ queryKey: ['purchase-requisition'] })
+      void qc.invalidateQueries({ queryKey: ['purchase-requisitions'] })
       setRejectId(null)
       setRejectReason('')
+    },
+    onError: (e) => {
+      // Already decided, withdrawn or cancelled meanwhile: show the inbox as it is now.
+      const { status } = apiFailure(e)
+      if (status === 400 || status === 409) void qc.invalidateQueries({ queryKey: ['approvals'] })
     },
   })
 
@@ -83,13 +105,14 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-pleros-white">Approvals</h1>
         <p className="text-pleros-muted text-sm mt-1">
-          Purchase orders over threshold, high discounts, and credit-limit overrides awaiting manager decision.
+          Purchase requisitions, purchase orders over threshold, high discounts, and credit-limit overrides awaiting manager decision.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <select className="pleros-input !w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
+          <option value="PURCHASE_REQUISITION">Purchase requisitions</option>
           <option value="PURCHASE_ORDER">Purchase orders</option>
           <option value="DISCOUNT">Discounts</option>
           <option value="CREDIT_LIMIT_OVERRIDE">Credit limit</option>
@@ -99,6 +122,7 @@ export default function ApprovalsPage() {
           <option value="PENDING">Pending</option>
           <option value="APPROVED">Approved</option>
           <option value="REJECTED">Rejected</option>
+          <option value="CANCELLED">Cancelled (closed without a decision)</option>
           <option value="">All statuses</option>
         </select>
       </div>
@@ -144,6 +168,14 @@ export default function ApprovalsPage() {
                           View PO →
                         </Link>
                       ) : null}
+                      {row.type === 'PURCHASE_REQUISITION' ? (
+                        <Link
+                          to={adminPath(`/purchasing/requisitions/${encodeURIComponent(row.subjectId)}`)}
+                          className="block text-xs text-pleros-accent mt-1"
+                        >
+                          View requisition →
+                        </Link>
+                      ) : null}
                       {row.type === 'CREDIT_LIMIT_OVERRIDE' ? (
                         <Link
                           to={`/admin/orders/${encodeURIComponent(row.subjectId)}`}
@@ -181,9 +213,22 @@ export default function ApprovalsPage() {
                       {row.rejectReason ? (
                         <p className="text-xs text-red-400 mt-1 max-w-xs">{row.rejectReason}</p>
                       ) : null}
+                      {row.status === 'CANCELLED' && row.cancelReason ? (
+                        <p className="text-xs text-pleros-muted mt-1 max-w-xs">{row.cancelReason}</p>
+                      ) : null}
                     </td>
                     <td className="py-3">
-                      {row.status === 'PENDING' ? (
+                      {row.status === 'PENDING' && !isApprover ? (
+                        <span className="text-xs text-pleros-text-3">A manager or admin decides</span>
+                      ) : row.status === 'PENDING' && row.type === 'PURCHASE_REQUISITION' && row.requestedBy === me?.userId ? (
+                        <span className="text-xs text-pleros-text-3">
+                          Your requisition: another manager or admin decides. To change it,{' '}
+                          <Link to={adminPath(`/purchasing/requisitions/${encodeURIComponent(row.subjectId)}`)} className="text-pleros-accent">
+                            withdraw it
+                          </Link>
+                          .
+                        </span>
+                      ) : row.status === 'PENDING' ? (
                         rejectId === row.id ? (
                           <div className="space-y-2 min-w-[200px]">
                             <input
@@ -203,7 +248,7 @@ export default function ApprovalsPage() {
                               >
                                 Confirm reject
                               </button>
-                              <button type="button" className="btn-ghost !text-xs !py-1" onClick={() => setRejectId(null)}>
+                              <button type="button" className="btn-ghost !text-xs !py-1" disabled={decide.isPending} onClick={() => setRejectId(null)}>
                                 Cancel
                               </button>
                             </div>
@@ -225,6 +270,7 @@ export default function ApprovalsPage() {
                             <button
                               type="button"
                               className="btn-ghost !text-xs !py-1"
+                              disabled={decide.isPending}
                               onClick={() => {
                                 setRejectId(row.id)
                                 setRejectReason('')
@@ -237,8 +283,10 @@ export default function ApprovalsPage() {
                       ) : (
                         '—'
                       )}
-                      {decide.isError && rejectId === row.id ? (
-                        <p className="text-xs text-red-400 mt-1">{errMsg(decide.error)}</p>
+                      {decide.isError && decidingId === row.id ? (
+                        <p className="text-xs text-red-400 mt-1" role="alert">
+                          {errMsg(decide.error)}
+                        </p>
                       ) : null}
                     </td>
                   </tr>

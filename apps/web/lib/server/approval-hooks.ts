@@ -6,8 +6,28 @@ import { orderDb } from './db'
 import { OrderStatus } from '@/generated/prisma-order'
 import { submitPurchaseOrderAfterApproval } from './purchasing'
 
+/** Checks that run before an approver's decision is recorded. Throws to refuse the decision. */
+export async function beforeApprovalDecided(tenantId: string, request: ApprovalRequest) {
+  if (request.type === ApprovalType.PURCHASE_REQUISITION) {
+    const { assertRequisitionApprovalDecidable } = await import('./requisition-approval-sync')
+    await assertRequisitionApprovalDecidable(tenantId, request)
+  }
+}
+
 /** Side effects when an approval request is approved or rejected. */
 export async function onApprovalDecided(tenantId: string, request: ApprovalRequest) {
+  // A request closed as CANCELLED was never decided: none of the approve/reject side effects below apply.
+  if (request.status !== ApprovalStatus.APPROVED && request.status !== ApprovalStatus.REJECTED) return
+  if (request.type === ApprovalType.PURCHASE_REQUISITION) {
+    const { applyRequisitionDecision } = await import('./requisition-approval-sync')
+    try {
+      await applyRequisitionDecision(tenantId, request)
+    } catch (err) {
+      // The decision is committed in the tenant database; reading the requisition or the reconciler copies it over.
+      console.error('[requisitions] applying approval decision failed; recovery will retry:', err)
+    }
+    return
+  }
   if (request.status === ApprovalStatus.APPROVED && request.type === ApprovalType.PURCHASE_ORDER) {
     await submitPurchaseOrderAfterApproval(tenantId, request.subjectId)
   }

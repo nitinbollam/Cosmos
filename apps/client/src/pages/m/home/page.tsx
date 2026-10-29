@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api-mobile'
 import { axiosErr } from '@/lib/axios-error'
-import { approvalSummary, type ApprovalRow } from '@/lib/approval-summary'
+import { approvalSummary, isOwnRequisition, type ApprovalRow } from '@/lib/approval-summary'
 import { getSessionUser } from '@/lib/auth-session'
 import { isManager, tabsFor } from '@/lib/mobile-home'
 import { readQueue } from '@/lib/offline-queue'
@@ -62,7 +62,9 @@ export default function MobileHomePage() {
               <div key={a.id} className="pleros-mobile-card">
                 <strong>{s.title}</strong>
                 {s.detail && <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.8 }}>{s.detail}</p>}
-                {rejecting === a.id ? (
+                {isOwnRequisition(a, user?.sub) ? (
+                  <p style={{ margin: '8px 0 0', fontSize: 13, opacity: 0.75 }}>Your requisition: another manager or admin decides.</p>
+                ) : rejecting === a.id ? (
                   <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     <input className="pleros-input" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
                     <div style={{ display: 'flex', gap: 8 }}>

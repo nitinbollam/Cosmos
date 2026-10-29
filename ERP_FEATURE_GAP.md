@@ -105,8 +105,8 @@ Pleros also ships **Celestial AI** — a differentiator most legacy ERPs do not 
 | Suppliers | ✅ | |
 | Purchase orders | ✅ | |
 | Receive → inventory + AP bill | ✅ | GL auto-post on receive |
-| Low-stock → PO prefill | ✅ | `/admin/purchasing?skuId=` |
-| Purchase requisitions / approvals | ❌ | Direct PO only |
+| Low-stock → requisition prefill | ✅ | `/admin/purchasing/requisitions/new?skuId=` (old `/admin/purchasing?skuId=` links redirect) |
+| Purchase requisitions / approvals | ⚠️ Partial | Every PO comes from a requisition approved by a manager or admin other than the requester; direct `POST /purchase-orders` is refused (405). **Unresolved bypass:** drop-ship POs are still created and submitted without a requisition (automatically in order processing, and manually via `POST /orders/{id}/drop-ship/create-po`). This is not an approved exemption; it stays open until the drop-ship approval policy is decided. |
 | Landed cost (freight / duty allocation) | ✅ | Freight/duty/other on PO, allocated into unit cost on receive |
 | Vendor scorecards / portal | ❌ | Not implemented |
 | Demand planning / MRP | ✅ | EWMA (`USAGE_EWMA` / seasonal) on daily outbound ledger series |

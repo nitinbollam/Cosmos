@@ -1,3 +1,4 @@
+import type { Prisma } from '@/generated/prisma-tenant'
 import { tenantDb } from './db'
 
 export type AuditInput = {
@@ -6,11 +7,18 @@ export type AuditInput = {
   entityId?: string
   userId?: string
   metadata?: Record<string, unknown>
+  /** A fixed id makes a retried write fail on the primary key instead of logging the event twice. */
+  id?: string
+  /** When the event happened, if it is being recorded later (e.g. delivered from an outbox). */
+  createdAt?: Date
 }
 
-export async function auditLog(tenantId: string, input: AuditInput) {
-  return tenantDb.auditEvent.create({
+/** Pass `db` to write the event inside a tenant-database transaction. */
+export async function auditLog(tenantId: string, input: AuditInput, db: Prisma.TransactionClient = tenantDb) {
+  return db.auditEvent.create({
     data: {
+      ...(input.id ? { id: input.id } : {}),
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
       tenantId,
       userId: input.userId,
       action: input.action,

@@ -57,6 +57,25 @@ export async function getPurchaseOrderDetail(tenantId: string, id: string) {
   return { ...po, supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
 }
 
+/**
+ * Purchase orders are created from approved purchase requisitions (requisition-conversion.ts). There is deliberately no
+ * exported general-purpose creator: POST /purchase-orders refuses, and the only other caller is drop-ship below.
+ */
+export const DIRECT_PO_CREATION_REFUSED =
+  'Purchase orders are no longer created directly. Raise a purchase requisition (POST /api/v1/purchase-requisitions); ' +
+  'once a manager or admin other than the requester approves it, convert it with ' +
+  'POST /api/v1/purchase-requisitions/{id}/convert.'
+
+/**
+ * Drop-ship POs for a sales order (drop-ship.ts only). UNRESOLVED APPROVAL BYPASS, not an approved exemption: these POs
+ * are created and submitted without a requisition or manager sign-off, automatically during order processing and
+ * manually via POST /orders/{id}/drop-ship/create-po (orders.write). Kept unchanged until the drop-ship approval policy
+ * is decided; do not add new callers.
+ */
+export async function createDropShipPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+  return insertPurchaseOrder(tenantId, dto)
+}
+
 /** Largest quantity a single PO line may carry; far above any real wholesale order. */
 export const MAX_PO_LINE_QUANTITY = 1_000_000
 
@@ -165,7 +184,7 @@ export function landedCostProblems(input: {
   return problems
 }
 
-export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+async function insertPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
   if (!dto || typeof dto !== 'object') throw new ApiError(400, 'A purchase order is required')
   const number = typeof dto.number === 'string' ? dto.number.trim() : ''
   if (!number) throw new ApiError(400, 'PO number is required')
@@ -261,6 +280,14 @@ export async function submitPurchaseOrder(tenantId: string, id: string, requeste
     throw new ApiError(400, 'Only DRAFT orders can be submitted')
   }
 
+  // Converted from an approved requisition: that approval covers this PO, so no threshold approval is asked for,
+  // once the approval and the PO's match with it are re-verified.
+  if (po.requisitionId) {
+    const { submitConvertedPurchaseOrder } = await import('./requisition-conversion')
+    await submitConvertedPurchaseOrder(tenantId, po)
+    return getPurchaseOrder(tenantId, id)
+  }
+
   const total = computePurchaseOrderTotal(po)
   const { poApprovalThreshold } = await getTenantWorkflowSettings(tenantId)
 
@@ -347,6 +374,15 @@ export async function updatePurchaseOrderLandedCosts(
   const po = await getPurchaseOrder(tenantId, id)
   if (po.status === PurchaseOrderStatus.CANCELLED || po.status === PurchaseOrderStatus.CLOSED) {
     throw new ApiError(400, 'Cannot update landed costs on a closed/cancelled PO')
+  }
+  // A converted PO's landed costs stay within what its requisition approved.
+  if (po.requisitionId) {
+    // Amounts arrive as exact decimal strings here and are checked by the conversion code; only the notes are checked here.
+    const noteProblems = landedCostProblems({ landedCostNotes: patch?.landedCostNotes })
+    if (noteProblems.length > 0) throw poValidationError(noteProblems)
+    const { updateConvertedLandedCosts } = await import('./requisition-conversion')
+    await updateConvertedLandedCosts(tenantId, po, patch)
+    return getPurchaseOrder(tenantId, id)
   }
   const problems = landedCostProblems(patch ?? {})
   if (problems.length > 0) throw poValidationError(problems)

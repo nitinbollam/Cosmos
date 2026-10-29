@@ -31,12 +31,13 @@ export async function routeApprovals(method: string, seg: string[], req: Request
     if (!body.approve && !body.rejectReason?.trim()) {
       throw new ApiError(400, 'rejectReason is required when rejecting')
     }
+    const { beforeApprovalDecided, onApprovalDecided } = await import('../approval-hooks')
+    await beforeApprovalDecided(session.tenantId, await approvals.getApprovalRequest(session.tenantId, seg[1]))
     const updated = await approvals.decideApprovalRequest(session.tenantId, seg[1], {
       approve: body.approve,
       decidedBy: session.userId,
       rejectReason: body.rejectReason,
     })
-    const { onApprovalDecided } = await import('../approval-hooks')
     await onApprovalDecided(session.tenantId, updated)
     return Response.json(updated)
   }
