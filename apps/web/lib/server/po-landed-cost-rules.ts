@@ -19,7 +19,7 @@ export type LandedCostChange = {
   approvedTotal: number | null
 }
 
-const money = (n: number) => `$${n.toFixed(2)}`
+const money = (n: number) => `$${n.toFixed(2)}` // money-ok: display text in an error message, never stored or summed
 
 /** The reason the change is refused, or null when it is allowed. */
 export function landedCostChangeBlocker(c: LandedCostChange): string | null {

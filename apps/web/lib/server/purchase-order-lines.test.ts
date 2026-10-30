@@ -2,18 +2,40 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   assertValidPurchaseOrderLines,
+  computePurchaseOrderTotal,
   landedCostProblems,
   MAX_PO_LINE_QUANTITY,
   poValidationError,
   purchaseOrderLineProblems,
+  purchaseOrderTotals,
 } from './purchasing'
+import { Prisma } from '@/generated/prisma-purchasing'
 
 const line = (over: Record<string, unknown> = {}) => ({ lineNo: 1, skuCode: 'COLA-12', description: '', qtyOrdered: 10, unitCost: 4.5, ...over })
 const refuses = (lines: unknown, message: string) =>
   assert.throws(() => assertValidPurchaseOrderLines(lines), (e: Error & { status?: number }) => e.message === message)
 
-test('a PO line with a SKU and a whole quantity passes; description and unit cost are optional', () => {
-  assertValidPurchaseOrderLines([line(), line({ lineNo: 2, skuCode: 'CHIPS-6', description: undefined, unitCost: undefined })])
+test('a PO line with a SKU, a whole quantity and a unit cost passes; the description is optional', () => {
+  assertValidPurchaseOrderLines([line(), line({ lineNo: 2, skuCode: 'CHIPS-6', description: undefined, unitCost: 0 })])
+})
+
+test('every line needs a unit cost: missing is refused, 0 is allowed', () => {
+  for (const unitCost of [undefined, null]) {
+    refuses([line({ unitCost })], 'Line 1: unit cost is required (enter 0 if there is no charge)')
+  }
+  assertValidPurchaseOrderLines([line({ unitCost: 0 })])
+  const problems = purchaseOrderLineProblems([line(), line({ lineNo: 2, skuCode: 'CHIPS-6', unitCost: undefined })])
+  assert.deepEqual(problems.map((p) => [p.line, p.field]), [[2, 'unitCost']])
+})
+
+test('a PO is worth its lines plus each landed charge once', () => {
+  const d = (n: number) => new Prisma.Decimal(n)
+  const po = { lines: [{ qtyOrdered: 300, unitCost: d(9) }], freightAmount: d(0), dutyAmount: null, otherLandedAmount: null }
+  assert.deepEqual(purchaseOrderTotals(po), { linesTotal: 2700, landedTotal: 0, total: 2700 })
+  assert.deepEqual(purchaseOrderTotals({ ...po, lines: [{ qtyOrdered: 300, unitCost: d(0) }], freightAmount: d(2700) }), { linesTotal: 0, landedTotal: 2700, total: 2700 })
+  assert.deepEqual(purchaseOrderTotals({ ...po, freightAmount: d(100), dutyAmount: d(50.5), otherLandedAmount: d(0.25) }), { linesTotal: 2700, landedTotal: 150.75, total: 2850.75 })
+  assert.deepEqual(purchaseOrderTotals({ ...po, lines: [{ qtyOrdered: 5000, unitCost: null }] }), { linesTotal: 0, landedTotal: 0, total: 0 })
+  assert.equal(computePurchaseOrderTotal({ ...po, freightAmount: d(2700) }), 5400)
 })
 
 test('a PO needs at least one line', () => {

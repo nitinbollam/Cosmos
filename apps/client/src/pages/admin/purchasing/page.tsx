@@ -9,6 +9,7 @@ import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { hasClientPermission } from '@/lib/requisitions'
 import { useViewer } from '@/components/purchasing/use-viewer'
+import { formatAmount } from '@/lib/decimal-amount'
 
 type PoStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'CLOSED' | 'CANCELLED'
 
@@ -22,6 +23,9 @@ type PurchaseOrder = {
   requisitionId?: string | null
   supplier?: { id: string; name: string; code: string }
   lines?: Array<{ id: string; lineNo: number; description: string; qtyOrdered: number; skuCode?: string | null }>
+  currency?: string
+  /** Lines plus freight, duty and other charges, each counted once (from the server). */
+  total?: number
 }
 
 type Supplier = {
@@ -175,6 +179,7 @@ export default function PurchasingPage() {
                       <th className="pb-2 pr-4">PO #</th>
                       <th className="pb-2 pr-4">Supplier</th>
                       <th className="pb-2 pr-4">Status</th>
+                      <th className="pb-2 pr-4 text-right">Total</th>
                       <th className="pb-2 pr-4">Created</th>
                       <th className="pb-2">Actions</th>
                     </tr>
@@ -189,6 +194,9 @@ export default function PurchasingPage() {
                         <td className="py-2 pr-4 text-pleros-text">{po.supplier?.name ?? '—'}</td>
                         <td className="py-2 pr-4">
                           <StatusBadge status={po.status} />
+                        </td>
+                        <td className="py-2 pr-4 text-right tabular-nums text-pleros-white">
+                          {po.total != null ? formatAmount(po.total, po.currency ?? 'USD', { grouping: false }) : '—'}
                         </td>
                         <td className="py-2 pr-4 text-pleros-muted">
                           {new Date(po.createdAt).toLocaleDateString()}

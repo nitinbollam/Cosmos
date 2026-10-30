@@ -36,6 +36,10 @@ type PurchaseOrder = {
   createdBy?: string | null
   /** Set when the PO was converted from an approved requisition. */
   requisitionId?: string | null
+  /** From the server: lines, landed charges and the total the approval limit is checked against. */
+  linesTotal?: number
+  landedTotal?: number
+  total?: number
   supplier?: { id: string; name: string; code: string }
   lines?: PoLine[]
   /** The current supplier bill for this PO, if one exists. */
@@ -408,6 +412,38 @@ export default function PurchaseOrderDetailPage() {
             <p className="mt-3 text-xs text-pleros-muted">
               Recording a receipt updates PO quantities and posts stock to the selected warehouse in one step.
             </p>
+            {po.data?.total != null ? (() => {
+              const money = (v: string | number) => formatAmount(v, po.data?.currency ?? 'USD', { grouping: false })
+              return (
+              <dl className="mt-4 ml-auto w-full max-w-xs space-y-1 text-sm" aria-label="Purchase order total">
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Lines</dt>
+                  <dd className="tabular-nums">{money(po.data.linesTotal ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Freight</dt>
+                  <dd className="tabular-nums">{money(po.data.freightAmount ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Duty</dt>
+                  <dd className="tabular-nums">{money(po.data.dutyAmount ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Other charges</dt>
+                  <dd className="tabular-nums">{money(po.data.otherLandedAmount ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t border-pleros-border pt-1 font-semibold text-pleros-white">
+                  <dt>PO total</dt>
+                  <dd className="tabular-nums">{money(po.data.total)}</dd>
+                </div>
+              </dl>
+              )
+            })() : null}
+            {po.data?.lines?.some((l) => l.unitCost == null || l.unitCost === '') ? (
+              <p className="mt-2 text-xs text-amber-400">
+                Some lines have no price (an older order), so this total is lower than the real cost.
+              </p>
+            ) : null}
           </Card>
 
           <SupplierBillCard po={po.data} />
