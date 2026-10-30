@@ -25,6 +25,7 @@ import { StopOutcomeDetails, type StopOutcomePod } from '@/components/pod/StopOu
 import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
 import { api } from '@/lib/api-admin'
 import { isForbidden, isNotFound } from '@/lib/axios-error'
+import { assignableUsers, ROUTE_DRIVER_ROLES } from '@/lib/assignees'
 import { dispatchSelectionChange, parseYmd, routeManifestDate, type DispatchUrlChange } from '@/lib/dispatch-selection'
 import { useQueryParams } from '@/lib/use-query-params'
 import { orderLabel } from '@/lib/order-label'
@@ -53,7 +54,14 @@ type DeliveryRoute = {
   stops: RouteStop[]
 }
 
-type UserRow = { id: string; email: string; firstName?: string | null; lastName?: string | null }
+type UserRow = {
+  id: string
+  email: string
+  firstName?: string | null
+  lastName?: string | null
+  role?: string | null
+  isActive?: boolean | null
+}
 
 function toYmd(d: Date): string {
   const y = d.getFullYear()
@@ -558,7 +566,8 @@ function DispatchDashboard() {
                     disabled={
                       assign.isPending || selected.status === 'COMPLETED' || selected.status === 'CANCELLED'
                     }
-                    users={(users.data?.items ?? []) as UserRow[]}
+                    drivers={assignableUsers(users.data?.items ?? [], ROUTE_DRIVER_ROLES)}
+                    driversLoading={users.isLoading}
                     onAssign={(driverId) => assign.mutate({ routeId: selected.id, driverId })}
                     assigned={!!selected.driverId}
                     unassignBlockedReason={unassignBlockedReason(selected)}
@@ -719,7 +728,9 @@ function unassignBlockedReason(route: DeliveryRoute): string | null {
 
 function AssignDriverSelect(props: {
   disabled: boolean
-  users: UserRow[]
+  /** Active drivers only; the server refuses anyone else. */
+  drivers: UserRow[]
+  driversLoading: boolean
   onAssign: (driverId: string) => void
   assigned: boolean
   unassignBlockedReason: string | null
@@ -727,16 +738,18 @@ function AssignDriverSelect(props: {
   onUnassign: () => void
 }) {
   const [v, setV] = useState('')
+  const none = props.drivers.length === 0
   return (
     <div className="flex items-center gap-1.5">
       <select
         className="rounded-lg bg-pleros-surface-2 border border-pleros-border px-2.5 py-1.5 text-xs text-pleros-text focus:outline-none focus:border-pleros-primary transition-colors"
         value={v}
-        disabled={props.disabled}
+        disabled={props.disabled || none}
+        title={none && !props.driversLoading ? 'Add a user with the Driver role in Settings → Users' : undefined}
         onChange={(e) => setV(e.target.value)}
       >
-        <option value="">Assign driver…</option>
-        {props.users.map((u) => (
+        <option value="">{none ? (props.driversLoading ? 'Loading…' : 'No active drivers') : 'Assign driver…'}</option>
+        {props.drivers.map((u) => (
           <option key={u.id} value={u.id}>
             {userLabel(u)}
           </option>

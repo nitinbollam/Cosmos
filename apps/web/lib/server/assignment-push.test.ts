@@ -102,7 +102,7 @@ test('only a new person other than the one acting is alerted', () => {
   assert.equal(shouldNotify('u0', null, 'm'), false)
 })
 
-test('assigning a pick task alerts the picker once, not on a repeat or a self-assign', async () => {
+test('assigning a pick task alerts the picker once, not on a repeat', async () => {
   sent.length = 0
   const task = await wmsDb.fulfillmentTask.create({
     data: { tenantId, orderId: `o-${randomUUID()}`, correlationId: 'c', warehouseId: 'w1', warehouseCode: 'W1', status: 'PENDING', pickLines: { create: [{ skuId: 's', warehouseId: 'w1', quantity: 1 }] } },
@@ -114,7 +114,8 @@ test('assigning a pick task alerts the picker once, not on a repeat or a self-as
   assert.equal(sent[0].payload.url, `/m/warehouse/task/${task.id}`)
 
   assert.equal((await call('m', 'PATCH', `/wms/tasks/${task.id}/assign`, { userId: uid.picker })).status, 200)
-  assert.equal((await call('m', 'PATCH', `/wms/tasks/${task.id}/assign`, { userId: uid.m })).status, 200)
+  // Pick tasks go to warehouse staff only (ClickUp 33), so a manager can't assign themselves.
+  assert.equal((await call('m', 'PATCH', `/wms/tasks/${task.id}/assign`, { userId: uid.m })).status, 400)
   await settle(2)
   assert.equal(sent.length, 1)
 })

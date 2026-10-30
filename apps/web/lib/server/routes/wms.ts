@@ -24,8 +24,11 @@ async function taskPickRoutes(method: string, seg: string[], req: Request, sessi
   }
   if (seg.length === 4 && seg[3] === 'assign' && method === 'PATCH') {
     if (!isManagerRole(session.role)) throw new ApiError(403, 'Only a manager can give a task to someone else. Claim it instead')
-    const body = (await req.json()) as { userId?: string | null }
-    return Response.json(await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], body.userId ?? null, session.userId))
+    const body = (await req.json()) as { userId?: unknown }
+    if (body.userId != null && typeof body.userId !== 'string') throw new ApiError(400, 'userId must be a string or null')
+    // Blank or null takes the picker off the task.
+    const userId = typeof body.userId === 'string' && body.userId.trim() ? body.userId.trim() : null
+    return Response.json(await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], userId, session.userId))
   }
   if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
     return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2], actor))

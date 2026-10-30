@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { isForbidden } from '@/lib/axios-error'
+import { assignableUsers, ROUTE_DRIVER_ROLES } from '@/lib/assignees'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { FailStopForm } from '@/components/pod/FailStopForm'
 import { StopOutcomeDetails, type StopOutcomePod } from '@/components/pod/StopOutcomeDetails'
@@ -28,7 +29,14 @@ type DeliveryRoute = {
   stops: RouteStop[]
 }
 
-type UserRow = { id: string; email: string; firstName?: string | null; lastName?: string | null }
+type UserRow = {
+  id: string
+  email: string
+  firstName?: string | null
+  lastName?: string | null
+  role?: string | null
+  isActive?: boolean | null
+}
 
 function userLabel(u: UserRow) {
   const n = [u.firstName, u.lastName].filter(Boolean).join(' ').trim()
@@ -81,6 +89,9 @@ export default function DispatchRouteDetailPage() {
     const u = (users.data?.items ?? []).find((x) => x.id === userId)
     return u ? userLabel(u) : null
   }
+  // Active drivers only; the server refuses anyone else.
+  const drivers = assignableUsers(users.data?.items ?? [], ROUTE_DRIVER_ROLES)
+  const noDriversLabel = users.isError ? 'No permission to list users' : users.isLoading ? 'Loading…' : 'No active drivers'
 
   const assign = useMutation({
     mutationFn: () => api.patch<DeliveryRoute>(`/routes/${encodeURIComponent(routeId)}/driver`, { driverId }),
@@ -165,10 +176,11 @@ export default function DispatchRouteDetailPage() {
                 className="flex-1 min-w-[200px] rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
                 value={driverId}
                 onChange={(e) => setDriverId(e.target.value)}
-                disabled={r.status === 'COMPLETED' || r.status === 'CANCELLED'}
+                disabled={r.status === 'COMPLETED' || r.status === 'CANCELLED' || drivers.length === 0}
+                title={drivers.length === 0 ? 'Add a user with the Driver role in Settings → Users' : undefined}
               >
-                <option value="">Select user…</option>
-                {(users.data?.items ?? []).map((u) => (
+                <option value="">{drivers.length === 0 ? noDriversLabel : 'Select driver…'}</option>
+                {drivers.map((u) => (
                   <option key={u.id} value={u.id}>
                     {userLabel(u)}
                   </option>
