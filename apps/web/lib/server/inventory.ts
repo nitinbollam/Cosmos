@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-inventory'
-import { inventoryDb } from './db'
+import { inventoryDb, purchasingDb } from './db'
 import { ApiError } from './session'
 
 import { swallowed } from './fire-and-forget'
@@ -35,6 +35,19 @@ export type CreateSkuInput = {
   reorderQty?: number
   trackLot?: boolean
   trackSerial?: boolean
+  /** Supplier that drop-ships this product; null or '' turns drop-ship off. */
+  dropShipSupplierId?: string | null
+}
+
+/** Normalise a drop-ship supplier from a SKU form and make sure it is one of this tenant's suppliers. */
+async function resolveDropShipSupplierId(tenantId: string, value: unknown): Promise<string | null> {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'string') throw new ApiError(400, 'dropShipSupplierId must be a supplier id')
+  const id = value.trim()
+  if (!id) return null
+  const supplier = await purchasingDb.supplier.findFirst({ where: { id, tenantId }, select: { id: true } })
+  if (!supplier) throw new ApiError(400, 'Drop-ship supplier not found')
+  return supplier.id
 }
 
 export async function distinctCategories(tenantId: string) {
@@ -78,8 +91,8 @@ export async function listSkus(
       select: { skuId: true },
     })
     const idList = [...new Set(rows.map((r) => r.skuId))]
-    if (idList.length === 0) return { items: [], total: 0, page, pageSize, hasMore: false }
-    where.id = { in: idList }
+    // Drop-ship products are always orderable: the supplier ships them, not our stock.
+    where.AND = [{ OR: [{ id: { in: idList } }, { dropShipSupplierId: { not: null } }] }]
   }
 
   const [items, total] = await Promise.all([
@@ -415,6 +428,7 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
 }
 
 export async function createSku(tenantId: string, input: CreateSkuInput) {
+  const dropShipSupplierId = await resolveDropShipSupplierId(tenantId, input.dropShipSupplierId)
   try {
     const sku = await inventoryDb.sKU.create({
       data: {
@@ -442,6 +456,7 @@ export async function createSku(tenantId: string, input: CreateSkuInput) {
         cost: new Prisma.Decimal(input.cost),
         price: new Prisma.Decimal(input.price),
         minPrice: input.minPrice !== undefined ? new Prisma.Decimal(input.minPrice) : undefined,
+        dropShipSupplierId,
         imageUrls: [],
         attributes: {},
       },
@@ -486,6 +501,8 @@ export async function createSku(tenantId: string, input: CreateSkuInput) {
 
 export async function updateSku(tenantId: string, id: string, patch: Partial<CreateSkuInput> & { isActive?: boolean }) {
   await findSkuById(tenantId, id)
+  const dropShipSupplierId =
+    patch.dropShipSupplierId !== undefined ? await resolveDropShipSupplierId(tenantId, patch.dropShipSupplierId) : undefined
   try {
     const ageRestricted =
       patch.ageRestricted !== undefined
@@ -526,6 +543,7 @@ export async function updateSku(tenantId: string, id: string, patch: Partial<Cre
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
         ...(patch.trackLot !== undefined ? { trackLot: Boolean(patch.trackLot) } : {}),
         ...(patch.trackSerial !== undefined ? { trackSerial: Boolean(patch.trackSerial) } : {}),
+        ...(dropShipSupplierId !== undefined ? { dropShipSupplierId } : {}),
       },
     })
     if (patch.price !== undefined) queueSalesChannelPush(tenantId, id)

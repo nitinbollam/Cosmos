@@ -81,6 +81,9 @@ model SKU {
   isKit             Boolean  @default(false)
   trackLot          Boolean  @default(false)
   trackSerial       Boolean  @default(false)
+  /** Purchasing supplier that ships this product straight to the customer. When set, order lines
+   *  for it are drop-shipped (auto-PO to this supplier) instead of picked from stock. */
+  dropShipSupplierId String?
   imageUrls Json 
   attributes        Json     
   createdAt         DateTime @default(now())
