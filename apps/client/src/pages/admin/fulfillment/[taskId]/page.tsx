@@ -7,6 +7,7 @@ import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { orderLabel } from '@/lib/order-label'
+import { assignableUsers, PICKER_ROLES } from '@/lib/assignees'
 
 type TaskDetail = {
   id: string
@@ -30,7 +31,14 @@ type TaskDetail = {
   }[]
 }
 
-type UserRow = { id: string; email: string; firstName?: string | null; lastName?: string | null }
+type UserRow = {
+  id: string
+  email: string
+  firstName?: string | null
+  lastName?: string | null
+  role?: string | null
+  isActive?: boolean | null
+}
 
 function userLabel(u: UserRow) {
   const n = [u.firstName, u.lastName].filter(Boolean).join(' ').trim()
@@ -126,6 +134,9 @@ export default function FulfillmentTaskDetailPage() {
     if (!t) return
     setAssignPick(t.assignedUserId ?? '')
   }, [t])
+  // Active warehouse staff only; the server refuses anyone else.
+  const pickers = assignableUsers(users.data?.items ?? [], PICKER_ROLES)
+  const currentAssignee = (users.data?.items ?? []).find((u) => u.id === t?.assignedUserId) ?? null
   const packingReady =
     t &&
     t.pickItems.length > 0 &&
@@ -179,7 +190,11 @@ export default function FulfillmentTaskDetailPage() {
                   disabled={t.status === 'CANCELLED' || t.status === 'DISPATCHED'}
                 >
                   <option value="">Unassigned</option>
-                  {(users.data?.items ?? []).map((u) => (
+                  {/* Keep a current assignee who no longer qualifies visible, so the box doesn't read "Unassigned". */}
+                  {currentAssignee && !pickers.some((u) => u.id === currentAssignee.id) && (
+                    <option value={currentAssignee.id}>{userLabel(currentAssignee)} (not warehouse staff)</option>
+                  )}
+                  {pickers.map((u) => (
                     <option key={u.id} value={u.id}>
                       {userLabel(u)}
                     </option>
@@ -197,8 +212,8 @@ export default function FulfillmentTaskDetailPage() {
                 </button>
               </div>
               {t.assignedUserId && (
-                <p className="text-xs text-pleros-muted mt-2 font-mono">
-                  Current: {t.assignedUserId}
+                <p className="text-xs text-pleros-muted mt-2">
+                  Current: {currentAssignee ? userLabel(currentAssignee) : <span className="font-mono">{t.assignedUserId}</span>}
                 </p>
               )}
               {assignMut.error ? (

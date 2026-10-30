@@ -62,9 +62,10 @@ export async function routeRoutes(method: string, seg: string[], req: Request): 
     return Response.json(await dispatch.unassignRouteDriver(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'driver' && method === 'PATCH') {
-    const body = (await req.json()) as { driverId?: string }
-    if (!body.driverId) throw new ApiError(400, 'driverId required')
-    return Response.json(await dispatch.assignRouteDriver(session.tenantId, seg[1], body.driverId))
+    const body = (await req.json()) as { driverId?: unknown }
+    const driverId = typeof body.driverId === 'string' ? body.driverId.trim() : ''
+    if (!driverId) throw new ApiError(400, 'driverId required')
+    return Response.json(await dispatch.assignRouteDriver(session.tenantId, seg[1], driverId))
   }
   if (seg.length === 4 && seg[2] === 'stops' && seg[3] === 'reorder' && method === 'PATCH') {
     const body = (await req.json()) as { stopIds?: string[] }

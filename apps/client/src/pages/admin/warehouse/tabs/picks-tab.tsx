@@ -9,11 +9,20 @@ import { EmptyState } from '@/components/pleros/empty-state'
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { PickTask, WarehouseRow, pickProgress, priorityBorder } from '../types'
 import { orderLabel } from '@/lib/order-label'
+import { assignableUsers, PICKER_ROLES } from '@/lib/assignees'
+import { axiosErr } from '@/lib/axios-error'
 
 interface PicksTabProps {
   warehouses: WarehouseRow[]
   userLabel: Map<string, string>
-  users: Array<{ id: string; firstName: string | null; lastName: string | null; email: string }>
+  users: Array<{
+    id: string
+    firstName: string | null
+    lastName: string | null
+    email: string
+    role?: string | null
+    isActive?: boolean | null
+  }>
 }
 
 const PICK_STATUSES = [
@@ -55,8 +64,10 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
       void qc.invalidateQueries({ queryKey: ['pick-tasks'] })
       setAssignTaskId(null)
     },
-    onError: (e: Error) => showToast(e.message, 'error'),
+    onError: (e: Error) => showToast(axiosErr(e), 'error'),
   })
+  // Active warehouse staff only; the server refuses anyone else.
+  const pickers = assignableUsers(users, PICKER_ROLES)
 
   return (
     <div className="space-y-4">
@@ -204,7 +215,11 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
             </label>
             <select className="pleros-input" value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}>
               <option value="">Unassigned</option>
-              {users.map((u) => {
+              {/* Keep a current assignee who doesn't qualify visible, so the box doesn't read "Unassigned". */}
+              {assignUserId && !pickers.some((u) => u.id === assignUserId) && (
+                <option value={assignUserId}>{userLabel.get(assignUserId) ?? assignUserId.slice(-6)} (not warehouse staff)</option>
+              )}
+              {pickers.map((u) => {
                 const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email
                 return (
                   <option key={u.id} value={u.id}>
