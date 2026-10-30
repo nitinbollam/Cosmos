@@ -1,6 +1,7 @@
 /**
  * Environment for the local bank-reconciliation demo: all 16 databases in one new temporary
- * directory, SQLite only, and every outbound-service credential blanked. Shared by launch.mjs,
+ * directory (SQLite, the default) or, with --postgres, 16 brand-new databases on a disposable
+ * Postgres cluster on this machine; every outbound-service credential blanked. Shared by launch.mjs,
  * fixture.ts and the Playwright config, which all refuse to run unless assertDisposableEnv passes.
  */
 import fs from 'node:fs'
@@ -14,6 +15,10 @@ export const REPO_ROOT = path.resolve(HERE, '..', '..')
 export const WEB_ROOT = path.join(REPO_ROOT, 'apps', 'web')
 export const DEV_DATA_DIR = path.join(WEB_ROOT, '.data')
 export const TEMP_PREFIX = 'pleros-bankrecon-demo-'
+/** Every Postgres database of a run is named <prefix><file>, with a fresh random prefix per run. */
+export const PG_DB_PREFIX = 'pleros_bankrecon_demo_'
+const PG_RUN_RE = /^pleros_bankrecon_demo_[0-9a-f]{8}_$/
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 /** Schema folder → SQLite file basename and the export name in apps/web/lib/server/db.ts. */
 export const SCHEMAS = {
@@ -68,14 +73,54 @@ export function createTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX))
 }
 
-/** The full environment for the fixture, the server and the browser test. */
-export function buildEnv(tmpDir, port) {
+/** Provider the generated Prisma clients were built for (they follow the schema files). */
+export function generatedProvider() {
+  const text = fs.readFileSync(path.join(WEB_ROOT, 'prisma', 'ledger', 'schema.prisma'), 'utf8')
+  return /datasource\s+\w+\s*\{[^}]*provider\s*=\s*"(\w+)"/.exec(text)?.[1] ?? 'unknown'
+}
+
+/**
+ * The maintenance URL of a disposable Postgres cluster (BANKTEST_DEMO_PG_ADMIN_URL). Only a server on
+ * this machine is accepted; the value is never printed.
+ */
+export function pgAdminUrl(raw) {
+  if (!raw) throw new Error('Refusing: --postgres needs BANKTEST_DEMO_PG_ADMIN_URL (a disposable local cluster)')
+  let u
+  try {
+    u = new URL(raw)
+  } catch {
+    throw new Error('Refusing: BANKTEST_DEMO_PG_ADMIN_URL is not a URL (value not shown)')
+  }
+  if (u.protocol !== 'postgresql:' && u.protocol !== 'postgres:') throw new Error('Refusing: BANKTEST_DEMO_PG_ADMIN_URL is not a postgres URL')
+  if (!LOCAL_HOSTS.has(u.hostname)) throw new Error('Refusing: BANKTEST_DEMO_PG_ADMIN_URL must point at a disposable cluster on localhost')
+  return u
+}
+
+export function newPgPrefix() {
+  return `${PG_DB_PREFIX}${randomBytes(4).toString('hex')}_`
+}
+
+function pgUrl(admin, dbName) {
+  const u = new URL(admin.href)
+  u.pathname = `/${dbName}`
+  return u.toString()
+}
+
+/**
+ * The full environment for the fixture, the server and the browser test. `pg` ({ admin, prefix })
+ * switches every database to this run's new Postgres databases.
+ */
+export function buildEnv(tmpDir, port, pg = null) {
   const own = {}
   for (const [schema, [file]] of Object.entries(SCHEMAS)) {
-    own[envKey(schema)] = `file:${path.join(tmpDir, `${file}.db`).replace(/\\/g, '/')}`
+    own[envKey(schema)] = pg ? pgUrl(pg.admin, `${pg.prefix}${file}`) : `file:${path.join(tmpDir, `${file}.db`).replace(/\\/g, '/')}`
   }
   Object.assign(own, {
-    PLEROS_DB_PROVIDER: 'sqlite',
+    PLEROS_DB_PROVIDER: pg ? 'postgres' : 'sqlite',
+    BANKTEST_DEMO_PG_PREFIX: pg ? pg.prefix : '',
+    BANKTEST_DEMO_PG_HOST: pg ? pg.admin.host : '',
+    // The maintenance URL stays with launch.mjs; the server and the browser test never get it.
+    BANKTEST_DEMO_PG_ADMIN_URL: '',
     DATABASE_URL: '',
     NODE_ENV: 'development',
     PORT: String(port),
@@ -104,6 +149,7 @@ export function buildEnv(tmpDir, port) {
 /**
  * Throws unless every database URL is a SQLite file inside `tmpDir` (a fresh directory under the OS
  * temp folder created for this run), none points at apps/web/.data, and nothing remote is configured.
+ * In Postgres mode every URL must instead be one of this run's new databases on the local cluster.
  */
 export function assertDisposableEnv(env, tmpDir) {
   if (!tmpDir) throw new Error('Refusing: no disposable directory (run through launch.mjs)')
@@ -112,12 +158,32 @@ export function assertDisposableEnv(env, tmpDir) {
   if (!dir.startsWith(`${osTmp}/`) || !path.basename(dir).startsWith(TEMP_PREFIX)) {
     throw new Error('Refusing: the database directory is not a new pleros-bankrecon-demo-* folder in the OS temp directory')
   }
-  if (env.PLEROS_DB_PROVIDER !== 'sqlite') throw new Error('Refusing: PLEROS_DB_PROVIDER must be sqlite')
+  if (env.PLEROS_DB_PROVIDER !== 'sqlite' && env.PLEROS_DB_PROVIDER !== 'postgres') {
+    throw new Error('Refusing: PLEROS_DB_PROVIDER must be sqlite or postgres')
+  }
   if (env.DATABASE_URL) throw new Error('Refusing: DATABASE_URL must be empty')
   const dataDir = norm(path.resolve(DEV_DATA_DIR))
   const keys = Object.keys(env).filter((k) => k.endsWith('_DATABASE_URL') && k !== 'DATABASE_URL')
   const expected = Object.keys(SCHEMAS).map(envKey)
   for (const k of expected) if (!keys.includes(k)) throw new Error(`Refusing: ${k} is not set`)
+  if (env.PLEROS_DB_PROVIDER === 'postgres') {
+    const prefix = env.BANKTEST_DEMO_PG_PREFIX ?? ''
+    const host = env.BANKTEST_DEMO_PG_HOST ?? ''
+    if (!PG_RUN_RE.test(prefix) || !host) throw new Error('Refusing: no Postgres run prefix (run through launch.mjs --postgres)')
+    const files = new Set(Object.values(SCHEMAS).map(([file]) => `/${prefix}${file}`))
+    for (const k of keys) {
+      let u
+      try {
+        u = new URL(env[k] ?? '')
+      } catch {
+        throw new Error(`Refusing: ${k} is not a URL`)
+      }
+      const ok = (u.protocol === 'postgresql:' || u.protocol === 'postgres:') && LOCAL_HOSTS.has(u.hostname) && u.host === host
+      if (!ok) throw new Error(`Refusing: ${k} is not on the disposable local cluster`)
+      if (!files.has(u.pathname)) throw new Error(`Refusing: ${k} is not one of this run's new databases`)
+    }
+    return keys.length
+  }
   for (const k of keys) {
     const url = norm(env[k] ?? '')
     if (!url.startsWith('file:')) throw new Error(`Refusing: ${k} is not a local SQLite file`)
@@ -128,8 +194,14 @@ export function assertDisposableEnv(env, tmpDir) {
   return keys.length
 }
 
-/** Sanitized description of the targets: provider and file names relative to the temp folder. */
+/** Sanitized description of the targets: file names relative to the temp folder, or host and database (no credentials). */
 export function describeTargets(env, tmpDir) {
+  if (env.PLEROS_DB_PROVIDER === 'postgres') {
+    return Object.keys(SCHEMAS).map((s) => {
+      const u = new URL(env[envKey(s)])
+      return `${envKey(s)} -> postgresql://***@${u.host}${u.pathname}`
+    })
+  }
   const base = `<os-temp>/${path.basename(tmpDir)}`
   return Object.keys(SCHEMAS).map((s) => `${envKey(s)} -> ${base}/${path.basename(env[envKey(s)])}`)
 }

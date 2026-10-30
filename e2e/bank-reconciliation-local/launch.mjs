@@ -5,6 +5,9 @@
  *   BANKTEST_DEMO_PASSWORD=<synthetic> node e2e/bank-reconciliation-local/launch.mjs serve [--port 4417]
  *   BANKTEST_DEMO_PASSWORD=<synthetic> node e2e/bank-reconciliation-local/launch.mjs test  [--port 4417] [--screenshots <dir>]
  *
+ * With --postgres (Postgres-generated clients, BANKTEST_DEMO_PG_ADMIN_URL = a disposable local cluster)
+ * the 16 databases are instead created fresh on that cluster and only they are dropped at exit.
+ *
  * Creates a new pleros-bankrecon-demo-* folder in the OS temp directory, points every database URL
  * at it (refusing anything remote or inside apps/web/.data), loads the synthetic fixture, starts the
  * app server, and on exit stops the server and removes that folder only. apps/web/.data is hashed
@@ -13,29 +16,36 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import net from 'node:net'
 import path from 'node:path'
 import {
   DEV_DATA_DIR,
   HERE,
   REPO_ROOT,
+  SCHEMAS,
   WEB_ROOT,
   assertDisposableEnv,
   buildEnv,
   createTempDir,
   describeTargets,
+  generatedProvider,
+  newPgPrefix,
+  pgAdminUrl,
   removeTempDir,
 } from './disposable-env.mjs'
 
-const USAGE = 'Usage: BANKTEST_DEMO_PASSWORD=<synthetic> node e2e/bank-reconciliation-local/launch.mjs <serve|test> [--port N] [--screenshots DIR]'
+const USAGE =
+  'Usage: BANKTEST_DEMO_PASSWORD=<synthetic> node e2e/bank-reconciliation-local/launch.mjs <serve|test> [--port N] [--screenshots DIR] [--postgres]'
 
 function parseArgs(argv) {
   const [mode, ...rest] = argv
   if (mode !== 'serve' && mode !== 'test') throw new Error(USAGE)
-  const opts = { mode, port: 4417, screenshots: null }
+  const opts = { mode, port: 4417, screenshots: null, postgres: false }
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--port') opts.port = Number(rest[++i])
     else if (rest[i] === '--screenshots') opts.screenshots = path.resolve(rest[++i] ?? '')
+    else if (rest[i] === '--postgres') opts.postgres = true
     else throw new Error(`Unknown argument ${rest[i]}\n${USAGE}`)
   }
   if (!Number.isInteger(opts.port) || opts.port < 1024 || opts.port > 65535) throw new Error('--port must be 1024-65535')
@@ -77,6 +87,17 @@ async function waitForHealth(baseUrl, server, timeoutMs = 180_000) {
   throw new Error('Server did not become healthy in time')
 }
 
+/** Runs CREATE/DROP DATABASE on the disposable cluster's maintenance database (generated ledger client). */
+async function withPgAdmin(admin, fn) {
+  const { PrismaClient } = createRequire(path.join(WEB_ROOT, 'generated', 'prisma-ledger', 'package.json'))('./index.js')
+  const client = new PrismaClient({ datasourceUrl: admin.href, log: [] })
+  try {
+    return await fn((sql) => client.$executeRawUnsafe(sql))
+  } finally {
+    await client.$disconnect()
+  }
+}
+
 function stopServer(server) {
   if (!server || server.exitCode !== null) return
   if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F'], { stdio: 'ignore' })
@@ -94,16 +115,31 @@ async function main() {
   const password = process.env.BANKTEST_DEMO_PASSWORD ?? ''
   if (password.length < 12) throw new Error('Set BANKTEST_DEMO_PASSWORD to a synthetic password of at least 12 characters (never a real one)')
   if (await portInUse(opts.port)) throw new Error(`Port ${opts.port} is already in use; refusing so the demo cannot talk to another server`)
+  const wantProvider = opts.postgres ? 'postgresql' : 'sqlite'
+  if (generatedProvider() !== wantProvider) {
+    throw new Error(`The Prisma clients are generated for ${generatedProvider()}, not ${wantProvider}; regenerate them first`)
+  }
+  const pg = opts.postgres ? { admin: pgAdminUrl(process.env.BANKTEST_DEMO_PG_ADMIN_URL), prefix: newPgPrefix() } : null
 
   const before = devDataHashes()
   const tmp = createTempDir()
-  const env = buildEnv(tmp, opts.port)
+  const env = buildEnv(tmp, opts.port, pg)
+  const pgCreated = []
   let server = null
   let log = null
   let exitCode = 1
   try {
     const n = assertDisposableEnv(env, tmp)
-    console.log(`[demo] provider=sqlite; ${n} database URLs, all disposable:`)
+    if (pg) {
+      // Fresh names: CREATE fails rather than reuse an existing database.
+      await withPgAdmin(pg.admin, async (exec) => {
+        for (const [file] of Object.values(SCHEMAS)) {
+          await exec(`CREATE DATABASE "${pg.prefix}${file}"`)
+          pgCreated.push(`${pg.prefix}${file}`)
+        }
+      })
+    }
+    console.log(`[demo] provider=${pg ? 'postgres' : 'sqlite'}; ${n} database URLs, all disposable:`)
     for (const line of describeTargets(env, tmp)) console.log(`[demo]   ${line}`)
     console.log(`[demo] outbound-service keys blanked (plus ${env.BANKTEST_DEMO_EXTRA_BLANKED} more names from apps/web/.env.local)`)
 
@@ -145,6 +181,21 @@ async function main() {
     stopServer(server)
     await new Promise((r) => setTimeout(r, 1500))
     if (log !== null) fs.closeSync(log)
+    if (pgCreated.length) {
+      try {
+        await withPgAdmin(pg.admin, async (exec) => {
+          for (const name of pgCreated) {
+            if (!name.startsWith(pg.prefix)) throw new Error(`Refusing to drop ${name}: not created by this run`)
+            await exec(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
+          }
+        })
+        console.log(`[demo] dropped the ${pgCreated.length} databases ${pg.prefix}*`)
+      } catch (e) {
+        // The temp folder and the .data check below still run; the leftover databases are named for review.
+        console.error(`[demo] could not drop ${pg.prefix}* (${e instanceof Error ? e.name : 'error'}); drop them by hand`)
+        exitCode = 1
+      }
+    }
     removeTempDir(tmp)
     const after = devDataHashes()
     const same = JSON.stringify(before) === JSON.stringify(after)

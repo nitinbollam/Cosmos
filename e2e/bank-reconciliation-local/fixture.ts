@@ -26,10 +26,21 @@ async function main() {
   assertDisposableEnv(process.env, dir)
   const password = process.env.BANKTEST_DEMO_PASSWORD ?? ''
   if (password.length < 12) throw new Error('BANKTEST_DEMO_PASSWORD must be set to a synthetic password of at least 12 characters')
+  const postgres = process.env.PLEROS_DB_PROVIDER === 'postgres'
   if (fs.readdirSync(dir).some((f) => f.endsWith('.db'))) throw new Error('Refusing: the demo directory already has databases')
-  console.log(`[fixture] provider=sqlite target=<os-temp>/${path.basename(dir)} (${Object.keys(SCHEMAS).length} new files)`)
+  console.log(
+    postgres
+      ? `[fixture] provider=postgres target=${process.env.BANKTEST_DEMO_PG_PREFIX}* (${Object.keys(SCHEMAS).length} new databases)`
+      : `[fixture] provider=sqlite target=<os-temp>/${path.basename(dir)} (${Object.keys(SCHEMAS).length} new files)`,
+  )
 
   const db = (await import(pathToFileURL(path.join(WEB_ROOT, 'lib/server/db.ts')).href)) as Client
+  if (postgres) {
+    for (const [, client] of Object.values(SCHEMAS)) {
+      const [{ n }] = await db[client].$queryRawUnsafe(`SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`)
+      if (n !== 0) throw new Error('Refusing: a demo database is not empty')
+    }
+  }
   const webRequire = createRequire(path.join(WEB_ROOT, 'package.json'))
   const prismaCli = webRequire.resolve('prisma/build/index.js')
   for (const [schema, [, client]] of Object.entries(SCHEMAS)) {
