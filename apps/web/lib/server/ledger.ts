@@ -1,4 +1,6 @@
 import { AccountType, Prisma } from '@/generated/prisma-ledger'
+import { assertLedgerPeriodOpen, lockBankAccountsForGl } from './bank-period-lock'
+import { addDays, parseIsoDate } from './bank-statement-csv'
 import { ledgerDb, tenantDb } from './db'
 import { periodRange } from './period-bounds'
 import { ApiError } from './session'
@@ -70,6 +72,8 @@ export type JournalLineInput = {
 export type CreateJournalEntryInput = {
   description: string
   fiscalPeriodClosed?: boolean
+  /** Optional YYYY-MM-DD accounting date (e.g. a bank-fee adjustment); defaults to now. */
+  postedAt?: string
   lines: JournalLineInput[]
 }
 
@@ -92,12 +96,22 @@ export async function createJournalDraft(tenantId: string, dto: CreateJournalEnt
   if (accounts.length !== accountIds.length) {
     throw new ApiError(400, 'One or more accounts are invalid for this tenant')
   }
+  let postedAt: Date | undefined
+  if (dto.postedAt !== undefined) {
+    const day = parseIsoDate(dto.postedAt)
+    if (!day) throw new ApiError(400, 'postedAt must be a date in YYYY-MM-DD format')
+    // Noon UTC is the same calendar date from UTC-11 to UTC+11, so the tenant-zone trial balance
+    // (PLR-156) and the UTC-dated bank reconciliation both put the entry on the date entered.
+    postedAt = addDays(day, 0.5)
+    await assertLedgerPeriodOpen(ledgerDb, tenantId, accountIds, postedAt)
+  }
 
   return ledgerDb.journalEntry.create({
     data: {
       tenantId,
       description: dto.description,
       fiscalPeriodClosed: dto.fiscalPeriodClosed ?? false,
+      ...(postedAt ? { postedAt } : {}),
       isPosted: false,
       lines: {
         create: decLines.map((l) => ({
@@ -116,11 +130,29 @@ export async function postJournalEntry(tenantId: string, id: string) {
   const entry = await getJournalEntry(tenantId, id)
   if (entry.isPosted) throw new ApiError(400, 'Already posted')
   assertJournalBalanced(entry.lines.map((l) => ({ debit: l.debit, credit: l.credit })))
-  return ledgerDb.journalEntry.update({
-    where: { id },
-    data: { isPosted: true },
-    include: { lines: { include: { account: true } } },
-  })
+  // A draft keeps its creation date, so posting it later can land inside a signed-off bank
+  // reconciliation period; that would silently change a signed-off book balance.
+  try {
+    await ledgerDb.$transaction(
+      async (tx) => {
+        const accountIds = [...new Set(entry.lines.map((l) => l.accountId))]
+        // Same per-account lock as sign-off, so a posting and a sign-off of that bank never interleave.
+        await lockBankAccountsForGl(tx, tenantId, accountIds)
+        await assertLedgerPeriodOpen(tx, tenantId, accountIds, entry.postedAt)
+        const res = await tx.journalEntry.updateMany({ where: { id, tenantId, isPosted: false }, data: { isPosted: true } })
+        if (res.count !== 1) throw new ApiError(400, 'Already posted')
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    )
+  } catch (e) {
+    // Postgres aborts a Serializable posting that waited on a sign-off (or another writer) of the same
+    // bank account; nothing was written, and retrying re-checks the period lock.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
+      throw new ApiError(409, 'Another change to this bank account happened at the same time; retry posting')
+    }
+    throw e
+  }
+  return getJournalEntry(tenantId, id)
 }
 
 export function listChartAccounts(tenantId: string) {

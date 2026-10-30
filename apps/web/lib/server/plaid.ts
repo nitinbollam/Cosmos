@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { decodeProtectedHeader, jwtVerify, importJWK } from 'jose'
-import { Prisma } from '@/generated/prisma-ledger'
+import { BankReconciliationStatus, BankStatementSource, Prisma } from '@/generated/prisma-ledger'
+import { bankLockBoundary } from './bank-period-lock'
 import { ledgerDb } from './db'
 import { ApiError } from './session'
 import { encryptSecret, decryptSecret } from './crypto-util'
@@ -55,7 +56,7 @@ export async function exchangePublicToken(tenantId: string, bankAccountId: strin
   })
 
   await ledgerDb.bankAccount.update({
-    where: { id: bankAccountId },
+    where: { id: bankAccountId, tenantId },
     data: {
       plaidAccessTokenEncrypted: encryptSecret(res.access_token),
       plaidItemId: res.item_id,
@@ -102,87 +103,222 @@ export async function handlePlaidWebhook(payload: PlaidWebhookPayload): Promise<
 
   for (const acct of accounts) {
     if (!acct.plaidAccessTokenEncrypted) continue
-    await syncPlaidTransactions(acct.tenantId, acct.id)
+    try {
+      await syncPlaidTransactions(acct.tenantId, acct.id)
+    } catch (e) {
+      // A refused page is recorded on the account's audit trail and retried by the next sync;
+      // it must not stop the other accounts of this item.
+      if (e instanceof ApiError && e.status === 409) {
+        console.warn(`[plaid] sync of bank account ${acct.id} held: ${e.message}`)
+        continue
+      }
+      throw e
+    }
   }
 }
 
-export async function syncPlaidTransactions(tenantId: string, bankAccountId: string) {
+type PlaidTxn = { date: string; name: string; amount: number; transaction_id: string }
+type PlaidSyncPage = {
+  added: PlaidTxn[]
+  modified: PlaidTxn[]
+  removed: Array<{ transaction_id: string }>
+  next_cursor: string
+  has_more: boolean
+}
+type FrozenChange = { transactionId: string; date: string; change: 'add' | 'modify' | 'remove' }
+
+export type PlaidSyncResult = { pages: number; added: number; modified: number; removed: number; held: number }
+
+/** Thrown inside a page transaction to roll it back; reported as 409 after the rollback. */
+class FrozenPeriodPage extends Error {
+  constructor(
+    readonly lockedThrough: Date,
+    readonly reconciliationId: string | null,
+    readonly changes: FrozenChange[],
+  ) {
+    super('Plaid page touches a signed-off period')
+  }
+}
+
+/**
+ * Pulls /transactions/sync pages until has_more is false. Each page is applied in one ledger
+ * transaction together with its cursor, so the cursor never moves past a transaction that was not
+ * stored. A page that would add, change or delete a line dated inside a signed-off reconciliation
+ * period is refused as a whole (409, recorded as a bank_statement.plaid_sync_blocked event) and the
+ * cursor stays where it was: reopen that period and sync again to apply it.
+ */
+export async function syncPlaidTransactions(tenantId: string, bankAccountId: string, actorUserId?: string): Promise<PlaidSyncResult> {
   const acct = await ledgerDb.bankAccount.findFirst({ where: { id: bankAccountId, tenantId } })
   if (!acct?.plaidAccessTokenEncrypted) throw new ApiError(400, 'Bank account is not linked to Plaid')
 
   const accessToken = decryptSecret(acct.plaidAccessTokenEncrypted)
-  const res = await plaidRequest<{
-    added: Array<{ date: string; name: string; amount: number; transaction_id: string }>
-    modified: Array<{ date: string; name: string; amount: number; transaction_id: string }>
-    removed: Array<{ transaction_id: string }>
-    next_cursor: string
-    has_more: boolean
-  }>('/transactions/sync', {
-    access_token: accessToken,
-    cursor: acct.plaidSyncCursor ?? undefined,
-  })
-
-  const incoming = [...res.added, ...res.modified]
-  const refIds = incoming.map((t) => t.transaction_id).filter(Boolean)
-
-  if (refIds.length > 0) {
-    const existing = await ledgerDb.bankStatementLine.findMany({
-      where: {
-        tenantId,
-        bankAccountId,
-        reference: { in: refIds },
-      },
+  const total: PlaidSyncResult = { pages: 0, added: 0, modified: 0, removed: 0, held: 0 }
+  let cursor = acct.plaidSyncCursor
+  for (;;) {
+    const page = await plaidRequest<PlaidSyncPage>('/transactions/sync', {
+      access_token: accessToken,
+      cursor: cursor ?? undefined,
     })
-    const existingMap = new Map(existing.map((e) => [e.reference, e]))
+    const applied = await applyPlaidPage(tenantId, bankAccountId, cursor, page, actorUserId)
+    total.pages++
+    total.added += applied.added
+    total.modified += applied.modified
+    total.removed += applied.removed
+    total.held += applied.held
+    cursor = page.next_cursor
+    if (!page.has_more) return total
+  }
+}
 
-    for (const tx of incoming) {
-      const existingLine = existingMap.get(tx.transaction_id)
-      if (existingLine) {
-        if (!existingLine.reconciled) {
-          await ledgerDb.bankStatementLine.update({
-            where: { id: existingLine.id },
+async function applyPlaidPage(
+  tenantId: string,
+  bankAccountId: string,
+  cursor: string | null,
+  page: PlaidSyncPage,
+  actorUserId?: string,
+) {
+  const incoming = [...(page.added ?? []), ...(page.modified ?? [])]
+  const removedIds = (page.removed ?? []).map((r) => r.transaction_id).filter(Boolean)
+  try {
+    return await ledgerDb.$transaction(
+      async (tx) => {
+        // Lock the account and claim the cursor in one write: a concurrent sync of the same page
+        // loses here, and sign-off, imports and matching of this account (lockBankAccount) wait.
+        const claimed = await tx.bankAccount.updateMany({
+          where: { id: bankAccountId, tenantId, plaidSyncCursor: cursor },
+          data: { updatedAt: new Date() },
+        })
+        if (claimed.count !== 1) throw new ApiError(409, 'Another Plaid sync of this bank account ran at the same time; sync again')
+
+        // Signed-off reconciliation periods are frozen: no Plaid edit, insert or delete may change them.
+        const boundary = await bankLockBoundary(tx, tenantId, bankAccountId)
+        const isFrozen = (d: Date) => boundary !== null && d < boundary
+        const refs = [...new Set([...incoming.map((t) => t.transaction_id), ...removedIds].filter(Boolean))]
+        const existing = refs.length
+          ? await tx.bankStatementLine.findMany({
+              where: { tenantId, bankAccountId, reference: { in: refs } },
+              include: { matchItems: { select: { activeStatementLineId: true } } },
+            })
+          : []
+        const byRef = new Map(existing.map((e) => [e.reference, e]))
+
+        const frozen: FrozenChange[] = []
+        // Changes Plaid reports for a matched line are not applied over the match; the event keeps them.
+        const held: Record<string, string>[] = []
+        const creates = new Map<string, Prisma.BankStatementLineCreateManyInput>()
+        const updates: { id: string; postedAt: Date; description: string; amount: Prisma.Decimal }[] = []
+        const deletes: string[] = []
+
+        for (const t of incoming) {
+          const postedAt = new Date(t.date)
+          const description = t.name.trim()
+          const amount = new Prisma.Decimal(-t.amount)
+          const line = byRef.get(t.transaction_id)
+          if (!line) {
+            if (isFrozen(postedAt)) frozen.push({ transactionId: t.transaction_id, date: t.date, change: 'add' })
+            else {
+              creates.set(t.transaction_id, {
+                tenantId,
+                bankAccountId,
+                postedAt,
+                description,
+                amount,
+                reference: t.transaction_id,
+                source: BankStatementSource.PLAID,
+              })
+            }
+            continue
+          }
+          const unchanged =
+            +line.postedAt === +postedAt && line.description === description && new Prisma.Decimal(line.amount).equals(amount)
+          if (unchanged) continue
+          if (line.lockedAt || isFrozen(line.postedAt) || isFrozen(postedAt)) {
+            frozen.push({ transactionId: t.transaction_id, date: t.date, change: 'modify' })
+          } else if (line.reconciled || line.matchItems.some((i) => i.activeStatementLineId)) {
+            held.push({ transactionId: t.transaction_id, change: 'modify', date: t.date, amount: amount.toFixed(2), description }) // money-ok: Decimal to 2-decimal string
+          } else {
+            updates.push({ id: line.id, postedAt, description, amount })
+          }
+        }
+        for (const id of removedIds) {
+          const line = byRef.get(id)
+          if (!line) {
+            creates.delete(id)
+            continue
+          }
+          if (line.lockedAt || isFrozen(line.postedAt)) {
+            frozen.push({ transactionId: id, date: line.postedAt.toISOString().slice(0, 10), change: 'remove' })
+          } else if (line.reconciled || line.matchItems.length) {
+            // Lines with match history are kept: the match items reference them.
+            held.push({ transactionId: id, change: 'remove' })
+          } else {
+            deletes.push(line.id)
+          }
+        }
+
+        if (frozen.length) {
+          const signed = await tx.bankReconciliation.findFirst({
+            where: { tenantId, bankAccountId, status: BankReconciliationStatus.SIGNED_OFF },
+            orderBy: { periodEnd: 'desc' },
+            select: { id: true },
+          })
+          throw new FrozenPeriodPage(boundary!, signed?.id ?? null, frozen)
+        }
+
+        if (creates.size) await tx.bankStatementLine.createMany({ data: [...creates.values()] })
+        for (const u of updates) {
+          await tx.bankStatementLine.update({
+            where: { id: u.id, tenantId },
+            data: { postedAt: u.postedAt, description: u.description, amount: u.amount },
+          })
+        }
+        if (deletes.length) await tx.bankStatementLine.deleteMany({ where: { tenantId, id: { in: deletes } } })
+        await tx.bankAccount.update({ where: { id: bankAccountId, tenantId }, data: { plaidSyncCursor: page.next_cursor } })
+
+        const counts = { added: creates.size, modified: updates.length, removed: deletes.length, held: held.length }
+        if (counts.added || counts.modified || counts.removed || counts.held) {
+          await tx.bankReconciliationEvent.create({
             data: {
-              postedAt: new Date(tx.date),
-              description: tx.name.trim(),
-              amount: new Prisma.Decimal(-tx.amount),
+              tenantId,
+              bankAccountId,
+              action: 'bank_statement.plaid_synced',
+              userId: actorUserId ?? null,
+              metadata: { ...counts, held },
             },
           })
         }
-      } else {
-        await ledgerDb.bankStatementLine.create({
+        return counts
+      },
+      { maxWait: 10_000, timeout: 30_000 },
+    )
+  } catch (e) {
+    if (e instanceof FrozenPeriodPage) {
+      const through = new Date(e.lockedThrough.getTime() - 86_400_000).toISOString().slice(0, 10)
+      try {
+        await ledgerDb.bankReconciliationEvent.create({
           data: {
             tenantId,
             bankAccountId,
-            postedAt: new Date(tx.date),
-            description: tx.name.trim(),
-            amount: new Prisma.Decimal(-tx.amount),
-            reference: tx.transaction_id,
+            reconciliationId: e.reconciliationId,
+            action: 'bank_statement.plaid_sync_blocked',
+            userId: actorUserId ?? null,
+            metadata: { lockedThrough: through, cursorKept: true, transactions: e.changes },
           },
         })
+      } catch (err) {
+        console.error('[plaid] could not record the refused sync page:', err)
       }
+      throw new ApiError(
+        409,
+        `${e.changes.length} Plaid transaction(s) fall in the signed-off reconciliation period through ${through}. ` +
+          'Nothing from this sync page was saved and the sync position was kept; reopen that period with a reason, then sync again.',
+        undefined,
+        { errors: e.changes },
+      )
     }
-  }
-
-  if (res.removed?.length) {
-    const removedIds = res.removed.map((r) => r.transaction_id).filter(Boolean)
-    if (removedIds.length > 0) {
-      await ledgerDb.bankStatementLine.deleteMany({
-        where: {
-          tenantId,
-          bankAccountId,
-          reference: { in: removedIds },
-          reconciled: false,
-        },
-      })
+    if (e instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(e.code)) {
+      throw new ApiError(409, 'Another change to this bank account happened at the same time; sync again')
     }
-  }
-
-  await ledgerDb.bankAccount.update({
-    where: { id: bankAccountId },
-    data: { plaidSyncCursor: res.next_cursor },
-  })
-
-  if (res.has_more) {
-    await syncPlaidTransactions(tenantId, bankAccountId)
+    throw e
   }
 }

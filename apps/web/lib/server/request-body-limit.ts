@@ -17,6 +17,7 @@ const LARGE_BODY_ROUTES: RegExp[] = [
   /^\/expense-reports\/receipts$/, // receipt, up to 5 MB, sent as base64
   /^\/(customers|leads|skus)\/import$/, // spreadsheet imports
   /^\/bank-accounts\/[^/]+\/import$/, // bank statement lines
+  /^\/bank-reconciliations\/[^/]+\/import-csv$/, // bank statement CSV
   /^\/wms\/receiving\/(sessions\/)?[^/]+\/import$/, // receiving scans
   /^\/wms\/cycle-counts\/[^/]+\/lines\/import$/, // cycle count lines
   /^\/msa\/transactions\/import$/, // MSA transactions

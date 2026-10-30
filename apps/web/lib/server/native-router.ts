@@ -17,6 +17,7 @@ import {
   routeJournalEntries,
   routeChartAccounts,
   routeBankAccounts,
+  routeBankReconciliations,
   routeFixedAssets,
   routeTax,
   routeFinancialStatements,
@@ -111,6 +112,7 @@ export async function handleNativeApi(method: string, path: string[], req: Reque
     if (seg[0] === 'unsubscribe') return await routeUnsubscribe(m, seg, req)
     if (seg[0] === 'webhooks') return await routeWebhooks(m, seg, req)
     if (seg[0] === 'bank-accounts') return await routeBankAccounts(m, seg, req)
+    if (seg[0] === 'bank-reconciliations') return await routeBankReconciliations(m, seg, req)
     if (seg[0] === 'fixed-assets') return await routeFixedAssets(m, seg, req)
     if (seg[0] === 'audit') return await routeAudit(m, seg, req)
     if (seg[0] === 'search') return await routeSearch(m, seg, req)
