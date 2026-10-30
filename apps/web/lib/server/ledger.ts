@@ -132,17 +132,26 @@ export async function postJournalEntry(tenantId: string, id: string) {
   assertJournalBalanced(entry.lines.map((l) => ({ debit: l.debit, credit: l.credit })))
   // A draft keeps its creation date, so posting it later can land inside a signed-off bank
   // reconciliation period; that would silently change a signed-off book balance.
-  await ledgerDb.$transaction(
-    async (tx) => {
-      const accountIds = [...new Set(entry.lines.map((l) => l.accountId))]
-      // Same per-account lock as sign-off, so a posting and a sign-off of that bank never interleave.
-      await lockBankAccountsForGl(tx, tenantId, accountIds)
-      await assertLedgerPeriodOpen(tx, tenantId, accountIds, entry.postedAt)
-      const res = await tx.journalEntry.updateMany({ where: { id, tenantId, isPosted: false }, data: { isPosted: true } })
-      if (res.count !== 1) throw new ApiError(400, 'Already posted')
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  )
+  try {
+    await ledgerDb.$transaction(
+      async (tx) => {
+        const accountIds = [...new Set(entry.lines.map((l) => l.accountId))]
+        // Same per-account lock as sign-off, so a posting and a sign-off of that bank never interleave.
+        await lockBankAccountsForGl(tx, tenantId, accountIds)
+        await assertLedgerPeriodOpen(tx, tenantId, accountIds, entry.postedAt)
+        const res = await tx.journalEntry.updateMany({ where: { id, tenantId, isPosted: false }, data: { isPosted: true } })
+        if (res.count !== 1) throw new ApiError(400, 'Already posted')
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    )
+  } catch (e) {
+    // Postgres aborts a Serializable posting that waited on a sign-off (or another writer) of the same
+    // bank account; nothing was written, and retrying re-checks the period lock.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
+      throw new ApiError(409, 'Another change to this bank account happened at the same time; retry posting')
+    }
+    throw e
+  }
   return getJournalEntry(tenantId, id)
 }
 

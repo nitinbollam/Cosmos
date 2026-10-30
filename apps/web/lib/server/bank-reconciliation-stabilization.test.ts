@@ -1,5 +1,5 @@
 // Must stay the first import: points every database at fresh temp files before ./db loads.
-import { ISOLATED_SKIP, assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases } from './test-support/isolated-databases'
+import { ISOLATED_PROVIDER, ISOLATED_SKIP, assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases } from './test-support/isolated-databases'
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { after, before, test } from 'node:test'
@@ -780,4 +780,431 @@ dbTest('F-8: audit and match rows name same-tenant users; unknown, deleted and o
   ).map((l) => l.text)
   assert.ok(report.includes('Prepared by: Deleted or unavailable user' + (ws.reconciliation.preparedAt ? ` at ${ws.reconciliation.preparedAt}` : '')))
   assert.ok(!report.some((l) => l.includes(gone.id)))
+})
+
+// ---------------------------------------------------------------------------------------------
+// Journal posting racing sign-off (both take the bank account lock first)
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** Postgres only: polls until another backend of this database waits on a lock (true) or `ms` pass (false). */
+async function sawBackendWaitingOnLock(ms: number): Promise<boolean> {
+  const until = Date.now() + ms
+  while (Date.now() < until) {
+    const [row] = await ledgerDb.$queryRawUnsafe<{ n: number }[]>(
+      `SELECT COUNT(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`,
+    )
+    if (row && row.n > 0) return true
+    await sleep(10)
+  }
+  return false
+}
+
+/**
+ * "Sign-off holds the account, then a posting arrives." Runs `during` once, right after the first
+ * ledger transaction takes a bank account lock, and keeps that transaction open until the competing
+ * transaction has issued its own account-lock statement and, on Postgres, is seen in pg_stat_activity
+ * waiting on that lock. No fixed delay decides the order; `evidence` records what was observed so the
+ * test can assert it. SQLite has no observable lock wait (and Prisma may not even start the second
+ * transaction while the first holds the database), so there only the outcome is asserted.
+ * (interleaveAtLockCheck covers the opposite order.)
+ */
+function startWhileAccountLocked(during: () => Promise<unknown>) {
+  const client = ledgerDb as unknown as Record<string, AnyFn>
+  const origTx = client.$transaction!
+  let fired: Promise<unknown> | null = null
+  let lockCalls = 0
+  let markReached: () => void = () => undefined
+  const reached = new Promise<void>((resolve) => (markReached = resolve))
+  const evidence = { competitorIssuedLock: false, competitorSeenWaiting: null as boolean | null }
+  const postgres = ISOLATED_PROVIDER === 'postgresql'
+  const wrapTx = (tx: object) =>
+    new Proxy(tx, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver)
+        if (prop !== 'bankAccount') return value
+        return new Proxy(value as object, {
+          get(d, p, r) {
+            const fn = Reflect.get(d, p, r) as AnyFn
+            if (p !== 'updateMany') return fn
+            return async (args: unknown) => {
+              lockCalls++
+              if (lockCalls > 1) {
+                // The competitor is about to send its lock statement.
+                evidence.competitorIssuedLock = true
+                markReached()
+                return fn.call(d, args)
+              }
+              const res = await fn.call(d, args)
+              fired = during()
+              await Promise.race([reached, sleep(postgres ? 15_000 : 2_000)])
+              if (postgres && evidence.competitorIssuedLock) evidence.competitorSeenWaiting = await sawBackendWaitingOnLock(15_000)
+              return res
+            }
+          },
+        })
+      },
+    })
+  client.$transaction = (arg: unknown, opts?: unknown) =>
+    typeof arg === 'function' ? origTx.call(ledgerDb, (tx: object) => (arg as AnyFn)(wrapTx(tx)), opts) : origTx.call(ledgerDb, arg, opts)
+  return {
+    restore() {
+      client.$transaction = origTx
+    },
+    settled: async () => (fired ? await fired : undefined),
+    evidence,
+  }
+}
+
+/** On Postgres the race must really have happened: the posting was blocked on the lock sign-off held. */
+function assertPostingQueuedBehindSignOff(evidence: { competitorIssuedLock: boolean; competitorSeenWaiting: boolean | null }) {
+  if (ISOLATED_PROVIDER !== 'postgresql') return
+  assert.equal(evidence.competitorIssuedLock, true, 'the posting never reached the account lock while sign-off held it')
+  assert.equal(evidence.competitorSeenWaiting, true, 'the posting was not seen waiting on the lock held by sign-off')
+}
+
+async function draftCashEntry(t: Tenant, postedAt: string, amount: string, description: string) {
+  const res = await api(t.tokens.ACCOUNTANT!, 'POST', '/journal-entries', {
+    description,
+    postedAt,
+    lines: [
+      { accountId: t.accounts.cash, debit: amount, credit: 0 },
+      { accountId: t.accounts.ar, debit: 0, credit: amount },
+    ],
+  })
+  assert.equal(res.status, 201, JSON.stringify(res.body))
+  return res.body.id as string
+}
+
+dbTest('F-3: a journal posting queued behind a sign-off gets a 409, never a 500, and never lands in the signed period', async () => {
+  const t = await makeTenant('f3post')
+  const bank = await newBank(t)
+  const recon = await newRecon(t, bank, P1, '0.00', '0.00')
+  const draft = await draftCashEntry(t, P1.day(20), '10.00', 'BANKTEST late receipt')
+  const version = (await workspace(t, recon)).reconciliation.version
+
+  let posted: ApiResult | null = null
+  const hook = startWhileAccountLocked(async () => {
+    posted = await api(t.tokens.ACCOUNTANT!, 'POST', `/journal-entries/${draft}/post`)
+  })
+  let signed: ApiResult
+  try {
+    signed = await api(t.tokens.MANAGER!, 'POST', `/bank-reconciliations/${recon}/sign-off`, { version })
+    await hook.settled()
+  } finally {
+    hook.restore()
+  }
+  assert.equal(signed.status, 200, JSON.stringify(signed.body))
+  assertPostingQueuedBehindSignOff(hook.evidence)
+  const p = posted as ApiResult | null
+  assert.equal(p?.status, 409, `posting queued behind sign-off → ${p?.status} ${JSON.stringify(p?.body)}`)
+  assert.equal((await ledgerDb.journalEntry.findUniqueOrThrow({ where: { id: draft } })).isPosted, false)
+  await assertSignedPeriodIntact(t, recon, 'posting vs sign-off')
+
+  // The retry is refused for the lasting reason: the entry is dated inside the signed-off period.
+  const retry = await api(t.tokens.ACCOUNTANT!, 'POST', `/journal-entries/${draft}/post`)
+  assert.equal(retry.status, 409, JSON.stringify(retry.body))
+  assert.match(retry.body.message, /signed off/)
+  assert.equal((await ledgerDb.journalEntry.findUniqueOrThrow({ where: { id: draft } })).isPosted, false)
+})
+
+dbTest('F-3: a posting dated after the period that loses a race with sign-off gets a 409 and succeeds on retry', async () => {
+  const t = await makeTenant('f3post2')
+  const bank = await newBank(t)
+  const recon = await newRecon(t, bank, P1, '0.00', '0.00')
+  const draft = await draftCashEntry(t, P2.day(3), '25.00', 'BANKTEST receipt after the period')
+  const version = (await workspace(t, recon)).reconciliation.version
+
+  let posted: ApiResult | null = null
+  const hook = startWhileAccountLocked(async () => {
+    posted = await api(t.tokens.ACCOUNTANT!, 'POST', `/journal-entries/${draft}/post`)
+  })
+  let signed: ApiResult
+  try {
+    signed = await api(t.tokens.MANAGER!, 'POST', `/bank-reconciliations/${recon}/sign-off`, { version })
+    await hook.settled()
+  } finally {
+    hook.restore()
+  }
+  assert.equal(signed.status, 200, JSON.stringify(signed.body))
+  assertPostingQueuedBehindSignOff(hook.evidence)
+  const p = posted as ApiResult | null
+  // Postgres reports the queued Serializable writer as a conflict (asserted exactly); SQLite simply
+  // waits and posts. A 500 is never correct.
+  if (ISOLATED_PROVIDER === 'postgresql') assert.equal(p?.status, 409, `posting after the period → ${p?.status} ${JSON.stringify(p?.body)}`)
+  assert.ok(p && [200, 409].includes(p.status), `posting after the period → ${p?.status} ${JSON.stringify(p?.body)}`)
+  if (p!.status === 409) {
+    assert.match(p!.body.message, /at the same time/)
+    const retry = await api(t.tokens.ACCOUNTANT!, 'POST', `/journal-entries/${draft}/post`)
+    assert.equal(retry.status, 200, JSON.stringify(retry.body))
+  }
+  assert.equal((await ledgerDb.journalEntry.findUniqueOrThrow({ where: { id: draft } })).isPosted, true)
+  await assertSignedPeriodIntact(t, recon, 'later posting vs sign-off')
+})
+
+// ---------------------------------------------------------------------------------------------
+// Rows that existed before the upgrade (no dedupe key; some reconciled by the retired flow)
+
+/**
+ * OPEN GAP, not accepted behavior. Rows written before the upgrade (and every Plaid-synced row) have no
+ * dedupe key, so re-importing the same transactions by CSV stores them a second time, and no user-facing
+ * action can delete a statement line. Which remedy applies (backfill keys, opening date after the legacy
+ * rows, or an audited void) is an open deployment decision: docs/BANK_RECONCILIATION_ROLLOUT.md
+ * section 5. Until it is made, this test guards the one
+ * property that must never break: a doubled line can never be signed off silently. The `todo` below
+ * is the behavior we want; when the decision is implemented, it replaces the first assertion block.
+ */
+test('legacy lines without a dedupe key are recognized on CSV re-import (open decision: key backfill or opening-date cutoff)', {
+  todo: 'pending the legacy-line deployment decision (docs/BANK_RECONCILIATION_ROLLOUT.md section 5)',
+})
+
+dbTest('legacy lines without a dedupe key (open gap): a CSV re-import is stored again, and the doubled period cannot be signed off', async () => {
+  const t = await makeTenant('legacy')
+  const bank = await newBank(t, 1000)
+  // As written before the upgrade: no dedupeKey, source defaulted, one reconciled by the retired
+  // line-only flow (which added its amount to currentBalance).
+  const legacyDeposit = await ledgerDb.bankStatementLine.create({
+    data: { tenantId: t.id, bankAccountId: bank, postedAt: new Date(`${P1.day(5)}T00:00:00Z`), description: 'BANKTEST legacy deposit', amount: new Prisma.Decimal('100.00'), reference: 'LEG-1' },
+  })
+  await ledgerDb.bankStatementLine.create({
+    data: { tenantId: t.id, bankAccountId: bank, postedAt: new Date(`${P1.day(6)}T00:00:00Z`), description: 'BANKTEST legacy fee', amount: new Prisma.Decimal('-20.00'), reference: 'LEG-2', reconciled: true, reconciledAt: new Date() },
+  })
+  await ledgerDb.bankAccount.update({ where: { id: bank }, data: { currentBalance: new Prisma.Decimal('980.00') } })
+  assert.equal(legacyDeposit.dedupeKey, null)
+  assert.equal(legacyDeposit.source, 'API')
+  await postCash(t, P1.day(5), 100, t.accounts.ar, 'BANKTEST receipt')
+  await postCash(t, P1.day(6), -20, t.accounts.fees, 'BANKTEST fee')
+  const recon = await newRecon(t, bank, P1, '0.00', '80.00')
+
+  // The same two transactions arrive again by CSV: nothing identifies them as duplicates.
+  const imp = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/import-csv`, {
+    csvText: csvOf([
+      [P1.day(5), 'BANKTEST legacy deposit', '100.00', 'LEG-1'],
+      [P1.day(6), 'BANKTEST legacy fee', '-20.00', 'LEG-2'],
+    ]),
+  })
+  assert.equal(imp.status, 201, JSON.stringify(imp.body))
+  // Records today's gap so a change in it is noticed; this is not the intended end state (see the todo above).
+  assert.deepEqual([imp.body.imported, imp.body.skippedDuplicates], [2, 0], 'gap changed: update this test and the todo above')
+  assert.equal(await ledgerDb.bankStatementLine.count({ where: { tenantId: t.id, reference: 'LEG-1' } }), 2)
+
+  // The invariant: the doubled items are ambiguous for auto-match and keep the period from being signed off.
+  const auto = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/auto-match`, {})
+  assert.equal(auto.body.matched, 0, JSON.stringify(auto.body))
+  const signed = await signOff(t, recon)
+  assert.equal(signed.status, 409, JSON.stringify(signed.body))
+  assert.ok(signed.body.errors.some((e: string) => /not in the books/.test(e)), JSON.stringify(signed.body))
+
+  // currentBalance keeps its legacy meaning (opening + retired-flow lines) and the retired endpoint changes nothing.
+  assert.equal((await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-accounts/${legacyDeposit.id}/reconcile`)).status, 410)
+  assert.equal((await ledgerDb.bankStatementLine.findUniqueOrThrow({ where: { id: legacyDeposit.id } })).reconciled, false)
+  assert.equal(await storedBalance(bank), '980.00')
+  const tiles = await legacyOpening(t)
+  assert.equal(tiles.closingBalanceTotal, 980)
+  assert.equal(tiles.openingBalanceTotal, 1000)
+})
+
+/**
+ * Candidate launch workaround (a) for the gap above, NOT an adopted policy: an opening date after the
+ * legacy lines. It must neither hide history from the book balance nor let a still-outstanding
+ * pre-cutoff item be signed off; see docs/BANK_RECONCILIATION_ROLLOUT.md section 5 for its prerequisites.
+ */
+dbTest('legacy-line workaround (a): an opening date after the legacy lines keeps full book history and fails closed on an uncleared pre-cutoff item', async () => {
+  const legacyLine = async (t: Tenant, bank: string, day: string, amount: string, reference: string) =>
+    ledgerDb.bankStatementLine.create({
+      data: { tenantId: t.id, bankAccountId: bank, postedAt: new Date(`${day}T00:00:00Z`), description: 'BANKTEST legacy', amount: new Prisma.Decimal(amount), reference },
+    })
+  const moveCutoff = async (t: Tenant, bank: string) => {
+    const res = await api(t.tokens.ACCOUNTANT!, 'PATCH', `/bank-accounts/${bank}`, { openingBalanceDate: P2.start })
+    assert.equal(res.status, 200, JSON.stringify(res.body))
+  }
+
+  // Prerequisites met: everything booked before the cutoff cleared the bank before it.
+  const t = await makeTenant('cutoff')
+  const bank = await newBank(t)
+  await legacyLine(t, bank, P1.day(5), '100.00', 'LEG-1')
+  await legacyLine(t, bank, P1.day(6), '-20.00', 'LEG-2')
+  await postCash(t, P1.day(5), 100, t.accounts.ar, 'BANKTEST receipt')
+  await postCash(t, P1.day(6), -20, t.accounts.fees, 'BANKTEST fee')
+  await moveCutoff(t, bank)
+  const event = await ledgerDb.bankReconciliationEvent.findFirstOrThrow({
+    where: { tenantId: t.id, bankAccountId: bank, action: 'bank_account.updated' },
+    orderBy: { createdAt: 'desc' },
+  })
+  const change = event.metadata as { before: { openingBalanceDate: string }; after: { openingBalanceDate: string } }
+  assert.equal(change.before.openingBalanceDate.slice(0, 10), P1.start)
+  assert.equal(change.after.openingBalanceDate.slice(0, 10), P2.start)
+
+  await postCash(t, P2.day(3), 50, t.accounts.ar, 'BANKTEST receipt 2')
+  const recon = await newRecon(t, bank, P2, '80.00', '130.00')
+  // The legacy rows cannot be re-imported into a period after the cutoff: the whole file is refused.
+  const again = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/import-csv`, {
+    csvText: csvOf([[P1.day(5), 'BANKTEST legacy deposit', '100.00', 'LEG-1'], [P2.day(3), 'BANKTEST deposit', '50.00', 'D-2']]),
+  })
+  assert.equal(again.status, 400, JSON.stringify(again.body))
+  const imp = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/import-csv`, {
+    csvText: csvOf([[P2.day(3), 'BANKTEST deposit', '50.00', 'D-2']]),
+  })
+  assert.equal(imp.status, 201, JSON.stringify(imp.body))
+  assert.equal((await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/auto-match`, {})).body.matched, 1)
+  const ws = await workspace(t, recon)
+  // The book balance still sums every posted line, including the 80.00 booked before the cutoff.
+  assert.equal(ws.balances.bookBalance, '130.00')
+  assert.equal(ws.balances.difference, '0.00')
+  assert.equal(ws.unmatchedBank.length + ws.unmatchedBook.length, 0)
+  assert.equal((await signOff(t, recon)).status, 200)
+  assert.equal(
+    await ledgerDb.bankStatementLine.count({ where: { tenantId: t.id, bankAccountId: bank, reference: { startsWith: 'LEG-' } } }),
+    2,
+    'legacy lines are kept, not deleted',
+  )
+
+  // Prerequisite broken: a cheque booked before the cutoff clears the bank after it.
+  const u = await makeTenant('cutoff-uncleared')
+  const bankU = await newBank(u)
+  await legacyLine(u, bankU, P1.day(5), '100.00', 'LEG-3')
+  await postCash(u, P1.day(5), 100, u.accounts.ar, 'BANKTEST receipt')
+  const cheque = await postCash(u, P1.day(20), -30, u.accounts.fees, 'BANKTEST cheque')
+  await moveCutoff(u, bankU)
+  const reconU = await newRecon(u, bankU, P2, '100.00', '70.00')
+  const csvU = await api(u.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${reconU}/import-csv`, {
+    csvText: csvOf([[P2.day(2), 'BANKTEST cheque cleared', '-30.00', 'CHQ-1']]),
+  })
+  assert.equal(csvU.status, 201, JSON.stringify(csvU.body))
+  const wsU = await workspace(u, reconU)
+  // The cheque's book line is before the cutoff, so it cannot be matched and the period shows a
+  // difference instead of being signed off.
+  assert.equal(wsU.balances.bookBalance, '70.00')
+  assert.ok(!wsU.unmatchedBook.some((b: { journalLineId: string }) => b.journalLineId === cheque))
+  assert.equal(wsU.unmatchedBank.length, 1)
+  assert.equal(wsU.balances.difference, '-30.00')
+  const refused = await signOff(u, reconU)
+  assert.equal(refused.status, 409, JSON.stringify(refused.body))
+  assert.ok(refused.body.errors.some((e: string) => /differ by/.test(e)), JSON.stringify(refused.body))
+  // And the cutoff can no longer be corrected through the API once a reconciliation exists.
+  const late = await api(u.tokens.ACCOUNTANT!, 'PATCH', `/bank-accounts/${bankU}`, { openingBalanceDate: P1.start })
+  assert.equal(late.status, 409, JSON.stringify(late.body))
+})
+
+// ---------------------------------------------------------------------------------------------
+// Money precision and day boundaries (exact numeric on Postgres; Decimal end to end)
+
+dbTest('precision and boundaries: cent sums, 13-digit amounts and the first/last instant of the period', async () => {
+  const t = await makeTenant('prec')
+  const bank = await newBank(t)
+  /** A posted entry on the cash account at an exact instant; amounts stay Decimal strings. */
+  const book = async (postedAt: Date, amount: string, description: string) => {
+    const abs = new Prisma.Decimal(amount).abs()
+    const cashDebit = new Prisma.Decimal(amount).isPositive()
+    const entry = await ledgerDb.journalEntry.create({
+      data: {
+        tenantId: t.id,
+        description,
+        isPosted: true,
+        postedAt,
+        lines: {
+          create: [
+            { accountId: t.accounts.cash, debit: cashDebit ? abs : 0, credit: cashDebit ? 0 : abs },
+            { accountId: t.accounts.ar, debit: cashDebit ? 0 : abs, credit: cashDebit ? abs : 0 },
+          ],
+        },
+      },
+      include: { lines: true },
+    })
+    return entry.lines.find((l) => l.accountId === t.accounts.cash)!.id
+  }
+  const kBig = await book(p1Start, '1234567890123.45', 'BANKTEST large receipt at the first instant')
+  const kSplit = await book(new Date(p1End.getTime() + DAY - 1), '-0.30', 'BANKTEST fee at the last instant')
+  const kCents = await book(new Date(`${P1.day(15)}T12:00:00Z`), '1.00', 'BANKTEST one dollar')
+  await book(new Date(p1End.getTime() + DAY), '500.00', 'BANKTEST first instant after the period')
+  await book(new Date(p1Start.getTime() - 1), '7.77', 'BANKTEST before the opening date')
+
+  // Opening 7.77 is the pre-cutoff book item; closing = opening + every statement line of the period.
+  const recon = await newRecon(t, bank, P1, '7.77', '1234567890131.92')
+
+  // One out-of-period row makes the whole file fail; nothing is stored.
+  const bad = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/import-csv`, {
+    csvText: csvOf([
+      [P1.start, 'BANKTEST large deposit', '1234567890123.45', 'BIG'],
+      [P2.start, 'BANKTEST next period', '1.00', 'NEXT'],
+    ]),
+  })
+  assert.equal(bad.status, 400, JSON.stringify(bad.body))
+  assert.deepEqual(bad.body.errors.map((e: { row: number }) => e.row), [3])
+  assert.equal(await ledgerDb.bankStatementLine.count({ where: { tenantId: t.id } }), 0)
+
+  const cents = Array.from({ length: 100 }, (_, i) => [P1.day(15), 'BANKTEST cent', '0.01', `C${i + 1}`] as [string, string, string, string])
+  const ok = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/import-csv`, {
+    csvText: csvOf([
+      [P1.start, 'BANKTEST large deposit', '1234567890123.45', 'BIG'],
+      [P1.end, 'BANKTEST fee part A', '-0.10', 'A'],
+      [P1.end, 'BANKTEST fee part B', '-0.20', 'B'],
+      ...cents,
+    ]),
+  })
+  assert.equal(ok.status, 201, JSON.stringify(ok.body))
+  assert.equal(ok.body.imported, 103)
+  const sum = await ledgerDb.bankStatementLine.aggregate({ where: { tenantId: t.id, reference: { startsWith: 'C' } }, _sum: { amount: true } })
+  assert.equal(new Prisma.Decimal(sum._sum.amount!).toFixed(2), '1.00')
+
+  const auto = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/auto-match`, {})
+  assert.equal(auto.status, 200, JSON.stringify(auto.body))
+  assert.deepEqual(auto.body.matches.map((m: { journalLineId: string }) => m.journalLineId), [kBig])
+
+  const ids = async (refs: string[]) => Promise.all(refs.map(async (r) => (await lineByRef(t.id, r))!.id))
+  const split = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/matches`, {
+    statementLineIds: await ids(['A', 'B']),
+    journalLineIds: [kSplit],
+  })
+  assert.equal(split.status, 201, JSON.stringify(split.body))
+  assert.equal(split.body.total, '-0.30', '-0.10 + -0.20 is exactly -0.30')
+  const many = await api(t.tokens.ACCOUNTANT!, 'POST', `/bank-reconciliations/${recon}/matches`, {
+    statementLineIds: await ids(cents.map((c) => c[3])),
+    journalLineIds: [kCents],
+  })
+  assert.equal(many.status, 201, JSON.stringify(many.body))
+  assert.equal(many.body.total, '1.00')
+
+  const ws = await workspace(t, recon)
+  assert.deepEqual(
+    {
+      bookBalance: ws.balances.bookBalance,
+      depositsInTransit: ws.balances.depositsInTransit,
+      outstandingPayments: ws.balances.outstandingPayments,
+      unrecordedBankItems: ws.balances.unrecordedBankItems,
+      adjustedBook: ws.balances.adjustedBook,
+      adjustedBank: ws.balances.adjustedBank,
+      difference: ws.balances.difference,
+      statementDifference: ws.balances.statementDifference,
+    },
+    {
+      bookBalance: '1234567890131.92',
+      depositsInTransit: '0.00',
+      outstandingPayments: '0.00',
+      unrecordedBankItems: '0.00',
+      adjustedBook: '1234567890131.92',
+      adjustedBank: '1234567890131.92',
+      difference: '0.00',
+      statementDifference: '0.00',
+    },
+  )
+  assert.equal(ws.unmatchedBook.length, 0, 'the entries before the opening date and after the period are not open items')
+  const signed = await signOff(t, recon)
+  assert.equal(signed.status, 200, JSON.stringify(signed.body))
+  assert.equal(signed.body.snapshot.adjustedBook, '1234567890131.92')
+  assert.equal(signed.body.snapshot.bookBalance, '1234567890131.92')
+  await assertSignedPeriodIntact(t, recon, 'precision')
+
+  // The last day of the period is locked (refused already as a draft); the first day after it is not.
+  const inside = await api(t.tokens.ACCOUNTANT!, 'POST', '/journal-entries', {
+    description: 'BANKTEST backdated to the last day',
+    postedAt: P1.end,
+    lines: [
+      { accountId: t.accounts.cash, debit: '1.00', credit: 0 },
+      { accountId: t.accounts.ar, debit: 0, credit: '1.00' },
+    ],
+  })
+  assert.equal(inside.status, 409, JSON.stringify(inside.body))
+  const outside = await draftCashEntry(t, P2.start, '1.00', 'BANKTEST first day after')
+  assert.equal((await api(t.tokens.ACCOUNTANT!, 'POST', `/journal-entries/${outside}/post`)).status, 200)
 })
