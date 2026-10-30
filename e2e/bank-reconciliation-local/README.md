@@ -82,4 +82,22 @@ It never runs `db push`, `migrate`, `seed`, `--accept-data-loss` or the cleanup 
 
 Results are written to `<screenshots>/ui-results.json`.
 
-Not covered: a Postgres run. The backend race tests run on SQLite only.
+## PostgreSQL run
+The same checks, against 16 brand-new databases on a **disposable** Postgres cluster on this machine (never a shared, staging or production server):
+
+```bash
+# Clients must be generated for Postgres in this checkout (rewrites the provider lines; revert them after)
+PLEROS_DB_PROVIDER=postgres node scripts/apply-prisma-provider.mjs && npm run db:generate -w @pleros/web
+export BANKTEST_DEMO_PG_ADMIN_URL='postgresql://<user>:<password>@127.0.0.1:<port>/postgres'   # localhost only
+node e2e/bank-reconciliation-local/launch.mjs test --port 4417 --postgres
+```
+
+- The launcher refuses a non-local host, and refuses unless the generated clients match the requested provider.
+- Databases are named `pleros_bankrecon_demo_<random>_<name>`. They are created with `CREATE DATABASE`, which fails rather than reuse a name, and at exit only those are dropped.
+- The maintenance URL is never passed to the server or the browser, and it is never printed.
+
+The backend tests run on Postgres the same way: set `PLEROS_TEST_PG_ADMIN_URL` (localhost only) with Postgres-generated clients. Without it they skip, as before.
+
+Afterwards, restore the committed providers: `PLEROS_DB_PROVIDER=sqlite node scripts/apply-prisma-provider.mjs && npm run db:generate -w @pleros/web`.
+
+Deployment, rollback and upgrade-rehearsal instructions are in [`docs/BANK_RECONCILIATION_ROLLOUT.md`](../../docs/BANK_RECONCILIATION_ROLLOUT.md).

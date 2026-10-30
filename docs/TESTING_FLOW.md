@@ -3043,7 +3043,7 @@ Business logic: `bank-recon.ts`. Dispatched by `routeBankAccounts` (`native-rout
 | /api/v1/bank-accounts/lines | GET | ADMIN_ROLES | List statement lines, filterable by account/reconciled/type/date (`bankRecon.listStatementLines`) |
 | /api/v1/bank-accounts/unreconciled | GET | ADMIN_ROLES | List unreconciled statement lines (`bankRecon.listUnreconciledLines`) |
 | /api/v1/bank-accounts/:id/import | POST | ADMIN_ROLES | Import statement lines for an account (`bankRecon.importStatementLines`) |
-| /api/v1/bank-accounts/:id/reconcile | POST | ADMIN_ROLES | Reconcile a statement line (`bankRecon.reconcileStatementLine`) |
+| /api/v1/bank-accounts/:id/reconcile | POST | ADMIN_ROLES | Retired: always 410 Gone. Match the line in a bank reconciliation instead (`/api/v1/bank-reconciliations/:id/matches`) |
 
 #### 8.2.13 Audit Log, Search, Feature Flags & Pricing
 
