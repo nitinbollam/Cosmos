@@ -24,8 +24,9 @@ import { FailStopForm } from '@/components/pod/FailStopForm'
 import { StopOutcomeDetails, type StopOutcomePod } from '@/components/pod/StopOutcomeDetails'
 import { AgeTag, StopItems, type StopItem } from '@/components/pod/StopItems'
 import { api } from '@/lib/api-admin'
-import { isForbidden } from '@/lib/axios-error'
+import { isForbidden, isNotFound } from '@/lib/axios-error'
 import { assignableUsers, ROUTE_DRIVER_ROLES } from '@/lib/assignees'
+import { dispatchSelectionChange, parseYmd, routeManifestDate, type DispatchUrlChange } from '@/lib/dispatch-selection'
 import { useQueryParams } from '@/lib/use-query-params'
 import { orderLabel } from '@/lib/order-label'
 
@@ -200,21 +201,24 @@ function DispatchDashboard() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const searchParams = useQueryParams()
-  const routeFromUrl = searchParams.get('route')
+  // The URL is the only copy of the selection, so a link (?route=…&date=…) opens exactly that route
+  // and there is no local state for it to fight with.
+  const selectedRouteId = searchParams.get('route')
+  const selectedDate = parseYmd(searchParams.get('date')) ?? toYmd(new Date())
 
-  const [selectedDate, setSelectedDate] = useState(() => toYmd(new Date()))
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(routeFromUrl)
   const [createOpen, setCreateOpen] = useState(false)
 
-  useEffect(() => {
-    if (routeFromUrl && routeFromUrl !== selectedRouteId) setSelectedRouteId(routeFromUrl)
-  }, [routeFromUrl, selectedRouteId])
-
-  const setRouteInUrl = useCallback(
-    (id: string | null) => {
+  const updateUrl = useCallback(
+    (change: DispatchUrlChange) => {
       const next = new URLSearchParams(searchParams.toString())
-      if (id) next.set('route', id)
-      else next.delete('route')
+      if (change.route !== undefined) {
+        if (change.route) next.set('route', change.route)
+        else next.delete('route')
+      }
+      if (change.date !== undefined) {
+        if (change.date) next.set('date', change.date)
+        else next.delete('date')
+      }
       const q = next.toString()
       navigate(q ? `/admin/dispatch?${q}` : '/admin/dispatch', { replace: true })
     },
@@ -241,6 +245,8 @@ function DispatchDashboard() {
     queryKey: ['dispatch-route', selectedRouteId],
     queryFn: () => api.get(`/routes/${encodeURIComponent(selectedRouteId!)}`),
     enabled: !!selectedRouteId,
+    // A 404 means the linked route doesn't exist; don't spend seconds retrying before dropping it.
+    retry: (count, e) => !isNotFound(e) && count < 3,
     refetchInterval: (q) => {
       const d = q.state.data
       if (!d?.driverId || d.status === 'COMPLETED' || d.status === 'CANCELLED') return false
@@ -248,26 +254,22 @@ function DispatchDashboard() {
     },
   })
 
+  // Settle the URL against the data: open the day's first route, switch to a linked route's own day,
+  // or drop a route that doesn't exist. Any other error leaves the selection alone.
+  const selectionDetail = routeDetail.isSuccess
+    ? routeDetail.data
+    : routeDetail.isError && isNotFound(routeDetail.error)
+      ? null
+      : undefined
   useEffect(() => {
-    if (!routes.isSuccess || !routes.data) return
-    const list = routes.data
-    if (list.length === 0) {
-      if (selectedRouteId) {
-        setSelectedRouteId(null)
-        setRouteInUrl(null)
-      }
-      return
-    }
-    if (selectedRouteId && !list.some((r) => r.id === selectedRouteId)) {
-      const first = list[0].id
-      setSelectedRouteId(first)
-      setRouteInUrl(first)
-    } else if (!selectedRouteId) {
-      const pick = routeFromUrl && list.some((r) => r.id === routeFromUrl) ? routeFromUrl : list[0].id
-      setSelectedRouteId(pick)
-      setRouteInUrl(pick)
-    }
-  }, [routes.isSuccess, routes.data, selectedRouteId, routeFromUrl, setRouteInUrl])
+    const change = dispatchSelectionChange({
+      routeId: selectedRouteId,
+      date: selectedDate,
+      list: routes.data,
+      detail: selectionDetail,
+    })
+    if (change) updateUrl(change)
+  }, [selectedRouteId, selectedDate, routes.data, selectionDetail, updateUrl])
 
   const assign = useMutation({
     mutationFn: ({ routeId, driverId }: { routeId: string; driverId: string }) =>
@@ -380,11 +382,7 @@ function DispatchDashboard() {
               type="date"
               className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-xs font-medium text-pleros-text focus:outline-none focus:border-pleros-primary transition-colors"
               value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value)
-                setSelectedRouteId(null)
-                setRouteInUrl(null)
-              }}
+              onChange={(e) => updateUrl({ date: parseYmd(e.target.value), route: null })}
             />
           </div>
 
@@ -431,10 +429,7 @@ function DispatchDashboard() {
                   <li key={r.id}>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedRouteId(r.id)
-                        setRouteInUrl(r.id)
-                      }}
+                      onClick={() => updateUrl({ route: r.id })}
                       className={`w-full text-left rounded-xl p-3 text-xs transition-all border ${
                         isSelected
                           ? 'bg-pleros-primary/10 border-pleros-primary shadow-sm text-pleros-white'
@@ -500,7 +495,7 @@ function DispatchDashboard() {
 
                 <div className="flex items-center gap-3 mt-1 text-xs text-pleros-muted">
                   <span>
-                    Scheduled: <strong className="text-pleros-text">{selectedDate}</strong>
+                    Scheduled: <strong className="text-pleros-text">{routeManifestDate(selected) ?? selectedDate}</strong>
                   </span>
                   <span>•</span>
                   <span className="flex items-center gap-1">
