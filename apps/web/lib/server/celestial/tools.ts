@@ -49,7 +49,7 @@ export const TOOL_PERMISSIONS: Record<CelestialToolName, string[]> = {
   list_warehouses: ['inventory.read', 'wms.read'],
 }
 
-const TOOL_LABELS: Record<CelestialToolName, string> = {
+export const TOOL_LABELS: Record<CelestialToolName, string> = {
   'orders.list': 'orders',
   'orders.detail': 'order details',
   'inventory.stock': 'stock levels',
@@ -358,7 +358,11 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
     case 'list_my_invoices': {
       const cust = isBuyer ? {} : await customerFilter(tenantId, ctx.customer)
       if (cust.notice) return { name, data: null, links: [], notice: cust.notice }
-      const page = await invoices.listInvoices(tenantId, 1, 50, cust.ids?.length === 1 ? { customerId: cust.ids[0] } : {}, buyerOpts)
+      const [page, open] = await Promise.all([
+        invoices.listInvoices(tenantId, 1, 50, cust.ids ? { customerIds: cust.ids } : {}, buyerOpts),
+        // Totals over every matching invoice, not just the 50 read above, for AR vs AP comparisons.
+        isBuyer ? null : erp.receivablesTotals(tenantId, { customerIds: cust.ids }),
+      ])
       // "Unpaid" = still has a balance and isn't void or credited.
       const matching = ctx.outstanding
         ? page.items.filter((i) => Number(i.balance) > 0 && !['VOID', 'CREDITED'].includes(String(i.status)))
@@ -378,6 +382,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
           total: matching.length,
           filters: filterLabels(ctx, ctx.outstanding && 'unpaid', ctx.customer && `customer “${ctx.customer}”`),
           outstandingOnly: Boolean(ctx.outstanding),
+          ...(open ? { openBalanceByCurrency: open.balanceByCurrency, openInvoices: open.openInvoices, totalsTruncated: open.totalsTruncated } : {}),
         },
         links: shown.map((invRow) => ({
           label: invRow.invoiceNumber,

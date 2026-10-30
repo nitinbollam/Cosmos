@@ -44,6 +44,22 @@ When a user asks a question requiring factual live data, Celestial automatically
 
 Every tool is read-only and checks the employee's module permission (for example `finance.read` for vendor bills and invoices) on each request. If the employee lacks access, Celestial says so instead of answering.
 
+### Questions that combine modules
+
+One question can run up to six lookups, and Celestial answers them together:
+
+- **Comparing periods:** "compare sales this quarter vs last quarter", "how many orders last month vs this month". You get each period's figures and the change between them.
+- **One supplier across purchasing and finance:** "show Pacific Supply's purchase orders and their bills". You get the supplier's POs, its vendor bills and open balance, and goods ordered vs billed.
+- **One customer across sales and finance:** "show Acme's orders, quotes and unpaid invoices". You get counts for each and what the customer still owes.
+- **Receivables vs payables:** "what do customers owe us vs what we owe suppliers", "what's our net position". You get open AR and AP per currency and the net.
+
+How these answers are built:
+
+- Pleros works out the comparison from every matching record, not just the rows shown.
+- Currencies are never added together or converted.
+- If a PO line has no cost recorded, if a total is partial, or if one lookup is missing, the answer says so instead of counting it as zero.
+- Each lookup has a time limit. A lookup that runs too long is reported as missing, and the rest of the answer is still shown.
+
 ---
 
 ## 4. Persona & Tone Guidelines

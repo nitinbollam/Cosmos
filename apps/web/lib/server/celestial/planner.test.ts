@@ -84,7 +84,7 @@ test('the unsupported reply is fixed text listing what the employee can look up'
   assert.equal(reply, unsupportedReply('what will the weather be on Friday?', WAREHOUSE))
 })
 
-test('multi-lookup plans keep separate settings per lookup and cap at 3', () => {
+test('multi-lookup plans keep separate settings per lookup and cap at 6', () => {
   const now = new Date('2026-10-27T00:00:00Z')
   const plan = parsePlan(
     JSON.stringify({
@@ -95,6 +95,9 @@ test('multi-lookup plans keep separate settings per lookup and cap at 3', () => 
         { tool: 'drop_tables', params: {} },
         { tool: 'list_warehouses' },
         { tool: 'list_low_stock' },
+        { tool: 'purchasing.suppliers' },
+        { tool: 'inventory.by_warehouse' },
+        { tool: 'sales.forecast' },
       ],
     }),
     ALL,
@@ -102,9 +105,13 @@ test('multi-lookup plans keep separate settings per lookup and cap at 3', () => 
   )
   assert.equal(plan?.type, 'tools')
   const calls = (plan as { calls: Array<{ tools: string[]; dateRange?: { label: string } }> }).calls
+  // Six slots are read from the reply; the unknown tool is dropped, not replaced by the seventh.
   assert.deepEqual(calls.map((c) => [c.tools[0], c.dateRange?.label]), [
     ['sales.summary', 'Q4 2026'],
     ['sales.summary', 'Q3 2026'],
+    ['list_warehouses', undefined],
+    ['list_low_stock', undefined],
+    ['purchasing.suppliers', undefined],
   ])
 })
 

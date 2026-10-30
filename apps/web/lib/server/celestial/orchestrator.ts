@@ -41,6 +41,7 @@ import { formatDocContext, retrievePlatformDocs } from './retrieval'
 import { formatToolResultsForPrompt, runTools } from './tools'
 import { buildDocFallbackReply, composeFromToolResults, toolResultHasData } from './compose'
 import { smallTalkReply } from './smalltalk'
+import { analyzeLookups, linkCalls, readBudget } from './cross-module'
 import { acceptSummary, buildSummaryMessages, shouldSummarize, summaryTimeoutMs, withDeadline } from './record-summary'
 import type { ToolResult } from './tools'
 import type { CelestialToolName } from './intent'
@@ -181,7 +182,7 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     planned = true
     if (!plan) return false
     routedBy = 'ai'
-    calls = plan.type === 'tools' ? plan.calls : []
+    calls = plan.type === 'tools' ? linkCalls(plan.calls) : []
     if (plan.type === 'clarify') askBack = clarifyReply(plan)
     if (plan.type === 'unsupported') unsupported = unsupportedReply(message, session)
     return true
@@ -209,14 +210,17 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     const { tools: names, ...callParams } = call
     return runTools(names, { ...callParams, session, customerId, customerName: profile.customerName })
   }
-  let perCall = await Promise.all(calls.map(runCall))
+  // Every lookup for this question shares one budget: a read that is too slow is reported as
+  // missing instead of holding up the whole answer.
+  const budget = readBudget()
+  let perCall = await budget.run(calls, runCall)
 
   // AI check after the fact: a name search that found nothing may mean the words were misread
   // (e.g. "least" taken as a product name). Ask the router once and rerun if it routes differently.
   if (canPlan && !planned && searchFoundNothing(calls, perCall.flat())) {
     const before = JSON.stringify(calls)
     if (applyPlan(await planQuestion(message, session, {}, earlier)) && JSON.stringify(calls) !== before) {
-      perCall = await Promise.all(calls.map(runCall))
+      perCall = await budget.run(calls, runCall)
     }
   }
   const toolResults = perCall.flat()
@@ -253,7 +257,7 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     clarification ??
     askBack ??
     unsupported ??
-    (shouldUseDirectCompose(toolResults) ? composeFromToolResults(toolResults) : null)
+    (shouldUseDirectCompose(toolResults) ? withAnalysis(analyzeLookups(calls, perCall), composeFromToolResults(toolResults)) : null)
 
   return {
     conversationId: conversation.id,
@@ -285,6 +289,11 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     }),
     routedBy,
   }
+}
+
+/** The server-built comparison (when the lookups are related) goes above the record tables. */
+function withAnalysis(analysis: string | null, records: string): string {
+  return analysis ? `${analysis}\n\n${records}` : records
 }
 
 const POINTS_BACK =

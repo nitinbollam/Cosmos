@@ -393,7 +393,7 @@ export async function listInvoices(
   tenantId: string,
   page = 1,
   pageSize = 50,
-  filters?: { status?: string; customerId?: string; excludeCancelled?: boolean },
+  filters?: { status?: string; customerId?: string; customerIds?: string[]; excludeCancelled?: boolean },
   opts?: { buyerCustomerId?: string },
 ) {
   const safePage = Math.max(1, page)
@@ -403,6 +403,8 @@ export async function listInvoices(
     where.customerId = opts.buyerCustomerId
   } else if (filters?.customerId?.trim()) {
     where.customerId = filters.customerId.trim()
+  } else if (filters?.customerIds) {
+    where.customerId = { in: filters.customerIds }
   }
 
   const status = filters?.status?.trim()

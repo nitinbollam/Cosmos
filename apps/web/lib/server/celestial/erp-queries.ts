@@ -5,6 +5,7 @@
  * keeps its own projections instead of calling them.
  */
 import { crmDb, inventoryDb, orderDb, purchasingDb, storefrontDb } from '../db'
+import { invoiceBalance } from '../invoice-status'
 import {
   OPEN_PO_STATUSES,
   SALES_EXCLUDED_STATUSES,
@@ -604,7 +605,7 @@ export async function financeBills(
     purchasingDb.vendorBill.count({ where }),
     purchasingDb.vendorBill.findMany({
       where,
-      select: { currency: true, totalAmount: true, amountPaid: true },
+      select: { currency: true, totalAmount: true, amountPaid: true, status: true },
       take: BILL_TOTALS_CAP,
     }),
   ])
@@ -628,11 +629,45 @@ export async function financeBills(
     total,
     page,
     pageSize: PAGE_SIZE,
+    // Only issued and part-paid bills are owed; a draft or void bill keeps its total but owes nothing.
     balanceByCurrency: sumByCurrency(
-      forTotals.map((b) => ({ currency: b.currency, amount: num(b.totalAmount) - num(b.amountPaid) })),
+      forTotals
+        .filter((b) => (OUTSTANDING_BILL_STATUSES as string[]).includes(b.status))
+        .map((b) => ({ currency: b.currency, amount: num(b.totalAmount) - num(b.amountPaid) })),
     ),
     totalsTruncated: total > BILL_TOTALS_CAP,
   }
+}
+
+// ── receivables totals (for AR vs AP) ──────────────────────────────────────
+
+/**
+ * What customers still owe, across every matching invoice rather than one page: open balance per
+ * currency and how many invoices carry it. "Unpaid" matches the invoice list: a balance is left and
+ * the invoice is neither void nor credited; cancelled orders are left out.
+ */
+export async function receivablesTotals(
+  tenantId: string,
+  f: { customerIds?: string[] } = {},
+): Promise<{ openInvoices: number; balanceByCurrency: Record<string, number>; totalsTruncated: boolean }> {
+  const where = {
+    tenantId,
+    status: { notIn: ['VOID', 'CREDITED'] as never[] },
+    order: { status: { not: 'CANCELLED' as never } },
+    ...(f.customerIds ? { customerId: { in: f.customerIds } } : {}),
+  }
+  const [rows, total] = await Promise.all([
+    orderDb.invoice.findMany({
+      where,
+      select: { currency: true, totalAmount: true, amountPaid: true, amountCredited: true },
+      take: BILL_TOTALS_CAP,
+    }),
+    orderDb.invoice.count({ where }),
+  ])
+  const open = rows
+    .map((r) => ({ currency: r.currency, amount: invoiceBalance(num(r.totalAmount), num(r.amountPaid), num(r.amountCredited)) }))
+    .filter((r) => r.amount > 0)
+  return { openInvoices: open.length, balanceByCurrency: sumByCurrency(open), totalsTruncated: total > BILL_TOTALS_CAP }
 }
 
 // ── quotes.list / quotes.detail ─────────────────────────────────────────────

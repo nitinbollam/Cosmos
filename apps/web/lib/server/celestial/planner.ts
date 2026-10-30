@@ -93,10 +93,28 @@ export function allowedPlannerTools(session: SessionUser): CelestialToolName[] {
 }
 
 /** Up to this many lookups may run for one question. */
-export const MAX_PLANNED_CALLS = 3
+export const MAX_PLANNED_CALLS = 6
 
 /** One earlier turn, as the router sees it: the question and the lookups it ran (settings only, no records). */
 export type PlannerTurn = { question: string; lookups: string }
+
+/** Multi-lookup patterns the server knows how to link and compare, limited to the employee's tools. */
+const COMBINATIONS: Array<{ needs: CelestialToolName[]; text: string; unless?: CelestialToolName }> = [
+  { needs: [], text: 'comparing periods: the same tool once per period ("sales this quarter vs last quarter" → the sales lookup twice)' },
+  { needs: ['purchasing.orders', 'finance.bills'], text: 'one supplier across modules: purchasing.orders and finance.bills with the same supplier' },
+  { needs: ['orders.list', 'list_my_invoices', 'quotes.list'], text: 'one customer across modules: orders.list, list_my_invoices and quotes.list with the same customer' },
+  { needs: ['orders.list', 'list_my_invoices'], text: 'one customer across modules: orders.list and list_my_invoices with the same customer', unless: 'quotes.list' },
+  { needs: ['inventory.stock', 'sales.by_product'], text: 'one product across modules: inventory.stock, search_catalog and sales.by_product with the same search' },
+  {
+    needs: ['list_my_invoices', 'finance.bills'],
+    text: 'what customers owe us vs what we owe suppliers (receivables vs payables, net position): list_my_invoices with outstanding=true and finance.bills with outstanding=true, no other fields',
+  },
+  { needs: [], text: 'two separate questions asked together' },
+]
+
+function combinationLines(tools: CelestialToolName[]): string[] {
+  return COMBINATIONS.filter((c) => c.needs.every((t) => tools.includes(t)) && !(c.unless && tools.includes(c.unless))).map((c) => `  • ${c.text};`)
+}
 
 export function buildPlannerMessages(question: string, tools: CelestialToolName[], earlier: PlannerTurn[] = []): ChatMessage[] {
   const lines = tools.map((t) => `- ${t}: ${CATALOG[t]!.does}. Fields: ${CATALOG[t]!.fields}`)
@@ -112,7 +130,9 @@ Lookups available to this employee:
 ${lines.join('\n')}
 "period" is a phrase like "today", "last month", "this quarter", "last quarter", "q2 2026" or "last 30 days".${context}
 Reply with exactly one of:
-{"type":"tools","calls":[{"tool":"<name>","params":{...}}]}  — 1 to ${MAX_PLANNED_CALLS} lookups. Use 2+ only when the question needs them, e.g. comparing two periods (same tool, different period) or a record plus related records.
+{"type":"tools","calls":[{"tool":"<name>","params":{...}}]}  — 1 to ${MAX_PLANNED_CALLS} lookups. Use 2+ only when the question needs them:
+${combinationLines(tools).join('\n')}
+  The server works out totals, differences and comparisons itself, so never add a lookup just to calculate.
 {"type":"clarify","question":"<short question>","options":["<option>","<option>"]}  — the question could reasonably mean different lookups (e.g. "balance" = customer invoices or supplier bills) and the chat doesn't settle it. 2 or 3 short options.
 {"type":"knowledge"}   — a how-to or "how does Pleros work" question, answered from product guides
 {"type":"unsupported"} — asks for data none of the lookups provide
@@ -264,7 +284,8 @@ const AMBIGUOUS =
 const DIRECTIONAL =
   /\b(invoices?|bills?|vendors?|suppliers?|customers?|receivables?|payables?|a\/r|a\/p|orders?|quotes?|purchase|po\b|we owe|owes us)\b/
 const REFINEMENT = /^(and|but|also|what about|how about|only|just|same|now|then|instead|except|what if)\b/
-const SEVERAL = /\b(compare|compared|comparison|vs\.?|versus|against|as well as|along with|together with|and (its|their|the related)|plus)\b/
+const SEVERAL =
+  /\b(compare|compared|comparison|vs\.?|versus|against|as well as|along with|together with|and (its|their|the related)|plus|net position|receivables? and payables?|payables? and receivables?|ar and ap|ap and ar|change from|grew|growth|difference between)\b/
 
 /**
  * Why the keyword routing should be double-checked by the AI router, or null when it is confident.
