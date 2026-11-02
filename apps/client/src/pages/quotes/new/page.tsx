@@ -4,14 +4,9 @@ import { useQueryParams } from '@/lib/use-query-params'
 import { Suspense, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { clearCart, readCart } from '@/lib/b2b-cart'
+import { applyProduct, quoteLinesProblem, type QuoteLineDraft } from '@/lib/quote-lines'
 
-type QuoteLineDraft = {
-  lineNo: number
-  skuCode: string
-  description: string
-  qty: string
-  unitPrice: string
-}
+type SkuOption = { id: string; code: string; name: string; price: string | number }
 
 export default function NewQuotePage() {
   return (
@@ -37,6 +32,32 @@ function NewQuoteForm() {
   ])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Product search for the line being edited; picking one fills its SKU, name and price.
+  const [searchTerm, setSearchTerm] = useState('')
+  const [options, setOptions] = useState<SkuOption[]>([])
+
+  useEffect(() => {
+    const term = searchTerm.trim()
+    if (term.length < 2) {
+      setOptions([])
+      return
+    }
+    const t = setTimeout(() => {
+      void api
+        .get<{ items?: SkuOption[] }>(`/skus?search=${encodeURIComponent(term)}&pageSize=20`)
+        .then((res) => setOptions(res.items ?? []))
+        .catch(() => setOptions([])) // swallow-ok: search suggestions only; a typed SKU is still checked on save
+    }, 250)
+    return () => clearTimeout(t)
+  }, [searchTerm])
+
+  const setSku = (idx: number, value: string) => {
+    const next = [...lines]
+    const match = options.find((o) => o.code === value.trim())
+    next[idx] = match ? applyProduct(lines[idx], match) : { ...lines[idx], skuCode: value }
+    setLines(next)
+    setSearchTerm(value)
+  }
 
   useEffect(() => {
     void api
@@ -63,6 +84,11 @@ function NewQuoteForm() {
   }, [searchParams])
 
   const submit = async () => {
+    const problem = quoteLinesProblem(lines)
+    if (problem) {
+      setErr(problem)
+      return
+    }
     setBusy(true)
     setErr(null)
     try {
@@ -71,7 +97,7 @@ function NewQuoteForm() {
         notes: notes.trim() || undefined,
         lines: lines.map((l) => ({
           lineNo: l.lineNo,
-          skuCode: l.skuCode.trim() || undefined,
+          skuCode: l.skuCode.trim(),
           description: l.description.trim(),
           qty: Math.max(1, Number.parseInt(l.qty, 10) || 1),
           unitPrice: Number.parseFloat(l.unitPrice) || 0,
@@ -102,7 +128,7 @@ function NewQuoteForm() {
         <Link to="/cart" className="pleros-shop-link-accent">
           Cart
         </Link>{' '}
-        to pre-fill lines. Submit-to-order <strong style={{ color: 'var(--c-text)' }}>requires a SKU code on every line.</strong>
+        to pre-fill lines, or search for a product on each line. <strong style={{ color: 'var(--c-text)' }}>Every line needs a product.</strong>
       </p>
       {err ? <p className="pleros-shop-error" style={{ marginTop: 12 }}>{err}</p> : null}
       <label style={{ display: 'block', marginTop: 20, fontSize: 13 }}>
@@ -113,6 +139,13 @@ function NewQuoteForm() {
         Notes
         <textarea rows={3} className="pleros-shop-field" style={{ resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </label>
+      <datalist id="quote-sku-options">
+        {options.map((o) => (
+          <option key={o.id} value={o.code}>
+            {o.name}
+          </option>
+        ))}
+      </datalist>
       <div style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: 15, color: 'var(--c-heading)' }}>Lines</h2>
         {lines.map((l, idx) => (
@@ -129,15 +162,15 @@ function NewQuoteForm() {
               </button>
             </span>
             <input
-              placeholder="SKU (optional)"
+              placeholder="Product: search by name or SKU (required)"
+              aria-label={`Line ${l.lineNo} product`}
+              required
+              list="quote-sku-options"
               className="pleros-shop-field pleros-shop-field--mono"
               style={{ marginTop: 0, padding: 8 }}
               value={l.skuCode}
-              onChange={(e) => {
-                const next = [...lines]
-                next[idx] = { ...l, skuCode: e.target.value }
-                setLines(next)
-              }}
+              onFocus={() => setSearchTerm(l.skuCode)}
+              onChange={(e) => setSku(idx, e.target.value)}
             />
             <input
               placeholder="Description"

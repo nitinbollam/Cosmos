@@ -57,23 +57,33 @@ export async function createQuote(
   if (opts?.buyerCustomerId && dto.customerRef !== opts.buyerCustomerId) {
     throw new ApiError(403, 'Cannot create quotes for another customer')
   }
+  if (!Array.isArray(dto.lines) || dto.lines.length === 0) throw new ApiError(400, 'A quote needs at least one line')
   const seqs = new Set(dto.lines.map((l) => l.lineNo))
   if (seqs.size !== dto.lines.length) throw new ApiError(400, 'Duplicate line numbers')
+  await resolveQuoteCustomerId(tenantId, dto.customerRef)
+  // Every line names a real product up front, so an approved quote can always become an order (ticket 55).
+  const lines = []
+  for (const l of dto.lines) {
+    if (!Number.isInteger(l.qty) || l.qty < 1) throw new ApiError(400, `Line ${l.lineNo}: quantity must be a whole number of 1 or more`)
+    if (typeof l.unitPrice !== 'number' || !Number.isFinite(l.unitPrice) || l.unitPrice < 0) {
+      throw new ApiError(400, `Line ${l.lineNo}: unit price must be 0 or more`)
+    }
+    const sku = await quoteLineSku(tenantId, l.lineNo, l.skuCode)
+    lines.push({
+      lineNo: l.lineNo,
+      skuCode: sku.code,
+      description: l.description?.trim() || sku.name,
+      qty: l.qty,
+      unitPrice: new Prisma.Decimal(String(l.unitPrice)),
+    })
+  }
   return storefrontDb.b2BQuote.create({
     data: {
       tenantId,
       customerRef: dto.customerRef,
       notes: dto.notes,
       status: QuoteStatus.OPEN,
-      lines: {
-        create: dto.lines.map((l) => ({
-          lineNo: l.lineNo,
-          skuCode: l.skuCode,
-          description: l.description,
-          qty: l.qty,
-          unitPrice: new Prisma.Decimal(l.unitPrice),
-        })),
-      },
+      lines: { create: lines },
     },
     include: { lines: { orderBy: { lineNo: 'asc' } } },
   })
@@ -95,10 +105,41 @@ export async function requestQuoteApproval(
   })
 }
 
+/** The active SKU a quote line is for; a line without one can't become an order. */
+async function quoteLineSku(tenantId: string, lineNo: number, skuCode: string | null | undefined) {
+  const code = skuCode?.trim()
+  if (!code) throw new ApiError(400, `Line ${lineNo}: choose a product (SKU)`)
+  const { inventoryDb } = await import('./db')
+  const sku = await inventoryDb.sKU.findFirst({ where: { tenantId, code: { equals: code } } })
+  if (!sku) throw new ApiError(400, `Line ${lineNo}: no product with SKU ${code}`)
+  if (!sku.isActive) throw new ApiError(400, `Line ${lineNo}: product ${code} is inactive`)
+  return sku
+}
+
+/** The customer a quote is for: its customerRef is a customer id, or (older quotes) a customer's external reference. */
+async function resolveQuoteCustomerId(tenantId: string, customerRef: string): Promise<string> {
+  const ref = customerRef?.trim()
+  if (!ref) throw new ApiError(400, 'A quote needs a customer')
+  const { crmDb } = await import('./db')
+  const byId = await crmDb.customer.findFirst({ where: { tenantId, id: ref }, select: { id: true } })
+  if (byId) return byId.id
+  const byRef = await crm.findCustomerByExternalRef(tenantId, ref)
+  if (byRef) return byRef.id
+  throw new ApiError(400, `No customer matches the quote's customer (${ref})`)
+}
+
 export async function approveQuote(tenantId: string, id: string, approvedByUserId: string) {
   const q = await getQuote(tenantId, id)
   if (q.status !== QuoteStatus.PENDING_APPROVAL) {
     throw new ApiError(400, 'Only pending quotes can be approved')
+  }
+  // A quote that couldn't become an order must not be approvable (ticket 55).
+  try {
+    await resolveQuoteCustomerId(tenantId, q.customerRef)
+    for (const line of q.lines) await quoteLineSku(tenantId, line.lineNo, line.skuCode)
+  } catch (e) {
+    if (e instanceof ApiError) throw new ApiError(400, `This quote can't be approved yet. ${e.message}`)
+    throw e
   }
   return storefrontDb.b2BQuote.update({
     where: { id },
@@ -133,9 +174,7 @@ async function quoteToOrderLines(tenantId: string, q: Awaited<ReturnType<typeof 
   const defaultWh = warehouses.find((w) => w.isDefault) ?? warehouses[0]
   const lineItems: Array<{ skuId: string; warehouseId: string; quantity: number; unitPrice: number }> = []
   for (const line of [...q.lines].sort((a, b) => a.lineNo - b.lineNo)) {
-    const skuCode = line.skuCode?.trim()
-    if (!skuCode) throw new ApiError(400, `Quote line ${line.lineNo}: skuCode is required`)
-    const sku = await inv.findSkuByCode(tenantId, skuCode)
+    const sku = await quoteLineSku(tenantId, line.lineNo, line.skuCode)
     lineItems.push({
       skuId: sku.id,
       warehouseId: defaultWh.id,
@@ -146,11 +185,15 @@ async function quoteToOrderLines(tenantId: string, q: Awaited<ReturnType<typeof 
   return lineItems
 }
 
+/**
+ * Turns an approved quote into an order at the approved prices, placed by the buyer (their own quote) or by
+ * staff ("Create order from quote"). The quote's customer is the order's customer; the approval is what
+ * authorises its prices, so they are not checked against the price list again (ticket 55).
+ */
 export async function submitQuote(
   tenantId: string,
   id: string,
-  sessionCustomerId?: string,
-  opts?: { buyerCustomerId?: string },
+  opts?: { buyerCustomerId?: string; userId?: string },
 ) {
   const q = await getQuote(tenantId, id, opts)
   if (q.convertedOrderId) return getQuote(tenantId, id, opts)
@@ -158,30 +201,49 @@ export async function submitQuote(
     throw new ApiError(400, 'Quote must be approved before placing an order')
   }
 
-  let customerId = opts?.buyerCustomerId ?? sessionCustomerId
-  if (!customerId) {
-    const byRef = await crm.findCustomerByExternalRef(tenantId, q.customerRef)
-    customerId = byRef?.id
-  }
-  if (!customerId) throw new ApiError(400, 'Could not resolve customer for quote')
-
+  const customerId = opts?.buyerCustomerId ?? (await resolveQuoteCustomerId(tenantId, q.customerRef))
   const lineItems = await quoteToOrderLines(tenantId, q)
 
-  const order = await orders.createOrder(
-    tenantId,
-    {
-      customerId,
-      channel: 'B2B_PORTAL',
-      paymentMethod: 'NET_TERMS',
-      notes: q.notes ?? undefined,
-      lineItems,
-    },
-    opts?.buyerCustomerId ? { buyerCustomerId: opts.buyerCustomerId } : undefined,
-  )
+  // Claim the quote first so two clicks (or buyer and staff at once) can't both create an order.
+  const claimed = await storefrontDb.b2BQuote.updateMany({
+    where: { id, tenantId, status: QuoteStatus.APPROVED, convertedOrderId: null },
+    data: { status: QuoteStatus.SUBMITTED },
+  })
+  if (claimed.count !== 1) {
+    const now = await getQuote(tenantId, id, opts)
+    if (now.convertedOrderId || now.status === QuoteStatus.SUBMITTED) return now
+    throw new ApiError(409, 'The quote changed while placing the order; reload and try again')
+  }
+
+  let order
+  try {
+    order = await orders.createOrder(
+      tenantId,
+      {
+        customerId,
+        channel: opts?.buyerCustomerId ? 'B2B_PORTAL' : 'SALES_REP',
+        paymentMethod: 'NET_TERMS',
+        notes: q.notes ?? `From quote ${q.quoteNumber}`,
+        lineItems,
+      },
+      {
+        ...(opts?.buyerCustomerId ? { buyerCustomerId: opts.buyerCustomerId } : {}),
+        userId: opts?.userId,
+        skipPriceValidation: true,
+      },
+    )
+  } catch (e) {
+    // Nothing was ordered: put the quote back so it can be placed once the problem (stock, credit) is fixed.
+    await storefrontDb.b2BQuote.updateMany({
+      where: { id, tenantId, status: QuoteStatus.SUBMITTED, convertedOrderId: null },
+      data: { status: QuoteStatus.APPROVED },
+    })
+    throw e
+  }
 
   return storefrontDb.b2BQuote.update({
     where: { id },
-    data: { status: QuoteStatus.SUBMITTED, convertedOrderId: order.id },
+    data: { convertedOrderId: order.id },
     include: { lines: { orderBy: { lineNo: 'asc' } } },
   })
 }
@@ -238,6 +300,9 @@ export async function acceptQuoteCounterOffer(tenantId: string, quoteId: string,
   if (!offer) throw new ApiError(404, 'Counter offer not found')
   if (offer.status !== 'OPEN') throw new ApiError(400, 'Counter offer is not open')
 
+  // Keep each line's product and description: the offer only changes quantities and prices.
+  const before = await getQuote(tenantId, quoteId)
+  const prior = new Map(before.lines.map((l) => [l.lineNo, l]))
   await storefrontDb.quoteLine.deleteMany({ where: { quoteId } })
   await storefrontDb.b2BQuote.update({
     where: { id: quoteId },
@@ -246,7 +311,8 @@ export async function acceptQuoteCounterOffer(tenantId: string, quoteId: string,
       lines: {
         create: offer.lines.map((l) => ({
           lineNo: l.lineNo,
-          description: `Line ${l.lineNo}`,
+          skuCode: prior.get(l.lineNo)?.skuCode ?? null,
+          description: prior.get(l.lineNo)?.description ?? `Line ${l.lineNo}`,
           qty: l.qty,
           unitPrice: l.unitPrice,
         })),
