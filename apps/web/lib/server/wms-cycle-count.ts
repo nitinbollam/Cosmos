@@ -227,7 +227,7 @@ export async function submitCycleCountForApproval(tenantId: string, id: string) 
   }
   return wmsDb.cycleCount.update({
     where: { id: row.id },
-    data: { status: 'PENDING_APPROVAL' },
+    data: { status: 'PENDING_APPROVAL', submittedAt: new Date() },
     include: { lines: true },
   })
 }

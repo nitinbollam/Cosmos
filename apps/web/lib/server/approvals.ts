@@ -2,6 +2,7 @@ import { ApprovalStatus, ApprovalType } from '@/generated/prisma-tenant'
 import type { Prisma } from '@/generated/prisma-tenant'
 import { tenantDb } from './db'
 import { auditLog, type AuditInput } from './audit-log'
+import { swallowed } from './fire-and-forget'
 import { ApiError } from './session'
 
 export type CreateApprovalInput = {
@@ -14,7 +15,7 @@ export type CreateApprovalInput = {
 }
 
 export async function createApprovalRequest(tenantId: string, input: CreateApprovalInput, db: Prisma.TransactionClient = tenantDb) {
-  return db.approvalRequest.create({
+  const row = await db.approvalRequest.create({
     data: {
       ...(input.id ? { id: input.id } : {}),
       tenantId,
@@ -25,6 +26,14 @@ export async function createApprovalRequest(tenantId: string, input: CreateAppro
       status: ApprovalStatus.PENDING,
     },
   })
+  // Tell the approvers now. Inside a caller's transaction the row isn't committed yet, so leave it to the
+  // reminder job, which sends the same notice within minutes (approval-reminders.ts).
+  if (db === tenantDb) {
+    void import('./approval-reminders')
+      .then(({ notifyApprovalRequested }) => notifyApprovalRequested(tenantId, row.id))
+      .catch(swallowed('approvals.notifyApprovalRequested'))
+  }
+  return row
 }
 
 export async function listApprovalRequests(
@@ -37,7 +46,8 @@ export async function listApprovalRequests(
       ...(filters?.type ? { type: filters.type } : {}),
       ...(filters?.status ? { status: filters.status } : {}),
     },
-    orderBy: { createdAt: 'desc' },
+    // Pending requests oldest first, so the longest-waiting is on top; decided ones newest first.
+    orderBy: { createdAt: filters?.status === ApprovalStatus.PENDING ? 'asc' : 'desc' },
   })
 }
 

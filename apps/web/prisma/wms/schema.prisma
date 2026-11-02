@@ -152,6 +152,8 @@ model CycleCount {
   type         CycleCountType
   status       CycleCountStatus @default(DRAFT)
   scheduledFor DateTime?
+  /// When it was last submitted for approval (ticket 64: how long it has been waiting).
+  submittedAt  DateTime?
   createdBy    String
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

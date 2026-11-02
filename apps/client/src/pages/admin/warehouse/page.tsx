@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQueryParams } from '@/lib/use-query-params'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { Tab, WarehouseRow } from './types'
@@ -21,7 +22,9 @@ const TAB_CONFIG: Array<{ id: Tab; label: string; icon: string }> = [
 ]
 
 export default function WarehousePage() {
-  const [tab, setTab] = useState<Tab>('picks')
+  // ?tab=counts (from the approvals inbox) opens that tab.
+  const tabParam = useQueryParams().get('tab')
+  const [tab, setTab] = useState<Tab>(() => TAB_CONFIG.find((t) => t.id === tabParam)?.id ?? 'picks')
 
   const warehousesQ = useQuery({
     queryKey: ['warehouses'],

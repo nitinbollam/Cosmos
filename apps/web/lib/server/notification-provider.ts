@@ -72,6 +72,18 @@ const TEMPLATE_COPY: Record<string, (payload: Record<string, unknown>) => { subj
     subject: `You've been invited to join ${String(p.orgName ?? 'a team')} on Pleros`,
     body: `You've been invited to join ${String(p.orgName ?? 'a team')} as ${String(p.role ?? 'STAFF')}.\n\nAccept the invite within 7 days:\n\n${String(p.inviteUrl ?? '')}`,
   }),
+  'approval.requested': (p) => ({
+    subject: `Approval needed: ${String(p.typeLabel ?? 'request')}`,
+    body: `${String(p.requestedBy ?? 'A team member')} is waiting for your approval of a ${String(p.typeLabel ?? 'request').toLowerCase()}.\n\nReview it: ${appPublicUrl()}/admin/approvals`,
+  }),
+  'approval.reminder': (p) => ({
+    subject: `Reminder: ${String(p.typeLabel ?? 'request')} waiting ${String(p.waitingDays ?? '?')} days for approval`,
+    body: `A ${String(p.typeLabel ?? 'request').toLowerCase()} from ${String(p.requestedBy ?? 'a team member')} has been waiting ${String(p.waitingDays ?? '?')} days for a decision.\n\nReview it: ${appPublicUrl()}/admin/approvals`,
+  }),
+  'approval.escalated': (p) => ({
+    subject: `Escalation: ${String(p.typeLabel ?? 'request')} unapproved for ${String(p.waitingDays ?? '?')} days`,
+    body: `A ${String(p.typeLabel ?? 'request').toLowerCase()} from ${String(p.requestedBy ?? 'a team member')} has had no decision for ${String(p.waitingDays ?? '?')} days. Please decide it or assign someone who can.\n\nReview it: ${appPublicUrl()}/admin/approvals`,
+  }),
   'marketplace.auction.outbid': (p) => ({
     subject: 'You were outbid on a marketplace auction',
     body: `Another bidder placed $${String(p.newBid ?? '')} on "${String(p.listingTitle ?? 'a listing')}". Place a higher bid before the auction ends.`,
