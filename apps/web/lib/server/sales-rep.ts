@@ -53,6 +53,7 @@ export async function listAccounts(
   const rows = await crmDb.customer.findMany({
     where: {
       tenantId,
+      isActive: true,
       ...(mineOnly ? { salesRepUserId: viewer.userId } : {}),
       ...(q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }] } : {}),
     },

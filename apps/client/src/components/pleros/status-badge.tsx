@@ -34,6 +34,7 @@ const STATUS: Record<string, { bg: string; text: string }> = {
   CONVERTED: { bg: 'var(--c-accent-dim)', text: 'var(--c-primary)' },
   PARTIALLY_RECEIVED: { bg: 'var(--c-warning-soft)', text: 'var(--c-warning)' },
   CLOSED: { bg: 'var(--c-surface-2)', text: 'var(--c-text-2)' },
+  DEACTIVATED: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
 }
 
 export function StatusBadge({ status }: { status: string }) {

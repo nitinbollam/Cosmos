@@ -61,16 +61,18 @@ export async function routeCustomers(method: string, seg: string[], req: Request
   if (seg.length === 1 && method === 'GET') {
     const url = new URL(req.url)
     const pageParam = url.searchParams.get('page')
+    const includeInactive = url.searchParams.get('includeInactive') === '1'
     if (pageParam) {
       return Response.json(
         await crm.listCustomersPaged(session.tenantId, {
           page: +pageParam || 1,
           pageSize: +(url.searchParams.get('pageSize') ?? 25) || 25,
           search: url.searchParams.get('search') ?? undefined,
+          includeInactive,
         }),
       )
     }
-    return Response.json(await crm.listCustomers(session.tenantId))
+    return Response.json(await crm.listCustomers(session.tenantId, { includeInactive }))
   }
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as Record<string, unknown>
@@ -82,6 +84,9 @@ export async function routeCustomers(method: string, seg: string[], req: Request
   if (seg.length === 2 && method === 'PATCH') {
     const body = (await req.json()) as Record<string, unknown>
     return Response.json(await crm.patchCustomer(session.tenantId, seg[1], body))
+  }
+  if (seg.length === 2 && method === 'DELETE') {
+    return Response.json(await crm.deleteCustomer(session.tenantId, seg[1]))
   }
   if (seg.length === 3 && seg[2] === 'prices' && method === 'GET') {
     return Response.json(await pricing.listCustomerPrices(session.tenantId, seg[1]))

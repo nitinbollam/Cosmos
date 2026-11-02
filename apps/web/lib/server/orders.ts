@@ -10,6 +10,7 @@ import { ApprovalType } from '@/generated/prisma-tenant'
 import { OrderStatus } from '@/generated/prisma-order'
 import * as discounts from './discounts'
 import { ApiError } from './session'
+import { assertCustomerCanTransact } from './crm'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
 import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
 import { enqueuePostingJob } from './posting-outbox'
@@ -114,6 +115,7 @@ export async function createOrder(
   },
 ) {
   assertValidOrderLines(dto.lineItems)
+  await assertCustomerCanTransact(tenantId, opts?.buyerCustomerId ?? dto.customerId)
   const dropShipSuppliers = await dropShipSupplierBySku(
     tenantId,
     dto.lineItems.map((li) => li.skuId),
