@@ -161,6 +161,9 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
         { status: 201 },
       )
     }
+    if (seg.length === 3 && seg[2] === 'open-purchase-orders' && method === 'GET') {
+      return Response.json(await wmsReceiving.listReceivablePurchaseOrders(session.tenantId, url.searchParams.get('q') ?? undefined))
+    }
     if (((seg.length === 3 && !isSessions) || (seg.length === 4 && isSessions)) && method === 'GET') {
       return Response.json(await wmsReceiving.getReceivingSession(id, session.tenantId))
     }

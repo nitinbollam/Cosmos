@@ -1,8 +1,8 @@
 import { ReceivingStatus } from '@/generated/prisma-wms'
-import { wmsDb } from './db'
+import { purchasingDb, wmsDb } from './db'
 import * as inv from './inventory'
 import * as poReceiving from './po-receiving'
-import { pickReceivingWarehouse } from './po-warehouse'
+import { pickReceivingWarehouse, warehouseRefs } from './po-warehouse'
 import { auditLog } from './audit-log'
 import { cancelRefusal, completionRefusal, expiryCutoff, OPEN_RECEIVING_STATES } from './receiving-session-rules'
 import { ApiError } from './session'
@@ -32,7 +32,14 @@ export async function startReceivingSession(
 ) {
   let poId: string | undefined
   if (poReference?.trim()) {
-    const po = await poReceiving.findPurchaseOrderByReference(tenantId, poReference)
+    // Checked before anything is created: an unknown PO is refused with a clear message and no session. It stays a
+    // 404 (the PO was not found), as everywhere else a PO is looked up.
+    const po = await poReceiving.findPurchaseOrderByReference(tenantId, poReference).catch((err: unknown) => {
+      if (err instanceof ApiError && err.status === 404) {
+        throw new ApiError(404, `No purchase order "${poReference.trim()}". Pick one from the open purchase orders, or check the number.`)
+      }
+      throw err
+    })
     poReceiving.assertPoOpenForReceiving(po.status)
     // One receiving session per PO at a time: continue the open one (e.g. started from the PO page).
     const open = await wmsDb.receivingSession.findFirst({
@@ -154,7 +161,7 @@ export async function scanReceivingItem(
     const po = await poReceiving.getPurchaseOrderForReceiving(tenantId, session.poId)
     const line = po.lines.find((l) => l.skuCode?.trim() === sku.code)
     const alreadyGood = existing ? existing.receivedQty - (existing.damagedQty ?? 0) : 0
-    const problem = poReceiving.overReceiptProblem(po.number, sku.code, line, alreadyGood + dto.receivedQty - damaged)
+    const problem = poReceiving.scanOverReceiptProblem(po.number, sku.code, line, alreadyGood, dto.receivedQty - damaged)
     if (problem) throw new ApiError(400, problem)
   }
 
@@ -194,7 +201,46 @@ export async function scanReceivingItem(
     })
   }
 
-  return item
+  return { ...item, skuCode: sku.code, skuName: sku.name }
+}
+
+/**
+ * Purchase orders that can be received against now (Submitted or Partially received, with units still open),
+ * for the phone's picker. `q` narrows by PO number. Each row says whether a session for it is already open.
+ */
+export async function listReceivablePurchaseOrders(tenantId: string, q?: string) {
+  const term = q?.trim()
+  const pos = await purchasingDb.purchaseOrder.findMany({
+    where: {
+      tenantId,
+      status: { in: ['SUBMITTED', 'PARTIALLY_RECEIVED'] },
+      ...(term ? { number: { contains: term } } : {}),
+    },
+    include: { lines: true, supplier: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  })
+  const open = await wmsDb.receivingSession.findMany({
+    where: { tenantId, poId: { in: pos.map((p) => p.id) }, status: { in: [...OPEN_RECEIVING_STATES] } },
+    select: { id: true, poId: true },
+  })
+  const sessionByPo = new Map(open.map((o) => [o.poId as string, o.id]))
+  const warehouses = await warehouseRefs(tenantId, pos.map((p) => p.warehouseId))
+  return pos
+    .map((po) => {
+      const receivable = po.lines.filter((l) => l.skuCode?.trim() && l.qtyOrdered - l.qtyReceived > 0)
+      return {
+        id: po.id,
+        number: po.number,
+        supplierName: po.supplier?.name ?? null,
+        status: po.status,
+        openLines: receivable.length,
+        openUnits: receivable.reduce((sum, l) => sum + (l.qtyOrdered - l.qtyReceived), 0),
+        warehouseName: po.warehouseId ? (warehouses.get(po.warehouseId)?.name ?? null) : null,
+        openSessionId: sessionByPo.get(po.id) ?? null,
+      }
+    })
+    .filter((po) => po.openUnits > 0)
 }
 
 export async function getReceivingSession(sessionId: string, tenantId: string) {
@@ -244,10 +290,25 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
   if (claimed.count !== 1) {
     throw new ApiError(409, 'This session is already being completed, or was just closed. Reload and check its status.')
   }
+  const progress = { stockPosted: false }
   try {
-    return await finishReceivingSession(session, tenantId, sessionId, notes, performedBy)
+    return await finishReceivingSession(session, tenantId, sessionId, notes, performedBy, progress)
   } catch (err) {
-    // Nothing was finalised: let the session be completed again once the problem is fixed.
+    if (progress.stockPosted) {
+      // Stock is already in: a retry would post it a second time. Close the session for the office to check.
+      const reason = err instanceof Error ? err.message : 'unknown error'
+      await wmsDb.receivingSession
+        .updateMany({
+          where: { id: sessionId, tenantId, status: { in: [...OPEN_RECEIVING_STATES] } },
+          data: {
+            status: 'DISCREPANCY',
+            discrepancyNotes: `Stock was posted but finishing the receipt failed (${reason}). Check stock and the purchase order; do not complete this session again.`,
+          },
+        })
+        .catch(swallowed('wms-receiving.completeReceivingSession.close'))
+      throw new ApiError(500, `Stock was received, but the receipt could not be finished (${reason}). The session is closed for the office to check. Do not scan it again.`)
+    }
+    // Nothing was posted: let the session be completed again once the problem is fixed.
     await wmsDb.receivingSession
       .updateMany({ where: { id: sessionId, tenantId, status: { in: [...OPEN_RECEIVING_STATES] } }, data: { completedAt: null } })
       .catch(swallowed('wms-receiving.completeReceivingSession.release'))
@@ -255,7 +316,20 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
   }
 }
 
-async function finishReceivingSession(session: LoadedSession, tenantId: string, sessionId: string, notes: string | undefined, performedBy: string) {
+/** Test seam: runs right after the stock has been posted, so a failure at that point can be simulated. */
+let completionFaultForTests: (() => void | Promise<void>) | null = null
+export function setReceivingCompletionFaultForTests(fn: (() => void | Promise<void>) | null) {
+  completionFaultForTests = fn
+}
+
+async function finishReceivingSession(
+  session: LoadedSession,
+  tenantId: string,
+  sessionId: string,
+  notes: string | undefined,
+  performedBy: string,
+  progress: { stockPosted: boolean },
+) {
   const hasDiscrepancy = session.items.some((i) => (i.damagedQty ?? 0) > 0)
   const nextStatus = hasDiscrepancy ? 'DISCREPANCY' : 'COMPLETED'
 
@@ -291,6 +365,7 @@ async function finishReceivingSession(session: LoadedSession, tenantId: string, 
       }
     }
 
+    progress.stockPosted = true
     await inv.receiveStock(
       tenantId,
       {
@@ -307,6 +382,7 @@ async function finishReceivingSession(session: LoadedSession, tenantId: string, 
     )
   }
 
+  await completionFaultForTests?.()
   if (session.poId) {
     await poReceiving.syncPurchaseOrderFromSkuReceipts(tenantId, session.poId, skuReceipts)
   }

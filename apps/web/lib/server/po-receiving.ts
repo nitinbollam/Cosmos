@@ -101,6 +101,28 @@ export function overReceiptProblem(
   return `${poNumber} has only ${open} more ${skuCode} to receive, not ${quantity}`
 }
 
+/**
+ * Why units being scanned into an open session can't be added, or null when they fit. It counts what is already
+ * received on the PO and what this session has already scanned, and says how many more can still be added, so
+ * staff are not left comparing two totals.
+ */
+export function scanOverReceiptProblem(
+  poNumber: string,
+  skuCode: string,
+  line: { qtyOrdered: number; qtyReceived: number } | undefined,
+  scannedThisSession: number,
+  adding: number,
+): string | null {
+  if (!line) return `${skuCode} isn't on ${poNumber}`
+  const counted = line.qtyReceived + scannedThisSession
+  const remaining = Math.max(0, line.qtyOrdered - counted)
+  if (adding <= remaining) return null
+  if (remaining === 0) {
+    return `${poNumber} has no more ${skuCode} to receive: ${line.qtyOrdered} ordered, ${counted} already received or scanned`
+  }
+  return `${poNumber} ordered ${line.qtyOrdered} ${skuCode}; ${counted} already received or scanned, so only ${remaining} more can be added (you tried to add ${adding})`
+}
+
 /** PO numbers by id, so receiving screens can show "PO-1001" instead of an internal id. */
 export async function purchaseOrderNumbers(tenantId: string, ids: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(ids.filter(Boolean))]
