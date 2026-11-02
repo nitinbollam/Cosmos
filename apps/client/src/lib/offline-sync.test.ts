@@ -121,6 +121,27 @@ test('replayOfflineQueue drains receiving actions when online', async () => {
   assert.equal((post.mock.calls[1]?.arguments as unknown[])?.[0], '/wms/receiving/sessions/sess1/scan')
 })
 
+test('a queued scan replays with its quantity, and an older one without a quantity as a single unit', async () => {
+  installBrowserMocks(true)
+  const queue = await import('./offline-queue')
+  const sync = await import('./offline-sync')
+  const post = mock.fn(async () => undefined)
+
+  queue.clearQueue()
+  queue.enqueueAction('receiving_scan', { sessionId: 'sess1', code: 'SKU-9', quantity: 12 })
+  queue.enqueueAction('receiving_scan', { sessionId: 'sess1', code: 'SKU-8' })
+  queue.enqueueAction('receiving_scan', { sessionId: 'sess1', code: 'SKU-7', quantity: 0 })
+
+  const result = await sync.replayOfflineQueue({ post })
+  assert.equal(result.synced, 3)
+  const bodies = post.mock.calls.map((c) => (c.arguments as unknown[])[1])
+  assert.deepEqual(bodies, [
+    { code: 'SKU-9', quantity: 12 },
+    { code: 'SKU-8', quantity: 1 },
+    { code: 'SKU-7', quantity: 1 },
+  ])
+})
+
 test('replayOfflineQueue keeps transient failures with lastError and re-registers sync', async () => {
   const { syncRegister } = installBrowserMocks(true)
   const queue = await import('./offline-queue')
