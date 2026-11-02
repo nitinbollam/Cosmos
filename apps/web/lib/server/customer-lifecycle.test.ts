@@ -5,7 +5,7 @@ import bcrypt from 'bcrypt'
 import { Prisma } from '@/generated/prisma-order'
 import { handleApiRequest } from '../../server/api-router'
 import { loginUser } from './auth'
-import { authDb, crmDb, orderDb, storefrontDb, tenantDb } from './db'
+import { authDb, crmDb, inventoryDb, orderDb, storefrontDb, tenantDb } from './db'
 import { createOrder } from './orders'
 import { createQuote } from './quotes'
 
@@ -43,6 +43,7 @@ async function call(token: string, method: string, path: string, body?: unknown)
 }
 
 let manager = ''
+const SKU_CODE = `LIFE-${randomUUID().slice(0, 6)}`
 
 before(async () => {
   await authDb.tenant.create({ data: { id: tenantId, name: 'Life', slug: `life-${tenantId.slice(-8)}`, settings: {} } })
@@ -50,6 +51,10 @@ before(async () => {
     data: { id: tenantId, slug: `life-${tenantId.slice(-8)}`, displayName: 'Life', settings: {}, metadata: {} },
   })
   manager = await login('MANAGER')
+  // Quote lines need a real product (ticket 55).
+  await inventoryDb.sKU.create({
+    data: { tenantId, code: SKU_CODE, name: 'Widget', category: 'X', cost: '1', price: '5', imageUrls: [], attributes: {} },
+  })
 })
 
 after(async () => {
@@ -62,6 +67,7 @@ after(async () => {
   await crmDb.customerPrice.deleteMany({ where: { tenantId } })
   await crmDb.activity.deleteMany({ where: { tenantId } })
   await crmDb.customer.deleteMany({ where: { tenantId } })
+  await inventoryDb.sKU.deleteMany({ where: { tenantId } })
   await tenantDb.tenantOrganization.deleteMany({ where: { id: tenantId } })
   await authDb.tenant.deleteMany({ where: { id: tenantId } })
 })
@@ -125,14 +131,14 @@ test('a deactivated customer keeps its history, leaves the pickers, and gets no 
     (e: { status?: number; message?: string }) => e.status === 409 && /deactivated/.test(e.message ?? ''),
   )
   await assert.rejects(
-    createQuote(tenantId, { customerRef: customer.id, lines: [{ lineNo: 1, description: 'x', qty: 1, unitPrice: 5 }] }),
+    createQuote(tenantId, { customerRef: customer.id, lines: [{ lineNo: 1, skuCode: SKU_CODE, description: 'x', qty: 1, unitPrice: 5 }] }),
     (e: { status?: number }) => e.status === 409,
   )
 
   const on = await call(manager, 'PATCH', `/customers/${customer.id}`, { isActive: true })
   assert.equal(on.body?.isActive, true)
   assert.equal(on.body?.deactivatedAt, null)
-  const quote = await createQuote(tenantId, { customerRef: customer.id, lines: [{ lineNo: 1, description: 'x', qty: 1, unitPrice: 5 }] })
+  const quote = await createQuote(tenantId, { customerRef: customer.id, lines: [{ lineNo: 1, skuCode: SKU_CODE, description: 'x', qty: 1, unitPrice: 5 }] })
   assert.ok(quote.id, 'reactivated customers can be quoted again')
 })
 
