@@ -8,6 +8,8 @@ import { EmptyState } from '@/components/pleros/empty-state'
 import { adminPath } from '@/lib/admin-path'
 import { formatAmount } from '@/lib/decimal-amount'
 import { APPROVER_ROLES, apiFailure } from '@/lib/requisitions'
+import { ESCALATE_AFTER_DAYS, REMIND_AFTER_DAYS, waitLevel, waitingLabel, type WaitLevel } from '@/lib/approval-age'
+import { useUserNames, useViewer } from '@/components/purchasing/use-viewer'
 
 type ApprovalRequest = {
   id: string
@@ -45,6 +47,25 @@ function contextSummary(type: string, ctx: Record<string, unknown>): string {
   return JSON.stringify(ctx)
 }
 
+const WAIT_COLOR: Record<WaitLevel, string> = {
+  ok: 'var(--c-text-3)',
+  reminded: 'var(--c-warning)',
+  escalated: 'var(--c-danger)',
+}
+
+/** Waiting time, coloured once approvers have been reminded (2 days) or it was escalated (5 days). */
+function Waiting({ since }: { since: string }) {
+  const level = waitLevel(since)
+  return (
+    <span title={new Date(since).toLocaleString()} style={{ color: WAIT_COLOR[level] }} className={level === 'ok' ? '' : 'font-semibold'}>
+      {waitingLabel(since)}
+      {level === 'escalated' ? ' · escalated' : level === 'reminded' ? ' · reminded' : ''}
+    </span>
+  )
+}
+
+type PendingCount = { id: string; warehouseId: string; type: string; status: string; submittedAt?: string | null; updatedAt: string; _count?: { lines: number } }
+
 function errMsg(e: unknown): string {
   if (e && typeof e === 'object' && 'response' in e) {
     const m = (e as { response?: { data?: { message?: unknown } } }).response?.data?.message
@@ -65,6 +86,7 @@ export default function ApprovalsPage() {
 
   const q = useQuery<ApprovalRequest[]>({
     queryKey: ['approvals', typeFilter, statusFilter],
+    enabled: typeFilter !== 'CYCLE_COUNT',
     queryFn: () => {
       const params = new URLSearchParams()
       if (typeFilter) params.set('type', typeFilter)
@@ -75,7 +97,20 @@ export default function ApprovalsPage() {
   })
 
   // Shared with the sidebar's query, so this costs no extra request.
-  const { data: me } = useQuery({ queryKey: ['auth-me'], queryFn: () => api.get<{ userId?: string; role?: string }>('/auth/me') })
+  const { viewer: me } = useViewer()
+  const nameOf = useUserNames(me)
+
+  // Cycle counts are approved on the warehouse page; list the waiting ones here so nothing goes unnoticed.
+  const showCounts = (typeFilter === '' || typeFilter === 'CYCLE_COUNT') && (statusFilter === 'PENDING' || statusFilter === '')
+  const countsQ = useQuery<PendingCount[]>({
+    queryKey: ['cycle-counts'],
+    queryFn: () => api.get('/wms/cycle-counts'),
+    enabled: showCounts,
+    retry: false,
+  })
+  const pendingCounts = (countsQ.data ?? [])
+    .filter((c) => c.status === 'PENDING_APPROVAL')
+    .sort((a, b) => new Date(a.submittedAt ?? a.updatedAt).getTime() - new Date(b.submittedAt ?? b.updatedAt).getTime())
   // The decide endpoint is gated by role, not permission: only these roles see Approve / Reject.
   const isApprover = APPROVER_ROLES.includes(me?.role ?? '')
 
@@ -105,7 +140,9 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-pleros-white">Approvals</h1>
         <p className="text-pleros-muted text-sm mt-1">
-          Purchase requisitions, purchase orders over threshold, high discounts, and credit-limit overrides awaiting manager decision.
+          Purchase requisitions, purchase orders over threshold, high discounts, credit-limit overrides, expense reports and cycle
+          counts awaiting a manager&rsquo;s decision. Pending items are listed longest-waiting first; approvers are emailed when one
+          arrives, reminded after {REMIND_AFTER_DAYS} days, and admins are alerted after {ESCALATE_AFTER_DAYS}.
         </p>
       </div>
 
@@ -117,6 +154,7 @@ export default function ApprovalsPage() {
           <option value="DISCOUNT">Discounts</option>
           <option value="CREDIT_LIMIT_OVERRIDE">Credit limit</option>
           <option value="EXPENSE_REPORT">Expense reports</option>
+          <option value="CYCLE_COUNT">Cycle counts</option>
         </select>
         <select className="pleros-input !w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="PENDING">Pending</option>
@@ -127,6 +165,49 @@ export default function ApprovalsPage() {
         </select>
       </div>
 
+      {showCounts && pendingCounts.length > 0 ? (
+        <Card>
+          <CardTitle>Cycle counts awaiting approval</CardTitle>
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-pleros-muted border-b border-pleros-border">
+                  <th className="pb-2 pr-4">Waiting</th>
+                  <th className="pb-2 pr-4">Count</th>
+                  <th className="pb-2 pr-4">Lines</th>
+                  <th className="pb-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingCounts.map((c) => (
+                  <tr key={c.id} className="border-b border-pleros-border/60">
+                    <td className="py-3 pr-4 whitespace-nowrap text-xs">
+                      <Waiting since={c.submittedAt ?? c.updatedAt} />
+                    </td>
+                    <td className="py-3 pr-4 font-mono">
+                      #{c.id.slice(-8)} · {c.type}
+                    </td>
+                    <td className="py-3 pr-4">{c._count?.lines ?? 0}</td>
+                    <td className="py-3">
+                      <Link to={adminPath('/warehouse?tab=counts')} className="text-xs text-pleros-accent">
+                        Review in Warehouse → Cycle counts →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : null}
+
+      {typeFilter === 'CYCLE_COUNT' ? (
+        showCounts && pendingCounts.length === 0 && !countsQ.isLoading ? (
+          <Card>
+            <EmptyState icon="✓" title="No cycle counts waiting" description="Nothing has been submitted for approval." />
+          </Card>
+        ) : null
+      ) : (
       <Card>
         <CardTitle>Inbox</CardTitle>
         {q.isLoading ? (
@@ -142,7 +223,8 @@ export default function ApprovalsPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-pleros-muted border-b border-pleros-border">
-                  <th className="pb-2 pr-4">Age</th>
+                  <th className="pb-2 pr-4">{statusFilter === 'PENDING' ? 'Waiting' : 'Requested'}</th>
+                  <th className="pb-2 pr-4">Requested by</th>
                   <th className="pb-2 pr-4">Type</th>
                   <th className="pb-2 pr-4">Summary</th>
                   <th className="pb-2 pr-4">Status</th>
@@ -153,8 +235,9 @@ export default function ApprovalsPage() {
                 {(q.data ?? []).map((row) => (
                   <tr key={row.id} className="border-b border-pleros-border/60 align-top">
                     <td className="py-3 pr-4 text-pleros-muted whitespace-nowrap text-xs">
-                      {new Date(row.createdAt).toLocaleString()}
+                      {row.status === 'PENDING' ? <Waiting since={row.createdAt} /> : new Date(row.createdAt).toLocaleString()}
                     </td>
+                    <td className="py-3 pr-4 text-xs whitespace-nowrap">{nameOf(row.requestedBy)}</td>
                     <td className="py-3 pr-4">
                       <StatusBadge status={row.type} />
                     </td>
@@ -296,6 +379,7 @@ export default function ApprovalsPage() {
           </div>
         )}
       </Card>
+      )}
     </div>
   )
 }

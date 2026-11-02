@@ -6,6 +6,9 @@ import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { PlerosDialogModal } from '@/components/pleros/radix-overlays'
 import { authFetch } from '@/lib/auth-session'
+import { axiosErr } from '@/lib/axios-error'
+import { useViewer } from '@/components/purchasing/use-viewer'
+import { hasClientPermission } from '@/lib/requisitions'
 
 type Sku = {
   id: string
@@ -24,7 +27,10 @@ type Sku = {
   exciseTaxCategory?: string | null
   trackLot?: boolean
   trackSerial?: boolean
+  dropShipSupplierId?: string | null
 }
+
+type SupplierRow = { id: string; code: string; name: string }
 
 type SkuTracking = { trackLot: boolean; trackSerial: boolean }
 
@@ -105,6 +111,17 @@ export default function SkuDetailPage() {
     queryKey: ['warehouses'],
     queryFn: () => api.get<WarehouseRow[]>('/warehouses'),
   })
+
+  // Choosing the supplier needs purchasing.write (the server checks too); listing them needs purchasing.read.
+  const { viewer } = useViewer()
+  const canSetDropShip = hasClientPermission(viewer, 'purchasing.write')
+  const suppliersQ = useQuery({
+    queryKey: ['suppliers'],
+    queryFn: () => api.get<SupplierRow[]>('/suppliers'),
+    retry: false,
+  })
+
+  const dropShipSupplier = suppliersQ.data?.find((s) => s.id === skuQ.data?.dropShipSupplierId)
 
   const trackingQ = useQuery({
     queryKey: ['skus', skuId, 'tracking'],
@@ -350,6 +367,43 @@ export default function SkuDetailPage() {
                 Serial number tracking
               </label>
             </div>
+          </div>
+
+          <div className="pleros-card">
+            <h3 className="text-pleros-white font-semibold font-display mb-1">Drop-ship</h3>
+            <p className="text-sm text-pleros-muted mb-3">
+              Orders for this product go to the supplier as a purchase order, and the supplier ships to the
+              customer. Counter (POS) and van sales still come from stock.
+            </p>
+            {!canSetDropShip || suppliersQ.isError ? (
+              <p className="text-sm">
+                {sku.dropShipSupplierId
+                  ? `Drop-ship from ${dropShipSupplier ? `${dropShipSupplier.code} · ${dropShipSupplier.name}` : 'a supplier'}`
+                  : 'Fulfilled from our stock'}
+                <span className="text-pleros-muted"> · ask a purchasing manager to change this.</span>
+              </p>
+            ) : (
+              <label className="flex flex-wrap items-center gap-2 text-sm">
+                Fulfil from
+                <select
+                  className="pleros-input !w-auto !py-1.5 !text-sm"
+                  value={sku.dropShipSupplierId ?? ''}
+                  disabled={patchSku.isPending || suppliersQ.isLoading}
+                  onChange={(e) => patchSku.mutate({ dropShipSupplierId: e.target.value || null })}
+                  aria-label="Drop-ship supplier"
+                >
+                  <option value="">Our stock (no drop-ship)</option>
+                  {(suppliersQ.data ?? []).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Drop-ship from {s.code} · {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {patchSku.isError && (
+              <p className="text-xs text-red-400 mt-2">{axiosErr(patchSku.error)}</p>
+            )}
           </div>
 
           <div className="pleros-card">

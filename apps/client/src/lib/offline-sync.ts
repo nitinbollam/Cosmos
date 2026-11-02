@@ -57,8 +57,9 @@ async function replayAction(action: OfflineAction, post: PostFn): Promise<void> 
       break
     }
     case 'receiving_scan': {
-      const { sessionId, code } = action.payload as { sessionId: string; code: string }
-      await post(`/wms/receiving/sessions/${sessionId}/scan`, { code, quantity: 1 })
+      // Scans queued before quantities existed carry none, and were one unit each.
+      const { sessionId, code, quantity } = action.payload as { sessionId: string; code: string; quantity?: number }
+      await post(`/wms/receiving/sessions/${sessionId}/scan`, { code, quantity: Number.isInteger(quantity) && (quantity as number) >= 1 ? quantity : 1 })
       break
     }
     case 'wms_tasks_refresh':
