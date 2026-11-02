@@ -124,3 +124,16 @@ test('moving more than a bin holds is refused; shipped units leave the bins', as
   // 3 left on hand: the pick bin (A-01, the first bin used) gives up its 7 first, then B-02 gives 2.
   assert.deepEqual([await binQty(sku.id, a1.id), await binQty(sku.id, b2.id)], [0, 3])
 })
+
+test('a warehouse with no bins can still finish putaway; nothing moves', async () => {
+  const wh = await inventoryDb.warehouse.create({ data: { tenantId, name: 'NoBins', code: `N-${randomUUID().slice(0, 4)}`, address: {} } })
+  const sku = await inventoryDb.sKU.create({
+    data: { tenantId, code: `S-${randomUUID().slice(0, 6)}`, name: 'W', category: 'X', cost: new Prisma.Decimal('2'), price: new Prisma.Decimal('5'), imageUrls: [], attributes: {} },
+  })
+  await receiveStock(tenantId, { skuId: sku.id, warehouseId: wh.id, quantity: 3, unitCost: 2 }, 'test')
+  const task = await createPutawayTaskFromReceiving(tenantId, `rs-${randomUUID()}`, wh.id, [{ skuId: sku.id, quantity: 3 }])
+  const res = await confirmPutawayLine(tenantId, task.id, task.lines[0].id, { performedBy: 'test' })
+  assert.equal(res.moved, 0)
+  assert.equal((await wmsDb.putawayTask.findUniqueOrThrow({ where: { id: task.id } })).status, 'COMPLETED')
+  assert.equal(await inventoryDb.binStock.count({ where: { tenantId, skuId: sku.id } }), 0)
+})

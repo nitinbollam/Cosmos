@@ -100,7 +100,15 @@ export async function confirmPutawayLine(
     binId = byCode.id
   }
   binId ??= line.suggestedBinId
-  if (!binId) throw new ApiError(400, 'Choose a bin to put this away in')
+  if (!binId) {
+    // A warehouse with no bins has nowhere to put stock: the line is done and the stock stays unbinned.
+    const hasBins = await inventoryDb.binLocation.count({ where: { tenantId, warehouseId: task.warehouseId, isActive: true } })
+    if (hasBins > 0) throw new ApiError(400, 'Choose a bin to put this away in')
+    await wmsDb.putawayLine.updateMany({ where: { id: lineId, taskId, status: 'PENDING' }, data: { status: 'PUTAWAY' } })
+    const open = await wmsDb.putawayLine.count({ where: { taskId, status: 'PENDING' } })
+    await wmsDb.putawayTask.update({ where: { id: taskId }, data: { status: open === 0 ? 'COMPLETED' : 'IN_PROGRESS' } })
+    return { taskId, lineId, binCode: null, moved: 0 }
+  }
   const bin = await inventoryDb.binLocation.findFirst({
     where: { id: binId, tenantId, warehouseId: task.warehouseId, isActive: true },
     select: { code: true },
