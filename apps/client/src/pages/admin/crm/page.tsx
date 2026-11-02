@@ -59,6 +59,7 @@ type CustomerRow = {
   creditUsed?: string | number | null
   paymentTermsDays?: number | null
   salesRepUserId?: string | null
+  isActive?: boolean | null
 }
 
 type UserRow = {
@@ -185,7 +186,7 @@ function CustomersSection(props: {
     queryKey: ['customers', page, debounced],
     queryFn: () =>
       api.get(
-        `/customers?page=${page}&pageSize=${CUSTOMERS_PAGE_SIZE}${debounced ? `&search=${encodeURIComponent(debounced)}` : ''}`,
+        `/customers?page=${page}&pageSize=${CUSTOMERS_PAGE_SIZE}&includeInactive=1${debounced ? `&search=${encodeURIComponent(debounced)}` : ''}`,
       ),
     placeholderData: (prev) => prev,
   })
@@ -197,15 +198,16 @@ function CustomersSection(props: {
   async function exportCsv() {
     setExporting(true)
     try {
-      const all = await api.get<CustomerRow[]>('/customers')
+      const all = await api.get<CustomerRow[]>('/customers?includeInactive=1')
       downloadCsv(
         `customers-${new Date().toISOString().slice(0, 10)}.csv`,
-        ['Name', 'Email', 'Phone', 'Type', 'Credit limit', 'Credit used', 'Payment terms (days)', 'Sales rep'],
+        ['Name', 'Email', 'Phone', 'Type', 'Status', 'Credit limit', 'Credit used', 'Payment terms (days)', 'Sales rep'],
         all.map((c) => [
           c.name,
           c.email ?? '',
           c.phone ?? '',
           c.customerKind ?? 'BUSINESS',
+          c.isActive === false ? 'Deactivated' : 'Active',
           c.creditLimit ?? '',
           c.creditUsed ?? '',
           c.paymentTermsDays ?? '',
@@ -322,6 +324,11 @@ function CustomersSection(props: {
                       {c.customerKind === 'INDIVIDUAL' ? (
                         <span className="ml-2">
                           <StatusBadge status="INDIVIDUAL" />
+                        </span>
+                      ) : null}
+                      {c.isActive === false ? (
+                        <span className="ml-2">
+                          <StatusBadge status="DEACTIVATED" />
                         </span>
                       ) : null}
                     </td>

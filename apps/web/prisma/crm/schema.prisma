@@ -40,6 +40,9 @@ model Customer {
   stripeCustomerId     String?
   /** acct_... under which stripeCustomerId was created (Connect direct charges). */
   stripeConnectAccountId String?
+  /// Deactivated customers keep their history but can't get new orders or quotes (ticket 2).
+  isActive             Boolean    @default(true)
+  deactivatedAt        DateTime?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   activities           Activity[]
@@ -47,6 +50,7 @@ model Customer {
   contractPrices       CustomerPrice[]
 
   @@index([tenantId])
+  @@index([tenantId, isActive])
 }
 
 model CustomerPrice {

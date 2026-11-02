@@ -190,7 +190,8 @@ async function customerNameMap(tenantId: string, ids: string[]): Promise<Map<str
   const map = new Map<string, string>()
   if (unique.length === 0) return map
   try {
-    const all = await crm.listCustomers(tenantId)
+    // Reports cover history, so deactivated customers keep their names here.
+    const all = await crm.listCustomers(tenantId, { includeInactive: true })
     for (const c of all) {
       if (unique.includes(c.id)) map.set(c.id, c.name)
     }

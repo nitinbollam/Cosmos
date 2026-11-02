@@ -194,7 +194,7 @@ export async function createPosOrder(
       ageAttestation: dto.ageAttestation ?? null,
       discountCode: dto.discountCode,
     },
-    { awaitPipeline: true, userId },
+    { awaitPipeline: true, userId, stockInHand: true },
   )
 
   const created = await orderDb.order.findFirst({

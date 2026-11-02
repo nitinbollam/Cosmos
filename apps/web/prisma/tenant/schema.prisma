@@ -167,9 +167,14 @@ model ApprovalRequest {
   rejectReason String?
   /// Why the request was closed as CANCELLED.
   cancelReason String?
+  /// Approvers were told it arrived / reminded (~2 days) / it was escalated to admins (~5 days). Ticket 64.
+  notifiedAt   DateTime?
+  remindedAt   DateTime?
+  escalatedAt  DateTime?
   createdAt    DateTime       @default(now())
 
   @@index([tenantId, status])
+  @@index([status, createdAt])
   @@index([tenantId, type])
   @@index([tenantId, subjectId])
 }

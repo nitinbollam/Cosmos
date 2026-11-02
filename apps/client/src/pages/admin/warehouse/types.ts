@@ -62,6 +62,8 @@ export type CycleRow = {
   type: string
   status: string
   scheduledFor: string | null
+  submittedAt?: string | null
+  updatedAt?: string
   createdBy: string
   createdAt: string
   _count: { lines: number }

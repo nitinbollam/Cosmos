@@ -9,6 +9,15 @@ import * as pricing from '../pricing'
 import { toBuyerSku } from '../buyer-sku'
 import { ApiError, requireSession, requirePermission, assertPermission } from './common'
 
+/**
+ * Choosing (or clearing) a product's drop-ship supplier decides that every order for it raises a
+ * purchase order to that supplier, so it needs purchasing rights on top of inventory.write.
+ */
+function assertMaySetDropShip(session: Parameters<typeof assertPermission>[0], rows: unknown[]) {
+  const touches = rows.some((r) => r !== null && typeof r === 'object' && (r as { dropShipSupplierId?: unknown }).dropShipSupplierId !== undefined)
+  if (touches) assertPermission(session, 'purchasing.write')
+}
+
 export async function routeSkus(method: string, seg: string[], req: Request): Promise<Response> {
   const session = await requireSession(req)
   const url = new URL(req.url)
@@ -55,6 +64,7 @@ export async function routeSkus(method: string, seg: string[], req: Request): Pr
   }
   if (seg[1] === 'import' && method === 'POST') {
     const body = (await req.json()) as { rows?: inv.CreateSkuInput[] }
+    assertMaySetDropShip(session, Array.isArray(body.rows) ? body.rows : [])
     return Response.json(await inv.importSkus(session.tenantId, body.rows ?? []))
   }
   if (seg.length === 1 && method === 'GET') {
@@ -77,6 +87,7 @@ export async function routeSkus(method: string, seg: string[], req: Request): Pr
   }
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as inv.CreateSkuInput
+    assertMaySetDropShip(session, [body])
     return Response.json(await inv.createSku(session.tenantId, body))
   }
   if (seg.length === 2 && method === 'GET') {
@@ -133,6 +144,7 @@ export async function routeSkus(method: string, seg: string[], req: Request): Pr
   }
   if (seg.length === 2 && method === 'PATCH') {
     const body = (await req.json()) as Partial<inv.CreateSkuInput> & { isActive?: boolean }
+    assertMaySetDropShip(session, [body])
     return Response.json(await inv.updateSku(session.tenantId, seg[1], body))
   }
   throw new ApiError(404, 'SKU route not found')

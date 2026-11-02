@@ -161,6 +161,9 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
         { status: 201 },
       )
     }
+    if (seg.length === 3 && seg[2] === 'open-purchase-orders' && method === 'GET') {
+      return Response.json(await wmsReceiving.listReceivablePurchaseOrders(session.tenantId, url.searchParams.get('q') ?? undefined))
+    }
     if (((seg.length === 3 && !isSessions) || (seg.length === 4 && isSessions)) && method === 'GET') {
       return Response.json(await wmsReceiving.getReceivingSession(id, session.tenantId))
     }
@@ -191,6 +194,10 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
       return Response.json(
         await wmsReceiving.importReceivingItems(id, session.tenantId, session.userId, body.rows ?? []),
       )
+    }
+    if (sub === 'cancel' && (method === 'PATCH' || method === 'POST')) {
+      const body = (await req.json().catch(() => ({}))) as { reason?: string }
+      return Response.json(await wmsReceiving.cancelReceivingSession(id, session.tenantId, session.userId, body.reason))
     }
     if (sub === 'complete' && (method === 'PATCH' || method === 'POST')) {
       const body = ((await req.json().catch(() => ({}))) ?? {}) as { notes?: string }

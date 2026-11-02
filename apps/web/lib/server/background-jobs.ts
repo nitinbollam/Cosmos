@@ -24,6 +24,10 @@ const RECONCILIATION_FIRST_RUN_MS = 5 * 60 * 1000
 const REQUISITION_RECONCILE_MS = 5 * 60 * 1000
 const REQUISITION_RECONCILE_FIRST_RUN_MS = 60 * 1000
 
+/** Approval notices, 2-day reminders and 5-day escalations (ticket 64); APPROVAL_REMINDERS_DISABLED=1 turns them off. */
+const APPROVAL_REMINDERS_MS = 5 * 60 * 1000
+const APPROVAL_REMINDERS_FIRST_RUN_MS = 2 * 60 * 1000
+
 let started = false
 
 export function startBackgroundJobs(): void {
@@ -40,6 +44,13 @@ export function startBackgroundJobs(): void {
       if (leaked.released > 0) console.log(`[jobs] released ${leaked.released} reservation(s) held by cancelled or failed orders`)
     } catch (err) {
       console.error('[jobs] reservation sweep failed:', err)
+    }
+    try {
+      const { expireStaleReceivingSessions } = await import('./wms-receiving')
+      const { expired } = await expireStaleReceivingSessions()
+      if (expired > 0) console.log(`[jobs] cancelled ${expired} receiving session(s) with nothing scanned after 24 hours`)
+    } catch (err) {
+      console.error('[jobs] receiving session expiry failed:', err)
     }
     try {
       const { runMarketplaceJobs } = await import('./marketplace-jobs')
@@ -145,6 +156,23 @@ export function startBackgroundJobs(): void {
   requisitionFirst.unref?.()
   const requisitionTimer = setInterval(() => void reconcileRequisitions(), REQUISITION_RECONCILE_MS)
   requisitionTimer.unref?.()
+
+  const remindApprovals = async () => {
+    if (process.env.APPROVAL_REMINDERS_DISABLED === '1') return
+    try {
+      const { runApprovalReminders } = await import('./approval-reminders')
+      const res = await runApprovalReminders()
+      if (res.requested + res.reminder + res.escalated > 0) {
+        console.log(`[jobs] approvals: ${res.requested} notified, ${res.reminder} reminded, ${res.escalated} escalated`)
+      }
+    } catch (err) {
+      console.error('[jobs] approval reminders failed:', err)
+    }
+  }
+  const approvalFirst = setTimeout(() => void remindApprovals(), APPROVAL_REMINDERS_FIRST_RUN_MS)
+  approvalFirst.unref?.()
+  const approvalTimer = setInterval(() => void remindApprovals(), APPROVAL_REMINDERS_MS)
+  approvalTimer.unref?.()
 
   const reconcileFirst = setTimeout(() => void reconcile(), RECONCILIATION_FIRST_RUN_MS)
   reconcileFirst.unref?.()
