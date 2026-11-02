@@ -24,6 +24,8 @@ type PurchaseOrder = {
   supplier?: { id: string; name: string; code: string }
   lines?: Array<{ id: string; lineNo: number; description: string; qtyOrdered: number; skuCode?: string | null }>
   currency?: string
+  warehouseId?: string | null
+  warehouse?: { id: string; name: string; code: string } | null
   /** Lines plus freight, duty and other charges, each counted once (from the server). */
   total?: number
 }
@@ -65,12 +67,22 @@ export default function PurchasingPage() {
     navigate(adminPath(`/purchasing/requisitions/new?skuId=${encodeURIComponent(prefillSkuId)}`), { replace: true })
   }, [prefillSkuId, viewerLoading, canRequisition, navigate])
 
+  const [warehouseFilter, setWarehouseFilter] = useState('')
+  const warehouseOptions = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ['warehouses'],
+    queryFn: () => api.get('/warehouses'),
+    enabled: tab === 'pos',
+  })
+
   const posQuery = useQuery<PurchaseOrder[]>({
-    queryKey: ['purchase-orders', statusFilter],
-    queryFn: () =>
-      statusFilter
-        ? api.get(`/purchase-orders?status=${encodeURIComponent(statusFilter)}`)
-        : api.get('/purchase-orders'),
+    queryKey: ['purchase-orders', statusFilter, warehouseFilter],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (statusFilter) params.set('status', statusFilter)
+      if (warehouseFilter) params.set('warehouseId', warehouseFilter)
+      const qs = params.toString()
+      return api.get(qs ? `/purchase-orders?${qs}` : '/purchase-orders')
+    },
     enabled: tab === 'pos',
     refetchInterval: 5000,
   })
@@ -138,6 +150,19 @@ export default function PurchasingPage() {
                 {f.label}
               </button>
             ))}
+            <select
+              aria-label="Filter by destination warehouse"
+              className="h-8 rounded-md bg-pleros-surface-2 border border-pleros-border px-2 text-xs text-pleros-text"
+              value={warehouseFilter}
+              onChange={(e) => setWarehouseFilter(e.target.value)}
+            >
+              <option value="">All warehouses</option>
+              {(warehouseOptions.data ?? []).map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
             <div className="ml-auto flex flex-wrap gap-2">
               {canRequisition && (
                 <Link to={adminPath('/purchasing/requisitions')} className="h-9 px-4 rounded-md border border-pleros-border text-pleros-text text-sm inline-flex items-center">
@@ -162,7 +187,7 @@ export default function PurchasingPage() {
               <EmptyState
                 icon="📦"
                 title="No purchase orders"
-                description={statusFilter ? 'Try clearing the status filter.' : 'Purchase orders are created from approved purchase requisitions.'}
+                description={statusFilter || warehouseFilter ? 'Try clearing the filters.' : 'Purchase orders are created from approved purchase requisitions.'}
                 action={
                   canRequisition ? (
                     <Link to={adminPath('/purchasing/requisitions/new')} className="h-9 px-4 rounded-md bg-pleros-primary text-white text-sm inline-flex items-center">
@@ -178,6 +203,7 @@ export default function PurchasingPage() {
                     <tr className="text-left text-pleros-muted border-b border-pleros-border">
                       <th className="pb-2 pr-4">PO #</th>
                       <th className="pb-2 pr-4">Supplier</th>
+                      <th className="pb-2 pr-4">Warehouse</th>
                       <th className="pb-2 pr-4">Status</th>
                       <th className="pb-2 pr-4 text-right">Total</th>
                       <th className="pb-2 pr-4">Created</th>
@@ -192,6 +218,7 @@ export default function PurchasingPage() {
                           {po.requisitionId ? <span className="block font-sans text-xs text-pleros-muted">From a requisition</span> : null}
                         </td>
                         <td className="py-2 pr-4 text-pleros-text">{po.supplier?.name ?? '—'}</td>
+                        <td className="py-2 pr-4 text-pleros-text">{po.warehouse?.name ?? '—'}</td>
                         <td className="py-2 pr-4">
                           <StatusBadge status={po.status} />
                         </td>

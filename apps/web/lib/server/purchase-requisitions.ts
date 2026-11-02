@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma, PurchaseRequisitionStatus } from '@/generated/prisma-purchasing'
 import { purchasingDb, tenantDb } from './db'
 import { ApiError, type SessionUser } from './session'
+import { assertDestinationWarehouse } from './po-warehouse'
 import {
   MAX_LINE_QTY,
   MAX_REQUISITION_LINES,
@@ -72,6 +73,7 @@ export type RequisitionLineInput = {
 /** The only fields a client may send. Anything else in the body (tenantId, requestedBy, status...) is ignored. */
 export type RequisitionInput = {
   supplierId?: string | null
+  warehouseId?: string | null
   currency?: string
   freightAmount?: string | number
   dutyAmount?: string | number
@@ -82,6 +84,7 @@ export type RequisitionInput = {
 
 type ParsedInput = {
   supplierId?: string | null
+  warehouseId?: string | null
   currency?: string
   freightAmount?: Prisma.Decimal
   dutyAmount?: Prisma.Decimal
@@ -108,6 +111,12 @@ export function parseRequisitionInput(body: unknown): ParsedInput {
       throw new ApiError(400, 'supplierId must be a supplier id or null')
     }
     out.supplierId = b.supplierId === null ? null : (b.supplierId as string).trim()
+  }
+  if (b.warehouseId !== undefined) {
+    if (b.warehouseId !== null && (typeof b.warehouseId !== 'string' || !b.warehouseId.trim())) {
+      throw new ApiError(400, 'warehouseId must be a warehouse id or null')
+    }
+    out.warehouseId = b.warehouseId === null ? null : (b.warehouseId as string).trim()
   }
   if (b.currency !== undefined) out.currency = normalizeCurrency(b.currency)
   if (b.freightAmount !== undefined) out.freightAmount = parseAmount(b.freightAmount, 'freightAmount')
@@ -206,6 +215,7 @@ export async function getRequisition(actor: Actor, id: string) {
 export async function createRequisition(actor: Actor, body: unknown) {
   const input = parseRequisitionInput(body)
   const tenantId = actor.tenantId
+  if (input.warehouseId) await assertDestinationWarehouse(tenantId, input.warehouseId)
   return purchasingDb.$transaction(async (tx) => {
     // The counter write comes first: it takes the write lock, so the rest of the transaction runs alone.
     const counter = await tx.purchaseRequisitionCounter.upsert({
@@ -221,6 +231,7 @@ export async function createRequisition(actor: Actor, body: unknown) {
         requestedBy: actor.userId,
         status: PurchaseRequisitionStatus.DRAFT,
         supplierId: input.supplierId ?? null,
+        warehouseId: input.warehouseId ?? null,
         currency: input.currency ?? 'USD',
         freightAmount: input.freightAmount ?? new Prisma.Decimal(0),
         dutyAmount: input.dutyAmount ?? new Prisma.Decimal(0),
@@ -261,6 +272,7 @@ async function explainRefusal(tx: Prisma.TransactionClient, actor: Actor, id: st
 export async function updateRequisition(actor: Actor, id: string, body: unknown) {
   const input = parseRequisitionInput(body)
   const tenantId = actor.tenantId
+  if (input.warehouseId) await assertDestinationWarehouse(tenantId, input.warehouseId)
   return purchasingDb.$transaction(async (tx) => {
     // Guarded write first: it both checks owner + status and takes the write lock, so a submit cannot slip in between
     // this check and the line changes below.
@@ -268,6 +280,7 @@ export async function updateRequisition(actor: Actor, id: string, body: unknown)
       where: { id, tenantId, requestedBy: actor.userId, status: { in: EDITABLE } },
       data: {
         ...(input.supplierId !== undefined ? { supplierId: input.supplierId } : {}),
+        ...(input.warehouseId !== undefined ? { warehouseId: input.warehouseId } : {}),
         ...(input.currency !== undefined ? { currency: input.currency } : {}),
         ...(input.freightAmount !== undefined ? { freightAmount: input.freightAmount } : {}),
         ...(input.dutyAmount !== undefined ? { dutyAmount: input.dutyAmount } : {}),

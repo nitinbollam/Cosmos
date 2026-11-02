@@ -26,6 +26,8 @@ export type Requisition = {
   requestedBy: string
   supplierId: string | null
   supplier?: { id: string; code: string; name: string } | null
+  /** Where the goods are meant to arrive; copied onto the PO when the requisition is converted. */
+  warehouseId?: string | null
   currency: string
   freightAmount: string
   dutyAmount: string

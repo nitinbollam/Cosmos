@@ -4,6 +4,7 @@ import { submissionProblems, type Requisition } from '@/lib/requisitions'
 
 export type RequisitionPayload = {
   supplierId: string | null
+  warehouseId: string | null
   currency: string
   freightAmount: string
   dutyAmount: string
@@ -32,6 +33,8 @@ export function RequisitionForm(props: {
   prefillNotes?: string
   suppliers: Array<{ id: string; name: string; code: string }>
   suppliersLoading?: boolean
+  warehouses?: Array<{ id: string; name: string }>
+  warehousesLoading?: boolean
   saving: boolean
   serverError?: string | null
   saveLabel: string
@@ -41,6 +44,7 @@ export function RequisitionForm(props: {
   const ids = useId()
   const init = props.initial
   const [supplierId, setSupplierId] = useState(init?.supplierId ?? '')
+  const [warehouseId, setWarehouseId] = useState(init?.warehouseId ?? '')
   const [currency, setCurrency] = useState(init?.currency ?? 'USD')
   const [freight, setFreight] = useState(init ? String(init.freightAmount) : '0')
   const [duty, setDuty] = useState(init ? String(init.dutyAmount) : '0')
@@ -87,6 +91,7 @@ export function RequisitionForm(props: {
     const landed = sumAmounts([f ?? '0', d ?? '0', o ?? '0'])
     const payload: RequisitionPayload = {
       supplierId: supplierId || null,
+      warehouseId: warehouseId || null,
       currency: cur,
       freightAmount: f ?? '0',
       dutyAmount: d ?? '0',
@@ -102,7 +107,7 @@ export function RequisitionForm(props: {
       total: sumAmounts([lineTotal, landed]),
       blockers: submissionProblems({ supplierId: payload.supplierId, lines: parsedLines }),
     }
-  }, [currency, freight, duty, other, lines, supplierId, notes])
+  }, [currency, freight, duty, other, lines, supplierId, warehouseId, notes])
 
   const errorList = Object.values(check.errors)
   const showErrors = touched && errorList.length > 0
@@ -135,6 +140,20 @@ export function RequisitionForm(props: {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label htmlFor={fieldId('warehouse')} className="block text-xs text-pleros-muted">
+            Destination warehouse
+          </label>
+          <select id={fieldId('warehouse')} className={`${input} mt-1`} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+            <option value="">{props.warehousesLoading ? 'Loading warehouses…' : 'Choose later (receiving uses the company default)'}</option>
+            {(props.warehouses ?? []).map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-pleros-muted">Where the goods should arrive. The PO and receiving start here.</p>
         </div>
         <div>
           <label htmlFor={fieldId('currency')} className="block text-xs text-pleros-muted">

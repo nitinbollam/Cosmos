@@ -78,6 +78,9 @@ model PurchaseOrder {
   /// existing table. One PO per requisition is enforced by the conversion's conditional update (see
   /// PurchaseRequisition.purchaseOrderId).
   requisitionId     String?
+  /// Where the goods are meant to arrive (inventory database warehouse id); null for POs made before this existed
+  /// and for drop-ship POs, whose goods go to the customer. A plain column for the same reason as requisitionId.
+  warehouseId       String?
   createdAt         DateTime              @default(now())
   updatedAt  DateTime              @updatedAt
   supplier   Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
@@ -87,6 +90,7 @@ model PurchaseOrder {
   @@index([tenantId, status])
   @@index([supplierId])
   @@index([tenantId, requisitionId])
+  @@index([tenantId, warehouseId])
 }
 
 model PurchaseOrderLine {
@@ -112,6 +116,9 @@ model PurchaseRequisition {
   status            PurchaseRequisitionStatus @default(DRAFT)
   requestedBy       String
   supplierId        String?
+  /// The destination warehouse, copied onto the PO at conversion. Not part of detailsHash: it changes no money, and
+  /// the hashes of requisitions already approved must stay valid. Optional: with none, receiving uses the company default.
+  warehouseId       String?
   currency          String                    @default("USD")
   freightAmount     Decimal                   @default(0)
   dutyAmount        Decimal                   @default(0)

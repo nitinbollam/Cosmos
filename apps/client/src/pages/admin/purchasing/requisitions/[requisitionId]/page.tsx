@@ -39,6 +39,10 @@ export default function RequisitionDetailPage() {
     queryFn: () => api.get('/suppliers'),
     enabled: editing,
   })
+  const warehouses = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ['warehouses'],
+    queryFn: () => api.get('/warehouses'),
+  })
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['purchase-requisition', id] })
@@ -299,6 +303,8 @@ export default function RequisitionDetailPage() {
               initial={r}
               suppliers={suppliers.data ?? []}
               suppliersLoading={suppliers.isLoading}
+              warehouses={warehouses.data ?? []}
+              warehousesLoading={warehouses.isLoading}
               saving={save.isPending}
               serverError={notice?.kind === 'error' ? notice.text : null}
               saveLabel="Save changes"
@@ -317,6 +323,14 @@ export default function RequisitionDetailPage() {
                 <dd className="text-pleros-text">{nameOf(r.requestedBy)}</dd>
                 <dt className="text-pleros-muted">Supplier</dt>
                 <dd className="text-pleros-text">{r.supplier ? `${r.supplier.name} (${r.supplier.code})` : <span className="text-pleros-muted">Not chosen yet</span>}</dd>
+                <dt className="text-pleros-muted">Destination warehouse</dt>
+                <dd className="text-pleros-text">
+                  {r.warehouseId ? (
+                    warehouses.data?.find((w) => w.id === r.warehouseId)?.name ?? 'Unavailable warehouse'
+                  ) : (
+                    <span className="text-pleros-muted">Not chosen (receiving uses the company default)</span>
+                  )}
+                </dd>
                 <dt className="text-pleros-muted">Currency</dt>
                 <dd className="text-pleros-text">{r.currency}</dd>
                 <dt className="text-pleros-muted">Created</dt>
