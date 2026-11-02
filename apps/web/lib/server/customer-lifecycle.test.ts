@@ -56,6 +56,7 @@ after(async () => {
   await authDb.authSession.deleteMany({ where: { userId: { in: userIds } } })
   await authDb.user.deleteMany({ where: { id: { in: userIds } } })
   await storefrontDb.b2BQuote.deleteMany({ where: { tenantId } })
+  await tenantDb.subscription.deleteMany({ where: { tenantId } })
   await orderDb.order.deleteMany({ where: { tenantId } })
   await crmDb.volumePriceBreak.deleteMany({ where: { tenantId } })
   await crmDb.customerPrice.deleteMany({ where: { tenantId } })
@@ -99,7 +100,13 @@ test('a deactivated customer keeps its history, leaves the pickers, and gets no 
     },
   })
 
+  const sub = await tenantDb.subscription.create({
+    data: { tenantId, customerId: customer.id, savedPaymentMethodId: 'pm-test', interval: 'MONTHLY', nextOrderDate: new Date(), status: 'ACTIVE' },
+  })
   const off = await call(manager, 'PATCH', `/customers/${customer.id}`, { isActive: false })
+  const paused = await tenantDb.subscription.findUniqueOrThrow({ where: { id: sub.id } })
+  assert.equal(paused.status, 'PAUSED', 'their subscriptions stop instead of failing')
+  assert.equal(paused.lastFailureReason, 'Customer deactivated')
   assert.equal(off.status, 200)
   assert.equal(off.body?.isActive, false)
   assert.ok(off.body?.deactivatedAt)

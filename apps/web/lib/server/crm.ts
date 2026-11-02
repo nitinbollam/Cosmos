@@ -209,7 +209,15 @@ export async function patchCustomer(tenantId: string, id: string, dto: Record<st
       data.deactivatedAt = isActive ? null : new Date()
     }
   }
-  return crmDb.customer.update({ where: { id }, data })
+  const updated = await crmDb.customer.update({ where: { id }, data })
+  if (data.isActive === false) {
+    // Their subscriptions would otherwise fail on the next run and email them a "payment failed" notice.
+    await tenantDb.subscription.updateMany({
+      where: { tenantId, customerId: id, status: 'ACTIVE' },
+      data: { status: 'PAUSED', lastFailureReason: 'Customer deactivated' },
+    })
+  }
+  return updated
 }
 
 /**
