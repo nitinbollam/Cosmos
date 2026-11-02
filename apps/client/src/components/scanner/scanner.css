@@ -40,6 +40,11 @@
   white-space: nowrap;
 }
 
+.scan-stock-scope {
+  font-size: 11px;
+  color: var(--c-text-3);
+}
+
 .scan-stock-figures {
   display: flex;
   gap: 22px;

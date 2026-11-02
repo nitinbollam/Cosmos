@@ -50,10 +50,12 @@ export async function listSkus(
   page = 1,
   pageSize = 50,
   search?: string,
-  opts?: { category?: string; warehouseId?: string; inStockOnly?: boolean; customerId?: string },
+  opts?: { category?: string; warehouseId?: string; inStockOnly?: boolean; customerId?: string; code?: string },
 ) {
   const where: Prisma.SKUWhereInput = {
     tenantId,
+    // An exact code (a scanned SKU) is one row, wherever it would sort among codes that merely contain it.
+    ...(opts?.code ? { code: opts.code } : {}),
     ...(search
       ? {
           OR: [

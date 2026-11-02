@@ -184,13 +184,18 @@ export default function InventoryPage() {
 
   const whMap = new Map((warehousesQ.data ?? []).map((w) => [w.id, `${w.code} · ${w.name}`]))
 
+  // While the search box still holds a scanned code, ask for that exact SKU. A plain
+  // search matches every code containing it, sorted by name, so with more than a page
+  // of matches the scanned SKU could land on page 2 and its stock card never show.
+  const exactScan = !!scannedCode && debouncedSearch === scannedCode
   const skusQ = useQuery({
-    queryKey: ['skus', debouncedSearch, category, warehouseId, inStockOnly, page],
+    queryKey: ['skus', debouncedSearch, exactScan, category, warehouseId, inStockOnly, page],
     queryFn: async () => {
       const q = new URLSearchParams()
       q.set('page', String(page))
       q.set('pageSize', String(pageSize))
-      if (debouncedSearch) q.set('search', debouncedSearch)
+      if (exactScan) q.set('code', debouncedSearch)
+      else if (debouncedSearch) q.set('search', debouncedSearch)
       if (category) q.set('category', category)
       if (warehouseId) q.set('warehouseId', warehouseId)
       if (inStockOnly) q.set('inStock', 'true')
@@ -300,9 +305,13 @@ export default function InventoryPage() {
   // The scanned SKU's row, once the filtered list lands. listSkus already
   // enriches rows with stock figures, so answering "how many do I have?" needs
   // no extra request — we just read the row the scan filtered us down to.
-  const scannedRow = scannedCode
+  const scannedRow = exactScan
     ? (skusQ.data?.items ?? []).find((s) => s.code === scannedCode)
     : undefined
+  // The figures are for the warehouse filter, which a scan leaves on, so name it.
+  const stockScope = warehouseId
+    ? `In ${(warehousesQ.data ?? []).find((w) => w.id === warehouseId)?.code ?? 'the selected warehouse'}`
+    : 'All warehouses'
   // The warehouse filter stays on a scan (it scopes the stock figures), so say so
   // when it is what keeps the scanned SKU out of the list instead of going quiet.
   const scannedMissing =
@@ -465,6 +474,7 @@ export default function InventoryPage() {
             <div className="scan-stock-id">
               <span className="scan-stock-code">{scannedRow.code}</span>
               <span className="scan-stock-name">{scannedRow.name}</span>
+              <span className="scan-stock-scope">{stockScope}</span>
             </div>
             <div className="scan-stock-figures">
               <div>
