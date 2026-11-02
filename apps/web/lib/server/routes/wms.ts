@@ -154,8 +154,8 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
         poId?: string
         asnId?: string
       }
-      const warehouseId = body.warehouseId || (await wmsReceiving.resolveDefaultWarehouseId(session.tenantId))
       const poId = body.purchaseOrderId ?? body.poId
+      const warehouseId = await wmsReceiving.resolveSessionWarehouseId(session.tenantId, body.warehouseId, poId)
       return Response.json(
         await wmsReceiving.startReceivingSession(session.tenantId, warehouseId, session.userId, poId, body.asnId),
         { status: 201 },

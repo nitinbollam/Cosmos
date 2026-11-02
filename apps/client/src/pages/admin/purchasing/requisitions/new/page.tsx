@@ -19,6 +19,10 @@ export default function NewRequisitionPage() {
     queryKey: ['suppliers'],
     queryFn: () => api.get('/suppliers'),
   })
+  const warehouses = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ['warehouses'],
+    queryFn: () => api.get('/warehouses'),
+  })
 
   // From a low-stock alert: start with that SKU and its suggested reorder quantity.
   const suggestion = useQuery<LinePrefill | null>({
@@ -69,6 +73,8 @@ export default function NewRequisitionPage() {
             prefillNotes={skuId ? 'Low-stock replenishment' : ''}
             suppliers={suppliers.data ?? []}
             suppliersLoading={suppliers.isLoading}
+            warehouses={warehouses.data ?? []}
+            warehousesLoading={warehouses.isLoading}
             saving={create.isPending}
             serverError={create.error ? apiFailure(create.error).message : null}
             saveLabel="Save draft"

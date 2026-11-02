@@ -36,6 +36,9 @@ type PurchaseOrder = {
   createdBy?: string | null
   /** Set when the PO was converted from an approved requisition. */
   requisitionId?: string | null
+  /** Destination warehouse: where the goods are meant to arrive. */
+  warehouseId?: string | null
+  warehouse?: { id: string; name: string; code: string } | null
   /** From the server: lines, landed charges and the total the approval limit is checked against. */
   linesTotal?: number
   landedTotal?: number
@@ -155,16 +158,22 @@ export default function PurchaseOrderDetailPage() {
 
   const startReceiving = useMutation({
     mutationFn: async () => {
-      const wh = warehouses.data?.[0]
-      if (!wh) throw new Error('No warehouse — seed inventory first')
-      return api.post('/wms/receiving/sessions', {
-        warehouseId: wh.id,
+      // The session starts at the PO's destination warehouse; with none set, the server uses the company default.
+      return api.post<{ resumed?: boolean }>('/wms/receiving/sessions', {
+        ...(po.data?.warehouseId ? { warehouseId: po.data.warehouseId } : {}),
         poId,
       })
     },
-    onSuccess: () => {
-      showToast('Receiving session started — continue in mobile warehouse or WMS API.', 'success')
+    onSuccess: (res) => {
+      const number = po.data?.number ?? 'this PO'
+      showToast(
+        res?.resumed
+          ? `Continuing the open receiving session for ${number}. On the mobile Receiving screen, enter ${number} to open it.`
+          : `Receiving session started for ${number}. On the mobile Receiving screen, enter ${number} to open it.`,
+        'success',
+      )
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
+      void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
     },
   })
 
@@ -203,6 +212,16 @@ export default function PurchaseOrderDetailPage() {
             <div>
               <h1 className="text-2xl font-bold text-pleros-white">PO {po.data.number}</h1>
               <p className="text-pleros-muted text-sm mt-1">{po.data.supplier?.name}</p>
+              <p className="text-pleros-muted text-sm mt-1">
+                Destination warehouse:{' '}
+                {po.data.warehouse ? (
+                  <span className="text-pleros-text">{po.data.warehouse.name}</span>
+                ) : po.data.warehouseId ? (
+                  <span className="text-pleros-text">Unavailable warehouse</span>
+                ) : (
+                  'not set (receiving uses the company default)'
+                )}
+              </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge status={po.data.status} />
                 {isPendingApproval ? (
@@ -260,7 +279,13 @@ export default function PurchaseOrderDetailPage() {
                     ? 'Need at least one warehouse'
                     : po.data.status === 'DRAFT'
                       ? 'Submit the PO before WMS receiving'
-                      : undefined
+                      : po.data.status === 'PENDING_APPROVAL'
+                        ? 'Waiting for approval: receiving starts once it is submitted'
+                        : po.data.status === 'CLOSED'
+                          ? 'Everything on this PO has been received'
+                          : po.data.status === 'CANCELLED'
+                            ? 'This PO was cancelled'
+                            : undefined
                 }
                 className="h-9 px-4 rounded-md border border-pleros-border text-pleros-text text-sm disabled:opacity-40"
               >
@@ -562,7 +587,8 @@ function ReceiveDrawer(props: {
   onDone: () => void
 }) {
   const lines = props.po.lines ?? []
-  const [warehouseId, setWarehouseId] = useState(props.warehouses[0]?.id ?? '')
+  const destination = props.po.warehouseId && props.warehouses.some((w) => w.id === props.po.warehouseId) ? props.po.warehouseId : ''
+  const [warehouseId, setWarehouseId] = useState(destination || (props.warehouses[0]?.id ?? ''))
   const [qtyByLine, setQtyByLine] = useState<Record<string, number>>(() =>
     Object.fromEntries(lines.map((l) => [l.id, 0])),
   )
@@ -570,8 +596,8 @@ function ReceiveDrawer(props: {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!warehouseId && props.warehouses[0]?.id) setWarehouseId(props.warehouses[0].id)
-  }, [props.warehouses, warehouseId])
+    if (!warehouseId && (destination || props.warehouses[0]?.id)) setWarehouseId(destination || props.warehouses[0]!.id)
+  }, [props.warehouses, warehouseId, destination])
 
   async function submitReceive() {
     setError(null)

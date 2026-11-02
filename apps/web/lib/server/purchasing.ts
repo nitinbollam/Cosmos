@@ -1,6 +1,7 @@
 import { Prisma, PurchaseOrderStatus, VendorBillStatus } from '@/generated/prisma-purchasing'
 import { inventoryDb, purchasingDb, tenantDb } from './db'
 import { landedCostChangeBlocker } from './po-landed-cost-rules'
+import { assertDestinationWarehouse, warehouseRefs } from './po-warehouse'
 import { ApiError } from './session'
 import * as poReceiving from './po-receiving'
 import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
@@ -12,6 +13,8 @@ import { getTenantWorkflowSettings } from './tenant-workflow-settings'
 
 export type CreatePurchaseOrderInput = {
   supplierId: string
+  /** Destination warehouse; left out for drop-ship POs, whose goods go to the customer. */
+  warehouseId?: string | null
   number: string
   notes?: string
   freightAmount?: number
@@ -28,14 +31,20 @@ export type ReceiveGoodsInput = {
 
 export type RecordPoPaymentInput = { amount: number; method: string; reference?: string }
 
-export async function listPurchaseOrders(tenantId: string, status?: string) {
+export async function listPurchaseOrders(tenantId: string, status?: string, warehouseId?: string) {
   const st = (status ? (status as PurchaseOrderStatus) : undefined) ?? undefined
+  const wh = warehouseId?.trim() || undefined
   const rows = await purchasingDb.purchaseOrder.findMany({
-    where: { tenantId, ...(st ? { status: st } : {}) },
+    where: { tenantId, ...(st ? { status: st } : {}), ...(wh ? { warehouseId: wh } : {}) },
     include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
     orderBy: { createdAt: 'desc' },
   })
-  return rows.map((po) => ({ ...po, ...purchaseOrderTotals(po) }))
+  const warehouses = await warehouseRefs(tenantId, rows.map((po) => po.warehouseId))
+  return rows.map((po) => ({
+    ...po,
+    ...purchaseOrderTotals(po),
+    warehouse: po.warehouseId ? (warehouses.get(po.warehouseId) ?? null) : null,
+  }))
 }
 
 export async function getPurchaseOrder(tenantId: string, id: string) {
@@ -55,7 +64,8 @@ export async function getPurchaseOrderDetail(tenantId: string, id: string) {
     orderBy: { createdAt: 'desc' },
     select: { id: true, billNumber: true, totalAmount: true, status: true },
   })
-  return { ...po, ...purchaseOrderTotals(po), supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
+  const warehouse = po.warehouseId ? ((await warehouseRefs(tenantId, [po.warehouseId])).get(po.warehouseId) ?? null) : null
+  return { ...po, ...purchaseOrderTotals(po), warehouse, supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
 }
 
 /**
@@ -198,6 +208,8 @@ async function insertPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInp
 
   const supplier = await purchasingDb.supplier.findFirst({ where: { id: dto.supplierId, tenantId } })
   if (!supplier) throw new ApiError(400, 'Unknown supplier for tenant')
+  const warehouseId = typeof dto.warehouseId === 'string' && dto.warehouseId.trim() ? dto.warehouseId.trim() : null
+  if (warehouseId) await assertDestinationWarehouse(tenantId, warehouseId)
 
   // Each line must name a real, active SKU. Receiving looks the SKU up by this exact code; a blank
   // description falls back to the SKU's name.
@@ -224,6 +236,7 @@ async function insertPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInp
     data: {
       tenantId,
       supplierId: dto.supplierId,
+      warehouseId,
       number,
       notes: dto.notes,
       freightAmount: new Prisma.Decimal(dto.freightAmount ?? 0),

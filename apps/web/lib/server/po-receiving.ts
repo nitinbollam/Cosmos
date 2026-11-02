@@ -6,6 +6,7 @@ import * as inv from './inventory'
 import { auditLog } from './audit-log'
 import { swallowed } from './fire-and-forget'
 import { ApiError } from './session'
+import { pickReceivingWarehouse } from './po-warehouse'
 
 function toNumberDecimal(v: unknown): number {
   if (v == null) return 0
@@ -337,7 +338,7 @@ export async function receivePurchaseOrderGoods(
     const line = po.lines.find((l) => l.id === r.lineId)
     return Boolean(line?.skuCode?.trim())
   })
-  const warehouseId = dto.warehouseId?.trim()
+  const warehouseId = pickReceivingWarehouse({ explicit: dto.warehouseId, poWarehouseId: po.warehouseId }) ?? undefined
   if (needsInventory && !warehouseId) {
     throw new ApiError(400, 'warehouseId is required to post inventory for SKU lines')
   }

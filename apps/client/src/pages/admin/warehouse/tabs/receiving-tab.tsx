@@ -39,7 +39,8 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
   const startRecvMut = useMutation({
     mutationFn: () =>
       api.post<{ id: string }>('/wms/receiving/sessions', {
-        warehouseId: recvWh,
+        // Left blank with a PO number, the server starts the session at that PO's destination warehouse.
+        warehouseId: recvWh || undefined,
         purchaseOrderId: recvPo.trim() || undefined,
       }),
     onSuccess: (res) => {
@@ -211,7 +212,7 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
               Warehouse
             </label>
             <select className="pleros-input" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
-              <option value="">Select warehouse…</option>
+              <option value="">{recvPo.trim() ? 'Destination warehouse of the PO' : 'Select warehouse…'}</option>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.code} — {w.name}
@@ -237,7 +238,7 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
             <button
               type="button"
               className="btn-primary"
-              disabled={!recvWh || startRecvMut.isPending}
+              disabled={(!recvWh && !recvPo.trim()) || startRecvMut.isPending}
               onClick={() => startRecvMut.mutate()}
             >
               {startRecvMut.isPending ? 'Starting…' : 'Start session'}

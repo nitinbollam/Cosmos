@@ -159,6 +159,7 @@ export async function convertRequisition(actor: Actor, id: string, body: unknown
         data: {
           tenantId,
           supplierId: supplier.id,
+          warehouseId: fresh.warehouseId,
           number: poNumber,
           status: PurchaseOrderStatus.DRAFT,
           notes: [`From requisition ${fresh.number}`, fresh.notes].filter(Boolean).join('\n'),

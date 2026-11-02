@@ -144,7 +144,13 @@ export async function routePurchaseOrders(method: string, seg: string[], req: Re
   const url = new URL(req.url)
 
   if (seg.length === 1 && method === 'GET') {
-    return Response.json(await purchasing.listPurchaseOrders(session.tenantId, url.searchParams.get('status') ?? undefined))
+    return Response.json(
+      await purchasing.listPurchaseOrders(
+        session.tenantId,
+        url.searchParams.get('status') ?? undefined,
+        url.searchParams.get('warehouseId') ?? undefined,
+      ),
+    )
   }
   if (seg.length === 1 && method === 'POST') {
     // Direct creation would bypass manager sign-off, for every role including admins. Refused after the session and

@@ -2,6 +2,7 @@ import { ReceivingStatus } from '@/generated/prisma-wms'
 import { wmsDb } from './db'
 import * as inv from './inventory'
 import * as poReceiving from './po-receiving'
+import { pickReceivingWarehouse } from './po-warehouse'
 import { ApiError } from './session'
 
 import { swallowed } from './fire-and-forget'
@@ -74,6 +75,22 @@ export async function startReceivingSession(
   }
 
   return { ...session, resumed: false }
+}
+
+/**
+ * The warehouse a new receiving session starts in: the one asked for, else the destination of the PO it is for,
+ * else the company default. (A session for a PO that already has an open session simply resumes that one.)
+ */
+export async function resolveSessionWarehouseId(tenantId: string, explicit: string | undefined, poReference: string | undefined): Promise<string> {
+  let poWarehouseId: string | null = null
+  if (!explicit?.trim() && poReference?.trim()) {
+    // An unknown PO is reported by startReceivingSession; here it just means "no destination".
+    poWarehouseId = await poReceiving
+      .findPurchaseOrderByReference(tenantId, poReference)
+      .then((po) => po.warehouseId ?? null, () => null)
+  }
+  const picked = pickReceivingWarehouse({ explicit, poWarehouseId })
+  return picked ?? (await resolveDefaultWarehouseId(tenantId))
 }
 
 export async function resolveDefaultWarehouseId(tenantId: string): Promise<string> {
