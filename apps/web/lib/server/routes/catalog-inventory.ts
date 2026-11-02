@@ -70,6 +70,7 @@ export async function routeSkus(method: string, seg: string[], req: Request): Pr
       warehouseId: url.searchParams.get('warehouseId') ?? undefined,
       inStockOnly: url.searchParams.get('inStock') === 'true',
       customerId,
+      code: url.searchParams.get('code')?.trim() || undefined,
     })
     if (!isPortalBuyer(session.role)) return Response.json(list)
     return Response.json({ ...list, items: list.items.map(toBuyerSku) })
