@@ -56,7 +56,7 @@ export async function resolveSegment(tenantId: string, segmentId: string) {
   if (!segment) throw new ApiError(404, 'Segment not found')
 
   const criteria = segment.filterCriteria as SegmentFilter
-  const customers = await crmDb.customer.findMany({ where: { tenantId } })
+  const customers = await crmDb.customer.findMany({ where: { tenantId, isActive: true } })
   const matched = []
   const hasFilters =
     criteria.hasNoOrdersEver ||

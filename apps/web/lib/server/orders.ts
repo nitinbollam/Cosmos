@@ -10,6 +10,7 @@ import { ApprovalType } from '@/generated/prisma-tenant'
 import { OrderStatus } from '@/generated/prisma-order'
 import * as discounts from './discounts'
 import { ApiError } from './session'
+import { assertCustomerCanTransact } from './crm'
 import { runOrderFulfillmentPipeline, cancelOrderWithCompensation } from './order-orchestration'
 import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
 import { enqueuePostingJob } from './posting-outbox'
@@ -92,6 +93,7 @@ export async function createOrder(
   opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string; skipPriceValidation?: boolean },
 ) {
   assertValidOrderLines(dto.lineItems)
+  await assertCustomerCanTransact(tenantId, opts?.buyerCustomerId ?? dto.customerId)
   const linesTotal = orderTotals(dto.lineItems, { taxRate: 0 }).linesTotal.toNumber()
   let discountRequested = 0
   let discountId: string | null = null

@@ -5,6 +5,9 @@ import { useState } from 'react'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
 import { StatusBadge } from '@/components/pleros/status-badge'
+import { CustomerAccountActions } from '@/components/crm/customer-account-actions'
+import { useViewer } from '@/components/purchasing/use-viewer'
+import { hasClientPermission } from '@/lib/requisitions'
 
 type Customer = {
   id: string
@@ -26,6 +29,8 @@ type Customer = {
   primaryCity?: string | null
   primaryState?: string | null
   primaryZip?: string | null
+  isActive?: boolean | null
+  deactivatedAt?: string | null
   createdAt: string
 }
 
@@ -74,6 +79,8 @@ export default function CrmCustomerDetailPage() {
   const params = useParams()
   const id = typeof params.id === 'string' ? params.id : params.id?.[0] ?? ''
   const qc = useQueryClient()
+  const { viewer } = useViewer()
+  const canWrite = hasClientPermission(viewer, 'crm.write')
 
   const [activityOpen, setActivityOpen] = useState(false)
   const [actType, setActType] = useState<'CALL' | 'EMAIL' | 'NOTE'>('CALL')
@@ -247,9 +254,13 @@ export default function CrmCustomerDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold font-display text-pleros-white">{c.name}</h1>
                 <StatusBadge status={c.customerKind === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'BUSINESS'} />
+                {c.isActive === false ? <StatusBadge status="DEACTIVATED" /> : null}
               </div>
               <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
                 Since {new Date(c.createdAt).toLocaleDateString()}
+                {c.isActive === false && c.deactivatedAt
+                  ? ` · Deactivated ${new Date(c.deactivatedAt).toLocaleDateString()}, so new orders and quotes are refused`
+                  : ''}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -263,6 +274,7 @@ export default function CrmCustomerDetailPage() {
                   {portalInvite.isPending ? 'Inviting…' : 'Invite to buyer portal'}
                 </button>
               ) : null}
+              {canWrite ? <CustomerAccountActions key={c.id} customer={c} /> : null}
               <button type="button" className="btn-primary" onClick={() => setActivityOpen(true)}>
                 Log activity
               </button>

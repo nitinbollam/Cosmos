@@ -57,6 +57,7 @@ export async function createQuote(
   if (opts?.buyerCustomerId && dto.customerRef !== opts.buyerCustomerId) {
     throw new ApiError(403, 'Cannot create quotes for another customer')
   }
+  await crm.assertCustomerCanTransact(tenantId, dto.customerRef)
   const seqs = new Set(dto.lines.map((l) => l.lineNo))
   if (seqs.size !== dto.lines.length) throw new ApiError(400, 'Duplicate line numbers')
   return storefrontDb.b2BQuote.create({
