@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-inventory'
 import { inventoryDb, purchasingDb } from './db'
 import { ApiError } from './session'
+import { trimBinsToOnHand } from './bin-stock'
 import { blendAverage, effectiveUnitCost, shippedUnitCosts, unitCost } from './stock-cost'
 
 import { swallowed } from './fire-and-forget'
@@ -368,6 +369,7 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
       select: { quantityOnHand: true },
     })
     const fromOnHand = fromAfter.quantityOnHand
+    await trimBinsToOnHand(tx, tenantId, { skuId: dto.skuId, warehouseId: dto.fromWarehouseId, batchId: batchKey }, fromOnHand, from.locationId)
     // The units leave at the source's average cost and arrive at that same cost (ticket 50).
     const movedCost = effectiveUnitCost(from.averageCost, sku?.cost)
 
@@ -738,6 +740,9 @@ export async function adjustStock(
     }
     const updatedLevel = await tx.stockLevel.findUniqueOrThrow({ where: { id: level.id } })
     const newOnHand = updatedLevel.quantityOnHand
+    if (dto.quantityDelta < 0) {
+      await trimBinsToOnHand(tx, tenantId, { skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey }, newOnHand, updatedLevel.locationId)
+    }
     await tx.stockLedgerEntry.create({
       data: {
         id: randomUUID(),
@@ -1025,7 +1030,7 @@ export async function commitShipmentForOrder(
 
       const level = await tx.stockLevel.findFirst({
         where: { tenantId, skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey },
-        select: { id: true, averageCost: true },
+        select: { id: true, averageCost: true, locationId: true },
       })
       if (!level) {
         throw new ApiError(409, `No stock level for sku ${res.skuId} in warehouse ${res.warehouseId}; cannot ship`)
@@ -1058,6 +1063,8 @@ export async function commitShipmentForOrder(
           where: { id: level.id },
           select: { quantityOnHand: true },
         })
+        // Shipped units leave their bins too (ticket 46).
+        await trimBinsToOnHand(tx, tenantId, { skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey }, after.quantityOnHand, level.locationId)
         await tx.stockLedgerEntry.create({
           data: {
             id: randomUUID(),

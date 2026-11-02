@@ -4,7 +4,10 @@ function pairKey(skuId: string, warehouseId: string) {
   return `${skuId}:${warehouseId}`
 }
 
-/** Maps skuId+warehouseId to a bin code from stock level location assignments. */
+/**
+ * Maps skuId+warehouseId to the bin to pick from: the bin holding the most of it (ticket 46), else the stock
+ * level's assigned location.
+ */
 export async function resolvePickBinCodes(
   tenantId: string,
   lines: Array<{ skuId: string; warehouseId: string }>,
@@ -24,7 +27,14 @@ export async function resolvePickBinCodes(
     },
   })
 
-  const locationIds = [...new Set(stockLevels.map((s) => s.locationId).filter(Boolean) as string[])]
+  const binStock = await inventoryDb.binStock.findMany({
+    where: { tenantId, skuId: { in: skuIds }, warehouseId: { in: warehouseIds }, quantity: { gt: 0 } },
+    orderBy: [{ quantity: 'desc' }, { binId: 'asc' }],
+  })
+
+  const locationIds = [
+    ...new Set([...stockLevels.map((s) => s.locationId), ...binStock.map((b) => b.binId)].filter(Boolean) as string[]),
+  ]
   const bins =
     locationIds.length > 0
       ? await inventoryDb.binLocation.findMany({ where: { tenantId, id: { in: locationIds } } })
@@ -35,6 +45,12 @@ export async function resolvePickBinCodes(
   for (const line of lines) {
     const key = pairKey(line.skuId, line.warehouseId)
     if (map.has(key)) continue
+
+    const fullest = binStock.find((b) => b.skuId === line.skuId && b.warehouseId === line.warehouseId)
+    if (fullest) {
+      map.set(key, binById.get(fullest.binId) ?? fullest.binId)
+      continue
+    }
 
     const level = stockLevels
       .filter((s) => s.skuId === line.skuId && s.warehouseId === line.warehouseId && s.locationId)
