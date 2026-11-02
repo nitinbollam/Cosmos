@@ -161,7 +161,7 @@ export async function scanReceivingItem(
     const po = await poReceiving.getPurchaseOrderForReceiving(tenantId, session.poId)
     const line = po.lines.find((l) => l.skuCode?.trim() === sku.code)
     const alreadyGood = existing ? existing.receivedQty - (existing.damagedQty ?? 0) : 0
-    const problem = poReceiving.overReceiptProblem(po.number, sku.code, line, alreadyGood + dto.receivedQty - damaged)
+    const problem = poReceiving.scanOverReceiptProblem(po.number, sku.code, line, alreadyGood, dto.receivedQty - damaged)
     if (problem) throw new ApiError(400, problem)
   }
 
