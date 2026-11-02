@@ -217,7 +217,8 @@ export type ReceiveStockInput = {
   skuId: string
   warehouseId: string
   quantity: number
-  unitCost: number
+  /** What the units cost. Omitted or null when unknown (no PO): they come in at the stock's current cost. */
+  unitCost?: number | null
   supplierId?: string
   poId?: string
   batchId?: string
@@ -248,12 +249,10 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
       where: { tenantId_skuId_warehouseId_batchId: levelKey },
       select: { quantityOnHand: true, averageCost: true },
     })
-    const averageCost = blendAverage(
-      before?.quantityOnHand ?? 0,
-      effectiveUnitCost(before?.averageCost, sku.cost),
-      dto.quantity,
-      unitCost(String(dto.unitCost)),
-    )
+    const currentCost = effectiveUnitCost(before?.averageCost, sku.cost)
+    // A receipt with no known cost must not drag the average toward $0 (ticket 50).
+    const receivedCost = dto.unitCost != null ? unitCost(String(dto.unitCost)) : currentCost
+    const averageCost = blendAverage(before?.quantityOnHand ?? 0, currentCost, dto.quantity, receivedCost)
     const currentLevel = await tx.stockLevel.upsert({
       where: { tenantId_skuId_warehouseId_batchId: levelKey },
       update: {
@@ -286,7 +285,7 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
         eventType: 'STOCK_RECEIVED',
         quantityDelta: dto.quantity,
         quantityAfter: currentLevel.quantityOnHand,
-        unitCost: new Prisma.Decimal(dto.unitCost),
+        unitCost: receivedCost,
         referenceId: dto.poId,
         referenceType: dto.poId ? 'PURCHASE_ORDER' : undefined,
         performedBy,

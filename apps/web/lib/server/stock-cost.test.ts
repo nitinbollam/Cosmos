@@ -138,6 +138,20 @@ test('legacy stock with no average ships at standard cost; a return comes back a
   assert.equal((await level(s.id, w.id)).averageCost?.toString(), expected)
 })
 
+test('a receipt with no known cost comes in at the current cost instead of dragging the average to $0', async () => {
+  const s = await sku('5')
+  const w = await warehouse()
+  await receiveStock(tenantId, { skuId: s.id, warehouseId: w.id, quantity: 10, unitCost: 4 }, 'test')
+  await receiveStock(tenantId, { skuId: s.id, warehouseId: w.id, quantity: 30, unitCost: 8 }, 'test')
+  await receiveStock(tenantId, { skuId: s.id, warehouseId: w.id, quantity: 10, unitCost: null }, 'test')
+  assert.equal((await level(s.id, w.id)).averageCost?.toString(), '7')
+  const last = await inventoryDb.stockLedgerEntry.findFirstOrThrow({ where: { tenantId, skuId: s.id, eventType: 'STOCK_RECEIVED' }, orderBy: { occurredAt: 'desc' } })
+  assert.equal(last.unitCost.toString(), '7')
+  const fresh = await sku('6')
+  await receiveStock(tenantId, { skuId: fresh.id, warehouseId: w.id, quantity: 2 }, 'test')
+  assert.equal((await level(fresh.id, w.id)).averageCost?.toString(), '6', 'first receipt with no cost uses the standard cost')
+})
+
 test('an adjustment on stock with no average keeps following the standard cost', async () => {
   const s = await sku('3')
   const w = await warehouse()
