@@ -41,6 +41,9 @@ model StockLevel {
   quantityOnHand    Int      @default(0)
   quantityReserved  Int      @default(0)
   quantityAvailable Int      @default(0)
+  /// Moving weighted average unit cost of this stock (ticket 50). Null for stock received before
+  /// averages existed: it is valued at the SKU's standard cost until a receipt or transfer sets it.
+  averageCost       Decimal?
   reorderPoint      Int      @default(0)
   reorderQty        Int      @default(0)
   leadTimeDays      Int      @default(7)

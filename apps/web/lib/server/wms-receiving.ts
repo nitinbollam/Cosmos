@@ -354,7 +354,8 @@ async function finishReceivingSession(
     const goodQty = it.receivedQty - (it.damagedQty ?? 0)
     if (goodQty <= 0) continue
 
-    let unitCost = 0
+    // Unknown without a PO line cost: receiveStock then uses the stock's current cost instead of $0.
+    let unitCost: number | null = null
     if (poForCost) {
       const line = it.purchaseOrderLineId
         ? poForCost.lines.find((l) => l.id === it.purchaseOrderLineId)
