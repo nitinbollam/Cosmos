@@ -46,6 +46,13 @@ export function startBackgroundJobs(): void {
       console.error('[jobs] reservation sweep failed:', err)
     }
     try {
+      const { expireStaleReceivingSessions } = await import('./wms-receiving')
+      const { expired } = await expireStaleReceivingSessions()
+      if (expired > 0) console.log(`[jobs] cancelled ${expired} receiving session(s) with nothing scanned after 24 hours`)
+    } catch (err) {
+      console.error('[jobs] receiving session expiry failed:', err)
+    }
+    try {
       const { runMarketplaceJobs } = await import('./marketplace-jobs')
       const mp = await runMarketplaceJobs()
       if (mp.auctionsClosed > 0 || mp.escrowsReleased > 0) {
