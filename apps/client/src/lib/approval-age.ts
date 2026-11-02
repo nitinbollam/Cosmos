@@ -32,7 +32,7 @@ export function waitLevel(since: string | Date, now: Date = new Date()): WaitLev
   return 'ok'
 }
 
-type CountLike = { status: string; scheduledFor: string | null; submittedAt?: string | null }
+type CountLike = { status: string; scheduledFor: string | null; submittedAt?: string | null; updatedAt?: string | null }
 
 /**
  * Why a cycle count needs attention, or null: scheduled for a day that has passed and still not submitted,
@@ -44,8 +44,10 @@ export function countOverdueReason(c: CountLike, now: Date = new Date()): string
     const endOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate() + 1)
     if (now >= endOfDue) return `Overdue: scheduled ${due.toLocaleDateString()}`
   }
-  if (c.status === 'PENDING_APPROVAL' && c.submittedAt && waitingDays(c.submittedAt, now) >= REMIND_AFTER_DAYS) {
-    return `Waiting ${waitingLabel(c.submittedAt, now)} for approval`
+  // Counts submitted before submittedAt existed fall back to their last change, which was the submit.
+  const since = c.submittedAt ?? c.updatedAt
+  if (c.status === 'PENDING_APPROVAL' && since && waitingDays(since, now) >= REMIND_AFTER_DAYS) {
+    return `Waiting ${waitingLabel(since, now)} for approval`
   }
   return null
 }

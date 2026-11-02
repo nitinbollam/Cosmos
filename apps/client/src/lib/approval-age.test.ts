@@ -26,4 +26,9 @@ test('a count is overdue once its scheduled day has passed, or after 2 days wait
   assert.equal(countOverdueReason({ status: 'COMPLETED', scheduledFor: '2026-07-31T09:00:00' }, now), null)
   assert.equal(countOverdueReason({ status: 'PENDING_APPROVAL', scheduledFor: null, submittedAt: ago(24) }, now), null)
   assert.equal(countOverdueReason({ status: 'PENDING_APPROVAL', scheduledFor: null, submittedAt: ago(62 * 24) }, now), 'Waiting 62 days for approval')
+  assert.equal(
+    countOverdueReason({ status: 'PENDING_APPROVAL', scheduledFor: null, submittedAt: null, updatedAt: ago(62 * 24) }, now),
+    'Waiting 62 days for approval',
+    'counts submitted before submittedAt existed use their last update',
+  )
 })
