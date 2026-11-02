@@ -92,7 +92,7 @@ export async function sellFromVan(
       notes: `Van sale from ${van.code} at stop ${stop.id} (order ${baseOrderId})`,
       shippingAddress: (stop.address ?? undefined) as Record<string, unknown> | undefined,
     },
-    { awaitPipeline: true, userId: actor.userId },
+    { awaitPipeline: true, userId: actor.userId, stockInHand: true },
   )
   const created = await orderDb.order.findFirst({ where: { id: order.id, tenantId }, include: { lineItems: true } })
   if (!created) throw new ApiError(500, 'Order not found after creation')

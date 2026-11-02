@@ -1,7 +1,7 @@
 import { orderTotals, remainingAfterGiftCard } from './order-totals'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
-import { orderDb } from './db'
+import { inventoryDb, orderDb } from './db'
 import { computeSalesTax } from './compliance-tax'
 import { getTenantSalesTaxRate } from './tenant-tax'
 import { checkCreditLimitForOrder, releaseCreditUsed } from './credit-limit'
@@ -52,8 +52,6 @@ export type CreateOrderInput = {
     warehouseId: string
     quantity: number
     unitPrice: number
-    fulfillmentType?: 'STOCK' | 'DROP_SHIP'
-    supplierId?: string
     preferredBatchId?: string
   }>
 }
@@ -86,12 +84,41 @@ export function assertValidOrderLines(lineItems: unknown): asserts lineItems is 
   }
 }
 
+/**
+ * Drop-ship is a property of the product: a line ships from its SKU's drop-ship supplier when one
+ * is set, and from stock otherwise. What the caller sends is ignored, so nobody can raise a supplier
+ * PO by posting DROP_SHIP with a supplier of their choice. Goods handed over on the spot (POS, van
+ * sales) always come from stock.
+ */
+async function dropShipSupplierBySku(tenantId: string, skuIds: string[], stockInHand: boolean) {
+  const bySku = new Map<string, string>()
+  if (stockInHand) return bySku
+  const skus = await inventoryDb.sKU.findMany({
+    where: { tenantId, id: { in: [...new Set(skuIds)] }, dropShipSupplierId: { not: null } },
+    select: { id: true, dropShipSupplierId: true },
+  })
+  for (const sku of skus) if (sku.dropShipSupplierId) bySku.set(sku.id, sku.dropShipSupplierId)
+  return bySku
+}
+
 export async function createOrder(
   tenantId: string,
   dto: CreateOrderInput,
-  opts?: { buyerCustomerId?: string; awaitPipeline?: boolean; userId?: string; skipPriceValidation?: boolean },
+  opts?: {
+    buyerCustomerId?: string
+    awaitPipeline?: boolean
+    userId?: string
+    skipPriceValidation?: boolean
+    /** POS and van sales: the goods leave with the customer, so no line is drop-shipped. */
+    stockInHand?: boolean
+  },
 ) {
   assertValidOrderLines(dto.lineItems)
+  const dropShipSuppliers = await dropShipSupplierBySku(
+    tenantId,
+    dto.lineItems.map((li) => li.skuId),
+    Boolean(opts?.stockInHand),
+  )
   const linesTotal = orderTotals(dto.lineItems, { taxRate: 0 }).linesTotal.toNumber()
   let discountRequested = 0
   let discountId: string | null = null
@@ -170,8 +197,8 @@ export async function createOrder(
           warehouseId: li.warehouseId,
           quantity: li.quantity,
           unitPrice: new Prisma.Decimal(li.unitPrice),
-          fulfillmentType: li.fulfillmentType ?? 'STOCK',
-          supplierId: li.supplierId ?? null,
+          fulfillmentType: dropShipSuppliers.has(li.skuId) ? 'DROP_SHIP' : 'STOCK',
+          supplierId: dropShipSuppliers.get(li.skuId) ?? null,
           preferredBatchId: li.preferredBatchId ?? null,
         })),
       },
