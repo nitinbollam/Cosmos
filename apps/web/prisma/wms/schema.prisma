@@ -57,7 +57,10 @@ model ReceivingSession {
   asnId            String?
   status           ReceivingStatus @default(OPEN)
   startedBy        String
+  /// Set the moment a completion starts, so a second completion (a double click, a retry, another user) is refused.
   completedAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
   discrepancyNotes String?
   items            ReceivingItem[]
   createdAt        DateTime        @default(now())
@@ -143,6 +146,8 @@ enum ReceivingStatus {
   COMPLETED
   DISCREPANCY
   CLOSED
+  /// Abandoned or started by mistake: nothing was posted, and it can no longer be scanned or completed.
+  CANCELLED
 }
 
 model CycleCount {

@@ -3,6 +3,8 @@ import { wmsDb } from './db'
 import * as inv from './inventory'
 import * as poReceiving from './po-receiving'
 import { pickReceivingWarehouse } from './po-warehouse'
+import { auditLog } from './audit-log'
+import { cancelRefusal, completionRefusal, expiryCutoff, OPEN_RECEIVING_STATES } from './receiving-session-rules'
 import { ApiError } from './session'
 
 import { swallowed } from './fire-and-forget'
@@ -119,7 +121,8 @@ export async function scanReceivingItem(
     where: {
       id: sessionId,
       tenantId,
-      status: { in: ['OPEN', 'IN_PROGRESS'] },
+      status: { in: [...OPEN_RECEIVING_STATES] },
+      completedAt: null,
     },
   })
   if (!session) throw new ApiError(404, 'Receiving session not found or not open')
@@ -216,19 +219,43 @@ export async function getReceivingSession(sessionId: string, tenantId: string) {
   }
 }
 
+const loadSessionWithItems = (sessionId: string, tenantId: string) =>
+  wmsDb.receivingSession.findFirst({ where: { id: sessionId, tenantId }, include: { items: true } })
+type LoadedSession = NonNullable<Awaited<ReturnType<typeof loadSessionWithItems>>>
+
+/**
+ * Completes a session: posts its stock, bills the PO and sets the final status. It can happen once. A finished
+ * session (Completed, Discrepancy or Closed) is refused, and the session is claimed with one conditional update
+ * before any stock moves, so two people completing at the same moment cannot both post it.
+ */
 export async function completeReceivingSession(sessionId: string, tenantId: string, notes: string | undefined, performedBy: string) {
-  const session = await wmsDb.receivingSession.findFirst({
-    where: { id: sessionId, tenantId },
-    include: { items: true },
-  })
+  const session = await loadSessionWithItems(sessionId, tenantId)
   if (!session) throw new ApiError(404, 'Session not found')
-  if (session.status === 'COMPLETED' || session.status === 'CLOSED') {
-    throw new ApiError(400, 'Session already completed')
-  }
+  const refusal = completionRefusal(session.status)
+  if (refusal) throw new ApiError(400, refusal)
   if (!session.items.length) {
     throw new ApiError(400, 'Cannot complete session with no items scanned')
   }
 
+  const claimed = await wmsDb.receivingSession.updateMany({
+    where: { id: sessionId, tenantId, status: { in: [...OPEN_RECEIVING_STATES] }, completedAt: null },
+    data: { completedAt: new Date() },
+  })
+  if (claimed.count !== 1) {
+    throw new ApiError(409, 'This session is already being completed, or was just closed. Reload and check its status.')
+  }
+  try {
+    return await finishReceivingSession(session, tenantId, sessionId, notes, performedBy)
+  } catch (err) {
+    // Nothing was finalised: let the session be completed again once the problem is fixed.
+    await wmsDb.receivingSession
+      .updateMany({ where: { id: sessionId, tenantId, status: { in: [...OPEN_RECEIVING_STATES] } }, data: { completedAt: null } })
+      .catch(swallowed('wms-receiving.completeReceivingSession.release'))
+    throw err
+  }
+}
+
+async function finishReceivingSession(session: LoadedSession, tenantId: string, sessionId: string, notes: string | undefined, performedBy: string) {
   const hasDiscrepancy = session.items.some((i) => (i.damagedQty ?? 0) > 0)
   const nextStatus = hasDiscrepancy ? 'DISCREPANCY' : 'COMPLETED'
 
@@ -345,6 +372,50 @@ export async function completeReceivingSession(sessionId: string, tenantId: stri
     { key: sessionId },
   )
   return { sessionId, status: nextStatus, hasDiscrepancy, ...billing }
+}
+
+/**
+ * Cancels a session that was started by mistake or abandoned. Stock is only posted when a session is completed,
+ * so cancelling changes no stock. A session that is completed or being completed cannot be cancelled.
+ */
+export async function cancelReceivingSession(sessionId: string, tenantId: string, cancelledBy: string, reason?: string) {
+  const session = await wmsDb.receivingSession.findFirst({ where: { id: sessionId, tenantId }, select: { id: true, status: true, poId: true, warehouseId: true } })
+  if (!session) throw new ApiError(404, 'Session not found')
+  const refusal = cancelRefusal(session.status)
+  if (refusal) throw new ApiError(400, refusal)
+  const cancelReason = reason?.trim().slice(0, 500) || null
+  const res = await wmsDb.receivingSession.updateMany({
+    where: { id: sessionId, tenantId, status: { in: [...OPEN_RECEIVING_STATES] }, completedAt: null },
+    data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason },
+  })
+  if (res.count !== 1) {
+    throw new ApiError(409, 'This session is being completed or changed at the same moment. Reload and check its status.')
+  }
+  void auditLog(tenantId, {
+    action: 'wms.receiving_cancelled',
+    entityType: 'ReceivingSession',
+    entityId: sessionId,
+    userId: cancelledBy,
+    metadata: { purchaseOrderId: session.poId, warehouseId: session.warehouseId, reason: cancelReason },
+  }).catch(swallowed('wms-receiving.cancelReceivingSession'))
+  return { sessionId, status: 'CANCELLED' as const }
+}
+
+/**
+ * Cancels open sessions older than the expiry age that never had anything scanned (a session started for a PO has
+ * its lines listed with zero received; those count as empty). Sessions with scans are left for a person to decide.
+ */
+export async function expireStaleReceivingSessions(now: Date = new Date()): Promise<{ expired: number }> {
+  const res = await wmsDb.receivingSession.updateMany({
+    where: {
+      status: { in: [...OPEN_RECEIVING_STATES] },
+      completedAt: null,
+      createdAt: { lt: expiryCutoff(now) },
+      items: { none: { OR: [{ receivedQty: { gt: 0 } }, { damagedQty: { gt: 0 } }] } },
+    },
+    data: { status: 'CANCELLED', cancelledAt: now, cancelReason: 'Expired: nothing was scanned' },
+  })
+  return { expired: res.count }
 }
 
 export async function importReceivingItems(

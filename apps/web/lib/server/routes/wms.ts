@@ -192,6 +192,10 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
         await wmsReceiving.importReceivingItems(id, session.tenantId, session.userId, body.rows ?? []),
       )
     }
+    if (sub === 'cancel' && (method === 'PATCH' || method === 'POST')) {
+      const body = (await req.json().catch(() => ({}))) as { reason?: string }
+      return Response.json(await wmsReceiving.cancelReceivingSession(id, session.tenantId, session.userId, body.reason))
+    }
     if (sub === 'complete' && (method === 'PATCH' || method === 'POST')) {
       const body = ((await req.json().catch(() => ({}))) ?? {}) as { notes?: string }
       return Response.json(

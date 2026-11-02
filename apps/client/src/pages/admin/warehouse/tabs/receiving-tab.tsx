@@ -15,14 +15,16 @@ import { ReceivingDetail, ReceivingRow, WarehouseRow } from '../types'
 interface ReceivingTabProps {
   warehouses: WarehouseRow[]
   warehouseLabel: Map<string, string>
+  /** A session to open straight away (from a link). */
+  initialSessionId?: string | null
 }
 
-export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) {
+export function ReceivingTab({ warehouses, warehouseLabel, initialSessionId }: ReceivingTabProps) {
   const qc = useQueryClient()
   const [recvDrawer, setRecvDrawer] = useState(false)
   const [recvWh, setRecvWh] = useState('')
   const [recvPo, setRecvPo] = useState('')
-  const [recvDetailId, setRecvDetailId] = useState<string | null>(null)
+  const [recvDetailId, setRecvDetailId] = useState<string | null>(initialSessionId ?? null)
   const [mobileScannerModalOpen, setMobileScannerModalOpen] = useState(false)
 
   const sessionsQ = useQuery({
@@ -48,6 +50,17 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
       setRecvDrawer(false)
       setRecvPo('')
       void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
+    },
+    onError: (e: Error) => showToast(axiosErr(e), 'error'),
+  })
+
+  const cancelRecvMut = useMutation({
+    mutationFn: (id: string) => api.patch(`/wms/receiving/sessions/${id}/cancel`, {}),
+    onSuccess: () => {
+      showToast('Receiving session cancelled. No stock was posted.')
+      void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
+      void qc.invalidateQueries({ queryKey: ['receiving-session', recvDetailId] })
+      setRecvDetailId(null)
     },
     onError: (e: Error) => showToast(axiosErr(e), 'error'),
   })
@@ -316,6 +329,20 @@ export function ReceivingTab({ warehouses, warehouseLabel }: ReceivingTabProps) 
               <button type="button" className="btn-ghost" onClick={() => setRecvDetailId(null)}>
                 Close
               </button>
+              {(recvDetailQ.data.status === 'OPEN' || recvDetailQ.data.status === 'IN_PROGRESS') && (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ color: 'var(--c-danger)' }}
+                  disabled={cancelRecvMut.isPending || completeRecvMut.isPending}
+                  onClick={() => {
+                    if (!confirm('Cancel this receiving session? No stock will be posted.')) return
+                    cancelRecvMut.mutate(recvDetailQ.data!.id)
+                  }}
+                >
+                  {cancelRecvMut.isPending ? 'Cancelling…' : 'Cancel session'}
+                </button>
+              )}
               {(recvDetailQ.data.status === 'OPEN' || recvDetailQ.data.status === 'IN_PROGRESS') && (
                 <button
                   type="button"

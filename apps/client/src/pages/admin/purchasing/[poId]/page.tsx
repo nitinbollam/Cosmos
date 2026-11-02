@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
@@ -64,6 +64,11 @@ export default function PurchaseOrderDetailPage() {
   const params = useParams()
   const poId = typeof params.poId === 'string' ? params.poId : params.poId?.[0] ?? ''
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  // Buttons follow what the signed-in user may do, not just the PO's status: the server refuses the rest.
+  const { viewer } = useViewer()
+  const canPurchase = hasClientPermission(viewer, 'purchasing.write')
+  const canWms = hasClientPermission(viewer, 'wms.write')
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [freight, setFreight] = useState('0')
   const [duty, setDuty] = useState('0')
@@ -159,7 +164,7 @@ export default function PurchaseOrderDetailPage() {
   const startReceiving = useMutation({
     mutationFn: async () => {
       // The session starts at the PO's destination warehouse; with none set, the server uses the company default.
-      return api.post<{ resumed?: boolean }>('/wms/receiving/sessions', {
+      return api.post<{ id?: string; resumed?: boolean }>('/wms/receiving/sessions', {
         ...(po.data?.warehouseId ? { warehouseId: po.data.warehouseId } : {}),
         poId,
       })
@@ -174,16 +179,18 @@ export default function PurchaseOrderDetailPage() {
       )
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
       void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
+      // Open the session on the Warehouse > Receiving screen rather than leaving the user on the PO.
+      if (res?.id) navigate(adminPath(`/warehouse?tab=receiving&session=${encodeURIComponent(res.id)}`))
     },
   })
 
   const isPendingApproval = po.data?.status === 'PENDING_APPROVAL'
-  const canSubmit = po.data?.status === 'DRAFT'
+  const canSubmit = canPurchase && po.data?.status === 'DRAFT'
   const canCancel =
-    po.data?.status === 'DRAFT' ||
-    po.data?.status === 'SUBMITTED' ||
-    po.data?.status === 'PENDING_APPROVAL'
+    canPurchase &&
+    (po.data?.status === 'DRAFT' || po.data?.status === 'SUBMITTED' || po.data?.status === 'PENDING_APPROVAL')
   const canReceiveGoods =
+    canPurchase &&
     po.data &&
     po.data.status !== 'DRAFT' &&
     po.data.status !== 'PENDING_APPROVAL' &&
@@ -270,6 +277,7 @@ export default function PurchaseOrderDetailPage() {
                   Record receipt
                 </button>
               )}
+              {canWms && (
               <button
                 type="button"
                 disabled={startReceiving.isPending || !canStartWmsSession}
@@ -291,6 +299,7 @@ export default function PurchaseOrderDetailPage() {
               >
                 {startReceiving.isPending ? 'Starting…' : 'Start WMS session'}
               </button>
+              )}
             </div>
           </div>
           {(submit.error || cancelPo.error || startReceiving.error) && (
@@ -361,7 +370,7 @@ export default function PurchaseOrderDetailPage() {
             <button
               type="button"
               className="mt-3 h-9 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-50"
-              disabled={saveLanded.isPending || !!landedInputError || landedInvalid || isPendingApproval}
+              disabled={saveLanded.isPending || !!landedInputError || landedInvalid || isPendingApproval || !canPurchase}
               onClick={() => saveLanded.mutate()}
             >
               {saveLanded.isPending ? 'Saving…' : 'Save landed costs'}
