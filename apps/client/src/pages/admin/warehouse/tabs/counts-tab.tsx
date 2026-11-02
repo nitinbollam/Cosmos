@@ -8,6 +8,7 @@ import { SpreadsheetImportPanel } from '@/components/pleros/spreadsheet-import-p
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { rowNumber, rowValue, type BulkImportResult, type SpreadsheetRow } from '@/lib/spreadsheet-import'
 import { CycleDetail, CycleRow, WarehouseRow } from '../types'
+import { countOverdueReason, waitingLabel } from '@/lib/approval-age'
 
 interface CountsTabProps {
   warehouses: WarehouseRow[]
@@ -165,6 +166,7 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
                 <th>Lines</th>
                 <th>Variances</th>
                 <th>Scheduled</th>
+                <th>Submitted</th>
                 <th />
               </tr>
             </thead>
@@ -176,6 +178,11 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
                   <td>{c.type}</td>
                   <td>
                     <StatusBadge status={c.status} />
+                    {countOverdueReason(c) ? (
+                      <p className="text-xs font-semibold mt-1" style={{ color: 'var(--c-danger)' }}>
+                        {countOverdueReason(c)}
+                      </p>
+                    ) : null}
                   </td>
                   <td>{c._count?.lines ?? 0}</td>
                   <td>
@@ -191,6 +198,9 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
                   </td>
                   <td className="text-sm" style={{ color: 'var(--c-text-3)' }}>
                     {c.scheduledFor ? new Date(c.scheduledFor).toLocaleDateString() : '—'}
+                  </td>
+                  <td className="text-sm whitespace-nowrap" style={{ color: 'var(--c-text-3)' }} title={c.submittedAt ? new Date(c.submittedAt).toLocaleString() : undefined}>
+                    {c.submittedAt ? `${new Date(c.submittedAt).toLocaleDateString()} (${waitingLabel(c.submittedAt) === 'Just now' ? 'just now' : `${waitingLabel(c.submittedAt)} ago`})` : '—'}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
