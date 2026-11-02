@@ -1,4 +1,5 @@
 import { jwtVerify } from 'jose'
+import { isDatabaseUnavailableError } from './db-health'
 import { jwtSecret } from './env'
 import { bindRequestTenant } from './tenant-scope'
 
@@ -179,6 +180,15 @@ export function toJsonError(e: unknown): Response {
   }
   if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') {
     return Response.json({ message: 'Conflict' }, { status: 409 })
+  }
+  if (isDatabaseUnavailableError(e)) {
+    // A missing or unreachable database is a server setup problem, not a bug in the request:
+    // log the real cause and tell the user so, instead of a generic 500 that the client retries.
+    console.error('[API Database Unavailable]', e)
+    return Response.json(
+      { message: 'This feature is unavailable because its database is not set up or not reachable. Please contact your administrator.' },
+      { status: 503 },
+    )
   }
   console.error('[API Uncaught Error]', e)
   return Response.json({ message: 'Internal server error' }, { status: 500 })

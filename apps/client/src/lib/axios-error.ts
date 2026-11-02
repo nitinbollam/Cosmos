@@ -29,3 +29,15 @@ export function isEmailVerificationRequired(e: unknown): boolean {
   if (!axios.isAxiosError(e) || e.response?.status !== 403) return false
   return axiosErr(e).toLowerCase().includes('verify your email')
 }
+
+/**
+ * Query retry policy: retry (up to 2 more times) only when the request never got a response or a
+ * gateway timed out. Any 4xx, and 500/503 from the API itself, gives the same answer on retry —
+ * retrying them only delays the error the user needs to see (ticket 62).
+ */
+export function shouldRetryQuery(failureCount: number, e: unknown): boolean {
+  if (failureCount >= 2) return false
+  if (!axios.isAxiosError(e)) return false
+  const status = e.response?.status
+  return status === undefined || status === 502 || status === 504
+}
