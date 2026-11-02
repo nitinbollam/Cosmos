@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-inventory'
 import { inventoryDb } from './db'
 import { ApiError } from './session'
+import { blendAverage, effectiveUnitCost, shippedUnitCosts, unitCost } from './stock-cost'
 
 import { swallowed } from './fire-and-forget'
 function queueSalesChannelPush(tenantId: string, skuId: string) {
@@ -241,18 +242,24 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
   }
 
   const result = await inventoryDb.$transaction(async (tx) => {
+    const levelKey = { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey }
+    // The receipt blends into the stock's average cost (ticket 50).
+    const before = await tx.stockLevel.findUnique({
+      where: { tenantId_skuId_warehouseId_batchId: levelKey },
+      select: { quantityOnHand: true, averageCost: true },
+    })
+    const averageCost = blendAverage(
+      before?.quantityOnHand ?? 0,
+      effectiveUnitCost(before?.averageCost, sku.cost),
+      dto.quantity,
+      unitCost(String(dto.unitCost)),
+    )
     const currentLevel = await tx.stockLevel.upsert({
-      where: {
-        tenantId_skuId_warehouseId_batchId: {
-          tenantId,
-          skuId: dto.skuId,
-          warehouseId: dto.warehouseId,
-          batchId: batchKey,
-        },
-      },
+      where: { tenantId_skuId_warehouseId_batchId: levelKey },
       update: {
         quantityOnHand: { increment: dto.quantity },
         quantityAvailable: { increment: dto.quantity },
+        averageCost,
       },
       create: {
         id: randomUUID(),
@@ -264,6 +271,7 @@ export async function receiveStock(tenantId: string, dto: ReceiveStockInput, per
         quantityOnHand: dto.quantity,
         quantityReserved: 0,
         quantityAvailable: dto.quantity,
+        averageCost,
       },
     })
 
@@ -321,6 +329,7 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
   }
   const batchKey = dto.batchId ?? ''
   const correlationId = randomUUID()
+  const sku = await inventoryDb.sKU.findFirst({ where: { id: dto.skuId, tenantId }, select: { cost: true } })
 
   await inventoryDb.$transaction(async (tx) => {
     const from = await tx.stockLevel.findFirst({
@@ -347,6 +356,8 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
       select: { quantityOnHand: true },
     })
     const fromOnHand = fromAfter.quantityOnHand
+    // The units leave at the source's average cost and arrive at that same cost (ticket 50).
+    const movedCost = effectiveUnitCost(from.averageCost, sku?.cost)
 
     await tx.stockLedgerEntry.create({
       data: {
@@ -358,7 +369,7 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
         eventType: 'TRANSFER_OUT',
         quantityDelta: -dto.quantity,
         quantityAfter: fromOnHand,
-        unitCost: new Prisma.Decimal(0),
+        unitCost: movedCost,
         referenceId: correlationId,
         referenceType: 'TRANSFER',
         performedBy,
@@ -366,18 +377,23 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
       },
     })
 
+    const toKey = { tenantId, skuId: dto.skuId, warehouseId: dto.toWarehouseId, batchId: batchKey }
+    const toBefore = await tx.stockLevel.findUnique({
+      where: { tenantId_skuId_warehouseId_batchId: toKey },
+      select: { quantityOnHand: true, averageCost: true },
+    })
+    const toAverage = blendAverage(
+      toBefore?.quantityOnHand ?? 0,
+      effectiveUnitCost(toBefore?.averageCost, sku?.cost),
+      dto.quantity,
+      movedCost,
+    )
     const toRow = await tx.stockLevel.upsert({
-      where: {
-        tenantId_skuId_warehouseId_batchId: {
-          tenantId,
-          skuId: dto.skuId,
-          warehouseId: dto.toWarehouseId,
-          batchId: batchKey,
-        },
-      },
+      where: { tenantId_skuId_warehouseId_batchId: toKey },
       update: {
         quantityOnHand: { increment: dto.quantity },
         quantityAvailable: { increment: dto.quantity },
+        averageCost: toAverage,
       },
       create: {
         id: randomUUID(),
@@ -388,6 +404,7 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
         quantityOnHand: dto.quantity,
         quantityReserved: 0,
         quantityAvailable: dto.quantity,
+        averageCost: toAverage,
       },
     })
 
@@ -401,7 +418,7 @@ export async function transferStock(tenantId: string, dto: TransferStockInput, p
         eventType: 'TRANSFER_IN',
         quantityDelta: dto.quantity,
         quantityAfter: toRow.quantityOnHand,
-        unitCost: new Prisma.Decimal(0),
+        unitCost: movedCost,
         referenceId: correlationId,
         referenceType: 'TRANSFER',
         performedBy,
@@ -649,8 +666,13 @@ export async function adjustStock(
     referenceId?: string
     referenceType?: string
     correlationId?: string
-    /** Post the loss (or find) to the general ledger at the SKU's cost. Not for adjustments that carry their own journal. */
+    /** Post the loss (or find) to the general ledger at the stock's cost. Not for adjustments that carry their own journal. */
     ledger?: boolean
+    /**
+     * Cost the units come back at, for a positive adjustment that returns known stock (a customer return at the
+     * cost it shipped at). Blended into the average. Without it, units are added or removed at the average.
+     */
+    unitCost?: string
   },
   performedBy: string,
 ) {
@@ -663,11 +685,22 @@ export async function adjustStock(
   const prevLevel = await inventoryDb.stockLevel.findFirst({
     where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
   })
+  const skuCost = (await inventoryDb.sKU.findFirst({ where: { id: dto.skuId, tenantId }, select: { cost: true } }))?.cost
+  let movedCost = '0'
   const result = await inventoryDb.$transaction(async (tx) => {
     const level = await tx.stockLevel.findFirst({
       where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
     })
     if (!level) throw new ApiError(404, 'Stock level not found')
+    // Valued at the average; a return with its own cost blends in at that cost (ticket 50). Stock with no
+    // average yet keeps none unless a cost was given, so it goes on following the SKU's standard cost.
+    const current = effectiveUnitCost(level.averageCost, skuCost)
+    const incoming = dto.quantityDelta > 0 && dto.unitCost != null ? unitCost(dto.unitCost) : null
+    movedCost = incoming ?? current
+    const averageCost =
+      dto.quantityDelta > 0 && (incoming != null || level.averageCost != null)
+        ? blendAverage(level.quantityOnHand, current, dto.quantityDelta, movedCost)
+        : undefined
     // Relative, guarded update. available = onHand - reserved, so requiring
     // available >= -delta covers both "would go negative" and "less than reserved".
     const guarded = await tx.stockLevel.updateMany({
@@ -679,6 +712,7 @@ export async function adjustStock(
       data: {
         quantityOnHand: { increment: dto.quantityDelta },
         quantityAvailable: { increment: dto.quantityDelta },
+        ...(averageCost !== undefined ? { averageCost } : {}),
         ...(dto.locationId !== undefined ? { locationId: dto.locationId || null } : {}),
       },
     })
@@ -698,7 +732,7 @@ export async function adjustStock(
         eventType: 'STOCK_ADJUSTED',
         quantityDelta: dto.quantityDelta,
         quantityAfter: newOnHand,
-        unitCost: new Prisma.Decimal(0),
+        unitCost: movedCost,
         referenceId: dto.referenceId,
         referenceType: dto.referenceType ?? 'ADJUSTMENT',
         performedBy,
@@ -736,8 +770,7 @@ export async function adjustStock(
 
   if (dto.ledger) {
     const [{ adjustmentPosting }, { enqueuePostingJobAfterCommit }] = await Promise.all([import('./stock-gl'), import('./posting-outbox')])
-    const costRow = await inventoryDb.sKU.findFirst({ where: { id: dto.skuId, tenantId }, select: { cost: true } })
-    const posting = adjustmentPosting(costRow?.cost?.toString(), dto.quantityDelta)
+    const posting = adjustmentPosting(movedCost, dto.quantityDelta)
     if (posting) {
       await enqueuePostingJobAfterCommit({
         tenantId,
@@ -930,8 +963,9 @@ export async function commitShipmentForOrder(
    * FULFILLED (which would report an empty shipment).
    */
   fulfillmentTaskId?: string,
-): Promise<{ shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number }> }> {
-  type ShippedLine = { skuId: string; warehouseId: string; batchId: string; quantity: number }
+): Promise<{ shipped: Array<{ skuId: string; warehouseId: string; batchId: string; quantity: number; unitCost?: string }> }> {
+  /** `unitCost` is what each unit was valued at when it left (ticket 50); commits stored before that have none. */
+  type ShippedLine = { skuId: string; warehouseId: string; batchId: string; quantity: number; unitCost?: string }
   const readCommit = async (): Promise<ShippedLine[] | null> => {
     if (!fulfillmentTaskId) return null
     const row = await inventoryDb.shipmentCommit.findFirst({ where: { tenantId, fulfillmentTaskId } })
@@ -957,6 +991,14 @@ export async function commitShipmentForOrder(
     const reservations = await tx.stockReservation.findMany({
       where: { tenantId, orderId, status: 'ACTIVE' },
     })
+    const standardCost = new Map(
+      (
+        await tx.sKU.findMany({
+          where: { tenantId, id: { in: [...new Set(reservations.map((r) => r.skuId))] } },
+          select: { id: true, cost: true },
+        })
+      ).map((k) => [k.id, k.cost]),
+    )
 
     for (const res of reservations) {
       const batchKey = res.batchId ?? ''
@@ -966,7 +1008,7 @@ export async function commitShipmentForOrder(
 
       const level = await tx.stockLevel.findFirst({
         where: { tenantId, skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey },
-        select: { id: true },
+        select: { id: true, averageCost: true },
       })
       if (!level) {
         throw new ApiError(409, `No stock level for sku ${res.skuId} in warehouse ${res.warehouseId}; cannot ship`)
@@ -991,6 +1033,7 @@ export async function commitShipmentForOrder(
         )
       }
 
+      const shipCost = effectiveUnitCost(level.averageCost, standardCost.get(res.skuId))
       if (shipQty > 0) {
         // Read back inside the same transaction: the row lock taken by the update above
         // guarantees this is the exact on-hand left by this shipment.
@@ -1008,7 +1051,7 @@ export async function commitShipmentForOrder(
             eventType: 'STOCK_SHIPPED',
             quantityDelta: -shipQty,
             quantityAfter: after.quantityOnHand,
-            unitCost: new Prisma.Decimal(0),
+            unitCost: shipCost,
             referenceId: orderId,
             referenceType: 'ORDER',
             performedBy,
@@ -1023,7 +1066,7 @@ export async function commitShipmentForOrder(
       })
 
       if (shipQty > 0) {
-        shipped.push({ skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey, quantity: shipQty })
+        shipped.push({ skuId: res.skuId, warehouseId: res.warehouseId, batchId: batchKey, quantity: shipQty, unitCost: shipCost })
       }
     }
 
@@ -1050,6 +1093,23 @@ export async function commitShipmentForOrder(
     queueSalesChannelPush(tenantId, line.skuId)
   }
   return { shipped }
+}
+
+/** Per-SKU unit cost these SKUs shipped at on this order, for valuing a return (ticket 50). */
+export async function orderShippedUnitCosts(tenantId: string, orderId: string, skuIds: string[]): Promise<Map<string, string>> {
+  const ids = [...new Set(skuIds)]
+  const [entries, skus] = await Promise.all([
+    inventoryDb.stockLedgerEntry.findMany({
+      where: { tenantId, eventType: 'STOCK_SHIPPED', referenceType: 'ORDER', referenceId: orderId, skuId: { in: ids } },
+      select: { skuId: true, quantityDelta: true, unitCost: true },
+    }),
+    inventoryDb.sKU.findMany({ where: { tenantId, id: { in: ids } }, select: { id: true, cost: true } }),
+  ])
+  return shippedUnitCosts(
+    entries.map((e) => ({ skuId: e.skuId, quantityDelta: e.quantityDelta, unitCost: e.unitCost.toString() })),
+    new Map(skus.map((k) => [k.id, k.cost.toString()])),
+    ids,
+  )
 }
 
 export async function releaseReservation(tenantId: string, reservationId: string): Promise<void> {
