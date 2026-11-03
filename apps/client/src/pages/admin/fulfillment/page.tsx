@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
@@ -48,6 +48,7 @@ export default function FulfillmentTasksPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [orderSearch, setOrderSearch] = useState('')
+  const ids = useId()
 
   const tasksUrl = useMemo(
     () => buildTasksUrl(statusFilter, warehouseId, orderSearch),
@@ -109,8 +110,14 @@ export default function FulfillmentTasksPage() {
 
       <div className="flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1">Warehouse</label>
+          <label
+            htmlFor={`${ids}-warehouse`}
+            className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1"
+          >
+            Warehouse
+          </label>
           <select
+            id={`${ids}-warehouse`}
             className="pleros-input min-w-[180px]"
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
@@ -124,8 +131,14 @@ export default function FulfillmentTasksPage() {
           </select>
         </div>
         <div className="flex-1 min-w-[200px] max-w-md">
-          <label className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1">Order ID</label>
+          <label
+            htmlFor={`${ids}-order`}
+            className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1"
+          >
+            Order ID
+          </label>
           <input
+            id={`${ids}-order`}
             className="pleros-input font-mono"
             placeholder="Filter by order id…"
             value={orderSearch}

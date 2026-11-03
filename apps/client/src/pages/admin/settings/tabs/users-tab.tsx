@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { getSessionUser } from '@/lib/auth-session'
@@ -31,6 +31,7 @@ export function UsersTab() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<string>(INVITE_ROLES[0])
+  const inviteId = useId()
   const [deactivateUser, setDeactivateUser] = useState<UserRow | null>(null)
   const [inviteLink, setInviteLink] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -203,6 +204,8 @@ export function UsersTab() {
                 const isSuperAdmin = u.role === 'SUPER_ADMIN'
                 const isMe = u.id === myUserId
                 const busy = accountMut.isPending && accountMut.variables?.user.id === u.id
+                // Said after each row's action buttons, so a screen reader hears whose account they act on.
+                const forUser = <span className="sr-only">, {u.firstName} {u.lastName}</span>
                 return (
                   <tr key={u.id} className={u.isActive ? '' : 'opacity-50'}>
                     <td>
@@ -210,12 +213,13 @@ export function UsersTab() {
                     </td>
                     <td className="font-mono text-xs">{u.email}</td>
                     <td className="text-sm text-pleros-text-2">
-                      {u.isActive && !isSuperAdmin ? (
+                      {/* Only an administrator can change an administrator; others see the role as text. */}
+                      {u.isActive && !isSuperAdmin && (iAmAdmin || u.role !== 'TENANT_ADMIN') ? (
                         <select
                           className="pleros-input !py-1 !px-2 !text-xs w-auto"
+                          aria-label={`Role for ${u.firstName} ${u.lastName}`}
                           value={u.role}
-                          disabled={!canWrite || roleMut.isPending || (!iAmAdmin && u.role === 'TENANT_ADMIN')}
-                          title={!iAmAdmin && u.role === 'TENANT_ADMIN' ? 'Only an administrator can change an administrator' : undefined}
+                          disabled={!canWrite || roleMut.isPending}
                           onChange={(e) => roleMut.mutate({ id: u.id, role: e.target.value })}
                         >
                           {((grantableRoles as string[]).includes(u.role) ? grantableRoles : [u.role, ...grantableRoles]).map((r) => (
@@ -264,6 +268,7 @@ export function UsersTab() {
                           onClick={() => accountMut.mutate({ user: u, action: 'reactivate' })}
                         >
                           Reactivate
+                          {forUser}
                         </button>
                       ) : (
                         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -273,6 +278,7 @@ export function UsersTab() {
                             onClick={() => openPermsModal(u)}
                           >
                             Permissions
+                            {forUser}
                           </button>
                           {!isMe ? (
                             <>
@@ -289,6 +295,7 @@ export function UsersTab() {
                                 }
                               >
                                 Reset password
+                                {forUser}
                               </button>
                               <button
                                 type="button"
@@ -297,6 +304,7 @@ export function UsersTab() {
                                 onClick={() => accountMut.mutate({ user: u, action: 'reset-link' })}
                               >
                                 Email reset link
+                                {forUser}
                               </button>
                               {u.emailVerified === false ? (
                                 <button
@@ -306,6 +314,7 @@ export function UsersTab() {
                                   onClick={() => accountMut.mutate({ user: u, action: 'verify-email' })}
                                 >
                                   Mark verified
+                                  {forUser}
                                 </button>
                               ) : null}
                               <button
@@ -317,18 +326,22 @@ export function UsersTab() {
                                 }
                               >
                                 Sign out everywhere
+                                {forUser}
                               </button>
                             </>
                           ) : null}
-                          <button
-                            type="button"
-                            className="btn-ghost !py-1 !px-2 !text-xs text-red-400 hover:text-red-300"
-                            disabled={isMe}
-                            title={isMe ? 'You cannot deactivate your own account' : undefined}
-                            onClick={() => setDeactivateUser(u)}
-                          >
-                            Deactivate
-                          </button>
+                          {isMe ? (
+                            <span className="text-xs text-pleros-text-3">You can't deactivate yourself</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-ghost !py-1 !px-2 !text-xs text-red-400 hover:text-red-300"
+                              onClick={() => setDeactivateUser(u)}
+                            >
+                              Deactivate
+                              {forUser}
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -434,10 +447,16 @@ export function UsersTab() {
           </div>
         }
       >
-        <label className="text-xs text-pleros-text-3">Email</label>
-        <input className="pleros-input mb-3 mt-1" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
-        <label className="text-xs text-pleros-text-3">Role</label>
-        <select className="pleros-input mt-1" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+        <label htmlFor={`${inviteId}-email`} className="text-xs text-pleros-text-3">Email</label>
+        <input
+          id={`${inviteId}-email`}
+          className="pleros-input mb-3 mt-1"
+          type="email"
+          value={inviteEmail}
+          onChange={(e) => setInviteEmail(e.target.value)}
+        />
+        <label htmlFor={`${inviteId}-role`} className="text-xs text-pleros-text-3">Role</label>
+        <select id={`${inviteId}-role`} className="pleros-input mt-1" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
           {grantableRoles.map((r) => (
             <option key={r} value={r}>
               {r}
@@ -640,6 +659,7 @@ function ChangePasswordCard() {
           className="pleros-input"
           type="password"
           placeholder="Current password"
+          aria-label="Current password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           required
@@ -649,6 +669,7 @@ function ChangePasswordCard() {
           className="pleros-input"
           type="password"
           placeholder="New password"
+          aria-label="New password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           required
@@ -659,6 +680,7 @@ function ChangePasswordCard() {
           className="pleros-input"
           type="password"
           placeholder="Confirm new password"
+          aria-label="Confirm new password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           required

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { useCartStore } from '@/stores/cart.store'
 
@@ -114,6 +114,7 @@ function getCategoryTheme(category?: string, name?: string, code?: string) {
 }
 
 export default function CatalogPage() {
+  const ids = useId()
   const addItem = useCartStore((s) => s.addItem)
   const cartCount = useCartStore((s) => s.count())
   const [q, setQ] = useState('')
@@ -289,10 +290,14 @@ export default function CatalogPage() {
 
         {/* Warehouse Selector Card */}
         <div className="space-y-2">
-          <label className="text-[11px] font-bold text-[var(--c-text-2)] flex items-center gap-1.5 uppercase tracking-wider">
-            <span>🏢</span> Fulfillment Hub
+          <label
+            htmlFor={`${ids}-warehouse`}
+            className="text-[11px] font-bold text-[var(--c-text-2)] flex items-center gap-1.5 uppercase tracking-wider"
+          >
+            <span aria-hidden="true">🏢</span> Fulfillment Hub
           </label>
           <select
+            id={`${ids}-warehouse`}
             className="pleros-input w-full text-xs font-medium"
             value={warehouseId}
             onChange={(e) => {
@@ -448,6 +453,7 @@ export default function CatalogPage() {
                 type="number"
                 min={0}
                 placeholder="Min"
+                aria-label="Minimum price"
                 value={priceMin}
                 onChange={(e) => setPriceMin(e.target.value)}
                 className="pleros-input w-full !pl-7 text-xs font-medium"
@@ -459,6 +465,7 @@ export default function CatalogPage() {
                 type="number"
                 min={0}
                 placeholder="Max"
+                aria-label="Maximum price"
                 value={priceMax}
                 onChange={(e) => setPriceMax(e.target.value)}
                 className="pleros-input w-full !pl-7 text-xs font-medium"
@@ -531,6 +538,7 @@ export default function CatalogPage() {
               type="search"
               className="pleros-input w-full !pl-9 !pr-8 text-xs sm:text-sm"
               placeholder="Search products by SKU, name, or category…"
+              aria-label="Search products"
               value={q}
               onChange={(e) => {
                 setQ(e.target.value)
@@ -541,6 +549,7 @@ export default function CatalogPage() {
               <button
                 type="button"
                 onClick={() => setQ('')}
+                aria-label="Clear search"
                 className="absolute right-2.5 top-2.5 text-xs text-[var(--c-text-3)] hover:text-white"
               >
                 ✕
@@ -549,8 +558,14 @@ export default function CatalogPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--c-text-3)] whitespace-nowrap">Sort by:</span>
+            <label
+              htmlFor={`${ids}-sort`}
+              className="text-xs text-[var(--c-text-3)] whitespace-nowrap"
+            >
+              Sort by:
+            </label>
             <select
+              id={`${ids}-sort`}
               className="pleros-input text-xs font-medium min-w-[140px]"
               value={sort}
               onChange={(e) => setSort(e.target.value as typeof sort)}
@@ -715,7 +730,7 @@ export default function CatalogPage() {
                         disabled={oos || qty <= 1}
                         onClick={() => setQty(sku.id, qty - 1)}
                         className="w-7 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                        aria-label="Decrease quantity"
+                        aria-label={`Decrease quantity of ${sku.name}`}
                       >
                         −
                       </button>
@@ -724,6 +739,7 @@ export default function CatalogPage() {
                         min={1}
                         max={avail > 0 ? avail : undefined}
                         disabled={oos}
+                        aria-label={`Quantity of ${sku.name}`}
                         value={qty}
                         onChange={(e) => {
                           const parsed = Number.parseInt(e.target.value, 10)
@@ -739,7 +755,7 @@ export default function CatalogPage() {
                         disabled={oos || (avail > 0 && qty >= avail)}
                         onClick={() => setQty(sku.id, avail > 0 ? Math.min(avail, qty + 1) : qty + 1)}
                         className="w-7 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                        aria-label="Increase quantity"
+                        aria-label={`Increase quantity of ${sku.name}`}
                       >
                         +
                       </button>
@@ -756,16 +772,19 @@ export default function CatalogPage() {
                   >
                     {isAdded ? (
                       <>
-                        <span>✓</span> Added
+                        <span aria-hidden="true">✓</span> Added<span className="sr-only"> {sku.name}</span>
                       </>
                     ) : oos ? (
-                      'Out of Stock'
+                      <>
+                        Out of Stock<span className="sr-only">: {sku.name}</span>
+                      </>
                     ) : (
                       <>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                         </svg>
                         <span>Add</span>
+                        <span className="sr-only"> {sku.name}</span>
                       </>
                     )}
                   </button>
