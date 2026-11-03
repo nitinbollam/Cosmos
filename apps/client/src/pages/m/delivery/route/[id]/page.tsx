@@ -28,6 +28,8 @@ type Stop = {
   pod?: StopPod | null
   // What is being delivered here, sent by the server for stops linked to an order.
   items?: StopItem[]
+  /** Whether this stop resolves to an order in the current tenant. */
+  hasLinkedOrder?: boolean
   ageRestricted?: boolean
   minimumAge?: number | null
   /** The recipient's age must be confirmed before this stop can be delivered. */
@@ -287,7 +289,13 @@ export default function DeliveryRoutePage() {
             )
           })()}
           <StopActions stop={s} />
-          <StopItems items={s.items} />
+          {s.hasLinkedOrder === false ? (
+            <p role="status" style={{ fontSize: 12, opacity: 0.7, margin: '8px 0 0' }}>No order linked</p>
+          ) : s.hasLinkedOrder === true && !s.items?.length ? (
+            <p role="status" style={{ fontSize: 12, opacity: 0.7, margin: '8px 0 0' }}>No products on linked order</p>
+          ) : (
+            <StopItems items={s.items} />
+          )}
           {s.status === 'DELIVERED' &&
             (s.pod?.photoUrl ? (
               <PodPhoto src={s.pod.photoUrl} caption="Proof of delivery" />
