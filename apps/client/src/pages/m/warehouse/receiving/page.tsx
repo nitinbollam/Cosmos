@@ -6,6 +6,7 @@ import { enqueueAction, readQueue } from '@/lib/offline-queue'
 import { axiosErr } from '@/lib/axios-error'
 import type { ReceiptBilling } from '@/lib/receipt-billing'
 import type { ScanResult } from '@/components/scanner/types'
+import { EMPTY_SCAN_LOG, recordScan, type ScanEntry } from '@/lib/receiving-scan-log'
 
 // Lazy so the decode engine (~500kB) is fetched only when a picker actually
 // opens the camera, keeping it out of the mobile app's initial bundle.
@@ -14,16 +15,6 @@ const BarcodeScannerSheet = lazy(() =>
     default: m.BarcodeScannerSheet,
   })),
 )
-
-type ScanStatus = 'sent' | 'queued' | 'error'
-
-type ScanEntry = {
-  id: number
-  code: string
-  status: ScanStatus
-  source: string
-  detail?: string
-}
 
 /** A purchase order that can be received against now, from the server. */
 type OpenPo = {
@@ -58,13 +49,6 @@ type ScanResponse = { receivedQty: number; expectedQty: number | null; skuCode?:
 
 const OPEN_STATUSES = ['OPEN', 'IN_PROGRESS']
 const SESSION_KEY = 'pleros.m.receiving.session'
-
-/**
- * Only the latest scans are listed. A large receipt runs to hundreds of scans on
- * a low-end warehouse phone, and older rows are history, not feedback; the
- * session totals below still count every one.
- */
-const RECENT_LIMIT = 50
 
 function rememberSession(id: string | null) {
   try {
@@ -103,13 +87,13 @@ export default function ReceivingMobilePage() {
   const [last, setLast] = useState<{ ok: boolean; text: string } | null>(null)
   const [scannerMode, setScannerMode] = useState<null | 'items' | 'po'>(null)
   const [completing, setCompleting] = useState(false)
-  const [recent, setRecent] = useState<ScanEntry[]>([])
-  const [totals, setTotals] = useState<Record<ScanStatus, number>>({ sent: 0, queued: 0, error: 0 })
+  const [scanLog, setScanLog] = useState(EMPTY_SCAN_LOG)
+  const { recent, failed, totals } = scanLog
   const nextId = useRef(0)
 
   const record = useCallback((entry: Omit<ScanEntry, 'id'>) => {
-    setRecent((prev) => [{ ...entry, id: nextId.current++ }, ...prev].slice(0, RECENT_LIMIT))
-    setTotals((prev) => ({ ...prev, [entry.status]: prev[entry.status] + 1 }))
+    const row = { ...entry, id: nextId.current++ }
+    setScanLog((log) => recordScan(log, row))
   }, [])
 
   const openSession = useCallback((id: string | null) => {
@@ -117,8 +101,7 @@ export default function ReceivingMobilePage() {
     rememberSession(id)
     setDetail(null)
     setLast(null)
-    setRecent([])
-    setTotals({ sent: 0, queued: 0, error: 0 })
+    setScanLog(EMPTY_SCAN_LOG)
   }, [])
 
   const loadDetail = useCallback(async (id: string) => {
@@ -297,6 +280,22 @@ export default function ReceivingMobilePage() {
     .filter(Boolean)
     .join(' · ')
 
+  const failedList = failed.length > 0 && (
+    <>
+      <h2 style={{ fontSize: 13, margin: '12px 0 0', color: 'var(--c-danger)' }}>
+        Not received{totals.error > failed.length ? ` (last ${failed.length} of ${totals.error})` : ''}
+      </h2>
+      <ul style={{ listStyle: 'none', padding: 0, margin: '6px 0 0', display: 'grid', gap: 6 }}>
+        {failed.map((r) => (
+          <li key={r.id} style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{r.code}</span>
+            <span style={{ fontSize: 11, textAlign: 'right', color: 'var(--c-danger)' }}>{r.detail ?? 'failed'}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+
   const recentList = recent.length > 0 && (
     <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0', display: 'grid', gap: 8 }}>
       {recent.map((r) => (
@@ -306,10 +305,10 @@ export default function ReceivingMobilePage() {
             style={{
               fontSize: 11,
               textAlign: 'right',
-              color: r.status === 'error' ? 'var(--c-danger)' : r.status === 'queued' ? 'var(--c-warning)' : 'var(--c-success)',
+              color: r.status === 'queued' ? 'var(--c-warning)' : 'var(--c-success)',
             }}
           >
-            {r.status === 'error' ? (r.detail ?? 'failed') : `${r.detail ?? r.status} · ${r.source}`}
+            {`${r.detail ?? r.status} · ${r.source}`}
           </span>
         </li>
       ))}
@@ -386,6 +385,7 @@ export default function ReceivingMobilePage() {
           </p>
           {last && <p style={{ marginTop: 8, fontSize: 13, color: last.ok ? 'var(--c-success)' : 'var(--c-danger)' }}>{last.text}</p>}
           {msg && <p style={{ marginTop: 8, fontSize: 13 }}>{msg}</p>}
+          {failedList}
           {recentList}
         </div>
       </div>
@@ -548,6 +548,7 @@ export default function ReceivingMobilePage() {
           <button type="button" className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={leaveSession}>
             Leave session open
           </button>
+          {failedList}
           {recentList}
         </>
       )}
