@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { FailStopForm } from '@/components/pod/FailStopForm'
@@ -198,6 +198,7 @@ export default function DispatchPage() {
 }
 
 function DispatchDashboard() {
+  const ids = useId()
   const qc = useQueryClient()
   const navigate = useNavigate()
   const searchParams = useQueryParams()
@@ -375,10 +376,14 @@ function DispatchDashboard() {
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1.5">
+            <label
+              htmlFor={`${ids}-manifest-date`}
+              className="block text-[11px] font-medium uppercase tracking-wider text-pleros-muted mb-1.5"
+            >
               Manifest Date
             </label>
             <input
+              id={`${ids}-manifest-date`}
               type="date"
               className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-xs font-medium text-pleros-text focus:outline-none focus:border-pleros-primary transition-colors"
               value={selectedDate}
@@ -977,6 +982,7 @@ function CreateRouteDrawer(props: {
   onClose: () => void
   onCreated: () => void
 }) {
+  const ids = useId()
   const [mode, setMode] = useState<'orders' | 'manual'>('orders')
   const [name, setName] = useState('')
   const [stopLines, setStopLines] = useState([{ address: '' }])
@@ -1095,10 +1101,14 @@ function CreateRouteDrawer(props: {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1">
+            <label
+              htmlFor={`${ids}-route-name-optional`}
+              className="block text-xs font-semibold text-pleros-muted uppercase tracking-wider mb-1"
+            >
               Route Name (Optional)
             </label>
             <input
+              id={`${ids}-route-name-optional`}
               className="w-full rounded-lg bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text focus:outline-none focus:border-pleros-primary"
               value={name}
               onChange={(e) => setName(e.target.value)}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api-admin'
@@ -38,6 +38,7 @@ const PICK_STATUSES = [
 ]
 
 export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
+  const ids = useId()
   const qc = useQueryClient()
   const [pickStatus, setPickStatus] = useState<string>('ALL')
   const [pickWarehouseId, setPickWarehouseId] = useState<string>('')
@@ -73,10 +74,15 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
         <div>
-          <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+          <label
+            htmlFor={`${ids}-status`}
+            className="block text-[11px] uppercase tracking-wider mb-1"
+            style={{ color: 'var(--c-text-3)' }}
+          >
             Status
-          </div>
+          </label>
           <select
+            id={`${ids}-status`}
             className="pleros-input w-auto min-w-[160px]"
             value={pickStatus}
             onChange={(e) => setPickStatus(e.target.value)}
@@ -89,10 +95,15 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
           </select>
         </div>
         <div>
-          <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+          <label
+            htmlFor={`${ids}-warehouse`}
+            className="block text-[11px] uppercase tracking-wider mb-1"
+            style={{ color: 'var(--c-text-3)' }}
+          >
             Warehouse
-          </div>
+          </label>
           <select
+            id={`${ids}-warehouse`}
             className="pleros-input w-auto min-w-[200px]"
             value={pickWarehouseId}
             onChange={(e) => setPickWarehouseId(e.target.value)}
@@ -210,10 +221,19 @@ export function PicksTab({ warehouses, userLabel, users }: PicksTabProps) {
             <span className="font-mono">{assignTaskId ? `#${assignTaskId.slice(-8)}` : ''}</span>.
           </p>
           <div>
-            <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: 'var(--c-text-3)' }}>
+            <label
+              htmlFor={`${ids}-operator`}
+              className="text-xs uppercase tracking-wider block mb-1"
+              style={{ color: 'var(--c-text-3)' }}
+            >
               Operator
             </label>
-            <select className="pleros-input" value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}>
+            <select
+              id={`${ids}-operator`}
+              className="pleros-input"
+              value={assignUserId}
+              onChange={(e) => setAssignUserId(e.target.value)}
+            >
               <option value="">Unassigned</option>
               {/* Keep a current assignee who doesn't qualify visible, so the box doesn't read "Unassigned". */}
               {assignUserId && !pickers.some((u) => u.id === assignUserId) && (

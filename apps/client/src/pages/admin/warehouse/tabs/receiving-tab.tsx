@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
@@ -20,6 +20,7 @@ interface ReceivingTabProps {
 }
 
 export function ReceivingTab({ warehouses, warehouseLabel, initialSessionId }: ReceivingTabProps) {
+  const ids = useId()
   const qc = useQueryClient()
   const [recvDrawer, setRecvDrawer] = useState(false)
   const [recvWh, setRecvWh] = useState('')
@@ -221,10 +222,19 @@ export function ReceivingTab({ warehouses, warehouseLabel, initialSessionId }: R
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+            <label
+              htmlFor={`${ids}-warehouse`}
+              className="block text-sm mb-1"
+              style={{ color: 'var(--c-text-2)' }}
+            >
               Warehouse
             </label>
-            <select className="pleros-input" value={recvWh} onChange={(e) => setRecvWh(e.target.value)}>
+            <select
+              id={`${ids}-warehouse`}
+              className="pleros-input"
+              value={recvWh}
+              onChange={(e) => setRecvWh(e.target.value)}
+            >
               <option value="">{recvPo.trim() ? 'Destination warehouse of the PO' : 'Select warehouse…'}</option>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -234,10 +244,15 @@ export function ReceivingTab({ warehouses, warehouseLabel, initialSessionId }: R
             </select>
           </div>
           <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+            <label
+              htmlFor={`${ids}-purchase-order-id-optional`}
+              className="block text-sm mb-1"
+              style={{ color: 'var(--c-text-2)' }}
+            >
               Purchase Order ID (optional)
             </label>
             <input
+              id={`${ids}-purchase-order-id-optional`}
               className="pleros-input"
               value={recvPo}
               onChange={(e) => setRecvPo(e.target.value)}

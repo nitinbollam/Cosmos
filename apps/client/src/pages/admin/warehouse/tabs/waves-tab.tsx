@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
@@ -13,6 +13,7 @@ interface WavesTabProps {
 }
 
 export function WavesTab({ warehouses, warehouseLabel }: WavesTabProps) {
+  const ids = useId()
   const qc = useQueryClient()
   const [waveWarehouseId, setWaveWarehouseId] = useState<string>('')
   const [waveDrawerOpen, setWaveDrawerOpen] = useState(false)
@@ -80,10 +81,15 @@ export function WavesTab({ warehouses, warehouseLabel }: WavesTabProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+          <label
+            htmlFor={`${ids}-warehouse`}
+            className="block text-[11px] uppercase tracking-wider mb-1"
+            style={{ color: 'var(--c-text-3)' }}
+          >
             Warehouse
-          </div>
+          </label>
           <select
+            id={`${ids}-warehouse`}
             className="pleros-input w-auto min-w-[200px]"
             value={waveWarehouseId}
             onChange={(e) => setWaveWarehouseId(e.target.value)}
