@@ -215,7 +215,7 @@ export default function DispatchRouteDetailPage() {
           <Card>
             <CardTitle>Stops</CardTitle>
             <p className="text-xs text-pleros-muted mt-1">
-              Stops are marked delivered from the driver app (`/m/delivery`), which requires a photo
+              Stops are marked delivered from the driver app (the Delivery screen on the phone), which requires a photo
               and the recipient's signature. Staff can mark a stop failed here.
             </p>
             <div className="mt-4 overflow-x-auto">

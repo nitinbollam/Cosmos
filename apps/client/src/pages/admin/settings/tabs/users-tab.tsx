@@ -4,6 +4,7 @@ import { api } from '@/lib/api-admin'
 import { getSessionUser } from '@/lib/auth-session'
 import { PlerosDialogModal } from '@/components/pleros/radix-overlays'
 import { UserRow, UsersPage, InviteRow, INVITE_ROLES, errMsg } from '../types'
+import { useSettingsAccess } from '@/components/settings/permission-gate'
 
 const PERMISSION_MODULES = [
   { id: 'inventory', name: 'Inventory & Catalog', description: 'SKUs, stock levels, stock alerts, lots' },
@@ -26,6 +27,7 @@ const PERMISSION_MODULES = [
 
 export function UsersTab() {
   const qc = useQueryClient()
+  const { allowed: canWrite, reason: readOnlyReason } = useSettingsAccess('users')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<string>(INVITE_ROLES[0])
@@ -147,9 +149,18 @@ export function UsersTab() {
           <h2 className="text-pleros-white font-semibold font-display">Team members</h2>
           <p className="text-pleros-text-3 text-sm mt-1">Manage users, roles, and granular module permissions</p>
         </div>
-        <button type="button" className="btn-primary" onClick={() => setInviteOpen(true)}>
-          Invite user
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!canWrite}
+            title={readOnlyReason ?? undefined}
+            onClick={() => setInviteOpen(true)}
+          >
+            Invite user
+          </button>
+          {!canWrite && readOnlyReason ? <span className="text-pleros-text-3 text-xs">{readOnlyReason}</span> : null}
+        </div>
       </div>
 
       {accountNotice ? (
@@ -203,7 +214,7 @@ export function UsersTab() {
                         <select
                           className="pleros-input !py-1 !px-2 !text-xs w-auto"
                           value={u.role}
-                          disabled={roleMut.isPending || (!iAmAdmin && u.role === 'TENANT_ADMIN')}
+                          disabled={!canWrite || roleMut.isPending || (!iAmAdmin && u.role === 'TENANT_ADMIN')}
                           title={!iAmAdmin && u.role === 'TENANT_ADMIN' ? 'Only an administrator can change an administrator' : undefined}
                           onChange={(e) => roleMut.mutate({ id: u.id, role: e.target.value })}
                         >
@@ -239,7 +250,9 @@ export function UsersTab() {
                     </td>
                     <td className="text-sm">{u.activeSessions ?? 0}</td>
                     <td className="text-right">
-                      {isSuperAdmin ? (
+                      {!canWrite ? (
+                        <span className="text-xs text-pleros-text-3">View only</span>
+                      ) : isSuperAdmin ? (
                         <span className="text-xs text-pleros-text-3">Managed via CLI</span>
                       ) : !iAmAdmin && u.role === 'TENANT_ADMIN' ? (
                         <span className="text-xs text-pleros-text-3">Managed by administrators</span>
@@ -386,7 +399,8 @@ export function UsersTab() {
                     <button
                       type="button"
                       className="btn-ghost !py-1 !px-2 !text-xs"
-                      disabled={revokeMut.isPending}
+                      disabled={!canWrite || revokeMut.isPending}
+                      title={readOnlyReason ?? undefined}
                       onClick={() => revokeMut.mutate(inv.id)}
                     >
                       Revoke

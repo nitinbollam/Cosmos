@@ -4,12 +4,16 @@ import { useQueryParams } from '@/lib/use-query-params'
 import { api } from '@/lib/api-admin'
 import { connectStatusLabel, type StripeConnectStatus } from '@/lib/stripe-connect'
 import { WebhookManager } from '@/components/settings/webhook-manager'
+import { PermissionGate, useSettingsAccess } from '@/components/settings/permission-gate'
 import { PlerosDialogModal, PlerosSheet } from '@/components/pleros/radix-overlays'
 import { MsaConfig, StripeStatus, NotificationProviderStatus, errMsg } from '../types'
 import { SalesChannelsSection } from './sales-channels-section'
 
 export function IntegrationsTab() {
   const qc = useQueryClient()
+  const edi = useSettingsAccess('edi')
+  const msa = useSettingsAccess('msa')
+  const stripeConnect = useSettingsAccess('stripeConnect')
   const searchParams = useQueryParams()
   const [addOpen, setAddOpen] = useState(false)
   const [rotateOpen, setRotateOpen] = useState(false)
@@ -120,9 +124,13 @@ export function IntegrationsTab() {
 
   return (
     <div className="space-y-6">
-      <SalesChannelsSection />
+      <PermissionGate action="salesChannels">
+        <SalesChannelsSection />
+      </PermissionGate>
 
-      <WebhookManager />
+      <PermissionGate action="webhooks">
+        <WebhookManager />
+      </PermissionGate>
 
       <div className="pleros-card">
         <div className="flex flex-wrap justify-between gap-3 mb-4">
@@ -132,9 +140,12 @@ export function IntegrationsTab() {
               Inbound 850 purchase orders, outbound 810 invoices and 856 ship notices (JSON interchange).
             </p>
           </div>
-          <button type="button" className="btn-primary !text-sm" onClick={() => setEdiDrawer(true)}>
-            Add partner
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button type="button" className="btn-primary !text-sm" disabled={!edi.allowed} onClick={() => setEdiDrawer(true)}>
+              Add partner
+            </button>
+            {edi.reason ? <span className="text-pleros-text-3 text-xs">{edi.reason}</span> : null}
+          </div>
         </div>
         {ediPartnersQ.isLoading ? (
           <div className="skeleton h-16 w-full" />
@@ -201,6 +212,8 @@ export function IntegrationsTab() {
           <button
             type="button"
             className="btn-primary !text-sm"
+            disabled={!msa.allowed}
+            title={msa.reason ?? undefined}
             onClick={() => {
               if (msaQ.data) {
                 setReporterDid(msaQ.data.reporterDid)
@@ -313,7 +326,8 @@ export function IntegrationsTab() {
           <button
             type="button"
             className="btn-primary !text-sm"
-            disabled={connectOnboardMut.isPending || connectRefreshMut.isPending}
+            disabled={!stripeConnect.allowed || connectOnboardMut.isPending || connectRefreshMut.isPending}
+            title={stripeConnect.reason ?? undefined}
             onClick={() => {
               if (connectQ.data?.onboardingStatus === 'ready') {
                 connectRefreshMut.mutate()
