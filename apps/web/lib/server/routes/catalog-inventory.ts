@@ -184,7 +184,8 @@ export async function routeInventory(method: string, seg: string[], req: Request
     return Response.json(await inv.ledgerForSku(session.tenantId, skuId, limit))
   }
   if (seg[1] === 'adjust' && method === 'POST') {
-    const body = (await req.json()) as Parameters<typeof inv.adjustStock>[1]
+    // Idempotency keys are internal (ticket 49); one in the body is not forwarded.
+    const { idempotencyKey: _internal, ...body } = (await req.json()) as Parameters<typeof inv.adjustStock>[1] & { idempotencyKey?: unknown }
     return Response.json(await inv.adjustStock(session.tenantId, { ...body, ledger: true }, session.userId))
   }
   if (seg[1] === 'receive' && method === 'POST') {

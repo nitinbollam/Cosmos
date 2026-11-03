@@ -2,7 +2,8 @@ import type { CycleCountType } from '@/generated/prisma-wms'
 import { randomUUID } from 'node:crypto'
 import { inventoryDb, wmsDb } from './db'
 import * as inv from './inventory'
-import { computeCycleCountDelta, cycleCountLineNeedsAdjustment } from './cycle-count-adjust'
+import { computeCycleCountDelta, cycleCountLineKey, cycleCountLineNeedsAdjustment } from './cycle-count-adjust'
+import { swallowed } from './fire-and-forget'
 import { ApiError } from './session'
 
 type InvLevelRow = {
@@ -232,16 +233,82 @@ export async function submitCycleCountForApproval(tenantId: string, id: string) 
   })
 }
 
+/**
+ * How long an approval holds its claim on a count without renewing it. Renewed before each line is posted, so it
+ * only has to cover one line; a crashed approval's claim lapses after this and a retry takes over (ticket 49).
+ */
+const APPROVAL_CLAIM_MS = 60_000
+
+const claimExpiry = () => new Date(Date.now() + APPROVAL_CLAIM_MS)
+
+function claimLost() {
+  return new ApiError(409, 'This count is now being approved by another request; try again shortly.')
+}
+
+/** Extends this approval's claim; false when another request holds the count now. */
+async function renewApprovalClaim(tenantId: string, countId: string, token: string) {
+  const renewed = await wmsDb.cycleCount.updateMany({
+    where: { id: countId, tenantId, approvalClaimId: token },
+    data: { approvalClaimExpiresAt: claimExpiry() },
+  })
+  return renewed.count === 1
+}
+
+/**
+ * Records a line's posting, only while this approval still holds the count. The claim row is written first in the
+ * same transaction, so a request taking over the count waits for this to commit, then sees a live claim.
+ * A posting already recorded is never replaced.
+ */
+function recordLinePosted(tenantId: string, countId: string, lineId: string, token: string, ledgerEntryId: string) {
+  return wmsDb.$transaction(async (tx) => {
+    // The line has no tenantId of its own; its count is checked for the tenant here, in the same transaction.
+    const held = await tx.cycleCount.updateMany({
+      where: { id: countId, tenantId, approvalClaimId: token },
+      data: { approvalClaimExpiresAt: claimExpiry() },
+    })
+    if (held.count !== 1) return false
+    await tx.cycleCountLine.updateMany({
+      where: { id: lineId, countId, postedLedgerId: null },
+      data: { postedLedgerId: ledgerEntryId },
+    })
+    return true
+  })
+}
+
+/**
+ * Stock postings an approval made for this count before postings carried an idempotency key, less those a person
+ * has reviewed and recorded on one of the count's lines (its postedLedgerId).
+ */
+export async function countLegacyCycleCountPostings(tenantId: string, countId: string) {
+  const recorded = await wmsDb.cycleCountLine.findMany({
+    where: { countId, postedLedgerId: { not: null } },
+    select: { postedLedgerId: true },
+  })
+  return inventoryDb.stockLedgerEntry.count({
+    where: {
+      tenantId,
+      referenceType: 'CYCLE_COUNT',
+      referenceId: countId,
+      eventType: 'STOCK_ADJUSTED',
+      idempotencyKey: null,
+      id: { notIn: recorded.map((l) => l.postedLedgerId!) },
+    },
+  })
+}
+
+function completedApproval(count: Awaited<ReturnType<typeof getCycleCount>>) {
+  return {
+    count,
+    adjustmentsPosted: 0,
+    skipped: count.lines.length,
+    alreadyPosted: 0,
+    errors: [] as string[],
+  }
+}
+
 export async function approveCycleCount(tenantId: string, id: string, performedBy: string) {
   const row = await getCycleCount(tenantId, id)
-  if (row.status === 'COMPLETED') {
-    return {
-      count: row,
-      adjustmentsPosted: 0,
-      skipped: row.lines.length,
-      errors: [] as string[],
-    }
-  }
+  if (row.status === 'COMPLETED') return completedApproval(row)
   if (row.status !== 'PENDING_APPROVAL') {
     throw new ApiError(400, 'Only counts pending approval can be posted')
   }
@@ -254,53 +321,124 @@ export async function approveCycleCount(tenantId: string, id: string, performedB
     throw new ApiError(400, `All lines must have counted quantities (${missing.length} missing)`)
   }
 
+  // One approval at a time, across server instances: the first request to claim the count posts it.
+  const token = randomUUID()
+  const claimed = await wmsDb.cycleCount.updateMany({
+    where: {
+      id: row.id,
+      tenantId,
+      status: 'PENDING_APPROVAL',
+      OR: [{ approvalClaimId: null }, { approvalClaimExpiresAt: { lt: new Date() } }],
+    },
+    data: { approvalClaimId: token, approvalClaimExpiresAt: claimExpiry() },
+  })
+  if (claimed.count !== 1) {
+    const current = await getCycleCount(tenantId, id)
+    if (current.status === 'COMPLETED') return completedApproval(current)
+    throw new ApiError(409, 'This count is already being approved; try again shortly.')
+  }
+
   const correlationId = randomUUID()
   let adjustmentsPosted = 0
   let skipped = 0
+  /** Lines an earlier attempt already posted (ticket 49): not adjusted again. */
+  let alreadyPosted = 0
   const errors: string[] = []
+  let completed = false
 
-  for (const line of row.lines) {
-    const countedQty = line.countedQty!
-    if (!cycleCountLineNeedsAdjustment(line.systemQty, countedQty)) {
-      skipped++
-      continue
+  try {
+    // Approvals before ticket 49 posted without idempotency keys, so a retry cannot tell which of their stock
+    // changes landed. Any such posting stops the approval until it is reviewed
+    // (scripts/cycle-count-legacy-postings-report.ts); nothing is matched to lines or reposted automatically.
+    if ((await countLegacyCycleCountPostings(tenantId, row.id)) > 0) {
+      throw new ApiError(409, 'This cycle count contains historical inventory postings that require review before approval.')
     }
 
-    const quantityDelta = computeCycleCountDelta(line.systemQty, countedQty)
-    try {
-      await inv.adjustStock(
-        tenantId,
-        {
-          skuId: line.skuId,
-          warehouseId: row.warehouseId,
-          quantityDelta,
-          batchId: '',
-          locationId: line.locationLabel,
-          referenceId: row.id,
-          referenceType: 'CYCLE_COUNT',
-          correlationId,
-          ledger: true,
-          reason: `Cycle count ${row.id}`,
-        },
-        performedBy,
-      )
-      adjustmentsPosted++
-    } catch (e) {
-      errors.push(
-        `${line.skuId.slice(-8)}: ${e instanceof Error ? e.message : 'adjustment failed'}`,
-      )
+    // Read again under the claim: an approval that held it before may have posted lines since the read above.
+    const lines = await wmsDb.cycleCountLine.findMany({ where: { countId: row.id }, orderBy: { id: 'asc' } })
+    for (const line of lines) {
+      const countedQty = line.countedQty!
+      if (!cycleCountLineNeedsAdjustment(line.systemQty, countedQty)) {
+        skipped++
+        continue
+      }
+      if (line.postedLedgerId) {
+        alreadyPosted++
+        continue
+      }
+
+      // Never post for a count another request has taken over.
+      if (!(await renewApprovalClaim(tenantId, row.id, token))) throw claimLost()
+
+      const quantityDelta = computeCycleCountDelta(line.systemQty, countedQty)
+      let posted: Awaited<ReturnType<typeof inv.postStockAdjustment>>
+      try {
+        posted = await inv.postStockAdjustment(
+          tenantId,
+          {
+            skuId: line.skuId,
+            warehouseId: row.warehouseId,
+            quantityDelta,
+            batchId: '',
+            locationId: line.locationLabel,
+            referenceId: row.id,
+            referenceType: 'CYCLE_COUNT',
+            correlationId,
+            ledger: true,
+            reason: `Cycle count ${row.id}`,
+            idempotencyKey: cycleCountLineKey(line.id),
+          },
+          performedBy,
+        )
+      } catch (e) {
+        errors.push(`${line.skuId.slice(-8)}: ${e instanceof Error ? e.message : 'adjustment failed'}`)
+        continue
+      }
+
+      // Inventory and WMS are separate databases, so this can be lost after the stock changed. The key above
+      // makes the next attempt (or the request that took the count over) find that posting and record it here
+      // instead of adjusting stock again.
+      let recorded: boolean
+      try {
+        recorded = await recordLinePosted(tenantId, row.id, line.id, token, posted.ledgerEntryId)
+      } catch (e) {
+        errors.push(`${line.skuId.slice(-8)}: ${e instanceof Error ? e.message : 'could not record the posting'}`)
+        continue
+      }
+      if (!recorded) throw claimLost()
+      if (posted.replayed) alreadyPosted++
+      else adjustmentsPosted++
+    }
+
+    if (errors.length > 0) {
+      throw new ApiError(400, `Could not post all adjustments: ${errors.join('; ')}`)
+    }
+
+    // Completed only once every line that changes stock has its posting recorded.
+    const after = await wmsDb.cycleCountLine.findMany({
+      where: { countId: row.id },
+      select: { systemQty: true, countedQty: true, postedLedgerId: true },
+    })
+    const unposted = after.filter((l) => cycleCountLineNeedsAdjustment(l.systemQty, l.countedQty) && !l.postedLedgerId)
+    if (unposted.length > 0) {
+      throw new ApiError(409, `${unposted.length} adjustment(s) are not recorded as posted yet; approve again to finish`)
+    }
+
+    const done = await wmsDb.cycleCount.updateMany({
+      where: { id: row.id, tenantId, status: 'PENDING_APPROVAL', approvalClaimId: token },
+      data: { status: 'COMPLETED', approvalClaimId: null, approvalClaimExpiresAt: null },
+    })
+    if (done.count !== 1) throw claimLost()
+    completed = true
+  } finally {
+    // Gives the count back for a retry, unless another request holds it now.
+    if (!completed) {
+      await wmsDb.cycleCount
+        .updateMany({ where: { id: row.id, tenantId, approvalClaimId: token }, data: { approvalClaimId: null, approvalClaimExpiresAt: null } })
+        .catch(swallowed('wms.cycleCount.releaseApprovalClaim'))
     }
   }
 
-  if (errors.length > 0) {
-    throw new ApiError(400, `Could not post all adjustments: ${errors.join('; ')}`)
-  }
-
-  const count = await wmsDb.cycleCount.update({
-    where: { id: row.id },
-    data: { status: 'COMPLETED' },
-    include: { lines: true },
-  })
-
-  return { count, adjustmentsPosted, skipped, errors }
+  const count = await wmsDb.cycleCount.findFirstOrThrow({ where: { id: row.id, tenantId }, include: { lines: true } })
+  return { count, adjustmentsPosted, skipped, alreadyPosted, errors }
 }

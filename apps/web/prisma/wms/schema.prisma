@@ -159,6 +159,10 @@ model CycleCount {
   scheduledFor DateTime?
   /// When it was last submitted for approval (ticket 64: how long it has been waiting).
   submittedAt  DateTime?
+  /// The approval request that is posting this count, and when its claim lapses (ticket 49). Only the holder
+  /// posts lines and completes the count; a crashed holder's claim expires and a retry takes over.
+  approvalClaimId        String?
+  approvalClaimExpiresAt DateTime?
   createdBy    String
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -176,6 +180,9 @@ model CycleCountLine {
   locationLabel String?
   systemQty     Int
   countedQty    Int?
+  /// The inventory ledger row of this line's adjustment once it is posted (ticket 49). A retried approval
+  /// skips lines that have it; the inventory side's idempotency key covers a crash before it was saved.
+  postedLedgerId String?
 
   @@index([countId])
   @@index([skuId])
