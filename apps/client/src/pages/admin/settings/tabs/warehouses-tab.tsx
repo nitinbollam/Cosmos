@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { useSettingsAccess } from '@/components/settings/permission-gate'
 import { PlerosSheet } from '@/components/pleros/radix-overlays'
 import { WarehouseRow, errMsg } from '../types'
 
 export function WarehousesTab() {
   const qc = useQueryClient()
+  const { allowed: canWrite, reason: readOnlyReason } = useSettingsAccess('warehouses')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
@@ -62,9 +64,12 @@ export function WarehousesTab() {
           <h2 className="text-pleros-white font-semibold font-display">Warehouses</h2>
           <p className="text-pleros-text-3 text-sm mt-1">Distribution centers for receiving, picking, and fulfillment.</p>
         </div>
-        <button type="button" className="btn-primary" onClick={() => setDrawerOpen(true)}>
-          New warehouse
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button type="button" className="btn-primary" disabled={!canWrite} onClick={() => setDrawerOpen(true)}>
+            New warehouse
+          </button>
+          {!canWrite && readOnlyReason ? <span className="text-pleros-text-3 text-xs">{readOnlyReason}</span> : null}
+        </div>
       </div>
 
       <div className="pleros-card overflow-x-auto">
@@ -78,9 +83,11 @@ export function WarehousesTab() {
             title="No warehouses yet"
             description="Add at least one warehouse before receiving inventory, running cycle counts, or filtering pick tasks."
             action={
-              <button type="button" className="btn-primary" onClick={() => setDrawerOpen(true)}>
-                Add your first warehouse
-              </button>
+              canWrite ? (
+                <button type="button" className="btn-primary" onClick={() => setDrawerOpen(true)}>
+                  Add your first warehouse
+                </button>
+              ) : undefined
             }
           />
         ) : (
@@ -111,7 +118,7 @@ export function WarehousesTab() {
                         <button
                           type="button"
                           className="btn-ghost !py-1 !px-2 !text-xs"
-                          disabled={defaultMut.isPending}
+                          disabled={!canWrite || defaultMut.isPending}
                           onClick={() => defaultMut.mutate(w.id)}
                         >
                           Set as default

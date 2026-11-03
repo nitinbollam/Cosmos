@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { TenantMe, STEP_LABELS, errMsg } from '../types'
+import { PermissionGate, useSettingsAccess } from '@/components/settings/permission-gate'
 
 export function CompanyTab() {
   const qc = useQueryClient()
+  const { allowed: canOnboard } = useSettingsAccess('onboarding')
   const tenant = useQuery<TenantMe>({
     queryKey: ['tenant-me'],
     queryFn: () => api.get('/tenants/me'),
@@ -51,6 +53,7 @@ export function CompanyTab() {
             Could not load tenant.
           </p>
         ) : (
+          <PermissionGate action="company">
           <form
             className="space-y-4 max-w-xl"
             onSubmit={(e) => {
@@ -115,6 +118,7 @@ export function CompanyTab() {
               {patch.isPending ? 'Saving…' : 'Save changes'}
             </button>
           </form>
+          </PermissionGate>
         )}
       </div>
 
@@ -141,7 +145,7 @@ export function CompanyTab() {
                   <input
                     type="checkbox"
                     checked={s.completed}
-                    disabled={patchStep.isPending}
+                    disabled={patchStep.isPending || !canOnboard}
                     onChange={(e) => patchStep.mutate({ stepKey: s.stepKey, completed: e.target.checked })}
                   />
                   Done
@@ -210,6 +214,7 @@ function WorkflowSettingsCard() {
       {wfQ.isLoading ? (
         <div className="skeleton h-10 w-48" />
       ) : (
+        <PermissionGate action="workflow">
         <form
           className="grid gap-4 sm:grid-cols-2 max-w-xl"
           onSubmit={(e) => {
@@ -272,6 +277,7 @@ function WorkflowSettingsCard() {
             </button>
           </div>
         </form>
+        </PermissionGate>
       )}
       {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
       {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Workflow settings updated.</p>}
@@ -321,6 +327,7 @@ function FinanceSettingsCard() {
       {finQ.isLoading ? (
         <div className="skeleton h-10 w-48" />
       ) : (
+        <PermissionGate action="finance">
         <form
           className="grid gap-4 sm:grid-cols-2 max-w-xl"
           onSubmit={(e) => {
@@ -376,6 +383,7 @@ function FinanceSettingsCard() {
             </button>
           </div>
         </form>
+        </PermissionGate>
       )}
       {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
     </div>
@@ -425,6 +433,7 @@ function TaxSettingsCard() {
       {taxQ.isLoading ? (
         <div className="skeleton h-10 w-48" />
       ) : (
+        <PermissionGate action="tax">
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
@@ -448,6 +457,7 @@ function TaxSettingsCard() {
             {saveMut.isPending ? 'Saving…' : taxQ.data?.status === 'unconfirmed' ? 'Confirm tax rate' : 'Save tax rate'}
           </button>
         </form>
+        </PermissionGate>
       )}
       {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
       {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Tax rate updated.</p>}
@@ -497,6 +507,7 @@ function AgeVerificationCard() {
       {policyQ.isLoading ? (
         <div className="skeleton h-24 w-full" />
       ) : (
+        <PermissionGate action="ageVerification">
         <form
           className="space-y-3"
           onSubmit={(e) => {
@@ -551,6 +562,7 @@ function AgeVerificationCard() {
             {saveMut.isPending ? 'Saving…' : 'Save age verification'}
           </button>
         </form>
+        </PermissionGate>
       )}
       {saveMut.error && <p className="text-red-400 text-sm mt-2">{errMsg(saveMut.error)}</p>}
       {saveMut.isSuccess && <p className="text-emerald-400 text-sm mt-2">Age verification policy updated.</p>}

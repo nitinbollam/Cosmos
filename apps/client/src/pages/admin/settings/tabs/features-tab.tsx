@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { errMsg } from '../types'
+import { useSettingsAccess } from '@/components/settings/permission-gate'
 
 type TenantFeatures = {
   pos?: boolean
@@ -46,6 +47,7 @@ function buildFeatureOverrides(defaults: TenantFeatures, toggles: TenantFeatures
 
 export function FeaturesTab() {
   const qc = useQueryClient()
+  const { allowed: canWrite, reason: readOnlyReason } = useSettingsAccess('features')
   const detailQ = useQuery<FeaturesDetail>({
     queryKey: ['tenant-features'],
     queryFn: () => api.get('/features'),
@@ -110,7 +112,7 @@ export function FeaturesTab() {
                 >
                   <input
                     type="checkbox"
-                    disabled={!planDefault}
+                    disabled={!planDefault || !canWrite}
                     checked={planDefault && Boolean(toggles[key])}
                     onChange={(e) => setToggles((prev) => ({ ...prev, [key]: e.target.checked }))}
                   />
@@ -126,11 +128,12 @@ export function FeaturesTab() {
         <button
           type="button"
           className="btn-primary"
-          disabled={detailQ.isLoading || saveMut.isPending}
+          disabled={!canWrite || detailQ.isLoading || saveMut.isPending}
           onClick={() => saveMut.mutate()}
         >
           {saveMut.isPending ? 'Saving…' : 'Save feature overrides'}
         </button>
+        {!canWrite && readOnlyReason ? <p className="text-pleros-text-3 text-xs">{readOnlyReason}</p> : null}
       </div>
     </div>
   )
