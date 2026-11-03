@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildStopItems } from './route-stop-items'
+import { buildLinkedStopItems, buildStopItems } from './route-stop-items'
 
 const SKUS = new Map([
   ['pod', { id: 'pod', code: 'VAP-POD-001', name: 'Premium Nicotine Pod 5pk', isTobacco: true, ageRestricted: true, minimumAge: 21 }],
@@ -35,4 +35,26 @@ test('buildStopItems merges repeated products and survives unknown SKUs', () => 
   const r = buildStopItems([{ skuId: 'chips', quantity: 1 }, { skuId: 'chips', quantity: 2 }, { skuId: 'gone', quantity: 1 }], SKUS, POLICY)
   assert.deepEqual(r.items.map((i) => [i.skuCode, i.quantity]), [['SNK-CHP-050', 3], ['gone', 1]])
   assert.equal(r.items[1].name, 'Unknown product')
+})
+
+test('buildLinkedStopItems distinguishes unlinked stops from linked orders with or without products', () => {
+  const linesByOrder = new Map([
+    ['with-products', [{ skuId: 'chips', quantity: 2 }]],
+    ['empty-order', []],
+  ])
+
+  const unlinked = buildLinkedStopItems(null, linesByOrder, SKUS, POLICY)
+  assert.equal(unlinked.hasLinkedOrder, false)
+  assert.deepEqual(unlinked.items, [])
+
+  const populated = buildLinkedStopItems('with-products', linesByOrder, SKUS, POLICY)
+  assert.equal(populated.hasLinkedOrder, true)
+  assert.deepEqual(populated.items.map((item) => [item.skuCode, item.quantity]), [['SNK-CHP-050', 2]])
+
+  const empty = buildLinkedStopItems('empty-order', linesByOrder, SKUS, POLICY)
+  assert.equal(empty.hasLinkedOrder, true)
+  assert.deepEqual(empty.items, [])
+
+  const missingOrder = buildLinkedStopItems('unknown-order', linesByOrder, SKUS, POLICY)
+  assert.equal(missingOrder.hasLinkedOrder, false)
 })

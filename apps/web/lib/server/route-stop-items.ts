@@ -26,6 +26,8 @@ export type StopItemsSummary = {
   ageCheckRequired: boolean
 }
 
+export type LinkedStopItemsSummary = StopItemsSummary & { hasLinkedOrder: boolean }
+
 type SkuRow = { id: string; code: string; name: string; isTobacco: boolean; ageRestricted: boolean; minimumAge: number | null }
 type AgePolicy = { enabled: boolean; minimumAge: number; requireDeliveryConfirmation: boolean }
 
@@ -64,4 +66,17 @@ export function buildStopItems(
     // Mirrors assertDeliveryAgeCompliance: only enforced when the company policy asks for it.
     ageCheckRequired: ageRestricted && policy.enabled && policy.requireDeliveryConfirmation,
   }
+}
+
+/** Resolve a stop's products and explicitly distinguish no linked order from an empty linked order. */
+export function buildLinkedStopItems(
+  orderId: string | null,
+  linesByOrder: ReadonlyMap<string, Array<{ skuId: string; quantity: number }>>,
+  skus: Map<string, SkuRow>,
+  policy: AgePolicy,
+): LinkedStopItemsSummary {
+  if (!orderId) return { ...NO_ITEMS, hasLinkedOrder: false }
+  const lines = linesByOrder.get(orderId)
+  if (!lines) return { ...NO_ITEMS, hasLinkedOrder: false }
+  return { ...buildStopItems(lines, skus, policy), hasLinkedOrder: true }
 }
