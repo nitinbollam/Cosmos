@@ -1,6 +1,8 @@
 import { useId, useMemo, useState } from 'react'
 import { formatAmount, lineAmount, parseAmountInput, sumAmounts } from '@/lib/decimal-amount'
 import { submissionProblems, type Requisition } from '@/lib/requisitions'
+import { RequisitionSkuPicker } from './requisition-sku-picker'
+import { selectSkuForRequisitionLine } from '@/lib/requisition-sku-picker'
 
 export type RequisitionPayload = {
   supplierId: string | null
@@ -197,10 +199,12 @@ export function RequisitionForm(props: {
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-2">
-                  <label htmlFor={fieldId(`${l.key}.sku`)} className="block text-xs text-pleros-muted">
-                    SKU (optional)
-                  </label>
-                  <input id={fieldId(`${l.key}.sku`)} className={`${input} mt-1 font-mono`} value={l.skuCode} onChange={(e) => updateLine(l.key, { skuCode: e.target.value })} />
+                  <RequisitionSkuPicker
+                    lineNumber={n}
+                    skuCode={l.skuCode}
+                    onChange={(skuCode) => updateLine(l.key, { skuCode })}
+                    onSelect={(sku) => updateLine(l.key, selectSkuForRequisitionLine(l, sku))}
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <label htmlFor={fieldId(`${l.key}.qty`)} className="block text-xs text-pleros-muted">
