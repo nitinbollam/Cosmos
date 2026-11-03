@@ -17,7 +17,7 @@ import { toBaseAmount, normalizeCurrency } from './fx-util'
 import { splitBaseAmounts } from './invoice-tax-split'
 import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
 import { swallowed } from './fire-and-forget'
-import { formatMoney } from './money'
+import { formatMoney, money, roundMoney, type MoneyValue } from './money'
 import { assertWithinBalance, invoiceRemaining, parsePaymentAmount } from './payment-amount'
 import {
   allocateShipmentTax,
@@ -345,7 +345,7 @@ export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
 export async function reconcileCancelledOrderInvoice(
   tenantId: string,
   orderId: string,
-  refundedAmount = 0,
+  refundedAmount: MoneyValue = '0',
 ) {
   const marker = `Order cancellation: ${orderId}`
   return orderDb.$transaction(async (tx) => {
@@ -358,22 +358,27 @@ export async function reconcileCancelledOrderInvoice(
       include: { creditMemos: true },
     })
     if (!invoice) return null
-    const recordedPayment = Math.max(Number(invoice.amountPaid), Number(order?.amountPaid ?? 0))
+    const invoicePayment = money(invoice.amountPaid)
+    const orderPayment = money(order?.amountPaid ?? '0')
+    const recordedPayment = invoicePayment.gte(orderPayment) ? invoicePayment : orderPayment
     const priorCancellationMemo = invoice.creditMemos.find((memo) => memo.reason === marker)
-    const creditedBefore = Number(invoice.amountCredited)
-    const total = Number(invoice.totalAmount)
-    const creditAmount = Math.max(0, +(total - creditedBefore).toFixed(2))
+    const creditedBefore = money(invoice.amountCredited)
+    const total = money(invoice.totalAmount)
+    const invoiceTax = money(invoice.taxAmount)
+    const creditRemainder = roundMoney(total.minus(creditedBefore))
+    const creditAmount = creditRemainder.isNegative() ? money('0') : creditRemainder
     let creditedAfter = creditedBefore
 
     if (priorCancellationMemo) {
-      creditedAfter = Math.min(
-        total,
-        Math.max(creditedBefore, creditedBefore + Number(priorCancellationMemo.totalAmount)),
-      )
-    } else if (creditAmount > 0.009) {
-      const taxRate = total > 0 ? Number(invoice.taxAmount) / total : 0
-      const creditTax = Math.min(Number(invoice.taxAmount), +(creditAmount * taxRate).toFixed(2))
-      const creditSubtotal = Math.max(0, +(creditAmount - creditTax).toFixed(2))
+      const priorMemoTotal = creditedBefore.plus(priorCancellationMemo.totalAmount)
+      const updatedCredit = priorMemoTotal.gt(creditedBefore) ? priorMemoTotal : creditedBefore
+      creditedAfter = updatedCredit.gt(total) ? total : updatedCredit
+    } else if (creditAmount.gt('0.009')) {
+      const taxRate = total.gt(0) ? invoiceTax.div(total) : money('0')
+      const calculatedTax = roundMoney(creditAmount.times(taxRate))
+      const creditTax = calculatedTax.gt(invoiceTax) ? invoiceTax : calculatedTax
+      const subtotalRemainder = roundMoney(creditAmount.minus(creditTax))
+      const creditSubtotal = subtotalRemainder.isNegative() ? money('0') : subtotalRemainder
       const seq = invoice.creditMemos.length + 1
       const memo = await tx.creditMemo.create({
         data: {
@@ -382,7 +387,7 @@ export async function reconcileCancelledOrderInvoice(
           invoiceId: invoice.id,
           memoNumber: formatCreditMemoNumber(orderId, seq),
           customerId: invoice.customerId,
-          totalAmount: new Prisma.Decimal(creditAmount),
+          totalAmount: creditAmount,
           reason: marker,
           lines: [
             {
@@ -394,29 +399,29 @@ export async function reconcileCancelledOrderInvoice(
           ] as never,
         },
       })
-      const base = splitBaseAmounts(creditAmount, creditTax, Number(invoice.fxRateToBase))
-      const cashRefundBase = splitBaseAmounts(
-        Math.min(creditAmount, Math.max(0, refundedAmount)),
-        0,
-        Number(invoice.fxRateToBase),
-      ).baseTotal
+      const base = splitBaseAmounts(creditAmount, creditTax, invoice.fxRateToBase)
+      const requestedRefund = money(refundedAmount)
+      const nonnegativeRefund = requestedRefund.isNegative() ? money('0') : requestedRefund
+      const cashRefund = nonnegativeRefund.lt(creditAmount) ? nonnegativeRefund : creditAmount
+      const cashRefundBase = splitBaseAmounts(cashRefund, '0', invoice.fxRateToBase).baseTotal
       await enqueuePostingJob(tx, {
         tenantId,
         kind: 'CREDIT_MEMO_JOURNAL',
         sourceType: 'CreditMemo',
         sourceId: memo.id,
-        amount: base.baseTotal.toFixed(2),
-        taxAmount: base.baseTax.toFixed(2),
-        cashAmount: cashRefundBase.toFixed(2),
+        amount: formatMoney(base.baseTotal),
+        taxAmount: formatMoney(base.baseTax),
+        cashAmount: formatMoney(cashRefundBase),
       })
-      creditedAfter = Math.min(total, creditedBefore + creditAmount)
+      const updatedCredit = creditedBefore.plus(creditAmount)
+      creditedAfter = updatedCredit.gt(total) ? total : updatedCredit
     }
 
     return tx.invoice.update({
       where: { id: invoice.id },
       data: {
-        amountCredited: new Prisma.Decimal(creditedAfter),
-        status: recordedPayment <= 0 ? 'VOID' : 'CREDITED',
+        amountCredited: creditedAfter,
+        status: recordedPayment.lte(0) ? 'VOID' : 'CREDITED',
       },
     })
   })

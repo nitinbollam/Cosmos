@@ -413,7 +413,7 @@ test('a partially paid issued invoice is fully credited and marked credited idem
       status: 'PARTIALLY_PAID',
     },
   })
-  await reconcileCancelledOrderInvoice(tenantId, s.orderId, 10)
+  await reconcileCancelledOrderInvoice(tenantId, s.orderId, '10.00')
   await reconcileCancelledOrderInvoice(tenantId, s.orderId)
   const updated = await orderDb.invoice.findFirstOrThrow({ where: { id: invoice.id } })
   assert.equal(updated.status, 'CREDITED')
@@ -424,6 +424,47 @@ test('a partially paid issued invoice is fully credited and marked credited idem
     where: { tenantId, kind: 'CREDIT_MEMO_JOURNAL', sourceId: memo.id },
   })
   assert.equal((memoJob.payload as { cashAmount?: string }).cashAmount, '10.00')
+})
+
+test('cancellation credit memo keeps decimal tax rounding and partial refund amounts exact', async () => {
+  const s = await seed()
+  const invoice = await orderDb.invoice.create({
+    data: {
+      tenantId,
+      orderId: s.orderId,
+      invoiceNumber: `INV-${randomUUID()}`,
+      customerId,
+      subtotal: '0.05',
+      taxAmount: '0.01',
+      totalAmount: '0.06',
+      amountPaid: '0.04',
+      amountCredited: '0.03',
+      fxRateToBase: '1.2345',
+      status: 'PARTIALLY_PAID',
+    },
+  })
+
+  await reconcileCancelledOrderInvoice(tenantId, s.orderId, '0.02')
+  await reconcileCancelledOrderInvoice(tenantId, s.orderId, '0.02')
+
+  const updated = await orderDb.invoice.findFirstOrThrow({ where: { id: invoice.id } })
+  assert.equal(updated.amountCredited.toFixed(2), '0.06')
+  assert.equal(updated.status, 'CREDITED')
+  const memo = await orderDb.creditMemo.findFirstOrThrow({ where: { invoiceId: invoice.id } })
+  assert.equal(await orderDb.creditMemo.count({ where: { invoiceId: invoice.id } }), 1)
+  assert.equal(memo.totalAmount.toFixed(2), '0.03')
+  const [line] = memo.lines as Array<{ subtotal: number; taxAmount: number; totalAmount: number }>
+  assert.equal(Number(line.subtotal), 0.02)
+  assert.equal(Number(line.taxAmount), 0.01)
+  assert.equal(Number(line.totalAmount), 0.03)
+  const memoJob = await orderDb.postingJob.findFirstOrThrow({
+    where: { tenantId, kind: 'CREDIT_MEMO_JOURNAL', sourceId: memo.id },
+  })
+  assert.deepEqual(memoJob.payload, {
+    amount: '0.04',
+    taxAmount: '0.01',
+    cashAmount: '0.02',
+  })
 })
 
 test('cancelling a paid invoiced order posts one credit and refunds the captured card once', async () => {

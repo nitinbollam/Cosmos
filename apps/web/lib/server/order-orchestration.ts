@@ -21,6 +21,7 @@ import * as wmsFulfillment from './wms-fulfillment'
 import * as backorders from './backorders'
 import * as dropShip from './drop-ship'
 import { emitDomainEvent, emitOrderEvent } from './domain-events'
+import { sum as sumMoney } from './money'
 
 import { swallowed } from './fire-and-forget'
 function parseCompletedSteps(raw: unknown): string[] {
@@ -964,10 +965,7 @@ export async function cancelOrderWithCompensation(
     // per-intent compensation state makes this amount stable across a retry.
     await step('invoice', async () => {
       const { reconcileCancelledOrderInvoice } = await import('./invoices')
-      const refundedAmount = Object.values(state.adjusted).reduce(
-        (sum, amount) => sum + Number(amount),
-        0,
-      )
+      const refundedAmount = sumMoney(Object.values(state.adjusted))
       await reconcileCancelledOrderInvoice(tenantId, orderId, refundedAmount)
     })
 
