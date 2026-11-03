@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
@@ -12,6 +12,7 @@ interface BinsTabProps {
 }
 
 export function BinsTab({ warehouses }: BinsTabProps) {
+  const ids = useId()
   const qc = useQueryClient()
   const [binWarehouseId, setBinWarehouseId] = useState<string>('')
   const [binCode, setBinCode] = useState('')
@@ -87,10 +88,15 @@ export function BinsTab({ warehouses }: BinsTabProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
         <div>
-          <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
+          <label
+            htmlFor={`${ids}-warehouse`}
+            className="block text-[11px] uppercase tracking-wider mb-1"
+            style={{ color: 'var(--c-text-3)' }}
+          >
             Warehouse
-          </div>
+          </label>
           <select
+            id={`${ids}-warehouse`}
             className="pleros-input w-auto min-w-[200px]"
             value={binWarehouseId}
             onChange={(e) => setBinWarehouseId(e.target.value)}
@@ -114,10 +120,15 @@ export function BinsTab({ warehouses }: BinsTabProps) {
               <h3 className="text-sm font-semibold text-pleros-white mb-3">Add bin location</h3>
               <div className="flex flex-wrap gap-3 items-end">
                 <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
+                  <label
+                    htmlFor={`${ids}-code`}
+                    className="block text-xs mb-1"
+                    style={{ color: 'var(--c-text-3)' }}
+                  >
                     Code
                   </label>
                   <input
+                    id={`${ids}-code`}
                     className="pleros-input w-32"
                     value={binCode}
                     onChange={(e) => setBinCode(e.target.value)}
@@ -125,16 +136,30 @@ export function BinsTab({ warehouses }: BinsTabProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
+                  <label
+                    htmlFor={`${ids}-aisle`}
+                    className="block text-xs mb-1"
+                    style={{ color: 'var(--c-text-3)' }}
+                  >
                     Aisle
                   </label>
-                  <input className="pleros-input w-24" value={binAisle} onChange={(e) => setBinAisle(e.target.value)} />
+                  <input
+                    id={`${ids}-aisle`}
+                    className="pleros-input w-24"
+                    value={binAisle}
+                    onChange={(e) => setBinAisle(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--c-text-3)' }}>
+                  <label
+                    htmlFor={`${ids}-zone`}
+                    className="block text-xs mb-1"
+                    style={{ color: 'var(--c-text-3)' }}
+                  >
                     Zone
                   </label>
                   <input
+                    id={`${ids}-zone`}
                     className="pleros-input w-24"
                     value={binZone}
                     onChange={(e) => setBinZone(e.target.value)}

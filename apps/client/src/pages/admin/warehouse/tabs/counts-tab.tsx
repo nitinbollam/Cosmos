@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
@@ -16,6 +16,7 @@ interface CountsTabProps {
 }
 
 export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
+  const ids = useId()
   const qc = useQueryClient()
   const [countDrawerOpen, setCountDrawerOpen] = useState(false)
   const [countWh, setCountWh] = useState('')
@@ -221,10 +222,19 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
       <PlerosSheet open={countDrawerOpen} onOpenChange={setCountDrawerOpen} title="New cycle count">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+            <label
+              htmlFor={`${ids}-warehouse`}
+              className="block text-sm mb-1"
+              style={{ color: 'var(--c-text-2)' }}
+            >
               Warehouse
             </label>
-            <select className="pleros-input" value={countWh} onChange={(e) => setCountWh(e.target.value)}>
+            <select
+              id={`${ids}-warehouse`}
+              className="pleros-input"
+              value={countWh}
+              onChange={(e) => setCountWh(e.target.value)}
+            >
               <option value="">Select warehouse…</option>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -234,10 +244,15 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
             </select>
           </div>
           <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+            <label
+              htmlFor={`${ids}-type`}
+              className="block text-sm mb-1"
+              style={{ color: 'var(--c-text-2)' }}
+            >
               Type
             </label>
             <select
+              id={`${ids}-type`}
               className="pleros-input"
               value={countType}
               onChange={(e) => setCountType(e.target.value as 'FULL' | 'ABC' | 'RANDOM')}
@@ -248,10 +263,15 @@ export function CountsTab({ warehouses, warehouseLabel }: CountsTabProps) {
             </select>
           </div>
           <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--c-text-2)' }}>
+            <label
+              htmlFor={`${ids}-scheduled-date-optional`}
+              className="block text-sm mb-1"
+              style={{ color: 'var(--c-text-2)' }}
+            >
               Scheduled date (optional)
             </label>
             <input
+              id={`${ids}-scheduled-date-optional`}
               type="date"
               className="pleros-input"
               value={countScheduled}
