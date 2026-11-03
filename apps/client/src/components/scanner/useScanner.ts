@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BarcodeFormat, ScannerStatus } from './types'
 import { ScannerError } from './types'
 import { mapGetUserMediaError, preflightCameraSupport } from './errors'
-import { pickEngine, type ScanEngine } from './engines'
+import { pickEngine, type RawDetection, type ScanEngine } from './engines'
+import { DecodeFailures, FrameStallWatch, withTimeout } from './decode-health'
+
+/** A frame whose decode hasn't answered by now is given up on, so one stuck call can't stop the loop. */
+const DECODE_TIMEOUT_MS = 3000
 
 /**
  * MediaTrackCapabilities/Constraints don't yet type `torch` in stock DOM lib.
@@ -17,7 +21,9 @@ export type UseScannerOptions = {
   /** Restrict decoded symbologies. */
   formats: BarcodeFormat[]
   /** Called with each raw decode BEFORE dedup/business rules. */
-  onDecode: (rawValue: string, format: BarcodeFormat) => void
+  onDecode?: (rawValue: string, format: BarcodeFormat) => void
+  /** Called after every decoded frame, with what it found or null; lets a gate count frames without the label. */
+  onFrame?: (hit: RawDetection | null) => void
   /** Fatal setup/stream errors. */
   onError: (error: ScannerError) => void
   /** Milliseconds between decode attempts. Lower = snappier, more CPU. */
@@ -72,6 +78,16 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
   // Keep the latest callbacks without re-triggering the camera effect.
   const onDecodeRef = useRef(options.onDecode)
   onDecodeRef.current = options.onDecode
+  const onFrameRef = useRef(options.onFrame)
+  onFrameRef.current = options.onFrame
+  const formatsRef = useRef(formats)
+  formatsRef.current = formats
+  const failuresRef = useRef(new DecodeFailures())
+  const stallRef = useRef(new FrameStallWatch())
+  // Once the native detector has failed, stay on ZXing for the rest of the page's life.
+  const avoidNativeRef = useRef(false)
+  // Bumped to reopen the camera (a frozen or ended track); part of the camera effect's deps.
+  const [restartKey, setRestartKey] = useState(0)
   const onErrorRef = useRef(options.onError)
   onErrorRef.current = options.onError
 
@@ -137,6 +153,14 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
         return
       }
 
+      // A frozen feed hands the decoder the same picture forever: reopen the camera.
+      if (stallRef.current.shouldRestart(video.currentTime)) {
+        setRestartKey((k) => k + 1)
+        return
+      }
+      // The phone can pause the video (an interruption, a call); playing again is harmless if it's running.
+      if (video.paused) void video.play().catch(() => undefined) // swallow-ok: autoplay refusal; the stall check reopens the camera
+
       // If currently decoding previous frame or video not ready yet, check again.
       if (decodingRef.current || video.readyState < 2 || video.videoWidth === 0) {
         loopTimer.current = window.setTimeout(tick, scanIntervalMs)
@@ -159,16 +183,28 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
         const ctx = canvas.getContext('2d', { willReadFrequently: true })
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-          const hit = await engine.decode(canvas)
-          if (hit && !pausedRef.current) {
-            onDecodeRef.current(hit.rawValue, hit.format)
+          const hit = await withTimeout(engine.decode(canvas), DECODE_TIMEOUT_MS)
+          failuresRef.current.succeeded()
+          if (!pausedRef.current) {
+            onFrameRef.current?.(hit)
+            if (hit) onDecodeRef.current?.(hit.rawValue, hit.format)
           }
         }
-      } catch (err) {
-        // A decode fault shouldn't kill the stream; log once and keep looping.
-        onErrorRef.current(
-          err instanceof ScannerError ? err : new ScannerError('unknown', 'Decode error', err),
-        )
+      } catch {
+        // A decode fault or a stuck decode shouldn't stop scanning. A decoder that keeps failing is replaced:
+        // the native detector can stop answering after a while on some Android phones, and ZXing is the steady fallback.
+        if (failuresRef.current.failed() && engineRef.current === engine) {
+          avoidNativeRef.current ||= engine.name === 'BarcodeDetector'
+          const next = await pickEngine(formatsRef.current, { avoidNative: avoidNativeRef.current })
+          if (streamRef.current && engineRef.current === engine) {
+            console.warn(`Scanner: replaced the ${engine.name} decoder with ${next.name} after repeated failures`)
+            engineRef.current = next
+            engine.dispose()
+            setCameraInfo((info) => (info ? { ...info, engine: next.name } : info))
+          } else {
+            next.dispose()
+          }
+        }
       } finally {
         decodingRef.current = false
         // Only reschedule next tick if we are still active and not paused/torn down.
@@ -243,6 +279,11 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
           return
         }
         streamRef.current = stream
+        stallRef.current.reset()
+        // The OS can end the track (another app takes the camera, a long lock): reopen it.
+        stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+          if (!cancelled) setRestartKey((k) => k + 1)
+        })
 
         // Enumerate cameras only AFTER permission (labels/deviceIds are hidden
         // until granted). Stored in a ref so this never restarts the stream —
@@ -280,7 +321,7 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
           })
         }
 
-        engineRef.current = await pickEngine(formats)
+        engineRef.current = await pickEngine(formats, { avoidNative: avoidNativeRef.current })
         if (cancelled) return
         if (video) {
           setCameraInfo({ width: video.videoWidth, height: video.videoHeight, engine: engineRef.current.name })
@@ -305,7 +346,7 @@ export function useScanner(options: UseScannerOptions): UseScannerReturn {
     // formats is captured by value; changing it mid-session isn't a supported
     // live operation (close + reopen to change symbologies).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, selectedDeviceId, highResolution, runLoop, teardown])
+  }, [active, selectedDeviceId, highResolution, restartKey, runLoop, teardown])
 
   const pause = useCallback(() => {
     pausedRef.current = true

@@ -16,9 +16,11 @@ export { WAREHOUSE_DEFAULT_FORMATS } from './formats'
  * On the vast majority of iOS devices step 1 returns null, so ZXing is the
  * effective primary there — which is why it, not the native path, gets the
  * TRY_HARDER tuning.
+ *
+ * `avoidNative` skips step 1: the scanner asks for it after the native detector has stopped answering.
  */
-export async function pickEngine(formats: BarcodeFormat[]): Promise<ScanEngine> {
-  const native = await NativeEngine.tryCreate(formats)
+export async function pickEngine(formats: BarcodeFormat[], opts: { avoidNative?: boolean } = {}): Promise<ScanEngine> {
+  const native = opts.avoidNative ? null : await NativeEngine.tryCreate(formats)
   if (native) return native
   return new ZXingEngine(formats)
 }
