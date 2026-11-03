@@ -15,6 +15,8 @@ type Sku = {
   category?: string
   unitOfMeasure?: string | null
   quantityAvailable?: number
+  /** Shipped straight from the supplier, so it can be ordered whatever the stock. */
+  dropShip?: boolean
   createdAt?: string
 }
 
@@ -211,7 +213,7 @@ export default function CatalogPage() {
       return
     }
     const qty = getQty(sku.id)
-    const avail = sku.quantityAvailable ?? 0
+    const avail = sku.dropShip ? 0 : (sku.quantityAvailable ?? 0)
     if (avail > 0 && qty > avail) {
       setToast({ message: `Only ${avail} available in stock` })
       window.setTimeout(() => setToast(null), 3000)
@@ -604,9 +606,10 @@ export default function CatalogPage() {
         {/* Product Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 flex-1">
           {sorted.map((sku) => {
-            const avail = sku.quantityAvailable ?? 0
-            const oos = avail <= 0
-            const lowStock = !oos && avail <= 5
+            // Drop-ship products have no stock limit here: avail 0 with oos false means "no cap".
+            const avail = sku.dropShip ? 0 : (sku.quantityAvailable ?? 0)
+            const oos = !sku.dropShip && avail <= 0
+            const lowStock = !sku.dropShip && !oos && avail <= 5
             const theme = getCategoryTheme(sku.category, sku.name, sku.code)
             const qty = getQty(sku.id)
             const isAdded = recentlyAddedSkuId === sku.id
@@ -648,7 +651,11 @@ export default function CatalogPage() {
 
                     {/* Stock Status Badge Top-Right */}
                     <div className="absolute top-2.5 right-2.5">
-                      {oos ? (
+                      {sku.dropShip ? (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider text-sky-300 bg-sky-950/80 border border-sky-500/40 backdrop-blur-sm">
+                          Ships from supplier
+                        </span>
+                      ) : oos ? (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-rose-300 bg-rose-950/80 border border-rose-500/40 backdrop-blur-sm">
                           Out of stock
                         </span>

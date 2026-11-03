@@ -13,6 +13,8 @@ import { crmDb, inventoryDb, orderDb } from './db'
 import { getAgeVerificationPolicy } from './compliance-age'
 import { ApiError } from './session'
 import { attemptOrQueue } from './deferred-work'
+import { assertAssignable } from './assignees'
+import { ROUTE_DRIVER_RULE } from './assignee-rules'
 import { parseDriverLocation } from './driver-scope'
 
 export function listRoutes(tenantId: string, date?: string, statuses?: RouteStatus[], driverId?: string) {
@@ -209,6 +211,7 @@ export async function assignRouteDriver(tenantId: string, id: string, driverId: 
   if (route.status === RouteStatus.CANCELLED || route.status === RouteStatus.COMPLETED) {
     throw new ApiError(400, 'Route is not assignable')
   }
+  await assertAssignable(tenantId, driverId, ROUTE_DRIVER_RULE)
   await dispatchDb.deliveryRoute.update({
     where: { id },
     // ASSIGNED until the driver delivers or fails a stop; a route already under way stays IN_PROGRESS.

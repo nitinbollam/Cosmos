@@ -868,6 +868,11 @@ export async function applyCreditMemo(
     return memo
   })
 
+  // Returned units go back at the cost they shipped at, and that same cost reverses their COGS (ticket 50).
+  const { orderShippedUnitCosts } = await import('./inventory')
+  const returnCosts =
+    input.restock !== false ? await orderShippedUnitCosts(tenantId, order.id, memoLines.map((ml) => ml.skuId)) : new Map<string, string>()
+
   for (const ml of memoLines) {
     await orderDb.orderLineItem.update({
       where: { id: ml.orderLineId },
@@ -889,6 +894,7 @@ export async function applyCreditMemo(
           referenceId: creditMemo.id,
           referenceType: 'CREDIT_MEMO',
           correlationId: randomUUID(),
+          unitCost: returnCosts.get(ml.skuId),
         },
         performedBy,
       )
@@ -951,17 +957,14 @@ export async function applyCreditMemo(
 
   // Restocked goods reverse their ship-time COGS.
   if (input.restock !== false) {
-    const { computeOrderCogs } = await import('./operations-gl')
-    const returnedCogs = await computeOrderCogs(
-      tenantId,
-      memoLines.map((ml) => ({ skuId: ml.skuId, quantity: ml.quantity })),
-    )
+    const { valueOf } = await import('./stock-cost')
+    const returnedCogs = valueOf(memoLines.map((ml) => ({ quantity: ml.quantity, unitCost: returnCosts.get(ml.skuId) ?? '0' })))
     await enqueuePostingJob(orderDb, {
       tenantId,
       kind: 'COGS_REVERSAL_JOURNAL',
       sourceType: 'CreditMemo',
       sourceId: creditMemo.id,
-      amount: returnedCogs.toFixed(2),
+      amount: formatMoney(returnedCogs),
     })
   }
 

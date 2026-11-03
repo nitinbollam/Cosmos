@@ -4,6 +4,8 @@ import { transferStock } from './inventory'
 import { normalizeState, vanLinesProblem, type VanLine } from './van-rules'
 import { isDriverRole } from './driver-scope'
 import { splitAcrossBatches, type BatchTake } from './batch-split'
+import { assertAssignable } from './assignees'
+import { VAN_DRIVER_RULE } from './assignee-rules'
 
 /**
  * A van is a warehouse of kind VEHICLE that rides with one driver (PLR-167). Stock moves on and
@@ -24,6 +26,7 @@ export async function createVan(
   if (!name || !code) throw new ApiError(400, 'A van needs a name and a code')
   if (!driverId) throw new ApiError(400, 'A van needs a driver')
   if (!stateCode) throw new ApiError(400, 'A van needs a two-letter state')
+  await assertAssignable(tenantId, driverId, VAN_DRIVER_RULE)
   const taken = await inventoryDb.warehouse.findFirst({
     where: { tenantId, kind: 'VEHICLE', assignedDriverId: driverId, isActive: true },
   })

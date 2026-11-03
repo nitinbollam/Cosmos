@@ -9,8 +9,30 @@ import { isOrderCancellationEligible } from './order-status'
 import { ApiError } from './session'
 import { rejectApprovedCancellationForStatus } from './approvals'
 
+/** Checks that run before an approver's decision is recorded. Throws to refuse the decision. */
+export async function beforeApprovalDecided(tenantId: string, request: ApprovalRequest) {
+  if (request.type === ApprovalType.PURCHASE_REQUISITION) {
+    const { assertRequisitionApprovalDecidable } = await import('./requisition-approval-sync')
+    await assertRequisitionApprovalDecidable(tenantId, request)
+  }
+}
+
 /** Side effects when an approval request is approved or rejected. */
 export async function onApprovalDecided(tenantId: string, request: ApprovalRequest) {
+  // A request closed without a decision must not trigger business side effects.
+  if (request.status !== ApprovalStatus.APPROVED && request.status !== ApprovalStatus.REJECTED) return request
+
+  if (request.type === ApprovalType.PURCHASE_REQUISITION) {
+    const { applyRequisitionDecision } = await import('./requisition-approval-sync')
+    try {
+      await applyRequisitionDecision(tenantId, request)
+    } catch (err) {
+      // The decision is committed in the tenant database; recovery retries this projection.
+      console.error('[requisitions] applying approval decision failed; recovery will retry:', err)
+    }
+    return request
+  }
+
   if (request.type === ApprovalType.ORDER_CANCELLATION) {
     if (request.status === ApprovalStatus.APPROVED) {
       const context = request.context as { reason?: string } | null
@@ -78,6 +100,7 @@ export async function onApprovalDecided(tenantId: string, request: ApprovalReque
       approve: request.status === ApprovalStatus.APPROVED,
       decidedBy: request.decidedBy ?? 'system',
       rejectReason: request.rejectReason ?? undefined,
+      approvalDecisionId: request.id,
     })
   }
 }

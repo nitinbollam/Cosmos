@@ -53,6 +53,7 @@ export async function listAccounts(
   const rows = await crmDb.customer.findMany({
     where: {
       tenantId,
+      isActive: true,
       ...(mineOnly ? { salesRepUserId: viewer.userId } : {}),
       ...(q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }] } : {}),
     },
@@ -235,13 +236,31 @@ export async function applyApprovedCreditIncrease(tenantId: string, request: { i
   const ctx = (request.context ?? {}) as { requestedLimit?: number; currentLimit?: number | null }
   const next = Number(ctx.requestedLimit)
   if (!Number.isFinite(next) || next <= 0) throw new ApiError(500, 'Credit request has no limit')
-  await crmDb.customer.update({ where: { id: request.subjectId }, data: { creditLimit: next } })
-  await auditLog(tenantId, {
-    userId: request.decidedBy ?? undefined,
-    action: 'credit_limit.changed',
-    entityType: 'Customer',
-    entityId: request.subjectId,
-    metadata: { from: ctx.currentLimit ?? null, to: next, requestId: request.id },
+  const auditId = `credit-limit-approved-${request.id}`
+  const existing = await tenantDb.auditEvent.findUnique({ where: { id: auditId }, select: { id: true } })
+  if (existing) return
+
+  const customer = await crmDb.customer.findFirst({
+    where: { id: request.subjectId, tenantId },
+    select: { creditLimit: true },
+  })
+  if (!customer) throw new ApiError(404, 'Customer not found')
+  if (customer.creditLimit?.toNumber() !== next) {
+    await crmDb.customer.update({ where: { id: request.subjectId }, data: { creditLimit: next } })
+  }
+  // A stable audit id makes concurrent and later hook retries converge on one event.
+  await tenantDb.auditEvent.upsert({
+    where: { id: auditId },
+    update: {},
+    create: {
+      id: auditId,
+      tenantId,
+      userId: request.decidedBy,
+      action: 'credit_limit.changed',
+      entityType: 'Customer',
+      entityId: request.subjectId,
+      metadata: { from: ctx.currentLimit ?? null, to: next, requestId: request.id },
+    },
   })
 }
 

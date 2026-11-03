@@ -7,6 +7,8 @@ import { derivePickLineStatus } from './pick-line-status'
 import { ApiError } from './session'
 import { claimable, compareTasks, matchesAssigned, pickAccess, type AssignedFilter } from './pick-claim'
 import { getTenantWorkflowSettings } from './tenant-workflow-settings'
+import { assertAssignable } from './assignees'
+import { PICKER_RULE } from './assignee-rules'
 
 import { swallowed } from './fire-and-forget'
 export type ConfirmPickLineInput = {
@@ -431,6 +433,8 @@ export async function assignFulfillmentTask(tenantId: string, taskId: string, us
   if (task.status === 'CANCELLED' || task.status === 'DISPATCHED') {
     throw new ApiError(400, `Cannot assign task in status ${task.status}`)
   }
+  // null takes the picker off the task.
+  if (userId) await assertAssignable(tenantId, userId, PICKER_RULE)
   const updated = await wmsDb.fulfillmentTask.update({
     where: { id: taskId },
     data: { assignedUserId: userId },

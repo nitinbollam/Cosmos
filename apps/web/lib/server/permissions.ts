@@ -6,6 +6,7 @@ export const AVAILABLE_MODULES = [
   'inventory',
   'wms',
   'purchasing',
+  'requisitions',
   'compliance',
   'crm',
   'quotes',
@@ -38,11 +39,15 @@ export const MODULE_METADATA: Record<ModuleKey, { label: string; permissions: st
   inventory: { label: 'Inventory', permissions: ['inventory.read', 'inventory.write'] },
   wms: { label: 'Warehouse & Fulfillment', permissions: ['wms.read', 'wms.write'] },
   purchasing: { label: 'Purchasing', permissions: ['purchasing.read', 'purchasing.write'] },
+  requisitions: { label: 'Purchase Requisitions', permissions: ['requisitions.read', 'requisitions.write'] },
   compliance: { label: 'Compliance & Tax', permissions: ['compliance.read', 'compliance.write'] },
   crm: { label: 'CRM & Customers', permissions: ['crm.read', 'crm.write'] },
   quotes: { label: 'Quotes', permissions: ['quotes.read', 'quotes.write'] },
   dispatch: { label: 'Dispatch & Delivery', permissions: ['dispatch.read', 'dispatch.write'] },
-  finance: { label: 'Finance & Ledger', permissions: ['finance.read', 'finance.write'] },
+  finance: {
+    label: 'Finance & Ledger',
+    permissions: ['finance.read', 'finance.write', 'finance.reconcile', 'finance.reconcile.signoff', 'finance.reconcile.reopen'],
+  },
   reports: { label: 'Reports & Analytics', permissions: ['reports.read', 'reports.write'] },
   pos: { label: 'Point of Sale', permissions: ['pos.read', 'pos.write'] },
   notifications: { label: 'Notifications', permissions: ['notifications.read', 'notifications.write'] },
@@ -73,6 +78,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'manufacturing.*',
     'wms.*',
     'purchasing.*',
+    // Raising requisitions is limited to managers (and admins, who have '*') until requester roles are decided.
+    'requisitions.*',
     'compliance.*',
     'crm.*',
     'quotes.*',
@@ -180,6 +187,16 @@ export function hasPermission(session: SessionUser | null | undefined, permissio
   if (permission === 'inventory.read' && perms.includes('wms.*')) return true
 
   return false
+}
+
+/**
+ * For sensitive actions that module wildcards must not grant: admins, or a user explicitly given
+ * exactly this permission. (`finance.*` would otherwise hand every sub-permission to every accountant.)
+ */
+export function hasExplicitPermission(session: SessionUser | null | undefined, permission: string): boolean {
+  if (!session) return false
+  if (session.role === 'SUPER_ADMIN' || session.role === 'TENANT_ADMIN') return true
+  return Array.isArray(session.permissions) && session.permissions.includes(permission)
 }
 
 export function assertPermission(session: SessionUser, permission: string | string[]) {

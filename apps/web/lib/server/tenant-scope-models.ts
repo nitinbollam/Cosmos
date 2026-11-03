@@ -30,6 +30,7 @@ export const TENANT_EXEMPT_MODELS: Record<string, { reason: ExemptReason; note: 
   'order.OrderLineItem': { reason: 'child', note: 'belongs to an Order' },
   'payment.StripeWebhookEvent': { reason: 'global', note: 'platform-level webhook dedupe, before a tenant is known' },
   'purchasing.PurchaseOrderLine': { reason: 'child', note: 'belongs to a PurchaseOrder' },
+  'purchasing.PurchaseRequisitionLine': { reason: 'child', note: 'belongs to a PurchaseRequisition' },
   'purchasing.VendorBillLine': { reason: 'child', note: 'belongs to a VendorBill' },
   'storefront.QuoteLine': { reason: 'child', note: 'belongs to a Quote' },
   'storefront.OrderTemplateLine': { reason: 'child', note: 'belongs to an OrderTemplate' },

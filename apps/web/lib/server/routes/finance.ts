@@ -9,6 +9,9 @@ import * as ledger from '../ledger'
 import * as financialStatements from '../financial-statements'
 import { buildIncomeStatementPdf } from '../financial-statement-document'
 import * as bankRecon from '../bank-recon'
+import * as bankReconciliation from '../bank-reconciliation'
+import { buildReconciliationPdf } from '../bank-reconciliation-document'
+import { hasExplicitPermission } from '../permissions'
 import * as fixedAssets from '../fixed-assets'
 import * as complianceTax from '../compliance-tax'
 import { getTenantTaxSettings } from '../tenant-tax'
@@ -291,7 +294,8 @@ export async function routeChartAccounts(method: string, seg: string[], req: Req
 
 export async function routeBankAccounts(method: string, seg: string[], req: Request): Promise<Response> {
   const isRead = method === 'GET'
-  const session = await requirePermission(req, isRead ? 'finance.read' : 'finance.write')
+  const isImport = seg.length === 3 && seg[2] === 'import' && method === 'POST'
+  const session = await requirePermission(req, isRead ? 'finance.read' : isImport ? 'finance.reconcile' : 'finance.write')
   const url = new URL(req.url)
   if (seg.length === 1 && method === 'GET') {
     if (url.searchParams.get('summary') === 'true') {
@@ -305,8 +309,12 @@ export async function routeBankAccounts(method: string, seg: string[], req: Requ
     return Response.json(await bankRecon.listBankAccounts(session.tenantId))
   }
   if (seg.length === 1 && method === 'POST') {
-    const body = (await req.json()) as Parameters<typeof bankRecon.createBankAccount>[1]
+    const body = (await req.json()) as bankRecon.BankAccountInput
     return Response.json(await bankRecon.createBankAccount(session.tenantId, body), { status: 201 })
+  }
+  if (seg.length === 2 && method === 'PATCH') {
+    const body = (await req.json()) as bankRecon.BankAccountInput
+    return Response.json(await bankRecon.updateBankAccount(session.tenantId, seg[1]!, body, session.userId))
   }
   if (seg.length === 2 && seg[1] === 'lines' && method === 'GET') {
     return Response.json(
@@ -323,14 +331,15 @@ export async function routeBankAccounts(method: string, seg: string[], req: Requ
     const bankAccountId = url.searchParams.get('bankAccountId') ?? undefined
     return Response.json(await bankRecon.listUnreconciledLines(session.tenantId, bankAccountId))
   }
-  if (seg.length === 3 && seg[2] === 'import' && method === 'POST') {
-    const body = (await req.json()) as {
-      lines: Array<{ postedAt: string; description: string; amount: number; reference?: string }>
-    }
-    return Response.json(await bankRecon.importStatementLines(session.tenantId, seg[1], body.lines ?? []), { status: 201 })
+  if (isImport) {
+    const body = (await req.json()) as { lines?: unknown }
+    return Response.json(await bankRecon.importStatementLines(session.tenantId, seg[1]!, body.lines, session.userId), {
+      status: 201,
+    })
   }
   if (seg.length === 3 && seg[2] === 'reconcile' && method === 'POST') {
-    return Response.json(await bankRecon.reconcileStatementLine(session.tenantId, seg[1]))
+    // Retired (410): always throws so the line-only flag can't bypass matching and sign-off.
+    return Response.json(await bankRecon.reconcileStatementLine(session.tenantId, seg[1]!))
   }
   if (seg.length === 4 && seg[2] === 'plaid' && seg[3] === 'link-token' && method === 'POST') {
     const { createLinkToken } = await import('../plaid')
@@ -345,9 +354,87 @@ export async function routeBankAccounts(method: string, seg: string[], req: Requ
   }
   if (seg.length === 4 && seg[2] === 'plaid' && seg[3] === 'sync' && method === 'POST') {
     const { syncPlaidTransactions } = await import('../plaid')
-    return Response.json(await syncPlaidTransactions(session.tenantId, seg[1]!))
+    return Response.json(await syncPlaidTransactions(session.tenantId, seg[1]!, session.userId))
   }
   throw new ApiError(404, 'Bank account route not found')
+}
+
+/**
+ * /bank-reconciliations — per-account statement periods. Reads need finance.read; preparing
+ * (create, import, match) needs finance.reconcile; sign-off needs finance.reconcile.signoff; reopen
+ * needs an admin role or an explicit finance.reconcile.reopen grant (module wildcards don't count).
+ */
+export async function routeBankReconciliations(method: string, seg: string[], req: Request): Promise<Response> {
+  const session = await requireSession(req)
+  const actor = { tenantId: session.tenantId, userId: session.userId }
+  const id = seg[1]
+  const action = seg[2]
+  const body = async <T,>() => ((await req.json().catch(() => ({}))) ?? {}) as T
+
+  if (method === 'GET') {
+    assertPermission(session, 'finance.read')
+    const url = new URL(req.url)
+    if (seg.length === 1) {
+      return Response.json(
+        await bankReconciliation.listReconciliations(session.tenantId, {
+          bankAccountId: url.searchParams.get('bankAccountId') ?? undefined,
+          status: url.searchParams.get('status') ?? undefined,
+        }),
+      )
+    }
+    if (seg.length === 2) return Response.json(await bankReconciliation.getReconciliationWorkspace(session.tenantId, id!))
+    if (seg.length === 3 && action === 'events') {
+      return Response.json(await bankReconciliation.listReconciliationEvents(session.tenantId, id!))
+    }
+    if (seg.length === 3 && action === 'pdf') {
+      const report = await bankReconciliation.getReconciliationReport(session.tenantId, id!)
+      const pdf = await buildReconciliationPdf(session.tenantId, report, session.email || session.userId)
+      const r = report.workspace.reconciliation
+      return new Response(new Uint8Array(pdf), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="bank-reconciliation-${r.periodEnd}.pdf"`,
+        },
+      })
+    }
+    throw new ApiError(404, 'Bank reconciliation route not found')
+  }
+
+  if (seg.length === 3 && action === 'sign-off' && method === 'POST') {
+    assertPermission(session, 'finance.reconcile.signoff')
+    return Response.json(await bankReconciliation.signOff(actor, id!, await body()))
+  }
+  if (seg.length === 3 && action === 'reopen' && method === 'POST') {
+    if (!hasExplicitPermission(session, 'finance.reconcile.reopen')) {
+      throw new ApiError(403, 'Forbidden: reopening needs an admin or an explicit finance.reconcile.reopen grant')
+    }
+    return Response.json(await bankReconciliation.reopen(actor, id!, await body()))
+  }
+
+  assertPermission(session, 'finance.reconcile')
+  if (seg.length === 1 && method === 'POST') {
+    return Response.json(await bankReconciliation.createReconciliation(actor, await body()), { status: 201 })
+  }
+  if (seg.length === 2 && method === 'PATCH') {
+    return Response.json(await bankReconciliation.updateReconciliation(actor, id!, await body()))
+  }
+  if (seg.length === 3 && action === 'import-csv' && method === 'POST') {
+    return Response.json(await bankReconciliation.importStatementCsv(actor, id!, await body()), { status: 201 })
+  }
+  if (seg.length === 3 && action === 'auto-match' && method === 'POST') {
+    return Response.json(await bankReconciliation.autoMatch(actor, id!, await body()))
+  }
+  if (seg.length === 3 && action === 'matches' && method === 'POST') {
+    return Response.json(await bankReconciliation.createManualMatch(actor, id!, await body()), { status: 201 })
+  }
+  if (seg.length === 4 && action === 'matches' && method === 'DELETE') {
+    return Response.json(await bankReconciliation.unmatch(actor, id!, seg[3]!, await body()))
+  }
+  // Same as DELETE, for clients that cannot send a DELETE body (the reason).
+  if (seg.length === 5 && action === 'matches' && seg[4] === 'unmatch' && method === 'POST') {
+    return Response.json(await bankReconciliation.unmatch(actor, id!, seg[3]!, await body()))
+  }
+  throw new ApiError(404, 'Bank reconciliation route not found')
 }
 
 export async function routeFixedAssets(method: string, seg: string[], req: Request): Promise<Response> {

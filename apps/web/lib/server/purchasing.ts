@@ -1,6 +1,7 @@
 import { Prisma, PurchaseOrderStatus, VendorBillStatus } from '@/generated/prisma-purchasing'
 import { inventoryDb, purchasingDb, tenantDb } from './db'
 import { landedCostChangeBlocker } from './po-landed-cost-rules'
+import { assertDestinationWarehouse, warehouseRefs } from './po-warehouse'
 import { ApiError } from './session'
 import * as poReceiving from './po-receiving'
 import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
@@ -12,6 +13,8 @@ import { getTenantWorkflowSettings } from './tenant-workflow-settings'
 
 export type CreatePurchaseOrderInput = {
   supplierId: string
+  /** Destination warehouse; left out for drop-ship POs, whose goods go to the customer. */
+  warehouseId?: string | null
   number: string
   notes?: string
   freightAmount?: number
@@ -28,13 +31,20 @@ export type ReceiveGoodsInput = {
 
 export type RecordPoPaymentInput = { amount: number; method: string; reference?: string }
 
-export function listPurchaseOrders(tenantId: string, status?: string) {
+export async function listPurchaseOrders(tenantId: string, status?: string, warehouseId?: string) {
   const st = (status ? (status as PurchaseOrderStatus) : undefined) ?? undefined
-  return purchasingDb.purchaseOrder.findMany({
-    where: { tenantId, ...(st ? { status: st } : {}) },
+  const wh = warehouseId?.trim() || undefined
+  const rows = await purchasingDb.purchaseOrder.findMany({
+    where: { tenantId, ...(st ? { status: st } : {}), ...(wh ? { warehouseId: wh } : {}) },
     include: { lines: { orderBy: { lineNo: 'asc' } }, supplier: true },
     orderBy: { createdAt: 'desc' },
   })
+  const warehouses = await warehouseRefs(tenantId, rows.map((po) => po.warehouseId))
+  return rows.map((po) => ({
+    ...po,
+    ...purchaseOrderTotals(po),
+    warehouse: po.warehouseId ? (warehouses.get(po.warehouseId) ?? null) : null,
+  }))
 }
 
 export async function getPurchaseOrder(tenantId: string, id: string) {
@@ -54,7 +64,27 @@ export async function getPurchaseOrderDetail(tenantId: string, id: string) {
     orderBy: { createdAt: 'desc' },
     select: { id: true, billNumber: true, totalAmount: true, status: true },
   })
-  return { ...po, supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
+  const warehouse = po.warehouseId ? ((await warehouseRefs(tenantId, [po.warehouseId])).get(po.warehouseId) ?? null) : null
+  return { ...po, ...purchaseOrderTotals(po), warehouse, supplierBill: bill ? { ...bill, totalAmount: Number(bill.totalAmount) } : null }
+}
+
+/**
+ * Purchase orders are created from approved purchase requisitions (requisition-conversion.ts). There is deliberately no
+ * exported general-purpose creator: POST /purchase-orders refuses, and the only other caller is drop-ship below.
+ */
+export const DIRECT_PO_CREATION_REFUSED =
+  'Purchase orders are no longer created directly. Raise a purchase requisition (POST /api/v1/purchase-requisitions); ' +
+  'once a manager or admin other than the requester approves it, convert it with ' +
+  'POST /api/v1/purchase-requisitions/{id}/convert.'
+
+/**
+ * Drop-ship POs for a sales order (drop-ship.ts only). UNRESOLVED APPROVAL BYPASS, not an approved exemption: these POs
+ * are created and submitted without a requisition or manager sign-off, automatically during order processing and
+ * manually via POST /orders/{id}/drop-ship/create-po (orders.write). Kept unchanged until the drop-ship approval policy
+ * is decided; do not add new callers.
+ */
+export async function createDropShipPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+  return insertPurchaseOrder(tenantId, dto)
 }
 
 /** Largest quantity a single PO line may carry; far above any real wholesale order. */
@@ -119,7 +149,9 @@ export function purchaseOrderLineProblems(lines: unknown): PoProblem[] {
     if (l.description != null && typeof l.description !== 'string') {
       problems.push({ line: lineNo, field: 'description', message: `${where}: description must be text` })
     }
-    if (l.unitCost != null) {
+    if (l.unitCost == null) {
+      problems.push({ line: lineNo, field: 'unitCost', message: `${where}: unit cost is required (enter 0 if there is no charge)` })
+    } else {
       if (typeof l.unitCost !== 'number' || !Number.isFinite(l.unitCost) || l.unitCost < 0) {
         problems.push({ line: lineNo, field: 'unitCost', message: `${where}: unit cost must be a number of 0 or more` })
       } else if (l.unitCost > MAX_PO_AMOUNT) {
@@ -165,7 +197,7 @@ export function landedCostProblems(input: {
   return problems
 }
 
-export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
+async function insertPurchaseOrder(tenantId: string, dto: CreatePurchaseOrderInput) {
   if (!dto || typeof dto !== 'object') throw new ApiError(400, 'A purchase order is required')
   const number = typeof dto.number === 'string' ? dto.number.trim() : ''
   if (!number) throw new ApiError(400, 'PO number is required')
@@ -176,6 +208,8 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
 
   const supplier = await purchasingDb.supplier.findFirst({ where: { id: dto.supplierId, tenantId } })
   if (!supplier) throw new ApiError(400, 'Unknown supplier for tenant')
+  const warehouseId = typeof dto.warehouseId === 'string' && dto.warehouseId.trim() ? dto.warehouseId.trim() : null
+  if (warehouseId) await assertDestinationWarehouse(tenantId, warehouseId)
 
   // Each line must name a real, active SKU. Receiving looks the SKU up by this exact code; a blank
   // description falls back to the SKU's name.
@@ -202,6 +236,7 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
     data: {
       tenantId,
       supplierId: dto.supplierId,
+      warehouseId,
       number,
       notes: dto.notes,
       freightAmount: new Prisma.Decimal(dto.freightAmount ?? 0),
@@ -238,27 +273,44 @@ export async function createPurchaseOrder(tenantId: string, dto: CreatePurchaseO
   return po
 }
 
-export function computePurchaseOrderTotal(po: {
+type PoAmounts = {
   lines: Array<{ qtyOrdered: number; unitCost: Prisma.Decimal | null }>
   freightAmount: Prisma.Decimal | null
   dutyAmount: Prisma.Decimal | null
   otherLandedAmount: Prisma.Decimal | null
-}): number {
-  const linesTotal = po.lines.reduce(
-    (s, l) => s + l.qtyOrdered * (l.unitCost != null ? Number(l.unitCost) : 0),
-    0,
-  )
-  const landed =
-    (po.freightAmount != null ? Number(po.freightAmount) : 0) +
-    (po.dutyAmount != null ? Number(po.dutyAmount) : 0) +
-    (po.otherLandedAmount != null ? Number(po.otherLandedAmount) : 0)
-  return +(linesTotal + landed).toFixed(2)
+}
+
+/** What a PO is worth, shown on the PO list and page: the lines, each landed charge once, and the total. */
+export function purchaseOrderTotals(po: PoAmounts) {
+  const round = (n: number) => +n.toFixed(2)
+  const linesTotal = po.lines.reduce((s, l) => s + l.qtyOrdered * (l.unitCost != null ? Number(l.unitCost) : 0), 0)
+  const freight = po.freightAmount != null ? Number(po.freightAmount) : 0
+  const duty = po.dutyAmount != null ? Number(po.dutyAmount) : 0
+  const other = po.otherLandedAmount != null ? Number(po.otherLandedAmount) : 0
+  return {
+    linesTotal: round(linesTotal),
+    landedTotal: round(freight + duty + other),
+    total: round(linesTotal + freight + duty + other),
+  }
+}
+
+/** The total the approval limit is checked against. */
+export function computePurchaseOrderTotal(po: PoAmounts): number {
+  return purchaseOrderTotals(po).total
 }
 
 export async function submitPurchaseOrder(tenantId: string, id: string, requestedBy?: string) {
   const po = await getPurchaseOrder(tenantId, id)
   if (po.status !== PurchaseOrderStatus.DRAFT) {
     throw new ApiError(400, 'Only DRAFT orders can be submitted')
+  }
+
+  // Converted from an approved requisition: that approval covers this PO, so no threshold approval is asked for,
+  // once the approval and the PO's match with it are re-verified.
+  if (po.requisitionId) {
+    const { submitConvertedPurchaseOrder } = await import('./requisition-conversion')
+    await submitConvertedPurchaseOrder(tenantId, po)
+    return getPurchaseOrder(tenantId, id)
   }
 
   const total = computePurchaseOrderTotal(po)
@@ -348,12 +400,21 @@ export async function updatePurchaseOrderLandedCosts(
   if (po.status === PurchaseOrderStatus.CANCELLED || po.status === PurchaseOrderStatus.CLOSED) {
     throw new ApiError(400, 'Cannot update landed costs on a closed/cancelled PO')
   }
+  // A converted PO's landed costs stay within what its requisition approved.
+  if (po.requisitionId) {
+    // Amounts arrive as exact decimal strings here and are checked by the conversion code; only the notes are checked here.
+    const noteProblems = landedCostProblems({ landedCostNotes: patch?.landedCostNotes })
+    if (noteProblems.length > 0) throw poValidationError(noteProblems)
+    const { updateConvertedLandedCosts } = await import('./requisition-conversion')
+    await updateConvertedLandedCosts(tenantId, po, patch)
+    return getPurchaseOrder(tenantId, id)
+  }
   const problems = landedCostProblems(patch ?? {})
   if (problems.length > 0) throw poValidationError(problems)
 
   // The approval total is fixed when the PO is submitted, so the charges may not be changed behind it.
   const pick = (next: number | undefined, current: Prisma.Decimal | null) =>
-    next !== undefined ? new Prisma.Decimal(next) : current
+    next !== undefined ? new Prisma.Decimal(next) : current // money-ok: landedCostProblems has already checked it is a finite number of 0 or more
   const afterChange = {
     lines: po.lines,
     freightAmount: pick(patch.freightAmount, po.freightAmount),

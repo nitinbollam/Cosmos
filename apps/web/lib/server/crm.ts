@@ -1,5 +1,5 @@
 import { Prisma } from '@/generated/prisma-crm'
-import { crmDb } from './db'
+import { crmDb, orderDb, paymentDb, storefrontDb, tenantDb } from './db'
 import { ApiError } from './session'
 
 import { swallowed } from './fire-and-forget'
@@ -18,19 +18,24 @@ function dec(n: number | undefined | null) {
   return new Prisma.Decimal(n)
 }
 
-export function listCustomers(tenantId: string) {
-  return crmDb.customer.findMany({ where: { tenantId }, orderBy: { name: 'asc' } })
+/** Deactivated customers are left out of lists unless asked for (pickers never offer them). */
+export function listCustomers(tenantId: string, opts: { includeInactive?: boolean } = {}) {
+  return crmDb.customer.findMany({
+    where: { tenantId, ...(opts.includeInactive ? {} : { isActive: true }) },
+    orderBy: { name: 'asc' },
+  })
 }
 
 export async function listCustomersPaged(
   tenantId: string,
-  opts: { page: number; pageSize: number; search?: string },
+  opts: { page: number; pageSize: number; search?: string; includeInactive?: boolean },
 ) {
   const page = Math.max(1, opts.page)
   const pageSize = Math.min(200, Math.max(1, opts.pageSize))
   const search = opts.search?.trim()
   const where = {
     tenantId,
+    ...(opts.includeInactive ? {} : { isActive: true }),
     ...(search
       ? {
           OR: [
@@ -148,25 +153,120 @@ export async function importCustomers(tenantId: string, rows: Record<string, unk
   return { created, failed: errors.length, errors }
 }
 
+/** Optional text: undefined leaves it alone, null or blank clears it, anything else is trimmed. */
+function optionalText(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined
+  if (v == null) return null
+  const t = String(v).trim()
+  return t === '' ? null : t
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export async function patchCustomer(tenantId: string, id: string, dto: Record<string, unknown>) {
-  await getCustomer(tenantId, id)
+  const current = await getCustomer(tenantId, id)
   const data: Prisma.CustomerUpdateInput = {}
-  if (dto.name != null) data.name = String(dto.name)
-  if (dto.email !== undefined) data.email = dto.email != null ? String(dto.email) : null
-  if (dto.phone !== undefined) data.phone = dto.phone != null ? String(dto.phone) : null
-  if (dto.externalRef !== undefined) data.externalRef = dto.externalRef != null ? String(dto.externalRef) : null
+  if (dto.name !== undefined) {
+    const name = String(dto.name ?? '').trim()
+    if (!name) throw new ApiError(400, 'Name is required')
+    data.name = name
+  }
+  if (dto.email !== undefined) {
+    const email = optionalText(dto.email)
+    if (email && !EMAIL_RE.test(email)) throw new ApiError(400, 'Enter a valid email address')
+    data.email = email
+  }
+  for (const key of [
+    'phone',
+    'externalRef',
+    'firstName',
+    'lastName',
+    'taxId',
+    'primaryAddressLine1',
+    'primaryCity',
+    'primaryState',
+    'primaryZip',
+  ] as const) {
+    if (dto[key] !== undefined) data[key] = optionalText(dto[key])
+  }
+  if (dto.paymentTermsDays !== undefined) {
+    const days = Number(dto.paymentTermsDays)
+    if (!Number.isInteger(days) || days < 0 || days > 365) {
+      throw new ApiError(400, 'Payment terms must be a whole number of days between 0 and 365')
+    }
+    data.paymentTermsDays = days
+  }
   if (dto.creditLimit !== undefined) {
     data.creditLimit = dto.creditLimit == null ? null : dec(Number(dto.creditLimit))
   }
   if (dto.creditUsed !== undefined) data.creditUsed = new Prisma.Decimal(Number(dto.creditUsed))
   if (dto.isLicensedTobacco !== undefined) data.isLicensedTobacco = Boolean(dto.isLicensedTobacco)
-  if (dto.tobaccoLicenseNumber !== undefined) {
-    data.tobaccoLicenseNumber =
-      dto.tobaccoLicenseNumber == null || String(dto.tobaccoLicenseNumber).trim() === ''
-        ? null
-        : String(dto.tobaccoLicenseNumber).trim()
+  if (dto.tobaccoLicenseNumber !== undefined) data.tobaccoLicenseNumber = optionalText(dto.tobaccoLicenseNumber)
+  if (dto.isActive !== undefined) {
+    const isActive = Boolean(dto.isActive)
+    if (isActive !== current.isActive) {
+      data.isActive = isActive
+      data.deactivatedAt = isActive ? null : new Date()
+    }
   }
-  return crmDb.customer.update({ where: { id }, data })
+  const updated = await crmDb.customer.update({ where: { id }, data })
+  if (data.isActive === false) {
+    // Their subscriptions would otherwise fail on the next run and email them a "payment failed" notice.
+    await tenantDb.subscription.updateMany({
+      where: { tenantId, customerId: id, status: 'ACTIVE' },
+      data: { status: 'PAUSED', lastFailureReason: 'Customer deactivated' },
+    })
+  }
+  return updated
+}
+
+/**
+ * New orders and quotes must not go to a deactivated customer. Refs that aren't a customer of
+ * this tenant (walk-in POS sales, free-text quote refs) are left to the caller's own checks.
+ */
+export async function assertCustomerCanTransact(tenantId: string, customerId: string | null | undefined) {
+  if (!customerId) return
+  const row = await crmDb.customer.findFirst({ where: { id: customerId, tenantId }, select: { isActive: true, name: true } })
+  if (row && !row.isActive) {
+    throw new ApiError(409, `${row.name} is deactivated. Reactivate the customer before creating new orders or quotes.`)
+  }
+}
+
+/**
+ * Hard delete, only for a customer with no business history (orders, invoices, credit memos,
+ * quotes, subscriptions or payments) — anything else must be deactivated so the history stays.
+ * Their own CRM rows go with them: contract prices and volume breaks are removed, and
+ * activities and leads are kept but unlinked.
+ */
+export async function deleteCustomer(tenantId: string, id: string) {
+  await getCustomer(tenantId, id)
+  const [orders, invoices, creditMemos, quotes, subscriptions, payments] = await Promise.all([
+    orderDb.order.count({ where: { tenantId, customerId: id } }),
+    orderDb.invoice.count({ where: { tenantId, customerId: id } }),
+    orderDb.creditMemo.count({ where: { tenantId, customerId: id } }),
+    storefrontDb.b2BQuote.count({ where: { tenantId, customerRef: id } }),
+    tenantDb.subscription.count({ where: { tenantId, customerId: id } }),
+    paymentDb.paymentIntent.count({ where: { tenantId, customerId: id } }),
+  ])
+  const history = [
+    [orders, 'order'],
+    [invoices, 'invoice'],
+    [creditMemos, 'credit memo'],
+    [quotes, 'quote'],
+    [subscriptions, 'subscription'],
+    [payments, 'payment'],
+  ] as const
+  const found = history.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}${n === 1 ? '' : 's'}`)
+  if (found.length > 0) {
+    throw new ApiError(409, `This customer has ${found.join(', ')}, so it can't be deleted. Deactivate it instead to keep the history.`, undefined, {
+      history: Object.fromEntries(history.map(([n, label]) => [label, n])),
+    })
+  }
+  await crmDb.$transaction([
+    crmDb.volumePriceBreak.deleteMany({ where: { tenantId, customerId: id } }),
+    crmDb.customer.delete({ where: { id } }),
+  ])
+  return { deleted: true }
 }
 
 export async function patchCustomerProfile(

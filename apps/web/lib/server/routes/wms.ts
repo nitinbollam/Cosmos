@@ -24,8 +24,11 @@ async function taskPickRoutes(method: string, seg: string[], req: Request, sessi
   }
   if (seg.length === 4 && seg[3] === 'assign' && method === 'PATCH') {
     if (!isManagerRole(session.role)) throw new ApiError(403, 'Only a manager can give a task to someone else. Claim it instead')
-    const body = (await req.json()) as { userId?: string | null }
-    return Response.json(await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], body.userId ?? null, session.userId))
+    const body = (await req.json()) as { userId?: unknown }
+    if (body.userId != null && typeof body.userId !== 'string') throw new ApiError(400, 'userId must be a string or null')
+    // Blank or null takes the picker off the task.
+    const userId = typeof body.userId === 'string' && body.userId.trim() ? body.userId.trim() : null
+    return Response.json(await wmsFulfillment.assignFulfillmentTask(session.tenantId, seg[2], userId, session.userId))
   }
   if (seg.length === 4 && seg[3] === 'pick-all' && method === 'POST') {
     return Response.json(await wmsFulfillment.confirmAllPickLines(session.tenantId, seg[2], actor))
@@ -151,12 +154,15 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
         poId?: string
         asnId?: string
       }
-      const warehouseId = body.warehouseId || (await wmsReceiving.resolveDefaultWarehouseId(session.tenantId))
       const poId = body.purchaseOrderId ?? body.poId
+      const warehouseId = await wmsReceiving.resolveSessionWarehouseId(session.tenantId, body.warehouseId, poId)
       return Response.json(
         await wmsReceiving.startReceivingSession(session.tenantId, warehouseId, session.userId, poId, body.asnId),
         { status: 201 },
       )
+    }
+    if (seg.length === 3 && seg[2] === 'open-purchase-orders' && method === 'GET') {
+      return Response.json(await wmsReceiving.listReceivablePurchaseOrders(session.tenantId, url.searchParams.get('q') ?? undefined))
     }
     if (((seg.length === 3 && !isSessions) || (seg.length === 4 && isSessions)) && method === 'GET') {
       return Response.json(await wmsReceiving.getReceivingSession(id, session.tenantId))
@@ -188,6 +194,10 @@ export async function routeWms(method: string, seg: string[], req: Request): Pro
       return Response.json(
         await wmsReceiving.importReceivingItems(id, session.tenantId, session.userId, body.rows ?? []),
       )
+    }
+    if (sub === 'cancel' && (method === 'PATCH' || method === 'POST')) {
+      const body = (await req.json().catch(() => ({}))) as { reason?: string }
+      return Response.json(await wmsReceiving.cancelReceivingSession(id, session.tenantId, session.userId, body.reason))
     }
     if (sub === 'complete' && (method === 'PATCH' || method === 'POST')) {
       const body = ((await req.json().catch(() => ({}))) ?? {}) as { notes?: string }

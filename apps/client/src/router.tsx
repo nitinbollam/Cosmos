@@ -137,6 +137,12 @@ const router = createBrowserRouter([
           { path: 'orders', element: page(() => import('@/pages/admin/orders/page')) },
           { path: 'orders/:id', element: page(() => import('@/pages/admin/orders/[id]/page')) },
           { path: 'purchasing', element: page(() => import('@/pages/admin/purchasing/page')) },
+          { path: 'purchasing/requisitions', element: page(() => import('@/pages/admin/purchasing/requisitions/page')) },
+          { path: 'purchasing/requisitions/new', element: page(() => import('@/pages/admin/purchasing/requisitions/new/page')) },
+          {
+            path: 'purchasing/requisitions/:requisitionId',
+            element: page(() => import('@/pages/admin/purchasing/requisitions/[requisitionId]/page')),
+          },
           {
             path: 'purchasing/:poId',
             element: page(() => import('@/pages/admin/purchasing/[poId]/page')),

@@ -656,7 +656,7 @@ async function moveShortPicksToBackorder(
 export async function onFulfillmentDispatched(
   tenantId: string,
   orderId: string,
-  shipped?: Array<{ skuId: string; quantity: number }>,
+  shipped?: Array<{ skuId: string; quantity: number; unitCost?: string }>,
   /** The fulfillment task that shipped; an order with backorders ships more than once. */
   fulfillmentTaskId?: string,
   options?: { coordinationHeld?: boolean },
@@ -688,16 +688,23 @@ export async function onFulfillmentDispatched(
     )
 
   // Queued, not posted inline: a ledger outage must not block or roll back shipping.
+  // COGS is what the shipped units were valued at in the stock ledger (ticket 50). Shipments committed
+  // before units carried a cost fall back to the SKU's standard cost.
   const { computeOrderCogs } = await import('./operations-gl')
   const { enqueuePostingJob } = await import('./posting-outbox')
-  const cogs = await computeOrderCogs(tenantId, billedLines)
+  const { valueOf } = await import('./stock-cost')
+  const { formatMoney, fromFloat } = await import('./money')
+  const valued = shipped?.length && shipped.every((l) => l.unitCost != null)
+  const cogs = valued
+    ? valueOf(shipped.map((l) => ({ quantity: l.quantity, unitCost: l.unitCost! })))
+    : fromFloat(await computeOrderCogs(tenantId, billedLines))
   await enqueuePostingJob(orderDb, {
     tenantId,
     kind: 'COGS_JOURNAL',
     sourceType: 'Order',
     sourceId: orderId,
     variant: fulfillmentTaskId ?? `ship:${randomUUID()}`,
-    amount: cogs.toFixed(2),
+    amount: formatMoney(cogs),
   })
   const { notifyOrderShipped } = await import('./notification-triggers')
   void notifyOrderShipped(tenantId, orderId, order.customerId).catch(

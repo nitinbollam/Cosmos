@@ -1,0 +1,6 @@
+date,description,amount,reference
+2026-09-31,BANKTEST bad date,10.00,X1
+2026-09-05,BANKTEST bad amount,12.345,X2
+2026-09-06,,5.00,X3
+2026-10-02,BANKTEST outside period,5.00,X4
+2026-09-07,BANKTEST ok row,5.00,X5

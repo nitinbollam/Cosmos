@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
@@ -8,6 +8,10 @@ import { showToast } from '@/lib/toast'
 import { showReceiptBillingResult, type ReceiptBilling } from '@/lib/receipt-billing'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { axiosErr } from '@/lib/axios-error'
+import { adminPath } from '@/lib/admin-path'
+import { formatAmount, lineAmount, parseAmountInput, sumAmounts } from '@/lib/decimal-amount'
+import { hasClientPermission, type Requisition } from '@/lib/requisitions'
+import { useUserNames, useViewer } from '@/components/purchasing/use-viewer'
 
 type PoLine = {
   id: string
@@ -28,6 +32,17 @@ type PurchaseOrder = {
   dutyAmount?: string | number
   otherLandedAmount?: string | number
   landedCostNotes?: string | null
+  currency?: string
+  createdBy?: string | null
+  /** Set when the PO was converted from an approved requisition. */
+  requisitionId?: string | null
+  /** Destination warehouse: where the goods are meant to arrive. */
+  warehouseId?: string | null
+  warehouse?: { id: string; name: string; code: string } | null
+  /** From the server: lines, landed charges and the total the approval limit is checked against. */
+  linesTotal?: number
+  landedTotal?: number
+  total?: number
   supplier?: { id: string; name: string; code: string }
   lines?: PoLine[]
   /** The current supplier bill for this PO, if one exists. */
@@ -49,6 +64,11 @@ export default function PurchaseOrderDetailPage() {
   const params = useParams()
   const poId = typeof params.poId === 'string' ? params.poId : params.poId?.[0] ?? ''
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  // Buttons follow what the signed-in user may do, not just the PO's status: the server refuses the rest.
+  const { viewer } = useViewer()
+  const canPurchase = hasClientPermission(viewer, 'purchasing.write')
+  const canWms = hasClientPermission(viewer, 'wms.write')
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [freight, setFreight] = useState('0')
   const [duty, setDuty] = useState('0')
@@ -67,6 +87,7 @@ export default function PurchaseOrderDetailPage() {
 
   const submit = useMutation({
     mutationFn: () => api.post(`/purchase-orders/${encodeURIComponent(poId)}/submit`, {}),
+    onError: () => void qc.invalidateQueries({ queryKey: ['purchase-order', poId] }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
@@ -90,17 +111,45 @@ export default function PurchaseOrderDetailPage() {
     setOtherLanded(String(po.data.otherLandedAmount ?? 0))
   }, [po.data])
 
+  // A converted PO sends exact decimal strings and is capped by its requisition; a direct PO keeps its old payload.
+  const converted = !!po.data?.requisitionId
   const saveLanded = useMutation({
     mutationFn: () =>
-      api.patch(`/purchase-orders/${encodeURIComponent(poId)}/landed-costs`, {
-        freightAmount: Number(freight.trim() || 0),
-        dutyAmount: Number(duty.trim() || 0),
-        otherLandedAmount: Number(otherLanded.trim() || 0),
-      }),
+      api.patch(
+        `/purchase-orders/${encodeURIComponent(poId)}/landed-costs`,
+        converted
+          ? { freightAmount: freight.trim(), dutyAmount: duty.trim(), otherLandedAmount: otherLanded.trim() }
+          : {
+              freightAmount: Number(freight.trim() || 0),
+              dutyAmount: Number(duty.trim() || 0),
+              otherLandedAmount: Number(otherLanded.trim() || 0),
+            },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['purchase-order', poId] }),
+    onError: async (e) => {
+      // Over the approved cap, or changed elsewhere: put the stored values back in the inputs. Set them directly, since
+      // an unchanged refetch keeps the same data object and the sync effect above would not run.
+      if ((e as { response?: { status?: number } }).response?.status !== 409) return
+      const fresh = await po.refetch()
+      if (fresh.data) {
+        setFreight(String(fresh.data.freightAmount ?? 0))
+        setDuty(String(fresh.data.dutyAmount ?? 0))
+        setOtherLanded(String(fresh.data.otherLandedAmount ?? 0))
+      }
+    },
   })
-  // A blank box counts as 0; anything else must be a number of 0 or more (the server enforces this too).
-  const landedInvalid = [freight, duty, otherLanded].some((v) => v.trim() !== '' && !(Number(v) >= 0))
+  const landedInputError = converted
+    ? ([
+        ['Freight', freight],
+        ['Duty', duty],
+        ['Other', otherLanded],
+      ] as const)
+        .map(([label, v]) => parseAmountInput(v, label))
+        .map((r) => (r.ok ? null : r.error))
+        .find(Boolean) ?? null
+    : null
+  // Direct PO: a blank box counts as 0; anything else must be a number of 0 or more (the server enforces this too).
+  const landedInvalid = !converted && [freight, duty, otherLanded].some((v) => v.trim() !== '' && !(Number(v) >= 0))
 
   type LandedPreview = {
     lines: Array<{ lineNo: number; landedUnitCost: number }>
@@ -114,26 +163,34 @@ export default function PurchaseOrderDetailPage() {
 
   const startReceiving = useMutation({
     mutationFn: async () => {
-      const wh = warehouses.data?.[0]
-      if (!wh) throw new Error('No warehouse — seed inventory first')
-      return api.post('/wms/receiving/sessions', {
-        warehouseId: wh.id,
+      // The session starts at the PO's destination warehouse; with none set, the server uses the company default.
+      return api.post<{ id?: string; resumed?: boolean }>('/wms/receiving/sessions', {
+        ...(po.data?.warehouseId ? { warehouseId: po.data.warehouseId } : {}),
         poId,
       })
     },
-    onSuccess: () => {
-      showToast('Receiving session started — continue in mobile warehouse or WMS API.', 'success')
+    onSuccess: (res) => {
+      const number = po.data?.number ?? 'this PO'
+      showToast(
+        res?.resumed
+          ? `Continuing the open receiving session for ${number}. On the mobile Receiving screen, enter ${number} to open it.`
+          : `Receiving session started for ${number}. On the mobile Receiving screen, enter ${number} to open it.`,
+        'success',
+      )
       void qc.invalidateQueries({ queryKey: ['purchase-order', poId] })
+      void qc.invalidateQueries({ queryKey: ['receiving-sessions'] })
+      // Open the session on the Warehouse > Receiving screen rather than leaving the user on the PO.
+      if (res?.id) navigate(adminPath(`/warehouse?tab=receiving&session=${encodeURIComponent(res.id)}`))
     },
   })
 
   const isPendingApproval = po.data?.status === 'PENDING_APPROVAL'
-  const canSubmit = po.data?.status === 'DRAFT'
+  const canSubmit = canPurchase && po.data?.status === 'DRAFT'
   const canCancel =
-    po.data?.status === 'DRAFT' ||
-    po.data?.status === 'SUBMITTED' ||
-    po.data?.status === 'PENDING_APPROVAL'
+    canPurchase &&
+    (po.data?.status === 'DRAFT' || po.data?.status === 'SUBMITTED' || po.data?.status === 'PENDING_APPROVAL')
   const canReceiveGoods =
+    canPurchase &&
     po.data &&
     po.data.status !== 'DRAFT' &&
     po.data.status !== 'PENDING_APPROVAL' &&
@@ -162,6 +219,16 @@ export default function PurchaseOrderDetailPage() {
             <div>
               <h1 className="text-2xl font-bold text-pleros-white">PO {po.data.number}</h1>
               <p className="text-pleros-muted text-sm mt-1">{po.data.supplier?.name}</p>
+              <p className="text-pleros-muted text-sm mt-1">
+                Destination warehouse:{' '}
+                {po.data.warehouse ? (
+                  <span className="text-pleros-text">{po.data.warehouse.name}</span>
+                ) : po.data.warehouseId ? (
+                  <span className="text-pleros-text">Unavailable warehouse</span>
+                ) : (
+                  'not set (receiving uses the company default)'
+                )}
+              </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge status={po.data.status} />
                 {isPendingApproval ? (
@@ -210,6 +277,7 @@ export default function PurchaseOrderDetailPage() {
                   Record receipt
                 </button>
               )}
+              {canWms && (
               <button
                 type="button"
                 disabled={startReceiving.isPending || !canStartWmsSession}
@@ -219,12 +287,19 @@ export default function PurchaseOrderDetailPage() {
                     ? 'Need at least one warehouse'
                     : po.data.status === 'DRAFT'
                       ? 'Submit the PO before WMS receiving'
-                      : undefined
+                      : po.data.status === 'PENDING_APPROVAL'
+                        ? 'Waiting for approval: receiving starts once it is submitted'
+                        : po.data.status === 'CLOSED'
+                          ? 'Everything on this PO has been received'
+                          : po.data.status === 'CANCELLED'
+                            ? 'This PO was cancelled'
+                            : undefined
                 }
                 className="h-9 px-4 rounded-md border border-pleros-border text-pleros-text text-sm disabled:opacity-40"
               >
                 {startReceiving.isPending ? 'Starting…' : 'Start WMS session'}
               </button>
+              )}
             </div>
           </div>
           {(submit.error || cancelPo.error || startReceiving.error) && (
@@ -232,6 +307,7 @@ export default function PurchaseOrderDetailPage() {
               {axiosMessage(submit.error ?? cancelPo.error ?? startReceiving.error)}
             </p>
           )}
+          {po.data.requisitionId ? <SourceRequisitionCard po={po.data} /> : null}
           {po.data.notes && (
             <p className="text-sm text-pleros-muted whitespace-pre-wrap">{po.data.notes}</p>
           )}
@@ -281,10 +357,20 @@ export default function PurchaseOrderDetailPage() {
                 />
               </label>
             </div>
+            {converted ? (
+              <p className="text-xs text-pleros-muted mt-2">
+                Converted from an approved requisition: these may move between each other, but their total cannot exceed the approved landed estimate.
+              </p>
+            ) : null}
+            {landedInputError ? (
+              <p className="text-xs text-red-400 mt-2" role="alert">
+                {landedInputError}
+              </p>
+            ) : null}
             <button
               type="button"
               className="mt-3 h-9 px-4 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-50"
-              disabled={saveLanded.isPending || landedInvalid || isPendingApproval}
+              disabled={saveLanded.isPending || !!landedInputError || landedInvalid || isPendingApproval || !canPurchase}
               onClick={() => saveLanded.mutate()}
             >
               {saveLanded.isPending ? 'Saving…' : 'Save landed costs'}
@@ -297,7 +383,11 @@ export default function PurchaseOrderDetailPage() {
             {landedInvalid ? (
               <p className="mt-2 text-xs text-red-400">Freight, duty and other must each be a number of 0 or more.</p>
             ) : null}
-            {saveLanded.isError ? <p className="mt-2 text-xs text-red-400">{axiosErr(saveLanded.error)}</p> : null}
+            {saveLanded.isError ? (
+              <p className="mt-2 text-xs text-red-400" role="alert">
+                {axiosErr(saveLanded.error)}
+              </p>
+            ) : null}
             {saveLanded.isSuccess ? <p className="mt-2 text-xs text-emerald-400">Landed costs saved.</p> : null}
             {landedPreviewQ.data?.lines?.length ? (
               <div className="mt-4 text-xs text-pleros-muted space-y-1">
@@ -330,6 +420,9 @@ export default function PurchaseOrderDetailPage() {
                     const received = l.qtyReceived ?? 0
                     const open = Math.max(0, l.qtyOrdered - received)
                     const cost = l.unitCost != null && l.unitCost !== '' ? Number(l.unitCost) : null
+                    // A converted PO carries costs approved to 4 decimals: show them exactly, in this page's plain style.
+                    const exact = converted && l.unitCost != null && l.unitCost !== ''
+                    const plain = (v: string) => formatAmount(v, po.data?.currency ?? 'USD', { grouping: false })
                     return (
                       <tr key={l.id} className="border-b border-pleros-border/60">
                         <td className="py-2 pr-4 text-pleros-muted">{l.lineNo}</td>
@@ -338,8 +431,12 @@ export default function PurchaseOrderDetailPage() {
                         <td className="py-2 pr-4 text-pleros-white">{l.qtyOrdered}</td>
                         <td className="py-2 pr-4 text-pleros-muted">{received}</td>
                         <td className="py-2 pr-4 text-pleros-white">{open}</td>
-                        <td className="py-2 pr-4 text-pleros-text">{cost != null ? `$${cost.toFixed(2)}` : 'No price'}</td>
-                        <td className="py-2 text-pleros-white">{cost != null ? `$${(cost * l.qtyOrdered).toFixed(2)}` : '—'}</td>
+                        <td className="py-2 pr-4 text-pleros-text">
+                          {exact ? plain(String(l.unitCost)) : cost != null ? `$${cost.toFixed(2)}` : 'No price'}
+                        </td>
+                        <td className="py-2 text-pleros-white">
+                          {exact ? plain(lineAmount(String(l.unitCost), l.qtyOrdered)) : cost != null ? `$${(cost * l.qtyOrdered).toFixed(2)}` : '—'}
+                        </td>
                       </tr>
                     )
                   })}
@@ -349,6 +446,38 @@ export default function PurchaseOrderDetailPage() {
             <p className="mt-3 text-xs text-pleros-muted">
               Recording a receipt updates PO quantities and posts stock to the selected warehouse in one step.
             </p>
+            {po.data?.total != null ? (() => {
+              const money = (v: string | number) => formatAmount(v, po.data?.currency ?? 'USD', { grouping: false })
+              return (
+              <dl className="mt-4 ml-auto w-full max-w-xs space-y-1 text-sm" aria-label="Purchase order total">
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Lines</dt>
+                  <dd className="tabular-nums">{money(po.data.linesTotal ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Freight</dt>
+                  <dd className="tabular-nums">{money(po.data.freightAmount ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Duty</dt>
+                  <dd className="tabular-nums">{money(po.data.dutyAmount ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-pleros-text">
+                  <dt>Other charges</dt>
+                  <dd className="tabular-nums">{money(po.data.otherLandedAmount ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t border-pleros-border pt-1 font-semibold text-pleros-white">
+                  <dt>PO total</dt>
+                  <dd className="tabular-nums">{money(po.data.total)}</dd>
+                </div>
+              </dl>
+              )
+            })() : null}
+            {po.data?.lines?.some((l) => l.unitCost == null || l.unitCost === '') ? (
+              <p className="mt-2 text-xs text-amber-400">
+                Some lines have no price (an older order), so this total is lower than the real cost.
+              </p>
+            ) : null}
           </Card>
 
           <SupplierBillCard po={po.data} />
@@ -370,6 +499,46 @@ export default function PurchaseOrderDetailPage() {
         </>
       )}
     </div>
+  )
+}
+
+/** Where a converted PO came from: its requisition, who approved it, and the landed-cost cap. */
+function SourceRequisitionCard({ po }: { po: PurchaseOrder }) {
+  const { viewer } = useViewer()
+  const nameOf = useUserNames(viewer)
+  const canRead = hasClientPermission(viewer, 'requisitions.read')
+  const req = useQuery<Requisition>({
+    queryKey: ['purchase-requisition', po.requisitionId],
+    queryFn: () => api.get(`/purchase-requisitions/${encodeURIComponent(po.requisitionId ?? '')}`),
+    enabled: canRead && !!po.requisitionId,
+    retry: false,
+  })
+  const r = req.data
+  return (
+    <Card>
+      <CardTitle>Source requisition</CardTitle>
+      {r ? (
+        <div className="mt-3 text-sm space-y-1">
+          <p>
+            <Link to={adminPath(`/purchasing/requisitions/${r.id}`)} className="text-pleros-accent font-mono">
+              {r.number}
+            </Link>{' '}
+            <span className="text-pleros-muted">
+              requested by {nameOf(r.requestedBy)}, approved by {nameOf(r.approvedBy)}
+              {r.approvedAt ? ` on ${new Date(r.approvedAt).toLocaleDateString()}` : ''}
+            </span>
+          </p>
+          <p className="text-xs text-pleros-muted">
+            Approved landed estimate {formatAmount(sumAmounts([r.freightAmount, r.dutyAmount, r.otherLandedAmount]), r.currency)}. Submitting this PO needs no further
+            approval while it still matches the requisition.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-pleros-muted">
+          {req.isLoading ? 'Loading…' : 'Converted from an approved requisition. Submitting it needs no further approval while it still matches.'}
+        </p>
+      )}
+    </Card>
   )
 }
 
@@ -427,7 +596,8 @@ function ReceiveDrawer(props: {
   onDone: () => void
 }) {
   const lines = props.po.lines ?? []
-  const [warehouseId, setWarehouseId] = useState(props.warehouses[0]?.id ?? '')
+  const destination = props.po.warehouseId && props.warehouses.some((w) => w.id === props.po.warehouseId) ? props.po.warehouseId : ''
+  const [warehouseId, setWarehouseId] = useState(destination || (props.warehouses[0]?.id ?? ''))
   const [qtyByLine, setQtyByLine] = useState<Record<string, number>>(() =>
     Object.fromEntries(lines.map((l) => [l.id, 0])),
   )
@@ -435,8 +605,8 @@ function ReceiveDrawer(props: {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!warehouseId && props.warehouses[0]?.id) setWarehouseId(props.warehouses[0].id)
-  }, [props.warehouses, warehouseId])
+    if (!warehouseId && (destination || props.warehouses[0]?.id)) setWarehouseId(destination || props.warehouses[0]!.id)
+  }, [props.warehouses, warehouseId, destination])
 
   async function submitReceive() {
     setError(null)

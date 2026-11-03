@@ -16,6 +16,8 @@ const STATUS: Record<string, { bg: string; text: string }> = {
   OPEN: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
   ASSIGNED: { bg: 'var(--c-accent-dim)', text: 'var(--c-primary)' },
   IN_PROGRESS: { bg: 'var(--c-warning-soft)', text: 'var(--c-warning)' },
+  UNRECONCILED: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
+  SIGNED_OFF: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
   COMPLETED: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
   WON: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
   LOST: { bg: 'var(--c-danger-soft)', text: 'var(--c-danger)' },
@@ -26,6 +28,13 @@ const STATUS: Record<string, { bg: string; text: string }> = {
   OVERDUE: { bg: 'var(--c-danger-soft)', text: 'var(--c-danger)' },
   CREDITED: { bg: 'var(--c-surface-2)', text: 'var(--c-text-2)' },
   VOID: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
+  PENDING_APPROVAL: { bg: 'var(--c-warning-soft)', text: 'var(--c-warning)' },
+  APPROVED: { bg: 'var(--c-success-soft)', text: 'var(--c-success)' },
+  REJECTED: { bg: 'var(--c-danger-soft)', text: 'var(--c-danger)' },
+  CONVERTED: { bg: 'var(--c-accent-dim)', text: 'var(--c-primary)' },
+  PARTIALLY_RECEIVED: { bg: 'var(--c-warning-soft)', text: 'var(--c-warning)' },
+  CLOSED: { bg: 'var(--c-surface-2)', text: 'var(--c-text-2)' },
+  DEACTIVATED: { bg: 'var(--c-surface-2)', text: 'var(--c-text-3)' },
 }
 
 export function StatusBadge({ status }: { status: string }) {

@@ -56,6 +56,9 @@ async function main() {
   const { handleApiRequest } = await import('../../web/server/api-router.ts')
   const { maxRequestBodyBytes } = await import('../../web/lib/server/request-body-limit.ts')
   const { startBackgroundJobs } = await import('../../web/lib/server/background-jobs.ts')
+  const { assertDatabasesReachable } = await import('../../web/lib/server/db-health.ts')
+  // Every domain database must be reachable before serving; in production a missing one fails the boot.
+  await assertDatabasesReachable(isProd)
   startBackgroundJobs()
 
   const app = express()

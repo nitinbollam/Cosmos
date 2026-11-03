@@ -24,7 +24,14 @@ export function totalLandedCharges(po: PoLanded): number {
   return dec(po.freightAmount) + dec(po.dutyAmount) + dec(po.otherLandedAmount)
 }
 
-/** Allocate PO-level landed charges across lines by extended product cost (qty × unit cost). */
+/**
+ * Allocate PO-level landed charges across lines by extended product cost (qty × unit cost).
+ *
+ * Each line's share is spread over the line's whole ordered quantity, so every unit carries the same
+ * landed cost however it arrives. (It used to be spread over only the units in the receipt being posted,
+ * so every partial receipt took on the full share again and the freight was capitalised once per receipt.)
+ * `qtyReceived` is the size of this receipt; it only decides whether there is anything to value.
+ */
 export function allocateLandedCostPerUnit(
   po: PoLanded,
   lineId: string,
@@ -47,7 +54,8 @@ export function allocateLandedCostPerUnit(
   const lineIndex = po.lines.findIndex((l) => l.id === lineId)
   const share = weights[lineIndex]! / weightSum
   const lineLandedTotal = totalLanded * share
-  const landedAdderPerUnit = lineLandedTotal / qtyReceived
+  const lineQty = Math.max(line.qtyOrdered, line.qtyReceived, 1)
+  const landedAdderPerUnit = lineLandedTotal / lineQty
 
   return { landedAdderPerUnit, lineLandedTotal }
 }

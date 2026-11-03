@@ -3,6 +3,9 @@ import { useState } from 'react'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { axiosErr } from '@/lib/axios-error'
+import { adminPath } from '@/lib/admin-path'
+import { Link } from 'react-router-dom'
 
 type QuoteRow = {
   id: string
@@ -10,6 +13,8 @@ type QuoteRow = {
   customerRef: string
   notes?: string | null
   rejectionReason?: string | null
+  convertedOrderId?: string | null
+  customerName?: string
   createdAt: string
   lines: Array<{ lineNo: number; skuCode?: string | null; description: string; qty: number; unitPrice: string | number }>
 }
@@ -57,6 +62,13 @@ export default function AdminQuotesPage() {
     mutationFn: (id: string) => api.post(`/quotes/${id}/approve`, {}),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'quotes'] }),
   })
+
+  // Staff place the order for the customer at the approved prices (ticket 55).
+  const orderMut = useMutation({
+    mutationFn: (id: string) => api.post<QuoteRow>(`/quotes/${id}/submit`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'quotes'] }),
+  })
+  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null)
 
   const rejectMut = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => api.post(`/quotes/${id}/reject`, { reason }),
@@ -114,7 +126,7 @@ export default function AdminQuotesPage() {
           Quote approvals
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
-          Review buyer quote requests, counter-offers, and approvals.
+          Review buyer quote requests, counter-offers and approvals, and create orders from approved quotes.
         </p>
       </div>
 
@@ -125,6 +137,15 @@ export default function AdminQuotesPage() {
           </button>
         ))}
       </div>
+
+      {orderMut.data?.convertedOrderId ? (
+        <p className="text-sm" role="status" style={{ color: 'var(--c-success)' }}>
+          Order created from the quote.{' '}
+          <Link to={adminPath(`/orders/${orderMut.data.convertedOrderId}`)} className="text-pleros-accent">
+            View order →
+          </Link>
+        </p>
+      ) : null}
 
       <div className="pleros-card overflow-x-auto">
         {quotesQ.isLoading ? (
@@ -149,7 +170,7 @@ export default function AdminQuotesPage() {
                   <td className="font-mono text-xs font-semibold text-pleros-white">
                     #{q.id.startsWith('seed_quote_') ? `Q-${q.id.replace('seed_quote_', '').toUpperCase()}` : `Q-${q.id.slice(-6).toUpperCase()}`}
                   </td>
-                  <td className="text-sm font-medium">{q.customerRef.startsWith('cust_') ? `Customer #${q.customerRef.slice(-6).toUpperCase()}` : q.customerRef}</td>
+                  <td className="text-sm font-medium">{q.customerName ?? q.customerRef}</td>
                   <td className="font-mono">${quoteTotal(q).toFixed(2)}</td>
                   <td>
                     <StatusBadge status={q.status} />
@@ -167,7 +188,10 @@ export default function AdminQuotesPage() {
                           type="button"
                           className="btn-primary !py-1 !px-2 !text-xs"
                           disabled={approveMut.isPending}
-                          onClick={() => void approveMut.mutate(q.id)}
+                          onClick={() => {
+                            setActionError(null)
+                            approveMut.mutate(q.id, { onError: (e) => setActionError({ id: q.id, message: axiosErr(e) }) })
+                          }}
                         >
                           Approve
                         </button>
@@ -175,6 +199,29 @@ export default function AdminQuotesPage() {
                           Reject
                         </button>
                       </>
+                    ) : null}
+                    {q.status === 'APPROVED' && !q.convertedOrderId ? (
+                      <button
+                        type="button"
+                        className="btn-primary !py-1 !px-2 !text-xs"
+                        disabled={orderMut.isPending}
+                        onClick={() => {
+                          setActionError(null)
+                          orderMut.mutate(q.id, { onError: (e) => setActionError({ id: q.id, message: axiosErr(e) }) })
+                        }}
+                      >
+                        {orderMut.isPending && orderMut.variables === q.id ? 'Creating order…' : 'Create order'}
+                      </button>
+                    ) : null}
+                    {q.convertedOrderId ? (
+                      <Link to={adminPath(`/orders/${q.convertedOrderId}`)} className="text-xs text-pleros-accent">
+                        View order →
+                      </Link>
+                    ) : null}
+                    {actionError?.id === q.id ? (
+                      <p className="text-xs mt-1 whitespace-normal max-w-xs" role="alert" style={{ color: 'var(--c-danger)' }}>
+                        {actionError.message}
+                      </p>
                     ) : null}
                   </td>
                 </tr>
@@ -230,6 +277,7 @@ export default function AdminQuotesPage() {
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>SKU</th>
                   <th>Desc</th>
                   <th>Qty</th>
                   <th>Unit</th>
@@ -239,6 +287,7 @@ export default function AdminQuotesPage() {
                 {detail.lines.map((ln) => (
                   <tr key={ln.lineNo}>
                     <td>{ln.lineNo}</td>
+                    <td className="font-mono text-xs">{ln.skuCode ?? '—'}</td>
                     <td>{ln.description}</td>
                     <td>{ln.qty}</td>
                     <td className="font-mono">${Number(ln.unitPrice).toFixed(2)}</td>

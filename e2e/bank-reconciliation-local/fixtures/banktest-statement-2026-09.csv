@@ -1,0 +1,9 @@
+date,description,amount,reference
+2026-09-03,BANKTEST deposit INV-1001,250.00,R1001
+2026-09-10,BANKTEST vendor payment BILL-2001,-120.00,R2001
+2026-09-15,BANKTEST deposit,75.00,R1002
+2026-09-16,BANKTEST deposit,75.00,R1003
+2026-09-21,BANKTEST batched deposit,300.00,R1045
+2026-09-23,BANKTEST split deposit part 1,40.00,R1006A
+2026-09-23,BANKTEST split deposit part 2,60.00,R1006B
+2026-09-28,BANKTEST bank service fee,-15.00,FEE09

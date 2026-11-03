@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQueryParams } from '@/lib/use-query-params'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { Tab, WarehouseRow } from './types'
@@ -21,7 +22,10 @@ const TAB_CONFIG: Array<{ id: Tab; label: string; icon: string }> = [
 ]
 
 export default function WarehousePage() {
-  const [tab, setTab] = useState<Tab>('picks')
+  // Links such as /admin/warehouse?tab=receiving&session=<id> open that tab and session directly.
+  const query = useQueryParams()
+  const tabParam = query.get('tab')
+  const [tab, setTab] = useState<Tab>(TAB_CONFIG.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'picks')
 
   const warehousesQ = useQuery({
     queryKey: ['warehouses'],
@@ -109,7 +113,7 @@ export default function WarehousePage() {
       )}
 
       {tab === 'receiving' && (
-        <ReceivingTab warehouses={warehouses} warehouseLabel={warehouseLabel} />
+        <ReceivingTab warehouses={warehouses} warehouseLabel={warehouseLabel} initialSessionId={query.get('session')} />
       )}
 
       {tab === 'putaway' && (

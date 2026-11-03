@@ -6,7 +6,6 @@ import * as backorders from '../backorders'
 import * as dropShip from '../drop-ship'
 import * as invoices from '../invoices'
 import * as quotes from '../quotes'
-import * as crm from '../crm'
 import * as orderPaymentAdmin from '../order-payment-admin'
 import * as approvals from '../approvals'
 import { ApprovalType } from '@/generated/prisma-tenant'
@@ -237,11 +236,10 @@ export async function routeQuotes(method: string, seg: string[], req: Request): 
     return Response.json(await quotes.getQuote(session.tenantId, seg[1], buyerOpts))
   }
   if (seg.length === 3 && seg[2] === 'submit' && method === 'POST') {
-    const byEmail = session.email
-      ? await crm.findCustomerByEmail(session.tenantId, session.email)
-      : null
+    // A buyer places their own approved quote; staff need order rights to create it for the customer.
+    if (!buyerOpts) assertPermission(session, 'orders.write')
     return Response.json(
-      await quotes.submitQuote(session.tenantId, seg[1], byEmail?.id, buyerOpts),
+      await quotes.submitQuote(session.tenantId, seg[1], { ...buyerOpts, userId: session.userId }),
     )
   }
   if (seg.length === 3 && seg[2] === 'request-approval' && method === 'POST') {

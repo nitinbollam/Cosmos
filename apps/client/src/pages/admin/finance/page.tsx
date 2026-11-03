@@ -24,6 +24,7 @@ import { ChartOfAccountsTab } from '@/pages/admin/finance/tabs/chart-of-accounts
 import { GeneralLedgerTab } from '@/pages/admin/finance/tabs/general-ledger-tab'
 import { IncomeStatementTab } from '@/pages/admin/finance/tabs/income-statement-tab'
 import { BalanceSheetTab } from '@/pages/admin/finance/tabs/balance-sheet-tab'
+import { BankReconciliationTab } from '@/pages/admin/finance/tabs/bank-reconciliation-tab'
 import { orderLabel } from '@/lib/order-label'
 
 type FinanceTab =
@@ -477,14 +478,6 @@ export default function FinancePage() {
     onError: (e) => setPayError(axiosErr(e)),
   })
 
-  const reconcileMut = useMutation({
-    mutationFn: (lineId: string) => api.post(`/bank-accounts/${lineId}/reconcile`, {}),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['finance', 'bank-summary'] })
-      void qc.invalidateQueries({ queryKey: ['finance', 'bank-unreconciled'] })
-    },
-  })
-
   const matchBillMut = useMutation({
     mutationFn: (billId: string) => api.post<BillRow>(`/bills/${encodeURIComponent(billId)}/match`, {}),
     onSuccess: (updated) => {
@@ -799,11 +792,16 @@ export default function FinancePage() {
 
       {tab === 'bank' && (
         <div className="space-y-4">
+          <BankReconciliationTab />
+
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="pleros-card">
-              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Opening Balance</div>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--c-text-3)' }}>Account opening balance</div>
               <div className="text-xl font-mono font-semibold mt-2" style={{ color: 'var(--c-heading)' }}>
                 {money(bankSummaryQ.data?.openingBalanceTotal ?? 0)}
+              </div>
+              <div className="text-[10px] mt-1" style={{ color: 'var(--c-text-3)' }}>
+                As entered on the bank accounts. Statement balances are per period in the reconciliation above.
               </div>
             </div>
             <div className="pleros-card">
@@ -863,7 +861,6 @@ export default function FinancePage() {
                     <th>Description</th>
                     <th>Amount</th>
                     <th>Type</th>
-                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -881,16 +878,6 @@ export default function FinancePage() {
                           <span className={`text-xs px-2 py-0.5 rounded font-mono ${amt >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
                             {amt >= 0 ? 'DEBIT (+)' : 'CREDIT (-)'}
                           </span>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn-primary !py-1 !px-2 !text-xs"
-                            disabled={reconcileMut.isPending}
-                            onClick={() => reconcileMut.mutate(line.id)}
-                          >
-                            Reconcile
-                          </button>
                         </td>
                       </tr>
                     )

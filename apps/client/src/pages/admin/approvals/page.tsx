@@ -5,6 +5,11 @@ import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
+import { adminPath } from '@/lib/admin-path'
+import { formatAmount } from '@/lib/decimal-amount'
+import { APPROVER_ROLES, apiFailure } from '@/lib/requisitions'
+import { ESCALATE_AFTER_DAYS, REMIND_AFTER_DAYS, waitLevel, waitingLabel, type WaitLevel } from '@/lib/approval-age'
+import { useUserNames, useViewer } from '@/components/purchasing/use-viewer'
 
 type ApprovalRequest = {
   id: string
@@ -14,6 +19,7 @@ type ApprovalRequest = {
   context: Record<string, unknown>
   status: string
   rejectReason?: string | null
+  cancelReason?: string | null
   createdAt: string
 }
 
@@ -31,12 +37,37 @@ function contextSummary(type: string, ctx: Record<string, unknown>): string {
   if (type === 'ORDER_CANCELLATION') {
     return `Order ${String(ctx.orderNumber ?? '')} · ${String(ctx.reason ?? 'Buyer requested cancellation')}`
   }
+  if (type === 'PURCHASE_REQUISITION') {
+    const total = ctx.total != null ? formatAmount(String(ctx.total), typeof ctx.currency === 'string' ? ctx.currency : 'USD') : '—'
+    const lines = typeof ctx.lineCount === 'number' ? ` · ${ctx.lineCount} line(s)` : ''
+    const supplier = typeof ctx.supplierName === 'string' ? ` · ${ctx.supplierName}` : ''
+    return `Requisition ${String(ctx.number ?? '')} · ${total}${supplier}${lines}`
+  }
   if (type === 'EXPENSE_REPORT') {
     const lines = Array.isArray(ctx.lines) ? ctx.lines : []
     return `Expense report · $${Number(ctx.total ?? 0).toFixed(2)} · ${lines.length} line(s)`
   }
   return JSON.stringify(ctx)
 }
+
+const WAIT_COLOR: Record<WaitLevel, string> = {
+  ok: 'var(--c-text-3)',
+  reminded: 'var(--c-warning)',
+  escalated: 'var(--c-danger)',
+}
+
+/** Waiting time, coloured once approvers have been reminded (2 days) or it was escalated (5 days). */
+function Waiting({ since }: { since: string }) {
+  const level = waitLevel(since)
+  return (
+    <span title={new Date(since).toLocaleString()} style={{ color: WAIT_COLOR[level] }} className={level === 'ok' ? '' : 'font-semibold'}>
+      {waitingLabel(since)}
+      {level === 'escalated' ? ' · escalated' : level === 'reminded' ? ' · reminded' : ''}
+    </span>
+  )
+}
+
+type PendingCount = { id: string; warehouseId: string; type: string; status: string; submittedAt?: string | null; updatedAt: string; _count?: { lines: number } }
 
 function errMsg(e: unknown): string {
   if (e && typeof e === 'object' && 'response' in e) {
@@ -57,6 +88,7 @@ export default function ApprovalsPage() {
 
   const q = useQuery<ApprovalRequest[]>({
     queryKey: ['approvals', typeFilter, statusFilter],
+    enabled: typeFilter !== 'CYCLE_COUNT',
     queryFn: () => {
       const params = new URLSearchParams()
       if (typeFilter) params.set('type', typeFilter)
@@ -67,7 +99,22 @@ export default function ApprovalsPage() {
   })
 
   // Shared with the sidebar's query, so this costs no extra request.
-  const { data: me } = useQuery({ queryKey: ['auth-me'], queryFn: () => api.get<{ userId?: string }>('/auth/me') })
+  const { viewer: me } = useViewer()
+  const nameOf = useUserNames(me)
+
+  // Cycle counts are approved on the warehouse page; list the waiting ones here so nothing goes unnoticed.
+  const showCounts = (typeFilter === '' || typeFilter === 'CYCLE_COUNT') && (statusFilter === 'PENDING' || statusFilter === '')
+  const countsQ = useQuery<PendingCount[]>({
+    queryKey: ['cycle-counts'],
+    queryFn: () => api.get('/wms/cycle-counts'),
+    enabled: showCounts,
+    retry: false,
+  })
+  const pendingCounts = (countsQ.data ?? [])
+    .filter((c) => c.status === 'PENDING_APPROVAL')
+    .sort((a, b) => new Date(a.submittedAt ?? a.updatedAt).getTime() - new Date(b.submittedAt ?? b.updatedAt).getTime())
+  // The decide endpoint is gated by role, not permission: only these roles see Approve / Reject.
+  const isApprover = APPROVER_ROLES.includes(me?.role ?? '')
 
   const decide = useMutation({
     mutationFn: ({ id, approve, rejectReason: reason }: { id: string; approve: boolean; rejectReason?: string }) =>
@@ -76,8 +123,15 @@ export default function ApprovalsPage() {
       void qc.invalidateQueries({ queryKey: ['approvals'] })
       void qc.invalidateQueries({ queryKey: ['purchase-order'] })
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] })
+      void qc.invalidateQueries({ queryKey: ['purchase-requisition'] })
+      void qc.invalidateQueries({ queryKey: ['purchase-requisitions'] })
       setRejectId(null)
       setRejectReason('')
+    },
+    onError: (e) => {
+      // Already decided, withdrawn or cancelled meanwhile: show the inbox as it is now.
+      const { status } = apiFailure(e)
+      if (status === 400 || status === 409) void qc.invalidateQueries({ queryKey: ['approvals'] })
     },
   })
 
@@ -86,27 +140,75 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-pleros-white">Approvals</h1>
         <p className="text-pleros-muted text-sm mt-1">
-          Purchase orders, order cancellation requests, discounts, and credit-limit overrides awaiting manager decision.
+          Purchase requisitions, purchase orders, order cancellation requests, discounts, credit-limit overrides, expense reports,
+          and cycle counts awaiting a manager&rsquo;s decision. Pending items are listed longest-waiting first; approvers are emailed
+          when one arrives, reminded after {REMIND_AFTER_DAYS} days, and admins are alerted after {ESCALATE_AFTER_DAYS}.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <select className="pleros-input !w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
+          <option value="PURCHASE_REQUISITION">Purchase requisitions</option>
           <option value="PURCHASE_ORDER">Purchase orders</option>
           <option value="ORDER_CANCELLATION">Order cancellations</option>
           <option value="DISCOUNT">Discounts</option>
           <option value="CREDIT_LIMIT_OVERRIDE">Credit limit</option>
           <option value="EXPENSE_REPORT">Expense reports</option>
+          <option value="CYCLE_COUNT">Cycle counts</option>
         </select>
         <select className="pleros-input !w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="PENDING">Pending</option>
           <option value="APPROVED">Approved</option>
           <option value="REJECTED">Rejected</option>
+          <option value="CANCELLED">Cancelled (closed without a decision)</option>
           <option value="">All statuses</option>
         </select>
       </div>
 
+      {showCounts && pendingCounts.length > 0 ? (
+        <Card>
+          <CardTitle>Cycle counts awaiting approval</CardTitle>
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-pleros-muted border-b border-pleros-border">
+                  <th className="pb-2 pr-4">Waiting</th>
+                  <th className="pb-2 pr-4">Count</th>
+                  <th className="pb-2 pr-4">Lines</th>
+                  <th className="pb-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingCounts.map((c) => (
+                  <tr key={c.id} className="border-b border-pleros-border/60">
+                    <td className="py-3 pr-4 whitespace-nowrap text-xs">
+                      <Waiting since={c.submittedAt ?? c.updatedAt} />
+                    </td>
+                    <td className="py-3 pr-4 font-mono">
+                      #{c.id.slice(-8)} · {c.type}
+                    </td>
+                    <td className="py-3 pr-4">{c._count?.lines ?? 0}</td>
+                    <td className="py-3">
+                      <Link to={adminPath('/warehouse?tab=counts')} className="text-xs text-pleros-accent">
+                        Review in Warehouse → Cycle counts →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : null}
+
+      {typeFilter === 'CYCLE_COUNT' ? (
+        showCounts && pendingCounts.length === 0 && !countsQ.isLoading ? (
+          <Card>
+            <EmptyState icon="✓" title="No cycle counts waiting" description="Nothing has been submitted for approval." />
+          </Card>
+        ) : null
+      ) : (
       <Card>
         <CardTitle>Inbox</CardTitle>
         {q.isLoading ? (
@@ -122,7 +224,8 @@ export default function ApprovalsPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-pleros-muted border-b border-pleros-border">
-                  <th className="pb-2 pr-4">Age</th>
+                  <th className="pb-2 pr-4">{statusFilter === 'PENDING' ? 'Waiting' : 'Requested'}</th>
+                  <th className="pb-2 pr-4">Requested by</th>
                   <th className="pb-2 pr-4">Type</th>
                   <th className="pb-2 pr-4">Summary</th>
                   <th className="pb-2 pr-4">Status</th>
@@ -133,8 +236,9 @@ export default function ApprovalsPage() {
                 {(q.data ?? []).map((row) => (
                   <tr key={row.id} className="border-b border-pleros-border/60 align-top">
                     <td className="py-3 pr-4 text-pleros-muted whitespace-nowrap text-xs">
-                      {new Date(row.createdAt).toLocaleString()}
+                      {row.status === 'PENDING' ? <Waiting since={row.createdAt} /> : new Date(row.createdAt).toLocaleString()}
                     </td>
+                    <td className="py-3 pr-4 text-xs whitespace-nowrap">{nameOf(row.requestedBy)}</td>
                     <td className="py-3 pr-4">
                       <StatusBadge status={row.type === 'ORDER_CANCELLATION' ? 'Order cancellation' : row.type} />
                     </td>
@@ -146,6 +250,14 @@ export default function ApprovalsPage() {
                           className="block text-xs text-pleros-accent mt-1"
                         >
                           View PO →
+                        </Link>
+                      ) : null}
+                      {row.type === 'PURCHASE_REQUISITION' ? (
+                        <Link
+                          to={adminPath(`/purchasing/requisitions/${encodeURIComponent(row.subjectId)}`)}
+                          className="block text-xs text-pleros-accent mt-1"
+                        >
+                          View requisition →
                         </Link>
                       ) : null}
                       {row.type === 'CREDIT_LIMIT_OVERRIDE' ? (
@@ -193,9 +305,22 @@ export default function ApprovalsPage() {
                       {row.rejectReason ? (
                         <p className="text-xs text-red-400 mt-1 max-w-xs">{row.rejectReason}</p>
                       ) : null}
+                      {row.status === 'CANCELLED' && row.cancelReason ? (
+                        <p className="text-xs text-pleros-muted mt-1 max-w-xs">{row.cancelReason}</p>
+                      ) : null}
                     </td>
                     <td className="py-3">
-                      {row.status === 'PENDING' ? (
+                      {row.status === 'PENDING' && !isApprover ? (
+                        <span className="text-xs text-pleros-text-3">A manager or admin decides</span>
+                      ) : row.status === 'PENDING' && row.type === 'PURCHASE_REQUISITION' && row.requestedBy === me?.userId ? (
+                        <span className="text-xs text-pleros-text-3">
+                          Your requisition: another manager or admin decides. To change it,{' '}
+                          <Link to={adminPath(`/purchasing/requisitions/${encodeURIComponent(row.subjectId)}`)} className="text-pleros-accent">
+                            withdraw it
+                          </Link>
+                          .
+                        </span>
+                      ) : row.status === 'PENDING' ? (
                         rejectId === row.id ? (
                           <div className="space-y-2 min-w-[200px]">
                             <input
@@ -215,7 +340,7 @@ export default function ApprovalsPage() {
                               >
                                 Confirm reject
                               </button>
-                              <button type="button" className="btn-ghost !text-xs !py-1" onClick={() => setRejectId(null)}>
+                              <button type="button" className="btn-ghost !text-xs !py-1" disabled={decide.isPending} onClick={() => setRejectId(null)}>
                                 Cancel
                               </button>
                             </div>
@@ -237,6 +362,7 @@ export default function ApprovalsPage() {
                             <button
                               type="button"
                               className="btn-ghost !text-xs !py-1"
+                              disabled={decide.isPending}
                               onClick={() => {
                                 setRejectId(row.id)
                                 setRejectReason('')
@@ -250,7 +376,9 @@ export default function ApprovalsPage() {
                         '—'
                       )}
                       {decide.isError && decide.variables?.id === row.id ? (
-                        <p className="text-xs text-red-400 mt-1">{errMsg(decide.error)}</p>
+                        <p className="text-xs text-red-400 mt-1" role="alert">
+                          {errMsg(decide.error)}
+                        </p>
                       ) : null}
                     </td>
                   </tr>
@@ -260,6 +388,7 @@ export default function ApprovalsPage() {
           </div>
         )}
       </Card>
+      )}
     </div>
   )
 }

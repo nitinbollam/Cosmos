@@ -41,6 +41,9 @@ model StockLevel {
   quantityOnHand    Int      @default(0)
   quantityReserved  Int      @default(0)
   quantityAvailable Int      @default(0)
+  /// Moving weighted average unit cost of this stock (ticket 50). Null for stock received before
+  /// averages existed: it is valued at the SKU's standard cost until a receipt or transfer sets it.
+  averageCost       Decimal?
   reorderPoint      Int      @default(0)
   reorderQty        Int      @default(0)
   leadTimeDays      Int      @default(7)
@@ -81,6 +84,9 @@ model SKU {
   isKit             Boolean  @default(false)
   trackLot          Boolean  @default(false)
   trackSerial       Boolean  @default(false)
+  /** Purchasing supplier that ships this product straight to the customer. When set, order lines
+   *  for it are drop-shipped (auto-PO to this supplier) instead of picked from stock. */
+  dropShipSupplierId String?
   imageUrls Json 
   attributes        Json     
   createdAt         DateTime @default(now())
@@ -115,6 +121,22 @@ model Warehouse {
 
   @@unique([tenantId, code])
   @@index([tenantId])
+}
+
+/// How much of a stock level sits in one bin (ticket 46). StockLevel stays the warehouse total; whatever
+/// is not in any bin is waiting for putaway. Moves between bins write STOCK_MOVED ledger rows.
+model BinStock {
+  id          String   @id @default(cuid())
+  tenantId    String
+  skuId       String
+  warehouseId String
+  batchId     String   @default("")
+  binId       String
+  quantity    Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, skuId, warehouseId, batchId, binId])
+  @@index([tenantId, warehouseId, binId])
 }
 
 model BinLocation {

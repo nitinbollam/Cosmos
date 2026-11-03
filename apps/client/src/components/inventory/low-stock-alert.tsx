@@ -1,10 +1,15 @@
 import { Link } from 'react-router-dom'
 import { CardTitle } from '@pleros/ui'
 import { adminPath } from '@/lib/admin-path'
+import { hasClientPermission } from '@/lib/requisitions'
+import { useViewer } from '@/components/purchasing/use-viewer'
 
 export type LowStockRow = { skuId: string; name: string; available: number; reorderPoint?: number }
 
 export function LowStockAlert({ alerts }: { alerts: LowStockRow[] }) {
+  // Purchases start as a requisition (POs are only created from approved ones), so only those who may raise one get the button.
+  const { viewer } = useViewer()
+  const viaRequisition = hasClientPermission(viewer, 'requisitions.write')
   return (
     <div className="pleros-card">
       <CardTitle>Low stock</CardTitle>
@@ -29,12 +34,14 @@ export function LowStockAlert({ alerts }: { alerts: LowStockRow[] }) {
                   {a.reorderPoint != null ? ` · reorder at ${a.reorderPoint}` : ''}
                 </div>
               </div>
-              <Link
-                to={adminPath(`/purchasing?skuId=${encodeURIComponent(a.skuId)}`)}
-                className="btn-primary !py-2 !px-3 !text-xs shrink-0 whitespace-nowrap"
-              >
-                Create PO
-              </Link>
+              {viaRequisition && (
+                <Link
+                  to={adminPath(`/purchasing/requisitions/new?skuId=${encodeURIComponent(a.skuId)}`)}
+                  className="btn-primary !py-2 !px-3 !text-xs shrink-0 whitespace-nowrap"
+                >
+                  Request purchase
+                </Link>
+              )}
             </li>
           ))}
         </ul>

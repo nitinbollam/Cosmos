@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-admin'
 import { showToast } from '@/lib/toast'
+import { axiosErr } from '@/lib/axios-error'
 import { StatusBadge } from '@/components/pleros/status-badge'
 import { EmptyState } from '@/components/pleros/empty-state'
 import { PutawayTaskRow, WarehouseRow } from '../types'
@@ -19,18 +20,22 @@ export function PutawayTab({ warehouseLabel }: PutawayTabProps) {
 
   const confirmPutaway = useMutation({
     mutationFn: ({ taskId, lineId }: { taskId: string; lineId: string }) =>
-      api.post(`/wms/putaway/tasks/${taskId}/lines/${lineId}/confirm`, {}),
-    onSuccess: () => {
-      showToast('Putaway confirmed')
+      api.post<{ binCode: string | null; moved: number; alreadyPutAway?: boolean }>(
+        `/wms/putaway/tasks/${taskId}/lines/${lineId}/confirm`,
+        {},
+      ),
+    onSuccess: (res) => {
+      // Only the line's quantity moves into the bin; the rest of the stock stays where it is.
+      showToast(res?.alreadyPutAway ? 'Already put away' : `Put away ${res?.moved ?? 0} into ${res?.binCode ?? 'the bin'}`)
       void qc.invalidateQueries({ queryKey: ['putaway-tasks'] })
     },
-    onError: (e: Error) => showToast(e.message, 'error'),
+    onError: (e: unknown) => showToast(axiosErr(e), 'error'),
   })
 
   return (
     <div className="space-y-4">
       <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>
-        Directed putaway tasks are created when receiving sessions complete. Confirm lines to assign stock to bins.
+        Directed putaway tasks are created when receiving sessions complete. Confirming a line moves that line's quantity into its bin.
       </p>
       <div className="pleros-card overflow-x-auto">
         {putawayQ.isLoading ? (

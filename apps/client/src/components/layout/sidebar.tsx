@@ -23,6 +23,7 @@ const BASE_SIDEBAR_NAV: NavItem[] = [
   { href: '/admin/fulfillment', label: 'Fulfillment', icon: 'fulfillment', permission: 'wms.read' },
   { href: '/admin/warehouse', label: 'Warehouse', icon: 'warehouse', permission: 'wms.read' },
   { href: '/admin/purchasing', label: 'Purchasing', icon: 'purchasing', permission: 'purchasing.read' },
+  { href: '/admin/purchasing/requisitions', label: 'Requisitions', icon: 'purchasing', permission: 'requisitions.read' },
   { href: '/admin/marketplace', label: 'Marketplace', icon: 'inventory', permission: 'marketplace.read', feature: 'marketplace' },
   { href: '/admin/compliance', label: 'Compliance', icon: 'compliance', permission: 'compliance.read' },
   { href: '/admin/crm', label: 'CRM', icon: 'crm', permission: 'crm.read' },
@@ -130,10 +131,12 @@ export function Sidebar({
 
       <nav className="pleros-sidebar-nav" aria-label="Admin navigation">
         {navItems.map((item) => {
+          const matches = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+          // The most specific item wins: /admin/purchasing/requisitions highlights Requisitions, not Purchasing.
           const active =
             item.href === '/admin'
               ? pathname === '/admin' || pathname === '/admin/'
-              : pathname === item.href || pathname.startsWith(`${item.href}/`)
+              : matches(item.href) && !navItems.some((o) => o.href.length > item.href.length && o.href.startsWith(`${item.href}/`) && matches(o.href))
           return (
             <Link
               key={item.href}
