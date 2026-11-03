@@ -124,9 +124,7 @@ export function IntegrationsTab() {
 
   return (
     <div className="space-y-6">
-      <PermissionGate action="salesChannels">
-        <SalesChannelsSection />
-      </PermissionGate>
+      <SalesChannelsSection />
 
       <PermissionGate action="webhooks">
         <WebhookManager />
