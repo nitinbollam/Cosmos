@@ -7,3 +7,8 @@ export function cycleCountLineNeedsAdjustment(systemQty: number, countedQty: num
   if (countedQty == null) return false
   return computeCycleCountDelta(systemQty, countedQty) !== 0
 }
+
+/** Inventory idempotency key of a line's adjustment: a retried approval posts each line once (ticket 49). */
+export function cycleCountLineKey(lineId: string): string {
+  return `cycle-count-line:${lineId}`
+}

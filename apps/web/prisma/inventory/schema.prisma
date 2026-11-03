@@ -23,8 +23,12 @@ model StockLedgerEntry {
   referenceType String?
   performedBy   String
   correlationId String
+  /// Set by a caller that must post a change exactly once (ticket 49: a cycle count line). A retry with the
+  /// same key finds this row instead of changing stock again. Null for everything else.
+  idempotencyKey String?
   occurredAt    DateTime @default(now())
 
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, skuId, warehouseId])
   @@index([tenantId, occurredAt])
   @@index([correlationId])

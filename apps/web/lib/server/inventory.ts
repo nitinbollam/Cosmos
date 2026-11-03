@@ -673,32 +673,88 @@ export function ledgerForSku(tenantId: string, skuId: string, limit = 100) {
   })
 }
 
-export async function adjustStock(
+export type AdjustStockInput = {
+  skuId: string
+  warehouseId: string
+  quantityDelta: number
+  reason?: string
+  batchId?: string
+  locationId?: string | null
+  referenceId?: string
+  referenceType?: string
+  correlationId?: string
+  /** Post the loss (or find) to the general ledger at the stock's cost. Not for adjustments that carry their own journal. */
+  ledger?: boolean
+  /**
+   * Cost the units come back at, for a positive adjustment that returns known stock (a customer return at the
+   * cost it shipped at). Blended into the average. Without it, units are added or removed at the average.
+   */
+  unitCost?: string
+}
+
+export async function adjustStock(tenantId: string, dto: AdjustStockInput, performedBy: string) {
+  // Keys are for internal callers that post a change exactly once; one arriving here (a request body) is dropped.
+  const { idempotencyKey: _ignored, ...rest } = dto as AdjustStockInput & { idempotencyKey?: unknown }
+  return (await postStockAdjustment(tenantId, rest, performedBy)).level
+}
+
+export type StockAdjustmentResult = {
+  level: StockLevelRow
+  ledgerEntryId: string
+  /** True when the key had already been posted: nothing changed this time. */
+  replayed: boolean
+}
+
+type StockLevelRow = Awaited<ReturnType<typeof inventoryDb.stockLevel.findUniqueOrThrow>>
+type LedgerEntryRow = Awaited<ReturnType<typeof inventoryDb.stockLedgerEntry.findUniqueOrThrow>>
+
+/** The adjustment's GL job. Keyed by `sourceId` + `variant`, so queueing the same one again leaves one job. */
+async function queueAdjustmentGl(tenantId: string, cost: string, quantityDelta: number, sourceId: string, variant: string) {
+  const [{ adjustmentPosting }, { enqueuePostingJobAfterCommit }] = await Promise.all([import('./stock-gl'), import('./posting-outbox')])
+  const posting = adjustmentPosting(cost, quantityDelta)
+  if (posting) {
+    await enqueuePostingJobAfterCommit({ tenantId, kind: posting.kind, sourceType: 'StockAdjustment', sourceId, variant, amount: posting.amount })
+  }
+}
+
+/**
+ * The key was posted before (a retry, or a second request that lost the race). Stock is not touched again.
+ * The GL job is queued again from the stored row: same source and variant as the first time, so an existing
+ * job is left alone and one lost to a crash between the two databases is recovered (ticket 49).
+ */
+async function replayStockAdjustment(tenantId: string, dto: AdjustStockInput, entry: LedgerEntryRow): Promise<StockAdjustmentResult> {
+  const batchKey = dto.batchId ?? ''
+  if (
+    entry.skuId !== dto.skuId ||
+    entry.warehouseId !== dto.warehouseId ||
+    (entry.batchId ?? '') !== batchKey ||
+    entry.quantityDelta !== dto.quantityDelta
+  ) {
+    throw new ApiError(409, 'This idempotency key was already used for a different stock adjustment')
+  }
+  if (dto.ledger) {
+    await queueAdjustmentGl(tenantId, entry.unitCost.toString(), entry.quantityDelta, entry.correlationId, `${entry.warehouseId}:${entry.skuId}:${batchKey}`)
+  }
+  const level = await inventoryDb.stockLevel.findFirstOrThrow({
+    where: { tenantId, skuId: entry.skuId, warehouseId: entry.warehouseId, batchId: batchKey },
+  })
+  return { level, ledgerEntryId: entry.id, replayed: true }
+}
+
+/**
+ * `adjustStock` with an optional `idempotencyKey`. The key is written on the ledger row in the same transaction as
+ * the stock change, and is unique per tenant, so however many requests carry it only one changes stock.
+ */
+export async function postStockAdjustment(
   tenantId: string,
-  dto: {
-    skuId: string
-    warehouseId: string
-    quantityDelta: number
-    reason?: string
-    batchId?: string
-    locationId?: string | null
-    referenceId?: string
-    referenceType?: string
-    correlationId?: string
-    /** Post the loss (or find) to the general ledger at the stock's cost. Not for adjustments that carry their own journal. */
-    ledger?: boolean
-    /**
-     * Cost the units come back at, for a positive adjustment that returns known stock (a customer return at the
-     * cost it shipped at). Blended into the average. Without it, units are added or removed at the average.
-     */
-    unitCost?: string
-  },
+  dto: AdjustStockInput & { idempotencyKey?: string },
   performedBy: string,
-) {
+): Promise<StockAdjustmentResult> {
   if (!Number.isFinite(dto.quantityDelta) || dto.quantityDelta === 0) {
     throw new ApiError(400, 'quantityDelta must be a non-zero number')
   }
 
+  const key = dto.idempotencyKey || undefined
   const batchKey = dto.batchId ?? ''
   const correlationId = dto.correlationId ?? randomUUID()
   const prevLevel = await inventoryDb.stockLevel.findFirst({
@@ -706,7 +762,12 @@ export async function adjustStock(
   })
   const skuCost = (await inventoryDb.sKU.findFirst({ where: { id: dto.skuId, tenantId }, select: { cost: true } }))?.cost
   let movedCost = '0'
-  const result = await inventoryDb.$transaction(async (tx) => {
+  const ledgerEntryId = randomUUID()
+  const outcome: { level: StockLevelRow } | { replay: LedgerEntryRow } = await inventoryDb.$transaction(async (tx) => {
+    if (key) {
+      const done = await tx.stockLedgerEntry.findFirst({ where: { tenantId, idempotencyKey: key } })
+      if (done) return { replay: done }
+    }
     const level = await tx.stockLevel.findFirst({
       where: { tenantId, skuId: dto.skuId, warehouseId: dto.warehouseId, batchId: batchKey },
     })
@@ -745,7 +806,7 @@ export async function adjustStock(
     }
     await tx.stockLedgerEntry.create({
       data: {
-        id: randomUUID(),
+        id: ledgerEntryId,
         tenantId,
         skuId: dto.skuId,
         warehouseId: dto.warehouseId,
@@ -759,10 +820,22 @@ export async function adjustStock(
         referenceType: dto.referenceType ?? 'ADJUSTMENT',
         performedBy,
         correlationId,
+        idempotencyKey: key ?? null,
       },
     })
-    return updatedLevel
+    return { level: updatedLevel }
+  }).catch(async (e: unknown) => {
+    // Another request with the same key committed first (Postgres lets both pass the check above). The unique
+    // index failed this insert and the whole transaction, stock change included, was rolled back. Handled here,
+    // after the rollback: an aborted Postgres transaction takes no further statements.
+    if (!key || (e as { code?: string }).code !== 'P2002') throw e
+    const done = await inventoryDb.stockLedgerEntry.findFirst({ where: { tenantId, idempotencyKey: key } })
+    if (!done) throw e
+    return { replay: done }
   })
+
+  if ('replay' in outcome) return replayStockAdjustment(tenantId, dto, outcome.replay)
+  const result = outcome.level
 
   if (
     prevLevel &&
@@ -791,22 +864,11 @@ export async function adjustStock(
   }
 
   if (dto.ledger) {
-    const [{ adjustmentPosting }, { enqueuePostingJobAfterCommit }] = await Promise.all([import('./stock-gl'), import('./posting-outbox')])
-    const posting = adjustmentPosting(movedCost, dto.quantityDelta)
-    if (posting) {
-      await enqueuePostingJobAfterCommit({
-        tenantId,
-        kind: posting.kind,
-        sourceType: 'StockAdjustment',
-        sourceId: correlationId,
-        variant: `${dto.warehouseId}:${dto.skuId}:${batchKey}`,
-        amount: posting.amount,
-      })
-    }
+    await queueAdjustmentGl(tenantId, movedCost, dto.quantityDelta, correlationId, `${dto.warehouseId}:${dto.skuId}:${batchKey}`)
   }
 
   queueSalesChannelPush(tenantId, dto.skuId)
-  return result
+  return { level: result, ledgerEntryId, replayed: false }
 }
 
 export function getStockLevels(tenantId: string, opts: { skuId?: string; warehouseId?: string }) {
