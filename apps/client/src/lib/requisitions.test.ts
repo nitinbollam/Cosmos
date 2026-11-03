@@ -108,3 +108,11 @@ test('submission problems match the server rules', () => {
     ['Line 1: quantity must be more than 0', 'Line 1: enter a unit cost (0 is allowed)'],
   )
 })
+
+test('SKU and estimated unit cost remain optional while a requisition is a draft', () => {
+  const draftLine = { lineNo: 1, skuCode: null, description: 'Uncatalogued item', qtyRequested: 2, unitCost: null }
+  assert.deepEqual(
+    submissionProblems({ supplierId: null, lines: [draftLine] }),
+    ['Choose a supplier', 'Line 1: enter a unit cost (0 is allowed)'],
+  )
+})

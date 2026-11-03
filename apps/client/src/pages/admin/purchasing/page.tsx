@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/pleros/empty-state'
 import { hasClientPermission } from '@/lib/requisitions'
 import { useViewer } from '@/components/purchasing/use-viewer'
 import { formatAmount } from '@/lib/decimal-amount'
+import { supplierFormErrors } from '@/lib/supplier-form'
 
 type PoStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'CLOSED' | 'CANCELLED'
 
@@ -39,13 +40,13 @@ type Supplier = {
 }
 
 const FILTERS: Array<{ label: string; value: '' | PoStatus }> = [
-  { label: 'ALL', value: '' },
-  { label: 'DRAFT', value: 'DRAFT' },
-  { label: 'PENDING_APPROVAL', value: 'PENDING_APPROVAL' },
-  { label: 'SUBMITTED', value: 'SUBMITTED' },
-  { label: 'PARTIALLY_RECEIVED', value: 'PARTIALLY_RECEIVED' },
-  { label: 'CLOSED', value: 'CLOSED' },
-  { label: 'CANCELLED', value: 'CANCELLED' },
+  { label: 'All', value: '' },
+  { label: 'Draft', value: 'DRAFT' },
+  { label: 'Pending Approval', value: 'PENDING_APPROVAL' },
+  { label: 'Submitted', value: 'SUBMITTED' },
+  { label: 'Partially Received', value: 'PARTIALLY_RECEIVED' },
+  { label: 'Closed', value: 'CLOSED' },
+  { label: 'Cancelled', value: 'CANCELLED' },
 ]
 
 export default function PurchasingPage() {
@@ -325,36 +326,52 @@ function SupplierDrawer(props: {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [showProblems, setShowProblems] = useState(false)
+  const fieldErrors = showProblems ? supplierFormErrors({ code, name, email }) : { code: '', name: '', email: '' }
   return (
     <div className="fixed inset-0 z-50 flex">
       <button type="button" className="flex-1 bg-black/60" aria-label="Close" onClick={props.onClose} />
       <div className="w-full max-w-md bg-pleros-surface border-l border-pleros-border p-6">
         <h2 className="text-lg font-semibold text-pleros-white">New supplier</h2>
+        <label htmlFor="supplier-code" className="mt-4 block text-xs text-pleros-muted">Supplier code</label>
         <input
-          placeholder="Code"
-          className="mt-4 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
+          id="supplier-code"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={code}
           onChange={(e) => setCode(e.target.value)}
+          aria-invalid={Boolean(fieldErrors.code)}
+          aria-describedby={fieldErrors.code ? 'supplier-code-error' : undefined}
         />
+        {fieldErrors.code && <p id="supplier-code-error" className="mt-1 text-xs text-red-400">{fieldErrors.code}</p>}
+        <label htmlFor="supplier-name" className="mt-3 block text-xs text-pleros-muted">Supplier name</label>
         <input
-          placeholder="Name"
-          className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
+          id="supplier-name"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          aria-invalid={Boolean(fieldErrors.name)}
+          aria-describedby={fieldErrors.name ? 'supplier-name-error' : undefined}
         />
+        {fieldErrors.name && <p id="supplier-name-error" className="mt-1 text-xs text-red-400">{fieldErrors.name}</p>}
+        <label htmlFor="supplier-email" className="mt-3 block text-xs text-pleros-muted">Email (optional)</label>
         <input
-          placeholder="Email"
-          className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
+          id="supplier-email"
+          type="email"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          aria-invalid={Boolean(fieldErrors.email)}
+          aria-describedby={fieldErrors.email ? 'supplier-email-error' : undefined}
         />
+        {fieldErrors.email && <p id="supplier-email-error" className="mt-1 text-xs text-red-400">{fieldErrors.email}</p>}
+        <label htmlFor="supplier-phone" className="mt-3 block text-xs text-pleros-muted">Phone (optional)</label>
         <input
-          placeholder="Phone (optional)"
-          className="mt-2 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
+          id="supplier-phone"
+          className="mt-1 w-full rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
-        {props.error && <p className="text-red-400 text-xs mt-2">{props.error.message}</p>}
+        {props.error && <p role="alert" className="text-red-400 text-xs mt-2">Could not create supplier: {props.error.message}</p>}
         <div className="mt-6 flex gap-2">
           <button
             type="button"
@@ -365,16 +382,18 @@ function SupplierDrawer(props: {
           </button>
           <button
             type="button"
-            disabled={props.loading || !code || !name}
+            disabled={props.loading}
             className="flex-1 h-10 rounded-md bg-pleros-primary text-white text-sm disabled:opacity-40"
-            onClick={() =>
+            onClick={() => {
+              setShowProblems(true)
+              if (Object.values(supplierFormErrors({ code, name, email })).some(Boolean)) return
               props.onSubmit({
-                code,
-                name,
-                email: email || undefined,
-                phone: phone || undefined,
+                code: code.trim(),
+                name: name.trim(),
+                email: email.trim() || undefined,
+                phone: phone.trim() || undefined,
               })
-            }
+            }}
           >
             {props.loading ? 'Saving…' : 'Create'}
           </button>
