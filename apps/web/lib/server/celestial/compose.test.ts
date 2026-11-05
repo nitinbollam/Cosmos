@@ -256,3 +256,34 @@ test('a record picked from a list says how it was picked', () => {
   ])
   assert.match(reply, /^\*\*#2 from your last list \(Q-1\)\.\*\*/)
 })
+
+test('an empty filtered invoice list does not claim everything is paid', () => {
+  const invoices = (extra: object) => [{ name: 'list_my_invoices', links: [], data: { rows: [], total: 0, outstandingOnly: true, filters: ['past due'], ...extra } }] as never
+  assert.doesNotMatch(composeFromToolResults(invoices({ narrowed: true })), /fully paid/)
+  assert.match(composeFromToolResults(invoices({ narrowed: false })), /fully paid/)
+})
+
+test('the same notice from two lookups is said once', () => {
+  const notice = 'I couldn\u2019t find a customer named \u201cZorblax\u201d.'
+  const reply = composeFromToolResults([
+    { name: 'orders.list', data: null, links: [], notice },
+    { name: 'quotes.list', data: null, links: [], notice },
+  ])
+  assert.equal(reply, notice)
+})
+
+test('a customer ranking by units leads with units', () => {
+  const data = {
+    label: 'this year',
+    rank: 'desc',
+    byUnits: true,
+    rows: [{ customerId: 'c', name: 'Acme', orders: 2, revenue: 50, units: 120 }],
+    ranked: 3,
+    truncated: false,
+    excludedStatuses: ['CANCELLED'],
+    limit: 1,
+  }
+  const reply = composeFromToolResults([{ name: 'sales.by_customer', data, links: [] }])
+  assert.match(reply, /most units/)
+  assert.match(reply, /\*\*Acme\*\* \u2014 120 units across 2 order\(s\)/)
+})

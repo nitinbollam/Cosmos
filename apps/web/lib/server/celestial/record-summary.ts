@@ -81,6 +81,11 @@ export function currencySupported(summary: string, evidence: string): boolean {
   return true
 }
 
+/** False when the summary calls records requisitions but the evidence holds none (a PO relabelled). */
+export function recordTypeSupported(summary: string, evidence: string): boolean {
+  return !/\brequisitions?\b/i.test(summary) || /\brequisitions?\b/i.test(evidence)
+}
+
 /** Trimmed summary text, or null when it isn't a short plain-prose summary. */
 export function cleanSummary(text: string | null | undefined): string | null {
   const t = (text ?? '').trim()
@@ -93,7 +98,7 @@ export function cleanSummary(text: string | null | undefined): string | null {
 export function acceptSummary(text: string | null | undefined, evidence: string, question: string): string | null {
   const s = cleanSummary(text)
   if (!s) return null
-  return numbersSupported(s, evidence, question) && currencySupported(s, evidence) ? s : null
+  return numbersSupported(s, evidence, question) && currencySupported(s, evidence) && recordTypeSupported(s, evidence) ? s : null
 }
 
 /** Resolve within `ms`, or null; a late provider answer is discarded. */

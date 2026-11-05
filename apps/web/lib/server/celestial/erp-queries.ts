@@ -5,6 +5,7 @@
  * keeps its own projections instead of calling them.
  */
 import { crmDb, inventoryDb, orderDb, purchasingDb, storefrontDb } from '../db'
+import { invoiceBalance } from '../invoice-status'
 import {
   OPEN_PO_STATUSES,
   SALES_EXCLUDED_STATUSES,
@@ -29,6 +30,7 @@ import {
   type OrderStatusFilter,
   type PoStatusFilter,
   type QuoteStatusFilter,
+  type RequisitionStatusFilter,
   type SortDirection,
 } from './erp-query-contracts'
 
@@ -536,6 +538,128 @@ export async function purchasingOrderDetail(tenantId: string, ref: { number?: st
 
 // ── finance.bills (accounts payable) ────────────────────────────────────────
 
+export type RequisitionRow = {
+  id: string
+  number: string
+  status: string
+  supplierName: string | null
+  currency: string
+  createdAt: Date
+  submittedAt: Date | null
+  lineCount: number
+  qtyRequested: number
+  estimatedCost: number | null
+  missingCostLines: number
+}
+
+/** Read-only requisition list. Never calls getRequisition, whose read repairs approval sync state. */
+export async function purchaseRequisitions(
+  tenantId: string,
+  f: { status?: RequisitionStatusFilter; statuses?: RequisitionStatusFilter[]; supplier?: string; dateRange?: DateRange; page?: number },
+): Promise<Page<RequisitionRow>> {
+  const { page, skip } = skipFor(f.page)
+  const supplierIds = await supplierIdsMatching(tenantId, f.supplier)
+  if (supplierIds && supplierIds.length === 0) return { rows: [], total: 0, page, pageSize: PAGE_SIZE }
+  const where = {
+    tenantId,
+    ...(f.status ? { status: f.status } : f.statuses?.length ? { status: { in: f.statuses } } : {}),
+    ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
+    ...(f.dateRange ? { createdAt: { gte: f.dateRange.from, lt: f.dateRange.to } } : {}),
+  }
+  const [items, total] = await Promise.all([
+    purchasingDb.purchaseRequisition.findMany({
+      where,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        currency: true,
+        createdAt: true,
+        submittedAt: true,
+        supplier: { select: { name: true } },
+        lines: { select: { qtyRequested: true, unitCost: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take: PAGE_SIZE,
+    }),
+    purchasingDb.purchaseRequisition.count({ where }),
+  ])
+  return {
+    rows: items.map((r) => {
+      const cost = goodsCost(r.lines.map((l) => ({ qty: l.qtyRequested, unitCost: nullableNum(l.unitCost) })))
+      return {
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        supplierName: r.supplier?.name ?? null,
+        currency: r.currency,
+        createdAt: r.createdAt,
+        submittedAt: r.submittedAt,
+        lineCount: r.lines.length,
+        qtyRequested: r.lines.reduce((a, l) => a + l.qtyRequested, 0),
+        estimatedCost: cost.amount,
+        missingCostLines: cost.missingCostLines,
+      }
+    }),
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+  }
+}
+
+export async function purchaseRequisitionDetail(tenantId: string, f: { number?: string }) {
+  if (!f.number) return null
+  const r = await purchasingDb.purchaseRequisition.findFirst({
+    where: { tenantId, number: f.number },
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      currency: true,
+      notes: true,
+      createdAt: true,
+      submittedAt: true,
+      approvedAt: true,
+      rejectedAt: true,
+      rejectReason: true,
+      cancelledAt: true,
+      cancelReason: true,
+      purchaseOrderId: true,
+      supplier: { select: { name: true } },
+      lines: {
+        select: { lineNo: true, skuCode: true, description: true, qtyRequested: true, unitCost: true },
+        orderBy: { lineNo: 'asc' },
+      },
+    },
+  })
+  if (!r) return null
+  const purchaseOrder = r.purchaseOrderId
+    ? await purchasingDb.purchaseOrder.findFirst({ where: { id: r.purchaseOrderId, tenantId }, select: { id: true, number: true } })
+    : null
+  const lines = r.lines.map((l) => ({ ...l, unitCost: nullableNum(l.unitCost) }))
+  const cost = goodsCost(lines.map((l) => ({ qty: l.qtyRequested, unitCost: l.unitCost })))
+  return {
+    id: r.id,
+    number: r.number,
+    status: r.status,
+    supplierName: r.supplier?.name ?? null,
+    currency: r.currency,
+    notes: r.notes,
+    createdAt: r.createdAt,
+    submittedAt: r.submittedAt,
+    approvedAt: r.approvedAt,
+    rejectedAt: r.rejectedAt,
+    rejectReason: r.rejectReason,
+    cancelledAt: r.cancelledAt,
+    cancelReason: r.cancelReason,
+    purchaseOrder,
+    lines,
+    estimatedCost: cost.amount,
+    missingCostLines: cost.missingCostLines,
+  }
+}
+
 export type BillFilters = {
   status?: BillStatusFilter
   /** true: still owed; false: fully settled. Undefined: no settlement filter. */
@@ -543,6 +667,8 @@ export type BillFilters = {
   pastDue?: boolean
   supplier?: string
   dateRange?: DateRange
+  /** The date range means the due date ("bills due this month"), not the issue date. */
+  byDueDate?: boolean
   page?: number
 }
 
@@ -579,8 +705,16 @@ export async function financeBills(
     tenantId,
     ...statusFilter,
     ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
-    ...(f.pastDue ? { dueAt: { lt: now } } : {}),
-    ...(f.dateRange ? { issuedAt: { gte: f.dateRange.from, lt: f.dateRange.to } } : {}),
+    ...(f.pastDue || (f.dateRange && f.byDueDate)
+      ? {
+          dueAt: {
+            ...(f.dateRange && f.byDueDate ? { gte: f.dateRange.from } : {}),
+            // Past due inside a period ends at whichever comes first: now or the period's end.
+            lt: f.pastDue ? (f.dateRange && f.byDueDate && f.dateRange.to < now ? f.dateRange.to : now) : f.dateRange!.to,
+          },
+        }
+      : {}),
+    ...(f.dateRange && !f.byDueDate ? { issuedAt: { gte: f.dateRange.from, lt: f.dateRange.to } } : {}),
   }
 
   const [items, total, forTotals] = await Promise.all([
@@ -604,7 +738,7 @@ export async function financeBills(
     purchasingDb.vendorBill.count({ where }),
     purchasingDb.vendorBill.findMany({
       where,
-      select: { currency: true, totalAmount: true, amountPaid: true },
+      select: { currency: true, totalAmount: true, amountPaid: true, status: true },
       take: BILL_TOTALS_CAP,
     }),
   ])
@@ -628,11 +762,45 @@ export async function financeBills(
     total,
     page,
     pageSize: PAGE_SIZE,
+    // Only issued and part-paid bills are owed; a draft or void bill keeps its total but owes nothing.
     balanceByCurrency: sumByCurrency(
-      forTotals.map((b) => ({ currency: b.currency, amount: num(b.totalAmount) - num(b.amountPaid) })),
+      forTotals
+        .filter((b) => (OUTSTANDING_BILL_STATUSES as string[]).includes(b.status))
+        .map((b) => ({ currency: b.currency, amount: num(b.totalAmount) - num(b.amountPaid) })),
     ),
     totalsTruncated: total > BILL_TOTALS_CAP,
   }
+}
+
+// ── receivables totals (for AR vs AP) ──────────────────────────────────────
+
+/**
+ * What customers still owe, across every matching invoice rather than one page: open balance per
+ * currency and how many invoices carry it. "Unpaid" matches the invoice list: a balance is left and
+ * the invoice is neither void nor credited; cancelled orders are left out.
+ */
+export async function receivablesTotals(
+  tenantId: string,
+  f: { customerIds?: string[] } = {},
+): Promise<{ openInvoices: number; balanceByCurrency: Record<string, number>; totalsTruncated: boolean }> {
+  const where = {
+    tenantId,
+    status: { notIn: ['VOID', 'CREDITED'] as never[] },
+    order: { status: { not: 'CANCELLED' as never } },
+    ...(f.customerIds ? { customerId: { in: f.customerIds } } : {}),
+  }
+  const [rows, total] = await Promise.all([
+    orderDb.invoice.findMany({
+      where,
+      select: { currency: true, totalAmount: true, amountPaid: true, amountCredited: true },
+      take: BILL_TOTALS_CAP,
+    }),
+    orderDb.invoice.count({ where }),
+  ])
+  const open = rows
+    .map((r) => ({ currency: r.currency, amount: invoiceBalance(num(r.totalAmount), num(r.amountPaid), num(r.amountCredited)) }))
+    .filter((r) => r.amount > 0)
+  return { openInvoices: open.length, balanceByCurrency: sumByCurrency(open), totalsTruncated: total > BILL_TOTALS_CAP }
 }
 
 // ── quotes.list / quotes.detail ─────────────────────────────────────────────
@@ -963,14 +1131,17 @@ export async function resolveCustomerIds(tenantId: string, name: string): Promis
   return rows.map((r) => r.id)
 }
 
-export type CustomerSalesRow = { customerId: string; name: string; orders: number; revenue: number }
+export type CustomerSalesRow = { customerId: string; name: string; orders: number; revenue: number; units?: number }
 
-/** Customers ranked by order revenue (non-cancelled orders) over the period. */
+/**
+ * Customers ranked by order revenue (non-cancelled orders) over the period, or by units bought
+ * (net of returned units) when `byUnits` is set.
+ */
 export async function salesByCustomer(
   tenantId: string,
-  f: { dateRange?: DateRange; rank?: SortDirection },
+  f: { dateRange?: DateRange; rank?: SortDirection; byUnits?: boolean },
   now = new Date(),
-): Promise<{ label: string; rank: SortDirection; rows: CustomerSalesRow[]; ranked: number; truncated: boolean; excludedStatuses: string[] }> {
+): Promise<{ label: string; rank: SortDirection; byUnits: boolean; rows: CustomerSalesRow[]; ranked: number; truncated: boolean; excludedStatuses: string[] }> {
   const rank = f.rank ?? 'desc'
   const current = quarterOf(now)
   const from = f.dateRange?.from ?? quarterRange(shiftQuarter(current, -4)).from
@@ -987,17 +1158,37 @@ export async function salesByCustomer(
     cur.revenue = roundMoney(cur.revenue + num(o.totalAmount))
     byCustomer.set(o.customerId, cur)
   }
+  const lines = f.byUnits
+    ? await orderDb.orderLineItem.findMany({
+        where: { order: { tenantId, status: { notIn: SALES_EXCLUDED_STATUSES }, createdAt: { gte: from, lt: to } } },
+        select: { quantity: true, returnedQty: true, order: { select: { customerId: true } } },
+        take: SALES_ORDER_CAP + 1,
+      })
+    : []
+  const unitsByCustomer = new Map<string, number>()
+  for (const l of lines.slice(0, SALES_ORDER_CAP)) {
+    unitsByCustomer.set(l.order.customerId, (unitsByCustomer.get(l.order.customerId) ?? 0) + Math.max(0, l.quantity - l.returnedQty))
+  }
   const names = await customerNames(tenantId, [...byCustomer.keys()])
   const dir = rank === 'asc' ? 1 : -1
   const rows = [...byCustomer.entries()]
-    .map(([customerId, v]) => ({ customerId, name: names.get(customerId) ?? customerId, ...v }))
-    .sort((a, b) => dir * (a.revenue - b.revenue) || dir * (a.orders - b.orders) || a.name.localeCompare(b.name))
+    .map(([customerId, v]) => ({
+      customerId,
+      name: names.get(customerId) ?? customerId,
+      ...v,
+      ...(f.byUnits ? { units: unitsByCustomer.get(customerId) ?? 0 } : {}),
+    }))
+    .sort(
+      (a, b) =>
+        dir * ((a.units ?? 0) - (b.units ?? 0)) || dir * (a.revenue - b.revenue) || dir * (a.orders - b.orders) || a.name.localeCompare(b.name),
+    )
   return {
     label: f.dateRange?.label ?? 'last 4 quarters and this quarter so far',
     rank,
+    byUnits: Boolean(f.byUnits),
     rows: rows.slice(0, SALES_RANK_SHOWN),
     ranked: rows.length,
-    truncated: orders.length > SALES_ORDER_CAP,
+    truncated: orders.length > SALES_ORDER_CAP || lines.length > SALES_ORDER_CAP,
     excludedStatuses: SALES_EXCLUDED_STATUSES,
   }
 }

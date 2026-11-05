@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import type { SessionUser } from '../session'
-import { allowedPlannerTools, buildPlannerMessages, clarifyReply, describeLookup, parsePlan, planQuestion, routingDoubt, unsupportedReply } from './planner'
+import { allowedPlannerTools, buildPlannerMessages, clarifyReply, describeLookup, parsePlan, plannerTimeoutMs, planQuestion, routingDoubt, unsupportedReply } from './planner'
 import { detectIntent } from './intent'
 import { resetProviderCooldowns } from './llm'
 
@@ -84,7 +84,7 @@ test('the unsupported reply is fixed text listing what the employee can look up'
   assert.equal(reply, unsupportedReply('what will the weather be on Friday?', WAREHOUSE))
 })
 
-test('multi-lookup plans keep separate settings per lookup and cap at 3', () => {
+test('multi-lookup plans keep separate settings per lookup and cap at 6', () => {
   const now = new Date('2026-10-27T00:00:00Z')
   const plan = parsePlan(
     JSON.stringify({
@@ -95,6 +95,9 @@ test('multi-lookup plans keep separate settings per lookup and cap at 3', () => 
         { tool: 'drop_tables', params: {} },
         { tool: 'list_warehouses' },
         { tool: 'list_low_stock' },
+        { tool: 'purchasing.suppliers' },
+        { tool: 'inventory.by_warehouse' },
+        { tool: 'sales.forecast' },
       ],
     }),
     ALL,
@@ -102,9 +105,13 @@ test('multi-lookup plans keep separate settings per lookup and cap at 3', () => 
   )
   assert.equal(plan?.type, 'tools')
   const calls = (plan as { calls: Array<{ tools: string[]; dateRange?: { label: string } }> }).calls
+  // Six slots are read from the reply; the unknown tool is dropped, not replaced by the seventh.
   assert.deepEqual(calls.map((c) => [c.tools[0], c.dateRange?.label]), [
     ['sales.summary', 'Q4 2026'],
     ['sales.summary', 'Q3 2026'],
+    ['list_warehouses', undefined],
+    ['list_low_stock', undefined],
+    ['purchasing.suppliers', undefined],
   ])
 })
 
@@ -137,4 +144,51 @@ test('routingDoubt: confident keyword matches skip the AI, unsure ones go to it'
   assert.equal(routingDoubt('what is our balance?', { tools: ['list_my_invoices'] }, false), 'ambiguous wording')
   assert.equal(routingDoubt('show bills and invoices', kw('show bills and invoices'), false), 'several lookups matched')
   assert.equal(routingDoubt('compare sales this quarter vs last quarter', kw('compare sales this quarter vs last quarter'), false), 'may need several lookups')
+})
+
+test('the router gets requisitions only with access, and keywords keep requisition questions', () => {
+  assert.ok(ALL.includes('purchasing.requisitions'))
+  assert.ok(!allowedPlannerTools(WAREHOUSE).includes('purchasing.requisitions'))
+  assert.equal(routingDoubt('show open requisitions', detectIntent('show open requisitions', false), true), null)
+  assert.equal(routingDoubt('status of PR-1001', detectIntent('status of PR-1001', false), true), null)
+})
+
+test('the router can filter requisitions and read a period as a due date', () => {
+  const now = new Date('2026-11-03T12:00:00Z')
+  const plan = parsePlan(
+    '{"type":"tools","calls":[{"tool":"purchasing.requisitions","params":{"requisitionStatus":"open"}},{"tool":"finance.bills","params":{"period":"this month","byDueDate":true}},{"tool":"purchasing.requisition_detail","params":{"requisitionRef":"PR-7"}}]}',
+    ALL,
+    now,
+  )
+  assert.equal(plan?.type, 'tools')
+  if (plan?.type !== 'tools') return
+  assert.deepEqual(plan.calls[0].requisitionStatuses, ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'])
+  assert.equal(plan.calls[1].byDueDate, true)
+  assert.equal(plan.calls[2].requisitionRef, 'PR-7')
+  assert.equal(parsePlan('{"type":"tools","calls":[{"tool":"purchasing.requisition_detail","params":{}}]}', ALL, now), null)
+})
+
+test('the router still answers through the fallback when the primary is rate-limited', async () => {
+  resetProviderCooldowns()
+  const calls: string[] = []
+  const fetchFn = (async (url: unknown) => {
+    calls.push(String(url))
+    if (String(url).includes('groq')) return new Response('{}', { status: 429 })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"type":"knowledge"}' } }] }), { status: 200 })
+  }) as typeof fetch
+  const plan = await planQuestion('anything?', ADMIN, { env: { ...ENV, OLLAMA_API_KEY: 'o' }, fetch: fetchFn })
+  assert.equal(plan?.type, 'knowledge')
+  assert.equal(calls.length, 2)
+  resetProviderCooldowns()
+})
+
+test('the router allows long enough for the fallback provider', () => {
+  assert.ok(plannerTimeoutMs({}) >= 10_000)
+  assert.equal(plannerTimeoutMs({ CELESTIAL_PLANNER_TIMEOUT_MS: '500' }), 500)
+})
+
+test('the router can ask for a customer ranking by units', () => {
+  const plan = parsePlan('{"type":"tool","tool":"sales.by_customer","params":{"byUnits":true}}', ALL)
+  assert.equal(plan?.type === 'tools' && plan.calls[0].byUnits, true)
 })

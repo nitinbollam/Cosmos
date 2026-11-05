@@ -15,7 +15,7 @@ import { PAGE_SIZE } from './erp-query-contracts'
 export const RESULT_SET_TTL_MS = 30 * 60 * 1000
 export const MAX_REFS = 50
 
-export type RefKind = 'order' | 'purchase_order' | 'quote' | 'sku'
+export type RefKind = 'order' | 'purchase_order' | 'requisition' | 'quote' | 'sku'
 
 export type ResultRef = { kind: RefKind; id: string; label: string }
 
@@ -38,6 +38,7 @@ type Scope = ResultSet['scope']
 const LIST_TOOLS: Partial<Record<CelestialToolName, RefKind>> = {
   'orders.list': 'order',
   'purchasing.orders': 'purchase_order',
+  'purchasing.requisitions': 'requisition',
   'quotes.list': 'quote',
   search_catalog: 'sku',
 }
@@ -50,6 +51,7 @@ function refsFor(result: ToolResult, kind: RefKind): ResultRef[] {
       case 'order':
         return { kind, id, label: r.orderNumber != null ? `ORD-${r.orderNumber}` : `ORD-${id.slice(-6).toUpperCase()}` }
       case 'purchase_order':
+      case 'requisition':
         return { kind, id, label: String(r.number) }
       case 'quote':
         return { kind, id, label: String(r.quoteNumber) }
@@ -127,11 +129,12 @@ function ordinalOf(lower: string): number | 'last' | undefined {
   if (word) return ORDINALS[word[1]]
   const numbered = lower.match(/(?:\bnumber|\bno\.|#)\s*(\d{1,2})\b/)
   if (numbered) return Number(numbered[1])
-  if (/\b(the )?last (one|order|po|purchase order|quote|product|item|sku)\b/.test(lower)) return 'last'
+  if (/\b(the )?last (one|order|po|purchase order|requisition|quote|product|item|sku)\b/.test(lower)) return 'last'
   return undefined
 }
 
 function kindHint(lower: string): RefKind | undefined {
+  if (/\brequisitions?\b/.test(lower)) return 'requisition'
   if (/\bpurchase orders?\b|\bpos?\b(?!\s*orders)/.test(lower)) return 'purchase_order'
   if (/\bquotes?\b/.test(lower)) return 'quote'
   if (/\b(products?|items?|skus?)\b/.test(lower)) return 'sku'
@@ -158,7 +161,7 @@ export function resolveFollowUp(message: string, sets: ResultSet[]): FollowUp | 
   }
 
   // Ordinals with an explicit record number ("order 1002") are lookups, not positions.
-  if (/\bORD-\d+|\bPO[-\s#]*\d+|\bQ-[A-Z0-9]{4,}/i.test(message)) return undefined
+  if (/\bORD-\d+|\bPO[-\s#]*\d+|\bQ-[A-Z0-9]{4,}|\bPR[-\s#]*\d+/i.test(message)) return undefined
   const pos = ordinalOf(lower)
   if (pos === undefined) return undefined
   const position = pos === 'last' ? set.refs.length : pos
@@ -183,6 +186,8 @@ export function intentForFollowUp(f: FollowUp): DetectedIntent | { clarify: stri
       return { tools: ['orders.detail'], orderId: ref.id }
     case 'purchase_order':
       return { tools: ['purchasing.order_detail'], poRef: ref.label }
+    case 'requisition':
+      return { tools: ['purchasing.requisition_detail'], requisitionRef: ref.label }
     case 'quote':
       return { tools: ['quotes.detail'], quoteId: ref.id }
     case 'sku':

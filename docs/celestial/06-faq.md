@@ -44,6 +44,23 @@ Answers to frequently asked operational, setup, and troubleshooting questions ac
 
 ---
 
+### Q: How do I create a purchase order or raise a purchase requisition?
+There is no direct "new purchase order" step. Every PO starts as a purchase requisition:
+1. In **Purchasing** (`/admin/purchasing`), click **New requisition** (needs requisitions access). Choose the supplier, warehouse and currency, add the lines with quantities and estimated unit costs, and save. It is saved as a draft.
+2. Open the requisition and click **Submit for approval**.
+3. An approver opens it and clicks **Approve** or **Reject**. You can't approve your own requisition. If it is rejected, the requester can edit it and click **Resubmit for approval**.
+4. Once it is approved, someone with purchasing write access clicks **Convert to PO**. The PO copies the approved supplier, currency, lines and cost estimates, and starts as a draft.
+5. Open the PO and click **Submit PO**. This needs no further approval. The PO can then be received.
+
+Requisitions are listed at `/admin/purchasing/requisitions`, and low-stock links start a requisition for that SKU.
+
+---
+
+### Q: What is a purchase requisition?
+A purchase requisition is an internal request to buy. Someone other than the requester approves it, and only then can it become a purchase order. Its statuses are draft, pending approval, approved, rejected, converted (a PO was created) and cancelled.
+
+---
+
 ### Q: How does 3-Way Purchase Matching prevent billing errors?
 1. When receiving goods on the dock, staff scan the physical PO shipment to record received quantities.
 2. When the supplier sends their vendor bill, enter the invoice in **Purchasing** (`/admin/purchasing`) or **Finance** (`/admin/finance`).

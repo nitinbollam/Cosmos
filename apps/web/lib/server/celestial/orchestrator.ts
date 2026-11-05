@@ -9,7 +9,7 @@ import {
   listConversations,
   touchConversation,
 } from './conversations'
-import { detectIntent, isHowToQuestion, isPlainLanguagePreferred, type DetectedIntent } from './intent'
+import { detectCombination, detectIntent, isHowToQuestion, isPlainLanguagePreferred, uncoveredTopics, type DetectedIntent } from './intent'
 import {
   clarifyReply,
   describeLookup,
@@ -41,6 +41,8 @@ import { formatDocContext, retrievePlatformDocs } from './retrieval'
 import { formatToolResultsForPrompt, runTools } from './tools'
 import { buildDocFallbackReply, composeFromToolResults, toolResultHasData } from './compose'
 import { smallTalkReply } from './smalltalk'
+import { analyzeLookups, linkCalls, readBudget, settleCarriedCustomers } from './cross-module'
+import { resolveCustomerIds } from './erp-queries'
 import { acceptSummary, buildSummaryMessages, shouldSummarize, summaryTimeoutMs, withDeadline } from './record-summary'
 import type { ToolResult } from './tools'
 import type { CelestialToolName } from './intent'
@@ -120,6 +122,8 @@ type PreparedChat = {
   /** Lookups run for this answer (settings only), so the router can read follow-ups in context. */
   lookups: Array<{ tool: string; params: ReturnType<typeof storeParams> }>
   routedBy: 'keywords' | 'ai' | 'follow-up'
+  /** The AI router was needed but gave no usable answer (rate-limited, slow or unreadable). */
+  routerMissed: boolean
 }
 
 async function prepareChat(session: SessionUser, input: CelestialChatInput): Promise<PreparedChat> {
@@ -171,23 +175,29 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
   const earlier = earlierTurns(conversation.messages)
   const canPlan =
     !isBuyer && !followUpIntent && !clarification && !smallTalk && !isHowToQuestion(message) && getCelestialModelInfo().configured
-  let calls: DetectedIntent[] = keywordIntent.tools.length > 0 ? [keywordIntent] : []
+  // A question that plainly names two linked lookups runs both, without depending on the router.
+  const combination = !followUpIntent && !clarification && !smallTalk ? detectCombination(message, isBuyer) : null
+  let calls: DetectedIntent[] = combination ? linkCalls(combination) : keywordIntent.tools.length > 0 ? [keywordIntent] : []
   let routedBy: PreparedChat['routedBy'] = followUpIntent ? 'follow-up' : 'keywords'
   let unsupported: string | null = null
   let askBack: string | null = null
   let planned = false
+  let routerMissed = false
 
   const applyPlan = (plan: Plan | null): boolean => {
     planned = true
-    if (!plan) return false
+    if (!plan) {
+      routerMissed = true
+      return false
+    }
     routedBy = 'ai'
-    calls = plan.type === 'tools' ? plan.calls : []
+    calls = plan.type === 'tools' ? linkCalls(plan.calls) : []
     if (plan.type === 'clarify') askBack = clarifyReply(plan)
     if (plan.type === 'unsupported') unsupported = unsupportedReply(message, session)
     return true
   }
 
-  if (canPlan && routingDoubt(message, keywordIntent, earlier.length > 0)) {
+  if (canPlan && !combination && routingDoubt(message, keywordIntent, earlier.length > 0)) {
     const plan = await planQuestion(message, session, {}, earlier)
     // A follow-up that points back ("when is it due?", "only the unpaid ones") and that the router
     // couldn't place reuses the previous lookup; the answer then carries the detail asked for.
@@ -198,6 +208,7 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     const pointsBack = previous.length > 0 && (keywordIntent.tools.length === 0 ? POINTS_BACK : PRONOUN).test(lower)
     if (plan?.type !== 'tools' && pointsBack) {
       planned = true
+      routerMissed = plan === null
       routedBy = 'ai'
       calls = previous.map((c) => (OUTSTANDING_WORDS.test(lower) ? { ...c, outstanding: true } : c))
     } else {
@@ -209,14 +220,20 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     const { tools: names, ...callParams } = call
     return runTools(names, { ...callParams, session, customerId, customerName: profile.customerName })
   }
-  let perCall = await Promise.all(calls.map(runCall))
+  // Every lookup for this question shares one budget: a read that is too slow is reported as
+  // missing instead of holding up the whole answer.
+  const budget = readBudget()
+  const customerExists = async (name: string) => (await resolveCustomerIds(session.tenantId, name)).length > 0
+  calls = await settleCarriedCustomers(calls, customerExists)
+  let perCall = await budget.run(calls, runCall)
 
   // AI check after the fact: a name search that found nothing may mean the words were misread
   // (e.g. "least" taken as a product name). Ask the router once and rerun if it routes differently.
   if (canPlan && !planned && searchFoundNothing(calls, perCall.flat())) {
     const before = JSON.stringify(calls)
-    if (applyPlan(await planQuestion(message, session, {}, earlier)) && JSON.stringify(calls) !== before) {
-      perCall = await Promise.all(calls.map(runCall))
+    if (applyPlan(await planQuestion(message, session, {}, earlier))) {
+      calls = await settleCarriedCustomers(calls, customerExists)
+      if (JSON.stringify(calls) !== before) perCall = await budget.run(calls, runCall)
     }
   }
   const toolResults = perCall.flat()
@@ -253,7 +270,13 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     clarification ??
     askBack ??
     unsupported ??
-    (shouldUseDirectCompose(toolResults) ? composeFromToolResults(toolResults) : null)
+    (shouldUseDirectCompose(toolResults)
+      ? withMissingTopics(
+          followUpIntent ? [] : uncoveredTopics(message, intentTools),
+          withAnalysis(analyzeLookups(calls, perCall), composeFromToolResults(toolResults)),
+          routerMissed,
+        )
+      : null)
 
   return {
     conversationId: conversation.id,
@@ -284,7 +307,31 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
       return { tool: names.join('+'), params: storeParams(callParams) }
     }),
     routedBy,
+    routerMissed,
   }
+}
+
+/** The product-guide answer; says so when it stands in for a question the router couldn't place. */
+function docFallback(prepared: PreparedChat): string {
+  const reply = buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage)
+  return prepared.routerMissed
+    ? `*The AI service is busy, so I couldn't work out which records you meant. This comes from the product guides, not your live data. If you wanted records, ask again in a minute.*\n\n${reply}`
+    : reply
+}
+
+/** The server-built comparison (when the lookups are related) goes above the record tables. */
+function withAnalysis(analysis: string | null, records: string): string {
+  return analysis ? `${analysis}\n\n${records}` : records
+}
+
+/** Says what the answer left out, rather than letting half a question disappear quietly. */
+function withMissingTopics(missing: string[], records: string, routerMissed = false): string {
+  if (missing.length === 0) {
+    return routerMissed
+      ? `${records}\n\n*The AI service is busy, so I matched this question on keywords alone. If I missed part of it, ask again in a minute.*`
+      : records
+  }
+  return `${records}\n\n*This answer doesn't cover ${missing.join(' or ')}. Ask about ${missing.length > 1 ? 'them' : 'that'} separately and I'll look it up.*`
 }
 
 const POINTS_BACK =
@@ -404,7 +451,7 @@ export async function chat(session: SessionUser, input: CelestialChatInput): Pro
     provider = llm.provider
     model = llm.model
   } catch {
-    reply = buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage)
+    reply = docFallback(prepared)
     provider = 'pleros'
     model = 'fallback'
   }
@@ -516,11 +563,7 @@ export async function chatStream(session: SessionUser, input: CelestialChatInput
             controller.close()
             return
           }
-          await streamText(
-            buildDocFallbackReply(prepared.message, prepared.docs, prepared.plainLanguage),
-            'pleros',
-            'fallback',
-          )
+          await streamText(docFallback(prepared), 'pleros', 'fallback')
         }
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Celestial stream failed'

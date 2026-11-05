@@ -34,7 +34,9 @@ When a user asks a question requiring factual live data, Celestial automatically
 | `inventory.stock` | "how much cable stock do we have", "which SKUs are available in each warehouse" | Available / on-hand / reserved / reorder point per SKU and warehouse, with units |
 | `purchasing.orders` | "show purchase orders", "partially received POs from Pacific Supply" | PO numbers, suppliers, receipt progress, and goods cost (shown as unknown when a line has no cost) |
 | `purchasing.order_detail` | "show the lines on PO-1001" | PO lines with received vs ordered quantities, unit costs, and related vendor bills |
-| `finance.bills` | "which vendor bills are past due", "how much do we owe Pacific Supply" | Vendor bills (accounts payable) with balances and due dates; totals kept separate per currency |
+| `purchasing.requisitions` | "any requisitions waiting for approval", "show open requisitions" | Requisition numbers, statuses, suppliers, quantities, and estimated goods cost |
+| `purchasing.requisition_detail` | "status of PR-1001" | Requisition lines, approval history, rejection or cancellation reason, and the PO it became |
+| `finance.bills` | "which vendor bills are past due", "bills due this month", "how much do we owe Pacific Supply" | Vendor bills (accounts payable) with balances and due dates; totals kept separate per currency |
 | `list_my_invoices` | "unpaid invoices", "which customers owe us" | Customer invoices (accounts receivable) with balances and totals |
 | `quotes.list` | "open quotes", "approved quotes" | Quote numbers, statuses, customers, totals, and whether each was converted to an order |
 | `quotes.detail` | "show quote Q-AB12CD34" | Quote lines, status, rejection reason, and the converted order if any |
@@ -43,6 +45,22 @@ When a user asks a question requiring factual live data, Celestial automatically
 | `global_search` | "lookup customer Acme", general search terms | Unified search across orders, customers, SKUs, and quotes |
 
 Every tool is read-only and checks the employee's module permission (for example `finance.read` for vendor bills and invoices) on each request. If the employee lacks access, Celestial says so instead of answering.
+
+### Questions that combine modules
+
+One question can run up to six lookups, and Celestial answers them together:
+
+- **Comparing periods:** "compare sales this quarter vs last quarter", "how many orders last month vs this month". You get each period's figures and the change between them.
+- **One supplier across purchasing and finance:** "show Pacific Supply's purchase orders and their bills". You get the supplier's POs, its vendor bills and open balance, and goods ordered vs billed.
+- **One customer across sales and finance:** "show Acme's orders, quotes and unpaid invoices". You get counts for each and what the customer still owes.
+- **Receivables vs payables:** "what do customers owe us vs what we owe suppliers", "what's our net position". You get open AR and AP per currency and the net.
+
+How these answers are built:
+
+- Pleros works out the comparison from every matching record, not just the rows shown.
+- Currencies are never added together or converted.
+- If a PO line has no cost recorded, if a total is partial, or if one lookup is missing, the answer says so instead of counting it as zero.
+- Each lookup has a time limit. A lookup that runs too long is reported as missing, and the rest of the answer is still shown.
 
 ---
 

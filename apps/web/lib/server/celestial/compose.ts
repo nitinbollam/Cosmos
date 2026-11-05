@@ -6,6 +6,7 @@ import type {
   Page,
   PurchaseOrderListRow,
   QuoteListRow,
+  RequisitionRow,
   StockRow,
   StockSummary,
   SalesSummary,
@@ -16,6 +17,7 @@ import type {
   WarehouseStockRow,
   ordersDetail,
   purchasingOrderDetail,
+  purchaseRequisitionDetail,
   quotesDetail,
 } from './erp-queries'
 
@@ -61,7 +63,8 @@ export function composeFromToolResults(toolResults: ToolResult[]): string {
     return ''
   }
 
-  return sections.join('\n\n')
+  // Two lookups can give the same notice ("couldn't find a customer named…"); say it once.
+  return [...new Set(sections)].join('\n\n')
 }
 
 /**
@@ -172,6 +175,7 @@ export function tryComposeDirectReply(toolResults: ToolResult[], _userMessage: s
 type OrderDetail = NonNullable<Awaited<ReturnType<typeof ordersDetail>>>
 type PoDetail = NonNullable<Awaited<ReturnType<typeof purchasingOrderDetail>>>
 type QuoteDetail = NonNullable<Awaited<ReturnType<typeof quotesDetail>>>
+type RequisitionDetail = NonNullable<Awaited<ReturnType<typeof purchaseRequisitionDetail>>>
 type StockData = {
   warehouse?: string
   rows: StockRow[]
@@ -208,6 +212,10 @@ function formatToolBody(result: ToolResult): string | null {
       return formatPurchaseOrders(result.data as Filtered<PurchaseOrderListRow>)
     case 'purchasing.order_detail':
       return formatPurchaseOrderDetail(result.data as PoDetail)
+    case 'purchasing.requisitions':
+      return formatRequisitions(result.data as Filtered<RequisitionRow>)
+    case 'purchasing.requisition_detail':
+      return formatRequisitionDetail(result.data as RequisitionDetail)
     case 'finance.bills':
       return formatBills(result.data as BillsData)
     case 'quotes.list':
@@ -535,6 +543,52 @@ function formatPurchaseOrderDetail(po: PoDetail): string {
   ].join('\n')
 }
 
+function formatRequisitions(page: Filtered<RequisitionRow>): string {
+  if (page.rows.length === 0) return `**Purchase requisitions${filterSuffix(page.filters)}:** No matching requisitions found.`
+  const tableRows = page.rows.map(
+    (r) =>
+      `| **${r.number}** | \`${r.status}\` | ${r.supplierName ?? 'not set'} | ${r.qtyRequested} | ${r.estimatedCost == null ? `unknown (${r.missingCostLines} line(s) without cost)` : money(r.estimatedCost, r.currency)} | ${formatDate(r.createdAt)} |`,
+  )
+  return [
+    `### Purchase requisitions${filterSuffix(page.filters)}`,
+    countLine(page),
+    '',
+    '| Requisition # | Status | Supplier | Qty requested | Estimated goods cost | Created |',
+    '| :--- | :--- | :--- | :--- | :--- | :--- |',
+    ...tableRows,
+    '',
+    '*Manage requisitions in [Purchasing → Requisitions](/admin/purchasing/requisitions).*',
+  ].join('\n')
+}
+
+function formatRequisitionDetail(r: RequisitionDetail): string {
+  const lineRows = r.lines.map(
+    (l) =>
+      `| ${l.lineNo} | ${l.skuCode ? `\`${l.skuCode}\`` : '—'} | ${l.description} | ${l.qtyRequested} | ${l.unitCost == null ? 'not recorded' : money(l.unitCost, r.currency)} |`,
+  )
+  const history = [
+    r.submittedAt && `Submitted ${formatDate(r.submittedAt)}`,
+    r.approvedAt && `Approved ${formatDate(r.approvedAt)}`,
+    r.rejectedAt && `Rejected ${formatDate(r.rejectedAt)}${r.rejectReason ? `: ${r.rejectReason}` : ''}`,
+    r.cancelledAt && `Cancelled ${formatDate(r.cancelledAt)}${r.cancelReason ? `: ${r.cancelReason}` : ''}`,
+  ].filter(Boolean)
+  return [
+    `### Purchase requisition ${r.number}`,
+    `- **Supplier:** ${r.supplierName ?? 'not set'} · **Status:** \`${r.status}\``,
+    `- **Estimated goods cost:** ${r.estimatedCost == null ? `unknown — ${r.missingCostLines} line(s) have no unit cost` : money(r.estimatedCost, r.currency)}`,
+    `- **Created:** ${formatDate(r.createdAt)}${history.length ? ` · ${history.join(' · ')}` : ''}`,
+    r.purchaseOrder ? `- **Purchase order:** [${r.purchaseOrder.number}](/admin/purchasing/${r.purchaseOrder.id})` : null,
+    '',
+    '| Line | SKU | Description | Qty requested | Unit cost |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    ...lineRows,
+    '',
+    `*Open [${r.number}](/admin/purchasing/requisitions/${r.id}) to review or act on it.*`,
+  ]
+    .filter((l) => l != null)
+    .join('\n')
+}
+
 function formatBills(d: BillsData): string {
   if (d.rows.length === 0) return `**Vendor bills${filterSuffix(d.filters)}:** No matching bills found.`
   const tableRows = d.rows.map(
@@ -599,11 +653,11 @@ function formatQuoteDetail(q: QuoteDetail): string {
 }
 
 function formatInvoices(result: ToolResult): string {
-  const data = result.data as InvoiceRow[] | { rows: InvoiceRow[]; total: number; filters?: string[]; outstandingOnly?: boolean }
+  const data = result.data as InvoiceRow[] | { rows: InvoiceRow[]; total: number; filters?: string[]; outstandingOnly?: boolean; narrowed?: boolean }
   const rows = Array.isArray(data) ? data : data.rows
   const filters = Array.isArray(data) ? [] : (data.filters ?? [])
   if (rows.length === 0) {
-    if (!Array.isArray(data) && data.outstandingOnly) return `**Invoices${filterSuffix(filters)}:** none — every matching invoice is fully paid.`
+    if (!Array.isArray(data) && data.outstandingOnly && !data.narrowed) return `**Invoices${filterSuffix(filters)}:** none — every matching invoice is fully paid.`
     return `**Invoices${filterSuffix(filters)}:** no invoices found.`
   }
   const total = Array.isArray(data) ? rows.length : data.total
@@ -639,7 +693,7 @@ function formatLowStock(result: ToolResult): string {
     '| :--- | :--- | :--- | :--- |',
     ...tableRows,
     '',
-    '*Create purchase orders or adjust inventory in [Inventory & SKUs](/admin/inventory).*',
+    '*Raise a [purchase requisition](/admin/purchasing/requisitions/new) to reorder, or adjust stock in [Inventory & SKUs](/admin/inventory).*',
   ].join('\n')
 }
 
@@ -647,6 +701,8 @@ type CatalogData = Page<CatalogRow> & { search?: string; priceRank?: 'asc' | 'de
 type CustomerSalesData = {
   label: string
   rank: 'asc' | 'desc'
+  byUnits?: boolean
+  truncated?: boolean
   rows: CustomerSalesRow[]
   ranked: number
   excludedStatuses: string[]
@@ -657,6 +713,27 @@ type WarehouseStockData = { rows: WarehouseStockRow[]; units: string[]; rank: 'a
 function formatCustomerSales(d: CustomerSalesData): string {
   if (d.rows.length === 0) return `**Customers by sales — ${d.label}:** no sales in this period.`
   const basis = `*Revenue = order totals, excluding ${d.excludedStatuses.map((x) => x.toLowerCase()).join(', ')} orders. Orders store no currency.*`
+  if (d.byUnits) {
+    const unitBasis = `*Units = quantity ordered minus returns, added up across all products whatever their unit of measure.${d.truncated ? ' Partial: too many order lines to total.' : ''}* ${basis}`
+    if (d.limit === 1) {
+      const r = d.rows[0]
+      return [
+        `**${d.rank === 'asc' ? 'Customer buying the fewest units' : 'Customer buying the most units'} — ${d.label}:** **${r.name}** — ${r.units ?? 0} units across ${r.orders} order(s), ${money(r.revenue)} in revenue.`,
+        '',
+        `*${d.rank === 'asc' ? 'Lowest' : 'Highest'} of ${d.ranked} customer(s) with orders.* ${unitBasis}`,
+      ].join('\n')
+    }
+    return [
+      `### Customers by units bought, ${d.rank === 'asc' ? 'lowest' : 'highest'} first — ${d.label}`,
+      `Showing ${d.rows.length} of ${d.ranked} customer(s).`,
+      '',
+      '| # | Customer | Units | Orders | Revenue |',
+      '| :--- | :--- | :--- | :--- | :--- |',
+      ...d.rows.map((r, i) => `| ${i + 1} | ${r.name} | ${r.units ?? 0} | ${r.orders} | ${money(r.revenue)} |`),
+      '',
+      unitBasis,
+    ].join('\n')
+  }
   if (d.limit === 1) {
     const r = d.rows[0]
     return [

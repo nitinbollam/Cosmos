@@ -95,7 +95,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | **Orders** | `/admin/orders` | Order list, detail with saga timeline, confirm/cancel/fulfill, **returns (RMA)**, split shipments, invoice link |
 | **Fulfillment** | `/admin/fulfillment` | Pick/pack tasks, assign picker, pick-all / pack / dispatch actions |
 | **Warehouse** | `/admin/warehouse` | Pick tasks, receiving sessions, cycle counts, **wave picking**, **bin locations** |
-| **Purchasing** | `/admin/purchasing` | Purchase orders, suppliers, receive goods |
+| **Purchasing** | `/admin/purchasing` | Purchase requisitions (the only way to create a PO), purchase orders, suppliers, receive goods |
 | **Compliance** | `/admin/compliance` | MSA reports, tax exposure summary, batch tracking context |
 | **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion, contract/volume pricing |
 | **Quotes** | `/admin/quotes` | Admin quote approval, counter-offers |
@@ -188,7 +188,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | `crm` | Customer, Lead, Activity |
 | `wms` | FulfillmentTask, PickLine, ReceivingSession, CycleCount, … |
 | `dispatch` | DeliveryRoute, RouteStop |
-| `purchasing` | Supplier, PurchaseOrder, PurchaseOrderLine |
+| `purchasing` | Supplier, PurchaseRequisition, PurchaseOrder, PurchaseOrderLine |
 | `payment` | PaymentIntent, LedgerEntry |
 | `ledger` | ChartAccount, JournalEntry, JournalLine |
 | `compliance` | MSATenant, MSAReport, Batch, … |
@@ -444,6 +444,7 @@ Summary of major work completed in the current development cycle.
 | **15.5 Buyer + admin UI** | Floating ✦ panel on shop/admin layouts · full page `/admin/celestial` · shared Zustand store `pleros-celestial-v1` |
 | **15.6 Live data tools** | `orders.list`, `orders.detail`, `inventory.stock`, `purchasing.orders`, `purchasing.order_detail`, `finance.bills`, `quotes.list`, `quotes.detail`, `list_my_invoices`, `search_catalog`, `list_warehouses`, `global_search`, `list_low_stock` — read-only, each checked against the employee's module permission |
 | **15.7 Answer pipeline** | Intent detection → tools + doc retrieval → direct Markdown tables when data exists → LLM synthesis for how-to/general → doc fallback if LLM empty/fails (always returns an answer) |
+| **15.7a Cross-module answers** | Up to 6 lookups per question (5 s each, 30 s overall; a slow lookup is reported as missing) · related lookups linked to the same supplier / customer / product · server-built comparisons: period changes, receivables vs payables per currency with net, a supplier's POs vs bills, a customer's orders, quotes and unpaid invoices · no mixed currencies, no sums over partial pages or unknown costs (`celestial/cross-module.ts`) |
 | **15.8 Streaming UI** | SSE token streaming · `react-markdown` + GFM + syntax highlighting · contextual deep links from tool results |
 | **15.9 Conversation store** | `CelestialConversation` / `CelestialMessage` in analytics DB · links/metadata on assistant messages · audit `celestial.chat` events |
 | **15.10 Feature gating** | Settings → Features tab · sidebar Celestial link hidden when disabled · shop FAB hidden until login |

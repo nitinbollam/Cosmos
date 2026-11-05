@@ -64,10 +64,11 @@ Comprehensive reference and how-to guides for all Pleros ERP admin modules. Inde
 ---
 
 ## 6. Purchasing & Procure-to-Pay
-- **Route:** `/admin/purchasing` (PO detail at `/admin/purchasing/:id`)
+- **Route:** `/admin/purchasing` (PO detail at `/admin/purchasing/:id`; requisitions at `/admin/purchasing/requisitions`)
 - **Key Capabilities:**
   - Supplier Management: Maintain vendor records, lead times, payment terms, and contacts.
-  - Purchase Orders: Create, approve, and track purchase orders.
+  - Purchase Requisitions: Raise a request to buy, get it approved, then convert it into a purchase order. This is the only way to create a PO.
+  - Purchase Orders: Created from approved requisitions as a draft, then submitted and tracked through receiving.
   - Dock Receiving: Receive purchase order lines directly into warehouse inventory.
   - Landed Cost Allocation: Distribute inbound freight, customs, and duty charges across received units to compute true landed COGS.
   - 3-Way Match: Automatically verify PO unit prices, received quantities, and vendor AP bills before approving payment.

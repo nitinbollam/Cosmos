@@ -41,6 +41,11 @@ export const OPEN_ORDER_STATUSES: OrderStatusFilter[] = ['PENDING', 'AWAITING_AP
 /** Purchase orders sent to the supplier and not fully received ("still to receive", "on order"). */
 export const OPEN_PO_STATUSES: PoStatusFilter[] = ['SUBMITTED', 'PARTIALLY_RECEIVED']
 
+export const REQUISITION_STATUSES = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CONVERTED', 'CANCELLED'] as const
+export type RequisitionStatusFilter = (typeof REQUISITION_STATUSES)[number]
+/** Requisitions still on their way to becoming a PO. */
+export const OPEN_REQUISITION_STATUSES: RequisitionStatusFilter[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED']
+
 export const QUOTE_STATUSES = ['OPEN', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'SUBMITTED', 'EXPIRED'] as const
 export type QuoteStatusFilter = (typeof QUOTE_STATUSES)[number]
 
@@ -87,8 +92,14 @@ export function resolveDateRange(message: string, now = new Date()): DateRange |
     const to = startOfUtcWeek(now)
     return { from: new Date(to.getTime() - 7 * DAY_MS), to, label: 'last week' }
   }
+  // Future periods exist for due dates ("bills due next week").
+  if (/\bnext week\b/.test(lower)) {
+    const from = new Date(startOfUtcWeek(now).getTime() + 7 * DAY_MS)
+    return { from, to: new Date(from.getTime() + 7 * DAY_MS), label: 'next week' }
+  }
   const quarter = quarterPhrase(lower, now)
   if (quarter) return quarter
+  if (/\bnext month\b/.test(lower)) return { from: new Date(Date.UTC(y, m + 1, 1)), to: new Date(Date.UTC(y, m + 2, 1)), label: 'next month' }
   if (/\bthis month\b/.test(lower)) return { from: new Date(Date.UTC(y, m, 1)), to: new Date(Date.UTC(y, m + 1, 1)), label: 'this month' }
   if (/\b(last|previous) month\b/.test(lower)) return { from: new Date(Date.UTC(y, m - 1, 1)), to: new Date(Date.UTC(y, m, 1)), label: 'last month' }
   if (/\bthis year\b/.test(lower)) return { from: new Date(Date.UTC(y, 0, 1)), to: new Date(Date.UTC(y + 1, 0, 1)), label: 'this year' }
@@ -183,6 +194,12 @@ export function parsePoRef(message: string): string | undefined {
   return m ? `PO-${m[1]}` : undefined
 }
 
+/** `PR-1001`, `pr 1001` or `requisition 1001` → `PR-1001`. */
+export function parseRequisitionRef(message: string): string | undefined {
+  const m = message.match(/\b(?:PR[-\s#]*|requisition\s+(?:number\s+|no\.?\s+|#\s*)?)(\d+)\b/i)
+  return m ? `PR-${m[1]}` : undefined
+}
+
 /** `Q-AB12CD34` → `ab12cd34`, the lowercase id suffix that quote numbers are derived from. */
 export function parseQuoteRef(message: string): string | undefined {
   const m = message.match(/\bQ-([A-Z0-9_]{4,})\b/i)
@@ -232,7 +249,8 @@ const PRODUCT_STOPWORDS = new Set([
   'currently', 'right', 'now', 'please', 'can', 'could', 'would', 'buy', 'reorder', 'point',
   'least', 'lowest', 'fewest', 'smallest', 'minimum', 'min', 'most', 'highest', 'largest', 'biggest', 'maximum',
   'max', 'top', 'bottom', 'rank', 'ranked', 'ranking', 'sorted', 'sort', 'order', 'by', 'one', 'ones',
-  'sales', 'sale', 'sold', 'selling', 'seller', 'sellers', 'revenue', 'best', 'worst', 'performing',
+  'sales', 'sale', 'sold', 'sell', 'sells', 'selling', 'seller', 'sellers', 'revenue', 'best', 'worst', 'performing',
+  'they', 'them', 'been', 'it', 'its',
   'performer', 'performers', 'popular',
   // Period words belong to the date filter, not the product name.
   'this', 'last', 'next', 'previous', 'past', 'so', 'far', 'today', 'yesterday', 'day', 'days', 'week', 'weeks',

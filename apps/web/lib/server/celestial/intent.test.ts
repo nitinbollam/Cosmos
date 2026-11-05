@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { detectIntent, isHowToQuestion, isPlainLanguagePreferred } from './intent'
+import { detectCombination, detectIntent, isHowToQuestion, isPlainLanguagePreferred, uncoveredTopics } from './intent'
 
 test('detectIntent picks order tools for buyer', () => {
   const intent = detectIntent('Where is my order shipment?', true)
@@ -247,4 +247,159 @@ test('isHowToQuestion: only procedural questions are how-to', () => {
   assert.equal(isHowToQuestion('how are sales this month?'), false)
   assert.equal(isHowToQuestion('how do I create a purchase order?'), true)
   assert.equal(isHowToQuestion('how can I add a new user?'), true)
+})
+
+test('requisition questions use the requisition lookup, never purchase orders', () => {
+  const pending = detectIntent('any purchase requisitions waiting for approval?', false)
+  assert.deepEqual(pending.tools, ['purchasing.requisitions'])
+  assert.equal(pending.requisitionStatus, 'PENDING_APPROVAL')
+
+  const open = detectIntent('show open requisitions', false)
+  assert.deepEqual(open.tools, ['purchasing.requisitions'])
+  assert.deepEqual(open.requisitionStatuses, ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'])
+
+  const converted = detectIntent('which requisitions were converted to a PO?', false)
+  assert.deepEqual(converted.tools, ['purchasing.requisitions'])
+  assert.equal(converted.requisitionStatus, 'CONVERTED')
+
+  assert.equal(detectIntent('requisitions not yet converted to orders', false).requisitionStatus, 'APPROVED')
+  assert.equal(detectIntent('show the latest requisition', false).limit, 1)
+})
+
+test('a requisition number reads that requisition', () => {
+  for (const q of ['status of PR-1001', 'what happened to requisition 1001?']) {
+    const intent = detectIntent(q, false)
+    assert.deepEqual(intent.tools, ['purchasing.requisition_detail'])
+    assert.equal(intent.requisitionRef, 'PR-1001')
+  }
+})
+
+test('requisition how-to questions are answered from the guides', () => {
+  for (const q of ['how do I raise a purchase requisition?', 'how do I approve an open requisition?', 'what is a requisition?']) {
+    assert.equal(isHowToQuestion(q), true, q)
+    assert.deepEqual(detectIntent(q, false).tools, [], q)
+  }
+  assert.equal(isHowToQuestion('show open requisitions'), false)
+})
+
+test('bills "due" in a period filter by due date and leave out paid bills', () => {
+  const due = detectIntent('bills due this month', false)
+  assert.deepEqual(due.tools, ['finance.bills'])
+  assert.equal(due.byDueDate, true)
+  assert.equal(due.outstanding, true)
+  assert.equal(due.dateRange?.label, 'this month')
+  assert.equal(detectIntent('bills due next week', false).dateRange?.label, 'next week')
+  // No "due": the period still means when the bill was issued.
+  assert.equal(detectIntent('bills from last month', false).byDueDate, undefined)
+  assert.equal(detectIntent('which vendor bills are past due?', false).byDueDate, undefined)
+})
+
+test('questions naming two linked lookups run both', () => {
+  const toolsOf = (q: string) => detectCombination(q, false)?.flatMap((c) => c.tools)
+  for (const q of ['are we net positive on what we owe and are owed?', 'how much do we owe vs how much are we owed?', 'compare receivables and payables']) {
+    assert.deepEqual(toolsOf(q), ['list_my_invoices', 'finance.bills'], q)
+  }
+  const supplier = detectCombination('what have we ordered and been billed by Pacific Supply?', false)!
+  assert.deepEqual(supplier.flatMap((c) => c.tools), ['purchasing.orders', 'finance.bills'])
+  assert.deepEqual(supplier.map((c) => c.supplier), ['Pacific Supply', 'Pacific Supply'])
+
+  for (const [q, product] of [['stock and sales for energy drinks', ['energy', 'drinks']], ['how much cable stock do we have and is it selling?', ['cable']]] as const) {
+    const calls = detectCombination(q, false)!
+    assert.deepEqual(calls.flatMap((c) => c.tools), ['inventory.stock', 'sales.by_product'], q)
+    assert.deepEqual(calls.map((c) => c.searchTokens), [product, product], q)
+  }
+})
+
+test('single-lookup questions are not treated as combinations', () => {
+  for (const q of ['what is my most selling stock', 'what do we owe?', 'how much do customers owe us?', 'show purchase orders', 'is PO-1001 billed and ordered?']) {
+    assert.equal(detectCombination(q, false), null, q)
+  }
+  assert.equal(detectCombination('compare receivables and payables', true), null)
+})
+
+test('invoice periods mean the due date only when the question says due', () => {
+  const due = detectIntent('invoices due this month', false)
+  assert.deepEqual(due.tools, ['list_my_invoices'])
+  assert.equal(due.byDueDate, true)
+  assert.equal(due.outstanding, true)
+  const issued = detectIntent('invoices from last month', false)
+  assert.equal(issued.dateRange?.label, 'last month')
+  assert.equal(issued.byDueDate, undefined)
+  const overdue = detectIntent('which invoices are overdue?', false)
+  assert.equal(overdue.pastDue, true)
+  assert.equal(overdue.byDueDate, undefined)
+})
+
+test('each part that is its own data question gets its own lookup', () => {
+  const toolsOf = (q: string) => detectCombination(q, false)?.map((c) => c.tools.join('+'))
+  assert.deepEqual(toolsOf('show pending orders and low stock'), ['orders.list', 'list_low_stock'])
+  assert.deepEqual(toolsOf('any requisitions waiting for approval, unpaid invoices and open quotes'), ['purchasing.requisitions', 'list_my_invoices', 'quotes.list'])
+  assert.deepEqual(toolsOf('how many orders and how many quotes do we have'), ['orders.list', 'quotes.list'])
+  assert.deepEqual(detectCombination('show pending orders and low stock', false)?.[0].orderStatus, 'PENDING')
+})
+
+test('a closing period covers every part; an earlier one stays put', () => {
+  const closing = detectCombination('quotes and orders this month', false)!
+  assert.deepEqual(closing.map((c) => c.dateRange?.label), ['this month', 'this month'])
+  const early = detectCombination('orders this month and unpaid invoices', false)!
+  assert.deepEqual(early.map((c) => c.dateRange?.label), ['this month', undefined])
+})
+
+test('"and" inside one topic is not split', () => {
+  for (const q of ['orders from Acme and Pacific', 'pending and shipped orders', 'what is the status of order 1003 and who bought it', 'which warehouses and locations do we have']) {
+    assert.equal(detectCombination(q, false), null, q)
+  }
+})
+
+test('uncoveredTopics names only what a multi-topic question left out', () => {
+  assert.deepEqual(uncoveredTopics('show orders with their invoices', ['orders.list']), ['customer invoices'])
+  assert.deepEqual(uncoveredTopics('show orders with their invoices', ['orders.list', 'list_my_invoices']), [])
+  assert.deepEqual(uncoveredTopics('show orders', ['orders.list']), [])
+  assert.deepEqual(uncoveredTopics('purchase orders from Pacific', ['purchasing.orders']), [])
+  assert.deepEqual(uncoveredTopics('has the quote been converted to an order?', ['quotes.list']), [])
+  assert.deepEqual(uncoveredTopics('what is my most selling stock', ['sales.by_product']), [])
+  assert.deepEqual(uncoveredTopics('show sales orders', ['orders.list']), [])
+})
+
+test('a period naming when the last part falls due stays with that part', () => {
+  const calls = detectCombination('any quotes waiting for approval, unpaid invoices and bills due this month', false)!
+  assert.deepEqual(calls.map((c) => c.tools[0]), ['quotes.list', 'list_my_invoices', 'finance.bills'])
+  assert.deepEqual(calls.map((c) => c.dateRange?.label), [undefined, undefined, 'this month'])
+  assert.equal(calls[0].quoteStatus, 'PENDING_APPROVAL')
+  assert.equal(calls[2].byDueDate, true)
+})
+
+test('a part that is only a period repeats the lookup before it', () => {
+  const calls = detectCombination('show sales this quarter and last quarter', false)!
+  assert.deepEqual(calls.map((c) => c.tools[0]), ['sales.summary', 'sales.summary'])
+  assert.notEqual(calls[0].dateRange?.label, calls[1].dateRange?.label)
+})
+
+test('names the rules did not read go to the router instead of being dropped', () => {
+  for (const q of ['show me Acme orders along with their invoices', 'Pacific Supply POs and how much we owe them', "Pacific Supply's POs and bills"]) {
+    assert.equal(detectCombination(q, false), null, q)
+  }
+  assert.ok(detectCombination('Pending orders and low stock', false))
+  assert.ok(detectCombination('quotes and orders for Acme', false))
+  assert.ok(detectCombination('what have we ordered and been billed by Pacific Supply?', false))
+})
+
+test('several order statuses are all kept', () => {
+  const both = detectIntent('pending and shipped orders', false)
+  assert.deepEqual(both.orderStatuses, ['PENDING', 'SHIPPED'])
+  assert.equal(both.orderStatus, undefined)
+  assert.equal(detectIntent('orders awaiting approval', false).orderStatus, 'AWAITING_APPROVAL')
+  assert.equal(detectIntent('orders waiting for approval', false).orderStatus, 'AWAITING_APPROVAL')
+  assert.equal(detectIntent('show pending orders', false).orderStatus, 'PENDING')
+})
+
+test('customer rankings about stock or units rank by units and are not read as two topics', () => {
+  for (const q of ['which customer orders the most stock?', 'who bought the most units?', 'which customer buys the most products?']) {
+    const i = detectIntent(q, false)
+    assert.deepEqual(i.tools, ['sales.by_customer'], q)
+    assert.equal(i.byUnits, true, q)
+  }
+  assert.deepEqual(uncoveredTopics('which customer orders the most stock?', ['sales.by_customer']), [])
+  assert.equal(detectIntent('who is our best customer?', false).byUnits, undefined)
+  assert.equal(detectIntent('which customer spent the most?', false).byUnits, undefined)
 })

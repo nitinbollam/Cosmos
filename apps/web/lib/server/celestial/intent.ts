@@ -9,6 +9,8 @@ import {
   parseOrderNumberRef,
   parsePoRef,
   parseQuoteRef,
+  parseRequisitionRef,
+  OPEN_REQUISITION_STATUSES,
   productSearchTokens,
   resolveDateRange,
   type BillStatusFilter,
@@ -18,6 +20,7 @@ import {
   type OrderStatusFilter,
   type PoStatusFilter,
   type QuoteStatusFilter,
+  type RequisitionStatusFilter,
   type SortDirection,
 } from './erp-query-contracts'
 
@@ -27,6 +30,8 @@ export type CelestialToolName =
   | 'inventory.stock'
   | 'purchasing.orders'
   | 'purchasing.order_detail'
+  | 'purchasing.requisitions'
+  | 'purchasing.requisition_detail'
   | 'finance.bills'
   | 'quotes.list'
   | 'quotes.detail'
@@ -49,6 +54,7 @@ export type ToolParams = {
   quoteId?: string
   quoteRef?: string
   poRef?: string
+  requisitionRef?: string
   /** Product words for SKU lookups ("cable product" → ["cable"]). */
   searchTokens?: string[]
   /** Free-text term for global search. */
@@ -59,6 +65,11 @@ export type ToolParams = {
   dateRange?: DateRange
   sort?: SortDirection
   poStatus?: PoStatusFilter
+  /** The date range filters bills by due date ("bills due this month"). */
+  byDueDate?: boolean
+  requisitionStatus?: RequisitionStatusFilter
+  /** Any of these requisition statuses ("open requisitions"). */
+  requisitionStatuses?: RequisitionStatusFilter[]
   billStatus?: BillStatusFilter
   outstanding?: boolean
   pastDue?: boolean
@@ -70,6 +81,10 @@ export type ToolParams = {
   stockRank?: SortDirection
   /** Rank products by sales ("best selling" → desc). */
   salesRank?: SortDirection
+  /** Rank customers by units bought instead of revenue ("which customer orders the most stock"). */
+  byUnits?: boolean
+  /** The customer name came from an earlier part of the question; dropped if no such customer exists. */
+  customerCarried?: boolean
   /** Ranked results wanted: 1 for "which product has the most…", N for "top N". */
   limit?: number
   /** Any of these order statuses ("waiting to ship" = every not-yet-shipped status). */
@@ -90,7 +105,7 @@ export type DetectedIntent = ToolParams & { tools: CelestialToolName[] }
 
 const ORDER_ID = /\b(seed_ord_[a-z0-9_]+|[a-z0-9]{20,})\b/i
 const DATA_NOUNS =
-  /\b(order|orders|invoice|invoices|warehouse|warehouses|stock|sku|skus|quote|quotes|customer|customers|bill|bills|purchase|supplier|suppliers|vendor|vendors|product|products|inventory)\b/
+  /\b(order|orders|invoice|invoices|warehouse|warehouses|stock|sku|skus|quote|quotes|customer|customers|bill|bills|purchase|requisition|requisitions|supplier|suppliers|vendor|vendors|product|products|inventory)\b/
 
 /** General overview / how-it-works questions — prefer plain business language, not dev docs. */
 export function isPlainLanguagePreferred(message: string): boolean {
@@ -106,6 +121,8 @@ export function isPlainLanguagePreferred(message: string): boolean {
 
 export function isHowToQuestion(message: string): boolean {
   const lower = message.toLowerCase()
+  // "How do I approve an open requisition?" and "what is a requisition?" ask about the process.
+  if (/\brequisitions?\b/.test(lower) && /\b(how (do|can|should|would) (i|we)|how to|what('s| is) an? (purchase )?requisition)\b/.test(lower)) return true
   if (/\bhow many\b/.test(lower) || /\bhow much\b/.test(lower)) return false
   if (/\b(show|list|find|search|any|pending|open|recent|which|compare)\b/.test(lower) && DATA_NOUNS.test(lower)) {
     return false
@@ -118,19 +135,26 @@ export function isHowToQuestion(message: string): boolean {
   )
 }
 
-function detectOrderStatus(lower: string): OrderStatusFilter | undefined {
-  if (/\bawaiting approval\b|\bneeds? approval\b/.test(lower)) return 'AWAITING_APPROVAL'
-  if (/\bback.?order(ed|s)?\b/.test(lower)) return 'BACKORDERED'
-  if (/\b(pending|awaiting)\b/.test(lower)) return 'PENDING'
-  if (/\bconfirmed\b/.test(lower)) return 'CONFIRMED'
-  if (/\b(processing|in progress|being picked)\b/.test(lower)) return 'PROCESSING'
-  if (/\b(packed|ready to ship)\b/.test(lower)) return 'PACKED'
-  if (/\b(shipped|in transit)\b/.test(lower)) return 'SHIPPED'
-  if (/\b(delivered|completed)\b/.test(lower)) return 'DELIVERED'
-  if (/\b(cancelled|canceled)\b/.test(lower)) return 'CANCELLED'
-  if (/\bfailed\b/.test(lower)) return 'FAILED'
-  if (/\breturn(ed|s)?\b/.test(lower)) return 'RETURNED'
-  return undefined
+const APPROVAL_WAIT = /\b(awaiting|waiting for|pending|needs?) approval\b/
+
+/** Every order status the question names: "pending and shipped orders" is both. */
+function detectOrderStatuses(lower: string): OrderStatusFilter[] {
+  const text = lower.replace(APPROVAL_WAIT, ' ')
+  const found: OrderStatusFilter[] = APPROVAL_WAIT.test(lower) ? ['AWAITING_APPROVAL'] : []
+  const checks: Array<[RegExp, OrderStatusFilter]> = [
+    [/\bback.?order(ed|s)?\b/, 'BACKORDERED'],
+    [/\b(pending|awaiting)\b/, 'PENDING'],
+    [/\bconfirmed\b/, 'CONFIRMED'],
+    [/\b(processing|in progress|being picked)\b/, 'PROCESSING'],
+    [/\b(packed|ready to ship)\b/, 'PACKED'],
+    [/\b(shipped|in transit)\b/, 'SHIPPED'],
+    [/\b(delivered|completed)\b/, 'DELIVERED'],
+    [/\b(cancelled|canceled)\b/, 'CANCELLED'],
+    [/\bfailed\b/, 'FAILED'],
+    [/\breturn(ed|s)?\b/, 'RETURNED'],
+  ]
+  for (const [words, status] of checks) if (words.test(text)) found.push(status)
+  return found
 }
 
 function detectChannel(lower: string): OrderChannelFilter | undefined {
@@ -155,7 +179,7 @@ function detectPriority(lower: string): OrderPriorityFilter | undefined {
 
 function detectPoStatus(lower: string): PoStatusFilter | undefined {
   if (/\bpartially received\b|\bpartial(ly)? receipt\b/.test(lower)) return 'PARTIALLY_RECEIVED'
-  if (/\b(pending approval|awaiting approval)\b/.test(lower)) return 'PENDING_APPROVAL'
+  if (APPROVAL_WAIT.test(lower)) return 'PENDING_APPROVAL'
   if (/\bdrafts?\b/.test(lower)) return 'DRAFT'
   if (/\bsubmitted\b/.test(lower)) return 'SUBMITTED'
   if (/\b(closed|fully received)\b/.test(lower)) return 'CLOSED'
@@ -164,12 +188,22 @@ function detectPoStatus(lower: string): PoStatusFilter | undefined {
 }
 
 function detectQuoteStatus(lower: string): QuoteStatusFilter | undefined {
-  if (/\b(pending approval|awaiting approval)\b/.test(lower)) return 'PENDING_APPROVAL'
+  if (APPROVAL_WAIT.test(lower)) return 'PENDING_APPROVAL'
   if (/\bapproved\b/.test(lower)) return 'APPROVED'
   if (/\brejected\b/.test(lower)) return 'REJECTED'
   if (/\bsubmitted\b/.test(lower)) return 'SUBMITTED'
   if (/\bexpired\b/.test(lower)) return 'EXPIRED'
   if (/\bopen\b/.test(lower)) return 'OPEN'
+  return undefined
+}
+
+function detectRequisitionStatus(lower: string): RequisitionStatusFilter | undefined {
+  if (/\b(waiting|pending|awaiting|needs? approval|for approval)\b/.test(lower)) return 'PENDING_APPROVAL'
+  if (/\bdrafts?\b/.test(lower)) return 'DRAFT'
+  if (/\brejected\b/.test(lower)) return 'REJECTED'
+  if (/\b(converted|became|become)\b/.test(lower) && !/\bnot (yet )?(been )?(converted|become)\b/.test(lower)) return 'CONVERTED'
+  if (/\bapproved\b/.test(lower) || /\bnot (yet )?(been )?converted\b/.test(lower)) return 'APPROVED'
+  if (/\b(cancelled|canceled)\b/.test(lower)) return 'CANCELLED'
   return undefined
 }
 
@@ -199,7 +233,14 @@ function supplierAfterOwe(message: string): string | undefined {
   return name && !MONTHS.test(name) ? name : undefined
 }
 
-export function detectIntent(message: string, isBuyer: boolean, context?: { orderId?: string; quoteId?: string }): DetectedIntent {
+const REQUISITION_WORDS = /\b(requisitions?|purchase requests?)\b/i
+/** A customer ranking about how much they buy, not how much they spend. */
+const UNITS_WORDS = /\b(stock|inventory|units?|pieces?|quantity|quantities|volume|items?|products?)\b/
+/** "Converted to a PO" describes a requisition; it is not a request for POs or orders as well. */
+const CONVERSION_PHRASE = /\b(converted|turned|became|become)\s+(in)?(to\s+)?(an?\s+)?(POs?|purchase orders?|orders?)\b/gi
+
+export function detectIntent(rawMessage: string, isBuyer: boolean, context?: { orderId?: string; quoteId?: string }): DetectedIntent {
+  const message = REQUISITION_WORDS.test(rawMessage) ? rawMessage.replace(CONVERSION_PHRASE, '$1') : rawMessage
   const lower = message.toLowerCase()
   const tools = new Set<CelestialToolName>()
   const out: DetectedIntent = { tools: [], orderId: context?.orderId, quoteId: context?.quoteId }
@@ -213,7 +254,7 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
   // Questions with their own answer shape, checked before the generic keyword groups.
   const customerRank =
     !isBuyer &&
-    /\b(best|top|biggest|largest|most valuable|worst|smallest)\s+(\d+\s+)?(customers?|clients?|buyers?|accounts?)\b|\bwho (orders|buys|spends|purchases) (the )?most\b|\b(customers?|clients?) (who|that) (orders?|buys?|spends?) (the )?most\b|\bwhich (customers?|clients?) (orders?|buys?|spends?|purchases?) (the )?(most|least)\b/.test(lower)
+    /\b(best|top|biggest|largest|most valuable|worst|smallest)\s+(\d+\s+)?(customers?|clients?|buyers?|accounts?)\b|\bwho (orders|ordered|buys|bought|spends|spent|purchases|purchased) (the )?most\b|\b(customers?|clients?) (who|that) (orders?|ordered|buys?|bought|spends?|spent) (the )?most\b|\bwhich (customers?|clients?) (orders?|ordered|buys?|bought|spends?|spent|purchases?|purchased) (the )?(most|least)\b/.test(lower)
   const averageOrder = /\b(average order (value|size|amount)|aov|avg\.? order)\b/.test(lower)
   const quoteConversion = /\b(quotes?|quotations?)\b/.test(lower) && /\bconvert/.test(lower)
   const warehouseRank =
@@ -229,6 +270,7 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
   if (customerRank) {
     tools.add('sales.by_customer')
     out.salesRank = salesRankOf(message)
+    if (UNITS_WORDS.test(lower)) out.byUnits = true
     out.limit = answerLimit(message.replace(/\bcustomers\b/gi, 'customer')) ?? (/\bcustomers\b/.test(lower) ? undefined : 1)
   }
   if (averageOrder && !isBuyer) tools.add('sales.summary')
@@ -239,6 +281,18 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
   }
   if (supplierList && !isBuyer) tools.add('purchasing.suppliers')
   const customer = detectCustomer(message)
+
+  const requisitionRef = parseRequisitionRef(message)
+  if (requisitionRef) {
+    out.requisitionRef = requisitionRef
+    tools.add('purchasing.requisition_detail')
+  } else if (REQUISITION_WORDS.test(message)) {
+    tools.add('purchasing.requisitions')
+    if (/\b(open|outstanding|in progress)\b/.test(lower)) out.requisitionStatuses = OPEN_REQUISITION_STATUSES
+    else out.requisitionStatus = detectRequisitionStatus(lower)
+    if (singleRecordWanted(message, /\brequisition\b/)) out.limit = 1
+    out.supplier = detectSupplier(message)
+  }
 
   // Purchasing first, so "purchase order" never reads as a sales order.
   const poRef = parsePoRef(message)
@@ -270,7 +324,10 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
   if (mentionsBills) {
     tools.add('finance.bills')
     if (/\b(past due|overdue|late)\b/.test(lower)) out.pastDue = true
-    if (/\b(unpaid|outstanding|open|owed?|still due)\b/.test(lower)) out.outstanding = true
+    // A bill "due" this month is one still to pay, and the period is its due date.
+    const dueWord = /\bdue\b/.test(lower) && !out.pastDue
+    if (dueWord && out.dateRange) out.byDueDate = true
+    if (dueWord || /\b(unpaid|outstanding|open|owed?)\b/.test(lower)) out.outstanding = true
     else if (/\b(fully paid|settled|paid off|already paid)\b/.test(lower) || /\bpaid bills?\b/.test(lower)) out.outstanding = false
     if (/\bpartially paid\b/.test(lower)) out.billStatus = 'PARTIALLY_PAID'
     else if (/\bvoid(ed)?\b/.test(lower)) out.billStatus = 'VOID'
@@ -287,6 +344,8 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
     tools.add('list_my_invoices')
     out.customer = customer
     if (/\b(unpaid|outstanding|open|owed?|owing|overdue|due|not (yet )?paid)\b/.test(lower)) out.outstanding = true
+    if (/\b(past due|overdue|late)\b/.test(lower)) out.pastDue = true
+    else if (/\bdue\b/.test(lower) && out.dateRange) out.byDueDate = true
   }
 
   const orderNumber = parseOrderNumberRef(salesText)
@@ -305,7 +364,9 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
       if (/\b(waiting to (ship|be shipped|go out)|to be shipped|not (yet )?shipped|unshipped|unfulfilled|open orders?|outstanding orders?|still to ship|need(s)? to (ship|go out)|yet to ship)\b/.test(salesText)) {
         out.orderStatuses = OPEN_ORDER_STATUSES
       } else {
-        out.orderStatus = detectOrderStatus(salesText)
+        const statuses = detectOrderStatuses(salesText)
+        if (statuses.length > 1) out.orderStatuses = statuses
+        else out.orderStatus = statuses[0]
       }
       out.channel = detectChannel(salesText)
       out.priority = detectPriority(salesText)
@@ -336,7 +397,7 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
     !isBuyer &&
     !customerRank &&
     !averageOrder &&
-    (topProducts || /\b(sales|revenue|turnover|takings|sold|selling|sellers?|earn(ed|ings)?)\b/.test(revenueText))
+    (topProducts || /\b(sales|revenue|turnover|takings|sold|selling|sellers?|earn(ed|ings)?|(did|do) we sell)\b/.test(revenueText))
   // "Which product sells best" ranks products by sales; it must not also run a product search.
   const productSales =
     salesQuestion &&
@@ -408,4 +469,129 @@ export function detectIntent(message: string, isBuyer: boolean, context?: { orde
 
   out.tools = [...tools]
   return out
+}
+
+const NET_POSITION =
+  /\bnet (position|positive|negative|balance)\b|\bwe owe\b.*\b(are owed|are we owed|owed to us|owes? us|customers? owe)\b|\b(are owed|are we owed|owed to us|owes? us|customers? owe)\b.*\bwe owe\b|\breceivables?\b.*\bpayables?\b|\bpayables?\b.*\breceivables?\b/
+const SUPPLIER_ORDERED = /\b(ordered|bought|[Pp]urchase [Oo]rders?)\b|\bPOs?\b/
+const SUPPLIER_BILLED = /\b(billed|bills?)\b/i
+const STOCK_AND_SALES =
+  /\b(stock|inventory|on.?hand)\b.*\band\b.*\b(sales|sold|sell|sells|selling)\b|\b(sales|sold|sell|sells|selling)\b.*\band\b.*\b(stock|inventory|on.?hand)\b/
+
+/**
+ * Questions that plainly ask for two linked lookups. These are answered without the AI router, so
+ * a rate-limited or terse model can't quietly drop half of the question.
+ */
+export function detectCombination(message: string, isBuyer: boolean): DetectedIntent[] | null {
+  if (isBuyer || isHowToQuestion(message)) return null
+  const calls = combinationCalls(message)
+  // A name these rules didn't pick up ("Acme orders and invoices") must not be dropped; the AI router reads it.
+  return calls && namesCovered(message, calls) ? calls : null
+}
+
+/** Words that open a sentence with a capital but are never a name. */
+const NOT_A_NAME_OPENER = /^(low|pending|open|unpaid|outstanding|overdue|shipped|delivered|cancelled|draft|approved|rejected|compare|sales|orders?|bills?|invoices?|quotes?|stock|inventory|requisitions?|receivables?|payables?|net|best|top|worst|are|were|was|did|who|when|why|also|then|so|how|what|which|where|any|show|list|give|tell|do|does|is|have|has)$/i
+
+function namesCovered(message: string, calls: DetectedIntent[]): boolean {
+  const known = calls
+    .flatMap((c) => [c.customer, c.supplier, c.warehouse, c.searchTerm, ...(c.searchTokens ?? [])])
+    .filter((v): v is string => Boolean(v))
+    .join(' ')
+    .toLowerCase()
+  const words = [...message.matchAll(/\b[A-Z][\w&-]*/g)]
+  return words.every((m) => {
+    const word = m[0]
+    if (known.includes(word.toLowerCase())) return true
+    if (word === 'I' || /^[A-Z]{1,4}s?$/.test(word) || MONTHS.test(word) || NOT_A_NAME.test(word)) return true
+    return m.index === 0 && NOT_A_NAME_OPENER.test(word)
+  })
+}
+
+function combinationCalls(message: string): DetectedIntent[] | null {
+  if (/\bORD-\d+|\bPO[-\s#]*\d+|\bQ-[A-Z0-9_]{4,}|\bPR[-\s#]*\d+/i.test(message)) return null
+  const lower = message.toLowerCase()
+  if (NET_POSITION.test(lower)) {
+    return [
+      { tools: ['list_my_invoices'], outstanding: true },
+      { tools: ['finance.bills'], outstanding: true },
+    ]
+  }
+  const dateRange = resolveDateRange(message)
+  if (SUPPLIER_ORDERED.test(message.replace(/\bpos\b/g, '')) && SUPPLIER_BILLED.test(message)) {
+    const supplier = message.match(/\b(?:from|for|by|supplier|vendor)\s+([A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){0,3})/)?.[1]?.trim()
+    return [
+      { tools: ['purchasing.orders'], supplier, dateRange },
+      { tools: ['finance.bills'], supplier, dateRange },
+    ]
+  }
+  // A ranking ("best selling", "most stock") has its own answer shape.
+  if (STOCK_AND_SALES.test(lower) && !/\b(most|least|best|worst|top|bottom|highest|lowest)\b/.test(lower)) {
+    const searchTokens = productSearchTokens(message)
+    if (searchTokens.length === 0) return null
+    return [
+      { tools: ['inventory.stock'], searchTokens },
+      { tools: ['sales.by_product'], searchTokens, dateRange },
+    ]
+  }
+  return splitParts(message)
+}
+
+const PART_SEPARATOR = /\s*(?:[,;&]|\bas well as\b|\balong with\b|\band also\b|\band\b|\bplus\b)\s*/i
+/** Too broad to count as a part of its own ("…and who is the customer"). */
+const NOT_A_PART = new Set<CelestialToolName>(['global_search', 'list_warehouses'])
+
+/** "Pending orders and low stock": each part that is a data question on its own becomes a lookup. */
+function splitParts(message: string): DetectedIntent[] | null {
+  const parts = message.split(PART_SEPARATOR).filter((p) => p.trim())
+  if (parts.length < 2 || parts.length > 6) return null
+  const calls: DetectedIntent[] = []
+  for (const part of parts) {
+    const intent = detectIntent(part, false)
+    const tools = intent.tools.filter((t) => !NOT_A_PART.has(t))
+    const period = resolveDateRange(part)
+    if (tools.length > 0) calls.push({ ...intent, tools })
+    // "Sales this quarter and last quarter": a part that is only a period repeats the lookup before it.
+    else if (period && calls.length > 0) calls.push({ ...calls[calls.length - 1], dateRange: period })
+  }
+  if (calls.length < 2) return null
+  // "Sales and orders this month": a period at the very end covers every part. A period in an
+  // earlier part ("orders this month and unpaid invoices"), or one that says when the last part
+  // falls due ("quotes and bills due this month"), stays with its own part.
+  const last = parts[parts.length - 1]
+  const closing = /\bdue\b/i.test(last) ? undefined : resolveDateRange(last)
+  return closing ? calls.map((c) => (c.dateRange ? c : { ...c, dateRange: closing })) : calls
+}
+
+const TOPICS: Array<{ label: string; words: RegExp; answeredBy: CelestialToolName[] }> = [
+  { label: 'sales orders', words: /\borders\b/, answeredBy: ['orders.list', 'orders.detail', 'sales.summary', 'sales.by_customer'] },
+  {
+    label: 'stock',
+    words: /\b(stock|inventory)\b/,
+    answeredBy: ['inventory.stock', 'inventory.by_warehouse', 'list_low_stock', 'search_catalog', 'sales.by_product'],
+  },
+  { label: 'vendor bills', words: /\b(bills?|billed|payables?)\b/, answeredBy: ['finance.bills', 'purchasing.order_detail', 'purchasing.suppliers'] },
+  { label: 'customer invoices', words: /\b(invoices?|receivables?)\b/, answeredBy: ['list_my_invoices'] },
+  { label: 'quotes', words: /\bquotes?\b/, answeredBy: ['quotes.list', 'quotes.detail'] },
+  { label: 'purchase orders', words: /\bpurchase orders?\b|\bpos\b|\bpo\b/, answeredBy: ['purchasing.orders', 'purchasing.order_detail', 'purchasing.suppliers'] },
+  { label: 'purchase requisitions', words: REQUISITION_WORDS, answeredBy: ['purchasing.requisitions', 'purchasing.requisition_detail'] },
+  { label: 'sales', words: /\b(sales|revenue)\b/, answeredBy: ['sales.summary', 'sales.by_product', 'sales.by_customer', 'sales.forecast'] },
+]
+
+/**
+ * Topics the question names that these lookups don't answer, so a dropped half is never silent. Only
+ * applies when the question names at least two topics: with one, a mismatch just means different words.
+ */
+export function uncoveredTopics(message: string, tools: readonly string[]): string[] {
+  const text = message
+    .toLowerCase()
+    .replace(/\b(converted|became|become|turned)\b.*\borders?\b/g, ' ')
+    .replace(/\bon order\b/g, ' ')
+    // "Orders the most stock" is one customer ranking, not a question about orders and stock.
+    .replace(/\b(orders?|ordered|buys?|bought|purchases?|purchased) (the )?(most|least) (stock|inventory)\b/g, ' ')
+    .replace(/\bsales orders?\b/g, 'orders')
+    .replace(/\bsales (reps?|tax(es)?|channels?)\b/g, ' ')
+  const salesOrderText = text.replace(/\b(purchase|supplier) orders?\b/g, ' ')
+  const named = TOPICS.filter((t) => t.words.test(t.label === 'sales orders' ? salesOrderText : text))
+  if (named.length < 2) return []
+  return named.filter((t) => !t.answeredBy.some((name) => tools.includes(name))).map((t) => t.label)
 }
