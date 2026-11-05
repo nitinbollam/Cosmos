@@ -95,7 +95,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | **Orders** | `/admin/orders` | Order list, detail with saga timeline, confirm/cancel/fulfill, **returns (RMA)**, split shipments, invoice link |
 | **Fulfillment** | `/admin/fulfillment` | Pick/pack tasks, assign picker, pick-all / pack / dispatch actions |
 | **Warehouse** | `/admin/warehouse` | Pick tasks, receiving sessions, cycle counts, **wave picking**, **bin locations** |
-| **Purchasing** | `/admin/purchasing` | Purchase orders, suppliers, receive goods |
+| **Purchasing** | `/admin/purchasing` | Purchase requisitions (the only way to create a PO), purchase orders, suppliers, receive goods |
 | **Compliance** | `/admin/compliance` | MSA reports, tax exposure summary, batch tracking context |
 | **CRM** | `/admin/crm` | Customers, leads, activities, import, lead conversion, contract/volume pricing |
 | **Quotes** | `/admin/quotes` | Admin quote approval, counter-offers |
@@ -188,7 +188,7 @@ Navigation is defined in `apps/client/src/components/layout/sidebar.tsx`.
 | `crm` | Customer, Lead, Activity |
 | `wms` | FulfillmentTask, PickLine, ReceivingSession, CycleCount, … |
 | `dispatch` | DeliveryRoute, RouteStop |
-| `purchasing` | Supplier, PurchaseOrder, PurchaseOrderLine |
+| `purchasing` | Supplier, PurchaseRequisition, PurchaseOrder, PurchaseOrderLine |
 | `payment` | PaymentIntent, LedgerEntry |
 | `ledger` | ChartAccount, JournalEntry, JournalLine |
 | `compliance` | MSATenant, MSAReport, Batch, … |

@@ -7,6 +7,7 @@ import { ApiError, type SessionUser } from '../session'
 import type { CelestialToolName, ToolParams } from './intent'
 import { orderCodeOf } from '../order-number'
 import * as erp from './erp-queries'
+import { OPEN_ORDER_STATUSES } from './erp-query-contracts'
 
 export type ToolContext = ToolParams & {
   session: SessionUser
@@ -33,6 +34,8 @@ export const TOOL_PERMISSIONS: Record<CelestialToolName, string[]> = {
   'inventory.stock': ['inventory.read'],
   'purchasing.orders': ['purchasing.read'],
   'purchasing.order_detail': ['purchasing.read'],
+  'purchasing.requisitions': ['requisitions.read'],
+  'purchasing.requisition_detail': ['requisitions.read'],
   'finance.bills': ['finance.read'],
   'quotes.list': ['quotes.read'],
   'quotes.detail': ['quotes.read'],
@@ -55,6 +58,8 @@ export const TOOL_LABELS: Record<CelestialToolName, string> = {
   'inventory.stock': 'stock levels',
   'purchasing.orders': 'purchase orders',
   'purchasing.order_detail': 'purchase order details',
+  'purchasing.requisitions': 'purchase requisitions',
+  'purchasing.requisition_detail': 'purchase requisition details',
   'finance.bills': 'vendor bills',
   'quotes.list': 'quotes',
   'quotes.detail': 'quote details',
@@ -167,7 +172,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
           filters: filterLabels(
             ctx,
             ctx.orderStatus,
-            ctx.orderStatuses && 'not yet shipped',
+            ctx.orderStatuses && (ctx.orderStatuses === OPEN_ORDER_STATUSES ? 'not yet shipped' : ctx.orderStatuses.join(' or ')),
             ctx.channel,
             ctx.priority,
             ctx.customer && `customer “${ctx.customer}”`,
@@ -255,6 +260,43 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
       return { name, data: po, links: [{ label: po.number, href: `/admin/purchasing/${po.id}` }] }
     }
+    case 'purchasing.requisitions': {
+      const page = await erp.purchaseRequisitions(tenantId, {
+        status: ctx.requisitionStatus,
+        statuses: ctx.requisitionStatuses,
+        supplier: ctx.supplier,
+        dateRange: ctx.dateRange,
+        page: ctx.page,
+      })
+      if (ctx.limit === 1 && page.rows[0]) {
+        return withSelection(
+          await runTool('purchasing.requisition_detail', { ...ctx, requisitionRef: page.rows[0].number }),
+          `${ctx.sort === 'asc' ? 'Oldest' : 'Latest'} of ${page.total} matching requisition(s).`,
+        )
+      }
+      return {
+        name,
+        data: {
+          ...page,
+          filters: filterLabels(
+            ctx,
+            ctx.requisitionStatus,
+            ctx.requisitionStatuses && 'open',
+            ctx.supplier && `supplier “${ctx.supplier}”`,
+          ),
+        },
+        links: page.rows.map((r) => ({ label: r.number, href: `/admin/purchasing/requisitions/${r.id}` })),
+      }
+    }
+    case 'purchasing.requisition_detail': {
+      const requisition = await erp.purchaseRequisitionDetail(tenantId, { number: ctx.requisitionRef })
+      if (!requisition) {
+        return { name, data: null, links: [], notice: `I couldn’t find requisition ${ctx.requisitionRef ?? ''}. Check the number (e.g. PR-1001).` }
+      }
+      const links = [{ label: requisition.number, href: `/admin/purchasing/requisitions/${requisition.id}` }]
+      if (requisition.purchaseOrder) links.push({ label: requisition.purchaseOrder.number, href: `/admin/purchasing/${requisition.purchaseOrder.id}` })
+      return { name, data: requisition, links }
+    }
     case 'finance.bills': {
       const page = await erp.financeBills(tenantId, {
         status: ctx.billStatus,
@@ -262,10 +304,12 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
         pastDue: ctx.pastDue,
         supplier: ctx.supplier,
         dateRange: ctx.dateRange,
+        byDueDate: ctx.byDueDate,
         page: ctx.page,
       })
       const filters = filterLabels(
-        ctx,
+        // Say which date the period filtered on: "due this month".
+        ctx.byDueDate && ctx.dateRange ? { ...ctx, dateRange: { ...ctx.dateRange, label: `due ${ctx.dateRange.label}` } } : ctx,
         ctx.billStatus,
         ctx.pastDue ? 'past due' : ctx.outstanding === true ? 'outstanding' : ctx.outstanding === false ? 'paid' : undefined,
         ctx.supplier && `supplier “${ctx.supplier}”`,
@@ -359,7 +403,17 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       const cust = isBuyer ? {} : await customerFilter(tenantId, ctx.customer)
       if (cust.notice) return { name, data: null, links: [], notice: cust.notice }
       const [page, open] = await Promise.all([
-        invoices.listInvoices(tenantId, 1, 50, cust.ids ? { customerIds: cust.ids } : {}, buyerOpts),
+        invoices.listInvoices(
+          tenantId,
+          1,
+          50,
+          {
+            ...(cust.ids ? { customerIds: cust.ids } : {}),
+            ...(ctx.pastDue ? { status: 'OVERDUE' } : {}),
+            ...(ctx.dateRange ? { dateRange: { ...ctx.dateRange, on: ctx.byDueDate ? ('dueAt' as const) : ('issuedAt' as const) } } : {}),
+          },
+          buyerOpts,
+        ),
         // Totals over every matching invoice, not just the 50 read above, for AR vs AP comparisons.
         isBuyer ? null : erp.receivablesTotals(tenantId, { customerIds: cust.ids }),
       ])
@@ -380,8 +434,14 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
             orderId: invRow.orderId,
           })),
           total: matching.length,
-          filters: filterLabels(ctx, ctx.outstanding && 'unpaid', ctx.customer && `customer “${ctx.customer}”`),
+          filters: filterLabels(
+            ctx.byDueDate && ctx.dateRange ? { ...ctx, dateRange: { ...ctx.dateRange, label: `due ${ctx.dateRange.label}` } } : ctx,
+            ctx.pastDue ? 'past due' : ctx.outstanding && 'unpaid',
+            ctx.customer && `customer “${ctx.customer}”`,
+          ),
           outstandingOnly: Boolean(ctx.outstanding),
+          // With a date or past-due filter, an empty list doesn't mean everything is paid.
+          narrowed: Boolean(ctx.dateRange || ctx.pastDue),
           ...(open ? { openBalanceByCurrency: open.balanceByCurrency, openInvoices: open.openInvoices, totalsTruncated: open.totalsTruncated } : {}),
         },
         links: shown.map((invRow) => ({

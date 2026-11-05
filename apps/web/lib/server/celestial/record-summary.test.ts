@@ -70,3 +70,10 @@ test('no AI summary above a one-line single answer', () => {
   const single: ToolResult = { name: 'sales.by_product', data: { rows: [{}], limit: 1 }, links: [] }
   assert.equal(shouldSummarize([single], ON, {}), false)
 })
+
+test('a summary calling purchase orders requisitions is dropped', () => {
+  const evidence = '### Purchase orders\n| **PO-1001** | `SUBMITTED` |'
+  assert.equal(acceptSummary('There is one open requisition: PO-1001.', evidence, 'show open requisitions'), null)
+  assert.ok(acceptSummary('There is one open purchase order: PO-1001.', evidence, 'show open POs'))
+  assert.ok(acceptSummary('One requisition is waiting.', '### Purchase requisitions\n| **PR-1001** |', 'any requisitions?'))
+})

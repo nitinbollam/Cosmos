@@ -30,6 +30,7 @@ import {
   type OrderStatusFilter,
   type PoStatusFilter,
   type QuoteStatusFilter,
+  type RequisitionStatusFilter,
   type SortDirection,
 } from './erp-query-contracts'
 
@@ -537,6 +538,128 @@ export async function purchasingOrderDetail(tenantId: string, ref: { number?: st
 
 // ── finance.bills (accounts payable) ────────────────────────────────────────
 
+export type RequisitionRow = {
+  id: string
+  number: string
+  status: string
+  supplierName: string | null
+  currency: string
+  createdAt: Date
+  submittedAt: Date | null
+  lineCount: number
+  qtyRequested: number
+  estimatedCost: number | null
+  missingCostLines: number
+}
+
+/** Read-only requisition list. Never calls getRequisition, whose read repairs approval sync state. */
+export async function purchaseRequisitions(
+  tenantId: string,
+  f: { status?: RequisitionStatusFilter; statuses?: RequisitionStatusFilter[]; supplier?: string; dateRange?: DateRange; page?: number },
+): Promise<Page<RequisitionRow>> {
+  const { page, skip } = skipFor(f.page)
+  const supplierIds = await supplierIdsMatching(tenantId, f.supplier)
+  if (supplierIds && supplierIds.length === 0) return { rows: [], total: 0, page, pageSize: PAGE_SIZE }
+  const where = {
+    tenantId,
+    ...(f.status ? { status: f.status } : f.statuses?.length ? { status: { in: f.statuses } } : {}),
+    ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
+    ...(f.dateRange ? { createdAt: { gte: f.dateRange.from, lt: f.dateRange.to } } : {}),
+  }
+  const [items, total] = await Promise.all([
+    purchasingDb.purchaseRequisition.findMany({
+      where,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        currency: true,
+        createdAt: true,
+        submittedAt: true,
+        supplier: { select: { name: true } },
+        lines: { select: { qtyRequested: true, unitCost: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take: PAGE_SIZE,
+    }),
+    purchasingDb.purchaseRequisition.count({ where }),
+  ])
+  return {
+    rows: items.map((r) => {
+      const cost = goodsCost(r.lines.map((l) => ({ qty: l.qtyRequested, unitCost: nullableNum(l.unitCost) })))
+      return {
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        supplierName: r.supplier?.name ?? null,
+        currency: r.currency,
+        createdAt: r.createdAt,
+        submittedAt: r.submittedAt,
+        lineCount: r.lines.length,
+        qtyRequested: r.lines.reduce((a, l) => a + l.qtyRequested, 0),
+        estimatedCost: cost.amount,
+        missingCostLines: cost.missingCostLines,
+      }
+    }),
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+  }
+}
+
+export async function purchaseRequisitionDetail(tenantId: string, f: { number?: string }) {
+  if (!f.number) return null
+  const r = await purchasingDb.purchaseRequisition.findFirst({
+    where: { tenantId, number: f.number },
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      currency: true,
+      notes: true,
+      createdAt: true,
+      submittedAt: true,
+      approvedAt: true,
+      rejectedAt: true,
+      rejectReason: true,
+      cancelledAt: true,
+      cancelReason: true,
+      purchaseOrderId: true,
+      supplier: { select: { name: true } },
+      lines: {
+        select: { lineNo: true, skuCode: true, description: true, qtyRequested: true, unitCost: true },
+        orderBy: { lineNo: 'asc' },
+      },
+    },
+  })
+  if (!r) return null
+  const purchaseOrder = r.purchaseOrderId
+    ? await purchasingDb.purchaseOrder.findFirst({ where: { id: r.purchaseOrderId, tenantId }, select: { id: true, number: true } })
+    : null
+  const lines = r.lines.map((l) => ({ ...l, unitCost: nullableNum(l.unitCost) }))
+  const cost = goodsCost(lines.map((l) => ({ qty: l.qtyRequested, unitCost: l.unitCost })))
+  return {
+    id: r.id,
+    number: r.number,
+    status: r.status,
+    supplierName: r.supplier?.name ?? null,
+    currency: r.currency,
+    notes: r.notes,
+    createdAt: r.createdAt,
+    submittedAt: r.submittedAt,
+    approvedAt: r.approvedAt,
+    rejectedAt: r.rejectedAt,
+    rejectReason: r.rejectReason,
+    cancelledAt: r.cancelledAt,
+    cancelReason: r.cancelReason,
+    purchaseOrder,
+    lines,
+    estimatedCost: cost.amount,
+    missingCostLines: cost.missingCostLines,
+  }
+}
+
 export type BillFilters = {
   status?: BillStatusFilter
   /** true: still owed; false: fully settled. Undefined: no settlement filter. */
@@ -544,6 +667,8 @@ export type BillFilters = {
   pastDue?: boolean
   supplier?: string
   dateRange?: DateRange
+  /** The date range means the due date ("bills due this month"), not the issue date. */
+  byDueDate?: boolean
   page?: number
 }
 
@@ -580,8 +705,16 @@ export async function financeBills(
     tenantId,
     ...statusFilter,
     ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
-    ...(f.pastDue ? { dueAt: { lt: now } } : {}),
-    ...(f.dateRange ? { issuedAt: { gte: f.dateRange.from, lt: f.dateRange.to } } : {}),
+    ...(f.pastDue || (f.dateRange && f.byDueDate)
+      ? {
+          dueAt: {
+            ...(f.dateRange && f.byDueDate ? { gte: f.dateRange.from } : {}),
+            // Past due inside a period ends at whichever comes first: now or the period's end.
+            lt: f.pastDue ? (f.dateRange && f.byDueDate && f.dateRange.to < now ? f.dateRange.to : now) : f.dateRange!.to,
+          },
+        }
+      : {}),
+    ...(f.dateRange && !f.byDueDate ? { issuedAt: { gte: f.dateRange.from, lt: f.dateRange.to } } : {}),
   }
 
   const [items, total, forTotals] = await Promise.all([

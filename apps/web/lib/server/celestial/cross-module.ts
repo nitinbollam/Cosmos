@@ -95,7 +95,7 @@ type Edge = {
 /** Lookups that describe the same supplier, customer or product, and the field that links them. */
 const EDGES: Edge[] = [
   {
-    tools: ['purchasing.orders', 'finance.bills'],
+    tools: ['purchasing.requisitions', 'purchasing.orders', 'finance.bills'],
     get: (c) => c.supplier,
     set: (c, from) => ({ ...c, supplier: from.supplier }),
   },
@@ -254,7 +254,7 @@ function comparePeriods(lookups: Lookup[]): string | null {
 
 /** Money customers owe us next to money we owe suppliers, one row per currency. */
 function compareReceivablesPayables(lookups: Lookup[]): string | null {
-  const ar = lookups.find((l) => l.result.name === 'list_my_invoices' && !l.call.customer)
+  const ar = lookups.find((l) => l.result.name === 'list_my_invoices' && !l.call.customer && !l.call.dateRange && !l.call.pastDue)
   const ap = lookups.find((l) => l.result.name === 'finance.bills' && !l.call.supplier && !l.call.dateRange)
   if (!ar || !ap) return null
   const lines = ['### Receivables vs payables', '']

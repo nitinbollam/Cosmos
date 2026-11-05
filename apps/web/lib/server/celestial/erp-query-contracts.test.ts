@@ -5,6 +5,7 @@ import {
   goodsCost,
   parseOrderNumberRef,
   parsePoRef,
+  parseRequisitionRef,
   parseQuoteRef,
   productSearchTokens,
   resolveDateRange,
@@ -134,4 +135,13 @@ test('singularWord lets plural searches find singular product names', async () =
   assert.equal(singularWord('glass'), 'glass')
   assert.equal(singularWord('USB'), 'USB')
   assert.deepEqual(productSearchTokens('do we have energy drinks in stock?'), ['energy', 'drinks'])
+})
+
+test('parseRequisitionRef and future periods', () => {
+  assert.equal(parseRequisitionRef('status of pr-1001'), 'PR-1001')
+  assert.equal(parseRequisitionRef('requisition #12'), 'PR-12')
+  assert.equal(parseRequisitionRef('show pr reviews'), undefined)
+  const now = new Date('2026-11-03T12:00:00Z')
+  assert.equal(resolveDateRange('due next month', now)?.from.toISOString(), '2026-12-01T00:00:00.000Z')
+  assert.equal(resolveDateRange('due next week', now)?.from.toISOString(), '2026-11-09T00:00:00.000Z')
 })

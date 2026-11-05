@@ -256,3 +256,9 @@ test('a record picked from a list says how it was picked', () => {
   ])
   assert.match(reply, /^\*\*#2 from your last list \(Q-1\)\.\*\*/)
 })
+
+test('an empty filtered invoice list does not claim everything is paid', () => {
+  const invoices = (extra: object) => [{ name: 'list_my_invoices', links: [], data: { rows: [], total: 0, outstandingOnly: true, filters: ['past due'], ...extra } }] as never
+  assert.doesNotMatch(composeFromToolResults(invoices({ narrowed: true })), /fully paid/)
+  assert.match(composeFromToolResults(invoices({ narrowed: false })), /fully paid/)
+})

@@ -393,7 +393,14 @@ export async function listInvoices(
   tenantId: string,
   page = 1,
   pageSize = 50,
-  filters?: { status?: string; customerId?: string; customerIds?: string[]; excludeCancelled?: boolean },
+  filters?: {
+    status?: string
+    customerId?: string
+    customerIds?: string[]
+    excludeCancelled?: boolean
+    /** Only invoices issued (or due) from `from` up to, not including, `to`. */
+    dateRange?: { from: Date; to: Date; on: 'issuedAt' | 'dueAt' }
+  },
   opts?: { buyerCustomerId?: string },
 ) {
   const safePage = Math.max(1, page)
@@ -406,6 +413,7 @@ export async function listInvoices(
   } else if (filters?.customerIds) {
     where.customerId = { in: filters.customerIds }
   }
+  if (filters?.dateRange) where[filters.dateRange.on] = { gte: filters.dateRange.from, lt: filters.dateRange.to }
 
   const status = filters?.status?.trim()
   if (status && status !== 'ALL') {

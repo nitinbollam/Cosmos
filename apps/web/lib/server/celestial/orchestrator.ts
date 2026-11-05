@@ -9,7 +9,7 @@ import {
   listConversations,
   touchConversation,
 } from './conversations'
-import { detectIntent, isHowToQuestion, isPlainLanguagePreferred, type DetectedIntent } from './intent'
+import { detectCombination, detectIntent, isHowToQuestion, isPlainLanguagePreferred, uncoveredTopics, type DetectedIntent } from './intent'
 import {
   clarifyReply,
   describeLookup,
@@ -172,7 +172,9 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
   const earlier = earlierTurns(conversation.messages)
   const canPlan =
     !isBuyer && !followUpIntent && !clarification && !smallTalk && !isHowToQuestion(message) && getCelestialModelInfo().configured
-  let calls: DetectedIntent[] = keywordIntent.tools.length > 0 ? [keywordIntent] : []
+  // A question that plainly names two linked lookups runs both, without depending on the router.
+  const combination = !followUpIntent && !clarification && !smallTalk ? detectCombination(message, isBuyer) : null
+  let calls: DetectedIntent[] = combination ? linkCalls(combination) : keywordIntent.tools.length > 0 ? [keywordIntent] : []
   let routedBy: PreparedChat['routedBy'] = followUpIntent ? 'follow-up' : 'keywords'
   let unsupported: string | null = null
   let askBack: string | null = null
@@ -188,7 +190,7 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     return true
   }
 
-  if (canPlan && routingDoubt(message, keywordIntent, earlier.length > 0)) {
+  if (canPlan && !combination && routingDoubt(message, keywordIntent, earlier.length > 0)) {
     const plan = await planQuestion(message, session, {}, earlier)
     // A follow-up that points back ("when is it due?", "only the unpaid ones") and that the router
     // couldn't place reuses the previous lookup; the answer then carries the detail asked for.
@@ -257,7 +259,12 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
     clarification ??
     askBack ??
     unsupported ??
-    (shouldUseDirectCompose(toolResults) ? withAnalysis(analyzeLookups(calls, perCall), composeFromToolResults(toolResults)) : null)
+    (shouldUseDirectCompose(toolResults)
+      ? withMissingTopics(
+          followUpIntent ? [] : uncoveredTopics(message, intentTools),
+          withAnalysis(analyzeLookups(calls, perCall), composeFromToolResults(toolResults)),
+        )
+      : null)
 
   return {
     conversationId: conversation.id,
@@ -294,6 +301,12 @@ async function prepareChat(session: SessionUser, input: CelestialChatInput): Pro
 /** The server-built comparison (when the lookups are related) goes above the record tables. */
 function withAnalysis(analysis: string | null, records: string): string {
   return analysis ? `${analysis}\n\n${records}` : records
+}
+
+/** Says what the answer left out, rather than letting half a question disappear quietly. */
+function withMissingTopics(missing: string[], records: string): string {
+  if (missing.length === 0) return records
+  return `${records}\n\n*This answer doesn't cover ${missing.join(' or ')}. Ask about ${missing.length > 1 ? 'them' : 'that'} separately and I'll look it up.*`
 }
 
 const POINTS_BACK =

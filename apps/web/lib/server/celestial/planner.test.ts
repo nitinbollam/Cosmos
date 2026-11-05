@@ -145,3 +145,25 @@ test('routingDoubt: confident keyword matches skip the AI, unsure ones go to it'
   assert.equal(routingDoubt('show bills and invoices', kw('show bills and invoices'), false), 'several lookups matched')
   assert.equal(routingDoubt('compare sales this quarter vs last quarter', kw('compare sales this quarter vs last quarter'), false), 'may need several lookups')
 })
+
+test('the router gets requisitions only with access, and keywords keep requisition questions', () => {
+  assert.ok(ALL.includes('purchasing.requisitions'))
+  assert.ok(!allowedPlannerTools(WAREHOUSE).includes('purchasing.requisitions'))
+  assert.equal(routingDoubt('show open requisitions', detectIntent('show open requisitions', false), true), null)
+  assert.equal(routingDoubt('status of PR-1001', detectIntent('status of PR-1001', false), true), null)
+})
+
+test('the router can filter requisitions and read a period as a due date', () => {
+  const now = new Date('2026-11-03T12:00:00Z')
+  const plan = parsePlan(
+    '{"type":"tools","calls":[{"tool":"purchasing.requisitions","params":{"requisitionStatus":"open"}},{"tool":"finance.bills","params":{"period":"this month","byDueDate":true}},{"tool":"purchasing.requisition_detail","params":{"requisitionRef":"PR-7"}}]}',
+    ALL,
+    now,
+  )
+  assert.equal(plan?.type, 'tools')
+  if (plan?.type !== 'tools') return
+  assert.deepEqual(plan.calls[0].requisitionStatuses, ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'])
+  assert.equal(plan.calls[1].byDueDate, true)
+  assert.equal(plan.calls[2].requisitionRef, 'PR-7')
+  assert.equal(parsePlan('{"type":"tools","calls":[{"tool":"purchasing.requisition_detail","params":{}}]}', ALL, now), null)
+})

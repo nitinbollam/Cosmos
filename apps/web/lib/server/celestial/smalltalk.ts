@@ -12,6 +12,7 @@ const EXAMPLES: Partial<Record<CelestialToolName, string>> = {
   'inventory.stock': 'How much cable stock do we have?',
   list_low_stock: 'What should I reorder?',
   'purchasing.orders': "What's still to be received from suppliers?",
+  'purchasing.requisitions': 'Any requisitions waiting for approval?',
   'finance.bills': 'What do we owe Pacific Supply?',
   list_my_invoices: 'Any unpaid customer invoices?',
   'quotes.list': 'Any quotes waiting for approval?',
@@ -40,7 +41,7 @@ export function smallTalkReply(message: string, session: SessionUser): string | 
   const lower = message.toLowerCase().trim().replace(/[!.?,\s]+$/g, '').replace(/,/g, '')
 
   if (CAPABILITIES.test(lower)) {
-    const list = examples(session, 10)
+    const list = examples(session, 11)
     return [
       "I'm Celestial. I answer questions about your Pleros data and explain how Pleros screens work.",
       '',

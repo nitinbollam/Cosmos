@@ -51,3 +51,11 @@ test('portal buyers can use no Celestial ERP tool', () => {
     assert.equal(canUseTool(buyer, name), false, name)
   }
 })
+
+test('requisitions need requisitions access, and purchasing access alone is not enough', async () => {
+  assert.equal(canUseTool(staff('MANAGER'), 'purchasing.requisitions'), true)
+  assert.equal(canUseTool(staff('ACCOUNTANT'), 'purchasing.requisitions'), false)
+  const [result] = await runTools(['purchasing.requisitions'], { session: staff('WAREHOUSE_STAFF') })
+  assert.equal(result.data, null)
+  assert.match(result.notice ?? '', /don't have access to purchase requisitions/)
+})

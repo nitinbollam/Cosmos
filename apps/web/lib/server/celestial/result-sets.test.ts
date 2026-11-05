@@ -92,3 +92,13 @@ test('liveResultSets drops expired sets and sets from another user, role or tena
   assert.equal(liveResultSets(meta, { ...SCOPE, tenantId: 't2' }, NOW).length, 0)
   assert.equal(liveResultSets([null, { resultSets: 'junk' }, { resultSets: [{ nope: 1 }] }], SCOPE, NOW).length, 0)
 })
+
+test('"open the first one" after a requisition list reads that requisition', () => {
+  const scope = { tenantId: 't', userId: 'u', role: 'MANAGER' }
+  const result = { name: 'purchasing.requisitions', links: [], data: { rows: [{ id: 'r1', number: 'PR-1001' }, { id: 'r2', number: 'PR-1002' }], total: 2, page: 1 } } as ToolResult
+  const sets = buildResultSets([result], {}, scope)
+  const follow = resolveFollowUp('open the second requisition', sets)
+  assert.equal(follow?.type, 'select')
+  assert.deepEqual(intentForFollowUp(follow!), { tools: ['purchasing.requisition_detail'], requisitionRef: 'PR-1002' })
+  assert.equal(resolveFollowUp('what about PR-1001 first', sets), undefined)
+})
