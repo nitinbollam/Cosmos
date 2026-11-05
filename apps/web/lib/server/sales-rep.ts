@@ -6,6 +6,7 @@
  * always come from the server, so a rep cannot quote or sell below what the customer is owed.
  */
 import { ApprovalType } from '@/generated/prisma-tenant'
+import { QuoteOrigin } from '@/generated/prisma-storefront'
 import { crmDb, inventoryDb, orderDb, tenantDb } from './db'
 import * as crm from './crm'
 import { createApprovalRequest, findPendingApprovalForSubject } from './approvals'
@@ -163,7 +164,7 @@ export async function quoteForAccount(
     customerRef: customerId,
     notes: typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined,
     lines: priced.map((p, i) => ({ lineNo: i + 1, skuCode: p.code, description: p.name, qty: p.quantity, unitPrice: p.unitPrice })),
-  })
+  }, { actor: { userId: viewer.userId, via: QuoteOrigin.SALES_REP } })
   await auditLog(tenantId, { userId: viewer.userId, action: 'rep.quote_created', entityType: 'B2BQuote', entityId: quote.id, metadata: { customerId } })
   return quote
 }

@@ -31,12 +31,16 @@ model Order {
   cancelledAt     DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+  /// The B2B quote (storefront B2BQuote id) this order was placed from. At most one order per quote per tenant,
+  /// enforced by the unique index below in the same insert that creates the order. Null for every other order.
+  sourceQuoteId   String?
   lineItems       OrderLineItem[]
   saga            OrderSaga?
   invoice         Invoice?
   shipments       OrderShipment[]
 
   @@unique([tenantId, orderNumber])
+  @@unique([tenantId, sourceQuoteId])
   @@index([tenantId, status])
   @@index([tenantId, customerId])
   @@index([tenantId, createdAt])

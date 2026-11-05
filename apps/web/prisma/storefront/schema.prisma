@@ -15,6 +15,14 @@ enum QuoteStatus {
   REJECTED
   SUBMITTED
   EXPIRED
+  WITHDRAWN
+}
+
+/// Where a quote was raised. Null on quotes created before this was recorded (legacy).
+enum QuoteOrigin {
+  BUYER_PORTAL
+  STAFF
+  SALES_REP
 }
 
 model B2BQuote {
@@ -29,6 +37,13 @@ model B2BQuote {
   approvedByUserId   String?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
+  /// The signed-in user who created the quote, always from the session. Null on legacy quotes.
+  createdByUserId    String?
+  createdVia         QuoteOrigin?
+  /// Bumped on every change to the quote, for conditional (optimistic) writes.
+  version            Int         @default(0)
+  withdrawnAt        DateTime?
+  withdrawReason     String?
   lines              QuoteLine[]
 
   @@index([tenantId, status])
@@ -71,14 +86,28 @@ model OrderTemplateLine {
   @@index([templateId])
 }
 
+/// Which party made a counter-offer: the buyer's portal side or the tenant's staff side.
+enum CounterOfferSide {
+  BUYER
+  STAFF
+}
+
 model QuoteCounterOffer {
   id        String                  @id @default(cuid())
   quoteId   String
+  /// Display label kept for existing clients ("BUYER" or "ADMIN"). Set by the server from `side` on new offers;
+  /// on legacy offers it came from the request body and is not trusted.
   offeredBy String
+  /// The signed-in user who made the offer, from the session on new offers (legacy: from the request body).
   userId    String?
   notes     String?
+  /// OPEN, ACCEPTED, or SUPERSEDED (still open when another offer was accepted or the quote approved).
   status    String                  @default("OPEN")
   createdAt DateTime                @default(now())
+  /// The authoritative side, set only by the server from the session. Null on offers made before it was recorded.
+  side             CounterOfferSide?
+  acceptedByUserId String?
+  acceptedAt       DateTime?
   lines     QuoteCounterOfferLine[]
 
   @@index([quoteId])

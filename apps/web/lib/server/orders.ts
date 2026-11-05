@@ -1,7 +1,7 @@
 import { orderTotals, remainingAfterGiftCard } from './order-totals'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
-import { inventoryDb, orderDb } from './db'
+import { inventoryDb, orderDb, tenantDb } from './db'
 import { computeSalesTax } from './compliance-tax'
 import { getTenantSalesTaxRate } from './tenant-tax'
 import { checkCreditLimitForOrder, releaseCreditUsed } from './credit-limit'
@@ -58,7 +58,7 @@ export type CreateOrderInput = {
 }
 
 /** Largest quantity a single order line may carry; far above any real wholesale order. */
-const MAX_LINE_QUANTITY = 1_000_000
+export const MAX_LINE_QUANTITY = 1_000_000
 
 /**
  * Every order line must be a whole, positive quantity at a non-negative price. Without this a
@@ -102,6 +102,56 @@ async function dropShipSupplierBySku(tenantId: string, skuIds: string[], stockIn
   return bySku
 }
 
+/**
+ * The order for this quote already exists: another conversion committed it first (the database allows one order
+ * per quote per tenant). Carries that order's id so the caller links it instead of placing a second one.
+ */
+export class DuplicateSourceOrderError extends Error {
+  constructor(public readonly orderId: string) {
+    super('An order for this quote already exists')
+  }
+}
+
+/** True only for a unique violation on (tenantId, sourceQuoteId), never for the order-number index. */
+export function isSourceQuoteConflict(e: unknown): boolean {
+  if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') return false
+  const target = (e.meta as { target?: unknown } | undefined)?.target
+  const names = Array.isArray(target) ? target.map(String) : typeof target === 'string' ? [target] : []
+  return names.some((n) => n === 'sourceQuoteId' || n.includes('sourceQuoteId'))
+}
+
+/**
+ * Runs the single order insert. When it loses the race for a quote's one order (unique violation on
+ * (tenantId, sourceQuoteId)), the failed insert has already rolled back: the winning order is read afresh and reported
+ * as DuplicateSourceOrderError, before any side effect (discount, approval, pipeline, email) runs for the loser.
+ * Every other error, including a duplicate order number, is rethrown unchanged.
+ */
+async function insertOrderOnce<T>(tenantId: string, sourceQuoteId: string | undefined, insert: () => Promise<T>): Promise<T> {
+  try {
+    return await insert()
+  } catch (e) {
+    if (!sourceQuoteId || !isSourceQuoteConflict(e)) throw e
+    const winner = await findOrderBySourceQuote(tenantId, sourceQuoteId)
+    if (!winner) throw e
+    throw new DuplicateSourceOrderError(winner.id)
+  }
+}
+
+let orderFaultHook: ((point: 'after-insert', orderId: string) => void) | null = null
+
+/**
+ * Tests only: run `hook` right after an order row is committed, before anything else createOrder does (discount,
+ * approval request, pipeline). Throwing from it simulates a failure after the order exists. Does nothing in production.
+ */
+export function setOrderFaultForTests(hook: typeof orderFaultHook) {
+  orderFaultHook = hook
+}
+
+/** The order placed from a quote, if any. Tenant-scoped; read from the order database, the source of truth. */
+export async function findOrderBySourceQuote(tenantId: string, quoteId: string) {
+  return orderDb.order.findFirst({ where: { tenantId, sourceQuoteId: quoteId } })
+}
+
 export async function createOrder(
   tenantId: string,
   dto: CreateOrderInput,
@@ -112,6 +162,11 @@ export async function createOrder(
     skipPriceValidation?: boolean
     /** POS and van sales: the goods leave with the customer, so no line is drop-shipped. */
     stockInHand?: boolean
+    /**
+     * Server-only (quote conversion): the quote this order is placed from. Stored in the same insert as the order,
+     * where the unique (tenantId, sourceQuoteId) index lets only one order per quote commit. Never from a request body.
+     */
+    sourceQuoteId?: string
   },
 ) {
   assertValidOrderLines(dto.lineItems)
@@ -179,10 +234,11 @@ export async function createOrder(
   const needsCreditApproval = !creditCheck.ok && creditCheck.requiresApproval
 
   const orderNumber = await allocateOrderNumber(tenantId)
-  const order = await orderDb.order.create({
+  const order = await insertOrderOnce(tenantId, opts?.sourceQuoteId, () => orderDb.order.create({
     data: {
       tenantId,
       orderNumber,
+      ...(opts?.sourceQuoteId ? { sourceQuoteId: opts.sourceQuoteId } : {}),
       customerId,
       channel: channel as never,
       status: needsCreditApproval ? OrderStatus.AWAITING_APPROVAL : undefined,
@@ -206,7 +262,8 @@ export async function createOrder(
       },
     },
     include: { lineItems: true },
-  })
+  }))
+  orderFaultHook?.('after-insert', order.id)
 
   if (discountId && discountAmount > 0) {
     await discounts.redeemDiscount(tenantId, discountId, {
@@ -230,6 +287,17 @@ export async function createOrder(
     }
   }
 
+  if (needsCreditApproval && opts?.sourceQuoteId) {
+    // Quote orders can be resumed by a retry while this request is still running: one request per order, by id.
+    await ensureCreditApprovalRequest(tenantId, order.id, opts?.userId ?? 'system', {
+      customerId,
+      openBalance: creditCheck.openBalance,
+      newOrderTotal: creditCheck.orderTotal,
+      creditLimit: creditCheck.creditLimit,
+      projectedTotal: creditCheck.projectedTotal,
+    })
+    return order
+  }
   if (needsCreditApproval) {
     const existing = await findPendingApprovalForSubject(
       tenantId,
@@ -267,10 +335,195 @@ export async function createOrder(
         console.error(`[orders] fulfillment pipeline failed for order ${order.id}:`, err),
       )
     }
-    void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(swallowed('orders.channel'))
+    if (opts?.sourceQuoteId) {
+      // A recovery may send this same email concurrently (resumeOrderPlacement): at most one of them delivers.
+      void notifyTriggers.notifyOrderCreatedOnce(tenantId, order.id, customerId, totalAmount)
+    } else {
+      void notifyTriggers.notifyOrderCreated(tenantId, order.id, customerId, totalAmount).catch(swallowed('orders.channel'))
+    }
     void emitOrderEvent(tenantId, 'order.created', order.id, {}, { key: order.id })
   }
   return order
+}
+
+/** The one credit-override request a quote order can have. Chosen, not random, so concurrent creators collide. */
+export const creditApprovalIdFor = (orderId: string) => `credit-override:${orderId}`
+
+/**
+ * Makes sure the order has its credit-limit override request, creating it only if none was ever made for the
+ * order (pending, decided or cancelled alike: a decided request is never re-raised). Safe under concurrency:
+ * the id is fixed per order, so of two creators one insert wins and the other finds it.
+ */
+async function ensureCreditApprovalRequest(
+  tenantId: string,
+  orderId: string,
+  requestedBy: string,
+  context: Record<string, unknown>,
+): Promise<{ created: boolean; status: string }> {
+  const any = await tenantDb.approvalRequest.findFirst({
+    where: { tenantId, type: ApprovalType.CREDIT_LIMIT_OVERRIDE, subjectId: orderId },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (any) return { created: false, status: any.status }
+  try {
+    const row = await createApprovalRequest(tenantId, {
+      id: creditApprovalIdFor(orderId),
+      type: ApprovalType.CREDIT_LIMIT_OVERRIDE,
+      subjectId: orderId,
+      requestedBy,
+      context,
+    })
+    return { created: true, status: row.status }
+  } catch (e) {
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e
+    const winner = await tenantDb.approvalRequest.findFirst({ where: { id: creditApprovalIdFor(orderId), tenantId } })
+    if (!winner) throw e
+    return { created: false, status: winner.status }
+  }
+}
+
+/**
+ * Past this age a resume sends no order.created webhook or email: webhooks are deduplicated only while their
+ * delivery rows are kept (30 days), so stay well inside that.
+ */
+export const RESUME_NOTICE_MAX_AGE_MS = 7 * 24 * 3_600_000
+
+export type ResumeReport = {
+  orderId: string
+  /** Order status after the resume. */
+  status: string | null
+  creditApproval: 'not-needed' | 'created' | 'already-requested' | 'already-decided' | 'failed'
+  /** The fulfilment pipeline (reservations, drop-ship POs, warehouse task, confirmation, credit use). */
+  pipeline: 'not-needed' | 'already-complete' | 'completed' | 'already-running' | 'skipped' | 'failed'
+  /** The customer's "order created" email. Never resent once attempted. */
+  email: 'not-needed' | 'sent' | 'failed' | 'already-attempted' | 'not-applicable' | 'skipped'
+  /** order.created webhooks: queued once per subscription (deduplicated by order id). */
+  event: 'not-needed' | 'emitted' | 'skipped'
+  /** What could not be resumed safely, for an operator. Empty when everything is in place. */
+  limitations: string[]
+}
+
+/**
+ * Finishes what placing a quote order left undone when the request stopped after the order was saved (a crash,
+ * a lost connection, an error part-way through createOrder). Every step is either idempotent or guarded so it
+ * happens at most once, so this is safe to call any number of times, including while the original request is
+ * still running:
+ * - awaiting credit approval: the order's one override request is created if none was ever made;
+ * - otherwise the fulfilment pipeline is run if its saga is missing or unfinished (the saga claim keeps runs
+ *   apart; reservations and the warehouse task are only ever topped up, never duplicated), then the
+ *   order.created webhook (deduplicated per subscription) and the order-created email (at most once, never
+ *   resent once attempted) follow.
+ * Discounts and gift cards are never replayed: quote orders have neither, and any other order is refused.
+ * Never throws for a step that fails; the report says what happened and what was left for an operator.
+ */
+export async function resumeOrderPlacement(tenantId: string, orderId: string): Promise<ResumeReport> {
+  const report: ResumeReport = {
+    orderId,
+    status: null,
+    creditApproval: 'not-needed',
+    pipeline: 'not-needed',
+    email: 'not-needed',
+    event: 'not-needed',
+    limitations: [],
+  }
+  const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { saga: true } })
+  if (!order) {
+    report.limitations.push('Order not found for this tenant; nothing was resumed.')
+    return report
+  }
+  report.status = order.status
+  if (!order.sourceQuoteId) {
+    // Its inputs (discount and gift card codes) are not stored, so its side effects cannot be rebuilt safely.
+    report.limitations.push('Only orders placed from a quote can be resumed; this order was left unchanged.')
+    return report
+  }
+
+  if (order.status === OrderStatus.AWAITING_APPROVAL) {
+    try {
+      const credit = await checkCreditLimitForOrder(tenantId, order.customerId, Number(order.totalAmount), order.paymentMethod)
+      const context = credit.ok
+        ? { customerId: order.customerId, newOrderTotal: Number(order.totalAmount), resumed: true }
+        : {
+            customerId: order.customerId,
+            openBalance: credit.openBalance,
+            newOrderTotal: credit.orderTotal,
+            creditLimit: credit.creditLimit,
+            projectedTotal: credit.projectedTotal,
+            resumed: true,
+          }
+      const ensured = await ensureCreditApprovalRequest(tenantId, order.id, 'system', context)
+      if (ensured.created) report.creditApproval = 'created'
+      else if (ensured.status === 'PENDING') report.creditApproval = 'already-requested'
+      else {
+        report.creditApproval = 'already-decided'
+        // Applying a decision is the approval hook's job; replaying it here could run it twice.
+        report.limitations.push(
+          `The credit override was already ${ensured.status.toLowerCase()} but the order is still awaiting approval; ` +
+            'it was not re-applied and needs an operator.',
+        )
+      }
+    } catch (err) {
+      report.creditApproval = 'failed'
+      report.limitations.push(`Could not ensure the credit override request: ${errMessage(err)}`)
+    }
+    // Fulfilment, the webhook and the email wait for the decision (resumeOrderAfterCreditApproval).
+    return report
+  }
+
+  if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.FAILED) {
+    report.limitations.push(`The order is ${order.status.toLowerCase()}; nothing was resumed.`)
+    return report
+  }
+
+  if (defersFulfillmentUntilPayment(order.paymentMethod)) {
+    // Fulfilment for these starts from the payment, not from placement.
+    return report
+  }
+
+  const sagaStatus = order.saga?.status
+  if (sagaStatus === 'COMPLETED') report.pipeline = 'already-complete'
+  else if (sagaStatus === 'FAILED' || sagaStatus === 'COMPENSATING') {
+    report.pipeline = 'skipped'
+    report.limitations.push(`The fulfilment pipeline is ${sagaStatus.toLowerCase()}; it was not re-run.`)
+  } else {
+    try {
+      const outcome = await runOrderFulfillmentPipeline(order.id, tenantId, order.saga?.correlationId ?? randomUUID())
+      report.pipeline = outcome === 'COMPLETED' ? 'completed' : outcome === 'ALREADY_RUNNING' ? 'already-running' : 'skipped'
+    } catch (err) {
+      report.pipeline = 'failed'
+      report.limitations.push(`The fulfilment pipeline failed while resuming: ${errMessage(err)}`)
+    }
+  }
+
+  const now = await orderDb.order.findFirst({ where: { id: orderId, tenantId }, select: { status: true } })
+  report.status = now?.status ?? report.status
+  if (report.pipeline === 'failed') {
+    // Even if the failure's own clean-up could not mark the order FAILED: don't announce an order that didn't go ahead.
+    report.limitations.push('No order-created webhook or email was sent because fulfilment failed.')
+    return report
+  }
+  if (!now || now.status === OrderStatus.CANCELLED || now.status === OrderStatus.FAILED) {
+    report.limitations.push('The order did not go ahead; no order-created webhook or email was sent.')
+    return report
+  }
+
+  if (Date.now() - order.createdAt.getTime() > RESUME_NOTICE_MAX_AGE_MS) {
+    // Webhook dedupe rows are purged after 30 days, and a weeks-late "order created" email misleads the customer.
+    report.event = 'skipped'
+    report.email = 'skipped'
+    report.limitations.push(
+      'The order is too old to tell whether its order.created webhook and email went out; neither was sent.',
+    )
+    return report
+  }
+  await emitOrderEvent(tenantId, 'order.created', order.id, {}, { key: order.id })
+  report.event = 'emitted'
+  report.email = await notifyTriggers.notifyOrderCreatedOnce(tenantId, order.id, order.customerId, Number(order.totalAmount))
+  return report
+}
+
+function errMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err)
 }
 
 export async function listOrders(
@@ -504,12 +757,17 @@ export async function resumeOrderAfterCreditApproval(tenantId: string, orderId: 
 
   if (!defersFulfillmentUntilPayment(order.paymentMethod)) {
     await runOrderFulfillmentPipeline(orderId, tenantId, correlationId)
-    void notifyTriggers.notifyOrderCreated(
-      tenantId,
-      orderId,
-      order.customerId,
-      Number(order.totalAmount),
-    ).catch(swallowed('orders.resumeOrderAfterCreditApproval'))
+    if (order.sourceQuoteId) {
+      // Quote orders may also be resumed by resumeOrderPlacement: at most one of the two sends the email.
+      void notifyTriggers.notifyOrderCreatedOnce(tenantId, orderId, order.customerId, Number(order.totalAmount))
+    } else {
+      void notifyTriggers.notifyOrderCreated(
+        tenantId,
+        orderId,
+        order.customerId,
+        Number(order.totalAmount),
+      ).catch(swallowed('orders.resumeOrderAfterCreditApproval'))
+    }
     void emitOrderEvent(tenantId, 'order.created', orderId, {}, { key: orderId })
   }
   return orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { lineItems: true } })
