@@ -68,6 +68,41 @@ export async function send(tenantId: string, dto: SendNotificationInput, idempot
   return deliverRecord(tenantId, row.id, dto)
 }
 
+/**
+ * At most once per key, ever: only the caller whose insert creates the row delivers it. If any row for the key
+ * exists, whatever its status (PENDING may be mid-send, FAILED may have reached the provider before an error),
+ * nothing is sent and null is returned. `send` differs: it re-delivers a row that is not SENT.
+ */
+export async function sendOnce(tenantId: string, dto: SendNotificationInput, idempotencyKey: string) {
+  let row
+  try {
+    row = await notificationDb.notificationRequest.create({
+      data: {
+        tenantId,
+        idempotencyKey,
+        channel: dto.channel,
+        recipient: dto.recipient,
+        templateKey: dto.templateKey,
+        payload: (dto.payload ?? {}) as Prisma.InputJsonValue,
+        status: NotificationStatus.PENDING,
+      },
+    })
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return null
+    throw e
+  }
+  return deliverRecord(tenantId, row.id, dto)
+}
+
+/** Whether a notification with this key was ever recorded (sent, failed or in progress). */
+export async function wasAttempted(tenantId: string, idempotencyKey: string) {
+  const row = await notificationDb.notificationRequest.findUnique({
+    where: { tenantId_idempotencyKey: { tenantId, idempotencyKey } },
+    select: { id: true },
+  })
+  return row !== null
+}
+
 export function list(tenantId: string, filters?: { recipient?: string; status?: string; channel?: string; event?: string }) {
   const recipient = filters?.recipient?.trim()
   return notificationDb.notificationRequest.findMany({

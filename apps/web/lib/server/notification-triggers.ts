@@ -3,6 +3,7 @@ import * as crm from './crm'
 import * as notifications from './notifications'
 import { shouldSendCustomerNotification } from './customer-notification-prefs'
 import { orderNumberMap } from './order-number'
+import { formatMoney, fromFloat } from './money'
 
 import { swallowed } from './fire-and-forget'
 /** The order's number, so messages say ORD-1042 like every screen does (null for a not-yet-numbered order). */
@@ -46,6 +47,48 @@ export async function notifyOrderCreated(
       `order-created:${orderId}`,
     )
     .catch(swallowed('notification-triggers.notifyOrderCreated'))
+}
+
+export type OnceOutcome = 'sent' | 'failed' | 'already-attempted' | 'not-applicable'
+
+/** The idempotency key of an order's "order created" email; shared by every path that may send it. */
+export const orderCreatedEmailKey = (orderId: string) => `order-created:${orderId}`
+
+/**
+ * The "order created" email, at most once per order however many requests (an original placement, retries,
+ * recoveries) reach it, including concurrently: an existing record for the order, in any status, means it is never
+ * sent again (see notifications.sendOnce). Awaited, and reports what happened. Never throws.
+ */
+export async function notifyOrderCreatedOnce(
+  tenantId: string,
+  orderId: string,
+  customerId: string,
+  totalAmount: number,
+): Promise<OnceOutcome> {
+  try {
+    const key = orderCreatedEmailKey(orderId)
+    if (await notifications.wasAttempted(tenantId, key)) return 'already-attempted'
+    const contact = await customerContact(tenantId, customerId)
+    if (!contact.email) return 'not-applicable'
+    if (!(await shouldSendCustomerNotification(tenantId, customerId, 'order.created', NotificationChannel.EMAIL))) {
+      return 'not-applicable'
+    }
+    const row = await notifications.sendOnce(
+      tenantId,
+      {
+        channel: NotificationChannel.EMAIL,
+        recipient: contact.email,
+        templateKey: 'order.created',
+        payload: { orderId, orderNumber: await numberOf(tenantId, orderId), total: formatMoney(fromFloat(totalAmount)), customerName: contact.name },
+      },
+      key,
+    )
+    if (!row) return 'already-attempted'
+    return row.status === 'SENT' ? 'sent' : 'failed'
+  } catch (err) {
+    swallowed('notification-triggers.notifyOrderCreatedOnce')(err)
+    return 'failed'
+  }
 }
 
 /**

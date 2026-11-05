@@ -4,9 +4,8 @@ import { useQueryParams } from '@/lib/use-query-params'
 import { Suspense, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { clearCart, readCart } from '@/lib/b2b-cart'
-import { applyProduct, quoteLinesProblem, type QuoteLineDraft } from '@/lib/quote-lines'
-
-type SkuOption = { id: string; code: string; name: string; price: string | number }
+import { quoteLinesProblem, type QuoteLineDraft } from '@/lib/quote-lines'
+import { QuoteLinesEditor } from '@/components/quotes/quote-lines-editor'
 
 export default function NewQuotePage() {
   return (
@@ -32,33 +31,6 @@ function NewQuoteForm() {
   ])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  // Product search for the line being edited; picking one fills its SKU, name and price.
-  const [searchTerm, setSearchTerm] = useState('')
-  const [options, setOptions] = useState<SkuOption[]>([])
-
-  useEffect(() => {
-    const term = searchTerm.trim()
-    if (term.length < 2) {
-      setOptions([])
-      return
-    }
-    const t = setTimeout(() => {
-      void api
-        .get<{ items?: SkuOption[] }>(`/skus?search=${encodeURIComponent(term)}&pageSize=20`)
-        .then((res) => setOptions(res.items ?? []))
-        .catch(() => setOptions([])) // swallow-ok: search suggestions only; a typed SKU is still checked on save
-    }, 250)
-    return () => clearTimeout(t)
-  }, [searchTerm])
-
-  const setSku = (idx: number, value: string) => {
-    const next = [...lines]
-    const match = options.find((o) => o.code === value.trim())
-    next[idx] = match ? applyProduct(lines[idx], match) : { ...lines[idx], skuCode: value }
-    setLines(next)
-    setSearchTerm(value)
-  }
-
   useEffect(() => {
     void api
       .get<{ customerId: string | null; customerName: string | null }>('/auth/me')
@@ -139,89 +111,9 @@ function NewQuoteForm() {
         Notes
         <textarea rows={3} className="pleros-shop-field" style={{ resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </label>
-      <datalist id="quote-sku-options">
-        {options.map((o) => (
-          <option key={o.id} value={o.code}>
-            {o.name}
-          </option>
-        ))}
-      </datalist>
       <div style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: 15, color: 'var(--c-heading)' }}>Lines</h2>
-        {lines.map((l, idx) => (
-          <div key={l.lineNo} className="pleros-shop-line-card">
-            <span className="pleros-shop-muted" style={{ fontSize: 12 }}>
-              Line #{l.lineNo}
-              <button
-                type="button"
-                style={{ marginLeft: 12, color: 'var(--c-danger)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}
-                onClick={() => setLines(lines.filter((_, i) => i !== idx).map((x, i) => ({ ...x, lineNo: i + 1 })))}
-                disabled={lines.length <= 1}
-              >
-                Remove
-              </button>
-            </span>
-            <input
-              placeholder="Product: search by name or SKU (required)"
-              aria-label={`Line ${l.lineNo} product`}
-              required
-              list="quote-sku-options"
-              className="pleros-shop-field pleros-shop-field--mono"
-              style={{ marginTop: 0, padding: 8 }}
-              value={l.skuCode}
-              onFocus={() => setSearchTerm(l.skuCode)}
-              onChange={(e) => setSku(idx, e.target.value)}
-            />
-            <input
-              placeholder="Description"
-              className="pleros-shop-field"
-              style={{ marginTop: 0, padding: 8 }}
-              value={l.description}
-              onChange={(e) => {
-                const next = [...lines]
-                next[idx] = { ...l, description: e.target.value }
-                setLines(next)
-              }}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="number"
-                min={1}
-                placeholder="Qty"
-                className="pleros-shop-field"
-                style={{ flex: 1, marginTop: 0, padding: 8 }}
-                value={l.qty}
-                onChange={(e) => {
-                  const next = [...lines]
-                  next[idx] = { ...l, qty: e.target.value }
-                  setLines(next)
-                }}
-              />
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Unit price"
-                className="pleros-shop-field"
-                style={{ flex: 1, marginTop: 0, padding: 8 }}
-                value={l.unitPrice}
-                onChange={(e) => {
-                  const next = [...lines]
-                  next[idx] = { ...l, unitPrice: e.target.value }
-                  setLines(next)
-                }}
-              />
-            </div>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="pleros-shop-btn-dashed"
-          onClick={() =>
-            setLines([...lines, { lineNo: lines.length + 1, skuCode: '', description: '', qty: '1', unitPrice: '0' }])
-          }
-        >
-          + Line
-        </button>
+        <QuoteLinesEditor lines={lines} onChange={setLines} />
       </div>
       <button type="button" disabled={busy} onClick={() => void submit()} className="btn-primary" style={{ marginTop: 28 }}>
         {busy ? 'Creating…' : 'Create draft quote'}

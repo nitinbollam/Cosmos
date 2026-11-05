@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { StatusBadge } from '@/components/status-badge'
+import { quoteActions } from '@/lib/buyer-quote'
 
 type Quote = {
   id: string
@@ -11,6 +12,10 @@ type Quote = {
   customerName?: string
   notes?: string | null
   createdAt?: string
+  convertedOrderId?: string | null
+  /** From the server: this buyer may edit / withdraw this quote (their own, still changeable). */
+  canEdit?: boolean
+  canWithdraw?: boolean
 }
 
 export default function QuotesPage() {
@@ -79,8 +84,28 @@ export default function QuotesPage() {
                 </p>
               ) : null}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <StatusBadge status={q.status} />
+              {quoteActions(q).edit ? (
+                <Link
+                  to={`/quotes/${q.id}?action=edit`}
+                  className="pleros-shop-link-accent"
+                  style={{ fontSize: 13 }}
+                  aria-label={`Edit ${q.quoteNumber || 'quote'}`}
+                >
+                  Edit
+                </Link>
+              ) : null}
+              {quoteActions(q).withdraw ? (
+                <Link
+                  to={`/quotes/${q.id}?action=withdraw`}
+                  className="pleros-shop-link-accent"
+                  style={{ fontSize: 13 }}
+                  aria-label={`Withdraw ${q.quoteNumber || 'quote'}`}
+                >
+                  Withdraw
+                </Link>
+              ) : null}
               <Link to={`/quotes/${q.id}`} className="pleros-shop-link-accent" style={{ fontSize: 13 }}>
                 View →
               </Link>
