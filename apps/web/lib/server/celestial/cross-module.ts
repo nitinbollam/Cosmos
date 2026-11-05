@@ -89,7 +89,8 @@ export function readBudget(env: Env = process.env, now: () => number = Date.now)
 type Edge = {
   tools: CelestialToolName[]
   get: (c: DetectedIntent) => string | undefined
-  set: (c: DetectedIntent, from: DetectedIntent) => DetectedIntent
+  /** `later` is true when the name was given in an earlier part of the question. */
+  set: (c: DetectedIntent, from: DetectedIntent, later: boolean) => DetectedIntent
 }
 
 /** Lookups that describe the same supplier, customer or product, and the field that links them. */
@@ -102,7 +103,7 @@ const EDGES: Edge[] = [
   {
     tools: ['orders.list', 'list_my_invoices', 'quotes.list'],
     get: (c) => c.customer,
-    set: (c, from) => ({ ...c, customer: from.customer }),
+    set: (c, from, later) => ({ ...c, customer: from.customer, ...(later ? { customerCarried: true } : {}) }),
   },
   {
     tools: ['inventory.stock', 'search_catalog', 'sales.by_product'],
@@ -128,7 +129,8 @@ export function linkCalls(calls: DetectedIntent[]): DetectedIntent[] {
       const named = [...new Set(members.map(edge.get).filter((v): v is string => Boolean(v)))]
       if (named.length !== 1) continue
       const source = members.find((c) => edge.get(c) === named[0])!
-      linked = linked.map((c) => (members.includes(c) && !edge.get(c) ? edge.set(c, source) : c))
+      const current = linked
+      linked = current.map((c) => (members.includes(c) && !edge.get(c) ? edge.set(c, source, current.indexOf(c) > current.indexOf(source)) : c))
     }
   }
   const seen = new Set<string>()
@@ -138,6 +140,23 @@ export function linkCalls(calls: DetectedIntent[]): DetectedIntent[] {
     seen.add(k)
     return true
   })
+}
+
+/**
+ * "Orders for Zorblax and open quotes": when the customer doesn't exist, the quotes are not narrowed
+ * to a name that can only come back empty. The lookup that named the customer still reports it.
+ * A name given last ("orders and quotes for Zorblax") covers every part and stays on them all.
+ */
+export async function settleCarriedCustomers(
+  calls: DetectedIntent[],
+  customerExists: (name: string) => Promise<boolean>,
+): Promise<DetectedIntent[]> {
+  if (!calls.some((c) => c.customerCarried)) return calls
+  return Promise.all(
+    calls.map(async ({ customerCarried, ...call }) =>
+      customerCarried && call.customer && !(await customerExists(call.customer)) ? { ...call, customer: undefined } : call,
+    ),
+  )
 }
 
 // ── Deterministic comparisons ───────────────────────────────────────────────
@@ -353,6 +372,8 @@ function compareCustomer(lookups: Lookup[]): string | null {
   const customer = related[0]?.call.customer
   const same = related.filter((l) => l.call.customer === customer)
   if (!customer || new Set(same.map((l) => l.result.name)).size < 2) return null
+  // Nothing to compare (for example no such customer); the lookups' own notices say why.
+  if (!same.some((l) => answered(l.result))) return null
   const lines = [`### ${customer} at a glance`, '']
   for (const l of same) {
     if (!answered(l.result)) {

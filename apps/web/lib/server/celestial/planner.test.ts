@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import type { SessionUser } from '../session'
-import { allowedPlannerTools, buildPlannerMessages, clarifyReply, describeLookup, parsePlan, planQuestion, routingDoubt, unsupportedReply } from './planner'
+import { allowedPlannerTools, buildPlannerMessages, clarifyReply, describeLookup, parsePlan, plannerTimeoutMs, planQuestion, routingDoubt, unsupportedReply } from './planner'
 import { detectIntent } from './intent'
 import { resetProviderCooldowns } from './llm'
 
@@ -166,4 +166,29 @@ test('the router can filter requisitions and read a period as a due date', () =>
   assert.equal(plan.calls[1].byDueDate, true)
   assert.equal(plan.calls[2].requisitionRef, 'PR-7')
   assert.equal(parsePlan('{"type":"tools","calls":[{"tool":"purchasing.requisition_detail","params":{}}]}', ALL, now), null)
+})
+
+test('the router still answers through the fallback when the primary is rate-limited', async () => {
+  resetProviderCooldowns()
+  const calls: string[] = []
+  const fetchFn = (async (url: unknown) => {
+    calls.push(String(url))
+    if (String(url).includes('groq')) return new Response('{}', { status: 429 })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"type":"knowledge"}' } }] }), { status: 200 })
+  }) as typeof fetch
+  const plan = await planQuestion('anything?', ADMIN, { env: { ...ENV, OLLAMA_API_KEY: 'o' }, fetch: fetchFn })
+  assert.equal(plan?.type, 'knowledge')
+  assert.equal(calls.length, 2)
+  resetProviderCooldowns()
+})
+
+test('the router allows long enough for the fallback provider', () => {
+  assert.ok(plannerTimeoutMs({}) >= 10_000)
+  assert.equal(plannerTimeoutMs({ CELESTIAL_PLANNER_TIMEOUT_MS: '500' }), 500)
+})
+
+test('the router can ask for a customer ranking by units', () => {
+  const plan = parsePlan('{"type":"tool","tool":"sales.by_customer","params":{"byUnits":true}}', ALL)
+  assert.equal(plan?.type === 'tools' && plan.calls[0].byUnits, true)
 })

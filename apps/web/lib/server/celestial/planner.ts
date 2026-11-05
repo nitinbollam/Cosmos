@@ -27,7 +27,8 @@ import { completeChat, type ChatMessage, type LlmOptions } from './llm'
 import { withDeadline } from './record-summary'
 import { canUseTool } from './tools'
 
-const DEFAULT_PLANNER_TIMEOUT_MS = 4_000
+/** Long enough for the fallback provider to answer when the primary is rate-limited. */
+const DEFAULT_PLANNER_TIMEOUT_MS = 12_000
 
 type Env = Record<string, string | undefined>
 
@@ -73,8 +74,8 @@ const CATALOG: Partial<Record<CelestialToolName, { does: string; fields: string 
   'quotes.detail': { does: 'one quote', fields: 'quoteRef (the part after Q-)' },
   'sales.summary': { does: 'sales revenue, order count and average order value for a period', fields: 'period' },
   'sales.by_customer': {
-    does: 'rank customers by revenue (best / biggest customers)',
-    fields: 'salesRank (desc=best|asc=smallest), period, limit (1 for "the best customer")',
+    does: 'rank customers by revenue (best / biggest customers), or by units bought',
+    fields: 'salesRank (desc=best|asc=smallest), byUnits (true when ranking by stock or units bought, not money), period, limit (1 for "the best customer")',
   },
   'purchasing.suppliers': { does: 'list suppliers with contact details, POs and what we owe them', fields: 'none' },
   'inventory.by_warehouse': {
@@ -203,6 +204,7 @@ function parseCall(raw: unknown, allowed: CelestialToolName[], now: Date): Detec
   intent.sort = direction(p.sort)
   intent.stockRank = direction(p.stockRank)
   intent.salesRank = direction(p.salesRank)
+  if (p.byUnits === true) intent.byUnits = true
   const limit = Number(p.limit)
   if (Number.isInteger(limit) && limit >= 1 && limit <= 10) intent.limit = limit
   intent.supplier = shortText(p.supplier)

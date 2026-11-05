@@ -1131,14 +1131,17 @@ export async function resolveCustomerIds(tenantId: string, name: string): Promis
   return rows.map((r) => r.id)
 }
 
-export type CustomerSalesRow = { customerId: string; name: string; orders: number; revenue: number }
+export type CustomerSalesRow = { customerId: string; name: string; orders: number; revenue: number; units?: number }
 
-/** Customers ranked by order revenue (non-cancelled orders) over the period. */
+/**
+ * Customers ranked by order revenue (non-cancelled orders) over the period, or by units bought
+ * (net of returned units) when `byUnits` is set.
+ */
 export async function salesByCustomer(
   tenantId: string,
-  f: { dateRange?: DateRange; rank?: SortDirection },
+  f: { dateRange?: DateRange; rank?: SortDirection; byUnits?: boolean },
   now = new Date(),
-): Promise<{ label: string; rank: SortDirection; rows: CustomerSalesRow[]; ranked: number; truncated: boolean; excludedStatuses: string[] }> {
+): Promise<{ label: string; rank: SortDirection; byUnits: boolean; rows: CustomerSalesRow[]; ranked: number; truncated: boolean; excludedStatuses: string[] }> {
   const rank = f.rank ?? 'desc'
   const current = quarterOf(now)
   const from = f.dateRange?.from ?? quarterRange(shiftQuarter(current, -4)).from
@@ -1155,17 +1158,37 @@ export async function salesByCustomer(
     cur.revenue = roundMoney(cur.revenue + num(o.totalAmount))
     byCustomer.set(o.customerId, cur)
   }
+  const lines = f.byUnits
+    ? await orderDb.orderLineItem.findMany({
+        where: { order: { tenantId, status: { notIn: SALES_EXCLUDED_STATUSES }, createdAt: { gte: from, lt: to } } },
+        select: { quantity: true, returnedQty: true, order: { select: { customerId: true } } },
+        take: SALES_ORDER_CAP + 1,
+      })
+    : []
+  const unitsByCustomer = new Map<string, number>()
+  for (const l of lines.slice(0, SALES_ORDER_CAP)) {
+    unitsByCustomer.set(l.order.customerId, (unitsByCustomer.get(l.order.customerId) ?? 0) + Math.max(0, l.quantity - l.returnedQty))
+  }
   const names = await customerNames(tenantId, [...byCustomer.keys()])
   const dir = rank === 'asc' ? 1 : -1
   const rows = [...byCustomer.entries()]
-    .map(([customerId, v]) => ({ customerId, name: names.get(customerId) ?? customerId, ...v }))
-    .sort((a, b) => dir * (a.revenue - b.revenue) || dir * (a.orders - b.orders) || a.name.localeCompare(b.name))
+    .map(([customerId, v]) => ({
+      customerId,
+      name: names.get(customerId) ?? customerId,
+      ...v,
+      ...(f.byUnits ? { units: unitsByCustomer.get(customerId) ?? 0 } : {}),
+    }))
+    .sort(
+      (a, b) =>
+        dir * ((a.units ?? 0) - (b.units ?? 0)) || dir * (a.revenue - b.revenue) || dir * (a.orders - b.orders) || a.name.localeCompare(b.name),
+    )
   return {
     label: f.dateRange?.label ?? 'last 4 quarters and this quarter so far',
     rank,
+    byUnits: Boolean(f.byUnits),
     rows: rows.slice(0, SALES_RANK_SHOWN),
     ranked: rows.length,
-    truncated: orders.length > SALES_ORDER_CAP,
+    truncated: orders.length > SALES_ORDER_CAP || lines.length > SALES_ORDER_CAP,
     excludedStatuses: SALES_EXCLUDED_STATUSES,
   }
 }

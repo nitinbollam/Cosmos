@@ -392,3 +392,14 @@ test('several order statuses are all kept', () => {
   assert.equal(detectIntent('orders waiting for approval', false).orderStatus, 'AWAITING_APPROVAL')
   assert.equal(detectIntent('show pending orders', false).orderStatus, 'PENDING')
 })
+
+test('customer rankings about stock or units rank by units and are not read as two topics', () => {
+  for (const q of ['which customer orders the most stock?', 'who bought the most units?', 'which customer buys the most products?']) {
+    const i = detectIntent(q, false)
+    assert.deepEqual(i.tools, ['sales.by_customer'], q)
+    assert.equal(i.byUnits, true, q)
+  }
+  assert.deepEqual(uncoveredTopics('which customer orders the most stock?', ['sales.by_customer']), [])
+  assert.equal(detectIntent('who is our best customer?', false).byUnits, undefined)
+  assert.equal(detectIntent('which customer spent the most?', false).byUnits, undefined)
+})

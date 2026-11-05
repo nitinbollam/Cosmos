@@ -63,7 +63,8 @@ export function composeFromToolResults(toolResults: ToolResult[]): string {
     return ''
   }
 
-  return sections.join('\n\n')
+  // Two lookups can give the same notice ("couldn't find a customer named…"); say it once.
+  return [...new Set(sections)].join('\n\n')
 }
 
 /**
@@ -700,6 +701,8 @@ type CatalogData = Page<CatalogRow> & { search?: string; priceRank?: 'asc' | 'de
 type CustomerSalesData = {
   label: string
   rank: 'asc' | 'desc'
+  byUnits?: boolean
+  truncated?: boolean
   rows: CustomerSalesRow[]
   ranked: number
   excludedStatuses: string[]
@@ -710,6 +713,27 @@ type WarehouseStockData = { rows: WarehouseStockRow[]; units: string[]; rank: 'a
 function formatCustomerSales(d: CustomerSalesData): string {
   if (d.rows.length === 0) return `**Customers by sales — ${d.label}:** no sales in this period.`
   const basis = `*Revenue = order totals, excluding ${d.excludedStatuses.map((x) => x.toLowerCase()).join(', ')} orders. Orders store no currency.*`
+  if (d.byUnits) {
+    const unitBasis = `*Units = quantity ordered minus returns, added up across all products whatever their unit of measure.${d.truncated ? ' Partial: too many order lines to total.' : ''}* ${basis}`
+    if (d.limit === 1) {
+      const r = d.rows[0]
+      return [
+        `**${d.rank === 'asc' ? 'Customer buying the fewest units' : 'Customer buying the most units'} — ${d.label}:** **${r.name}** — ${r.units ?? 0} units across ${r.orders} order(s), ${money(r.revenue)} in revenue.`,
+        '',
+        `*${d.rank === 'asc' ? 'Lowest' : 'Highest'} of ${d.ranked} customer(s) with orders.* ${unitBasis}`,
+      ].join('\n')
+    }
+    return [
+      `### Customers by units bought, ${d.rank === 'asc' ? 'lowest' : 'highest'} first — ${d.label}`,
+      `Showing ${d.rows.length} of ${d.ranked} customer(s).`,
+      '',
+      '| # | Customer | Units | Orders | Revenue |',
+      '| :--- | :--- | :--- | :--- | :--- |',
+      ...d.rows.map((r, i) => `| ${i + 1} | ${r.name} | ${r.units ?? 0} | ${r.orders} | ${money(r.revenue)} |`),
+      '',
+      unitBasis,
+    ].join('\n')
+  }
   if (d.limit === 1) {
     const r = d.rows[0]
     return [

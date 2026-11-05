@@ -81,6 +81,10 @@ export type ToolParams = {
   stockRank?: SortDirection
   /** Rank products by sales ("best selling" → desc). */
   salesRank?: SortDirection
+  /** Rank customers by units bought instead of revenue ("which customer orders the most stock"). */
+  byUnits?: boolean
+  /** The customer name came from an earlier part of the question; dropped if no such customer exists. */
+  customerCarried?: boolean
   /** Ranked results wanted: 1 for "which product has the most…", N for "top N". */
   limit?: number
   /** Any of these order statuses ("waiting to ship" = every not-yet-shipped status). */
@@ -230,6 +234,8 @@ function supplierAfterOwe(message: string): string | undefined {
 }
 
 const REQUISITION_WORDS = /\b(requisitions?|purchase requests?)\b/i
+/** A customer ranking about how much they buy, not how much they spend. */
+const UNITS_WORDS = /\b(stock|inventory|units?|pieces?|quantity|quantities|volume|items?|products?)\b/
 /** "Converted to a PO" describes a requisition; it is not a request for POs or orders as well. */
 const CONVERSION_PHRASE = /\b(converted|turned|became|become)\s+(in)?(to\s+)?(an?\s+)?(POs?|purchase orders?|orders?)\b/gi
 
@@ -248,7 +254,7 @@ export function detectIntent(rawMessage: string, isBuyer: boolean, context?: { o
   // Questions with their own answer shape, checked before the generic keyword groups.
   const customerRank =
     !isBuyer &&
-    /\b(best|top|biggest|largest|most valuable|worst|smallest)\s+(\d+\s+)?(customers?|clients?|buyers?|accounts?)\b|\bwho (orders|buys|spends|purchases) (the )?most\b|\b(customers?|clients?) (who|that) (orders?|buys?|spends?) (the )?most\b|\bwhich (customers?|clients?) (orders?|buys?|spends?|purchases?) (the )?(most|least)\b/.test(lower)
+    /\b(best|top|biggest|largest|most valuable|worst|smallest)\s+(\d+\s+)?(customers?|clients?|buyers?|accounts?)\b|\bwho (orders|ordered|buys|bought|spends|spent|purchases|purchased) (the )?most\b|\b(customers?|clients?) (who|that) (orders?|ordered|buys?|bought|spends?|spent) (the )?most\b|\bwhich (customers?|clients?) (orders?|ordered|buys?|bought|spends?|spent|purchases?|purchased) (the )?(most|least)\b/.test(lower)
   const averageOrder = /\b(average order (value|size|amount)|aov|avg\.? order)\b/.test(lower)
   const quoteConversion = /\b(quotes?|quotations?)\b/.test(lower) && /\bconvert/.test(lower)
   const warehouseRank =
@@ -264,6 +270,7 @@ export function detectIntent(rawMessage: string, isBuyer: boolean, context?: { o
   if (customerRank) {
     tools.add('sales.by_customer')
     out.salesRank = salesRankOf(message)
+    if (UNITS_WORDS.test(lower)) out.byUnits = true
     out.limit = answerLimit(message.replace(/\bcustomers\b/gi, 'customer')) ?? (/\bcustomers\b/.test(lower) ? undefined : 1)
   }
   if (averageOrder && !isBuyer) tools.add('sales.summary')
@@ -579,6 +586,8 @@ export function uncoveredTopics(message: string, tools: readonly string[]): stri
     .toLowerCase()
     .replace(/\b(converted|became|become|turned)\b.*\borders?\b/g, ' ')
     .replace(/\bon order\b/g, ' ')
+    // "Orders the most stock" is one customer ranking, not a question about orders and stock.
+    .replace(/\b(orders?|ordered|buys?|bought|purchases?|purchased) (the )?(most|least) (stock|inventory)\b/g, ' ')
     .replace(/\bsales orders?\b/g, 'orders')
     .replace(/\bsales (reps?|tax(es)?|channels?)\b/g, ' ')
   const salesOrderText = text.replace(/\b(purchase|supplier) orders?\b/g, ' ')

@@ -378,7 +378,7 @@ async function runTool(name: CelestialToolName, ctx: ToolContext): Promise<ToolR
       }
     }
     case 'sales.by_customer': {
-      const ranking = await erp.salesByCustomer(tenantId, { dateRange: ctx.dateRange, rank: ctx.salesRank })
+      const ranking = await erp.salesByCustomer(tenantId, { dateRange: ctx.dateRange, rank: ctx.salesRank, byUnits: ctx.byUnits })
       const rows = ctx.limit ? ranking.rows.slice(0, ctx.limit) : ranking.rows
       return {
         name,

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analyzeLookups, linkCalls, readBudget } from './cross-module'
+import { analyzeLookups, linkCalls, readBudget, settleCarriedCustomers } from './cross-module'
 import type { DetectedIntent } from './intent'
 import type { ToolResult } from './tools'
 import { parsePlan, routingDoubt, MAX_PLANNED_CALLS, allowedPlannerTools } from './planner'
@@ -210,4 +210,39 @@ test('unrelated or single lookups get no comparison', () => {
     ),
     null,
   )
+})
+
+test('a customer that does not exist is not carried on to a later part of the question', async () => {
+  const linked = linkCalls([
+    { tools: ['orders.list'], customer: 'Zorblax' },
+    { tools: ['quotes.list'], quoteStatus: 'SENT' as DetectedIntent['quoteStatus'] },
+  ])
+  assert.equal(linked[1].customer, 'Zorblax')
+  assert.equal(linked[1].customerCarried, true)
+
+  const unknown = await settleCarriedCustomers(linked, async () => false)
+  assert.equal(unknown[0].customer, 'Zorblax', 'the part that named it still reports it')
+  assert.equal(unknown[1].customer, undefined)
+  assert.equal(unknown[1].customerCarried, undefined)
+
+  const known = await settleCarriedCustomers(linked, async () => true)
+  assert.equal(known[1].customer, 'Zorblax')
+  assert.equal(known[1].customerCarried, undefined, 'the marker is not stored with the lookup')
+})
+
+test('a customer named last covers every part, even when it does not exist', async () => {
+  const linked = linkCalls([{ tools: ['orders.list'] }, { tools: ['quotes.list'], customer: 'Zorblax' }])
+  assert.equal(linked[0].customerCarried, undefined)
+  const settled = await settleCarriedCustomers(linked, async () => false)
+  assert.deepEqual(settled.map((c) => c.customer), ['Zorblax', 'Zorblax'])
+})
+
+test('no "at a glance" section when none of the customer lookups were answered', () => {
+  const notice = 'I couldn\u2019t find a customer named \u201cZorblax\u201d.'
+  const failed = (name: ToolResult['name']): ToolResult => ({ name, data: null, links: [], notice })
+  const calls: DetectedIntent[] = [
+    { tools: ['orders.list'], customer: 'Zorblax' },
+    { tools: ['quotes.list'], customer: 'Zorblax' },
+  ]
+  assert.equal(analyzeLookups(calls, [[failed('orders.list')], [failed('quotes.list')]]), null)
 })
