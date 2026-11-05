@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Card, CardTitle } from '@pleros/ui'
 import { api } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
@@ -60,6 +60,7 @@ export default function FulfillmentTaskDetailPage() {
   const taskId = decodeURIComponent(params?.taskId ?? '')
   const qc = useQueryClient()
   const [assignPick, setAssignPick] = useState('')
+  const ids = useId()
 
   const task = useQuery<TaskDetail>({
     queryKey: ['wms', 'task', taskId],
@@ -142,6 +143,9 @@ export default function FulfillmentTaskDetailPage() {
     t.pickItems.length > 0 &&
     t.pickItems.every((p) => p.status === 'PICKED' || p.status === 'SHORT')
   const canPick = t && !['CANCELLED', 'PACKED', 'DISPATCHED'].includes(t.status)
+  // Why Pack or Dispatch can't be used yet, said on the page rather than only in a tooltip.
+  const packHint = t && !packingReady && ['PENDING', 'PICKING'].includes(t.status)
+  const dispatchHint = t && ['PENDING', 'PICKING'].includes(t.status)
 
   return (
     <div className="p-6 space-y-4">
@@ -181,9 +185,12 @@ export default function FulfillmentTaskDetailPage() {
             </div>
 
             <div className="mt-4 pt-4 border-t border-pleros-border">
-              <p className="text-xs text-pleros-muted mb-2">Assign picker (optional)</p>
+              <label htmlFor={`${ids}-picker`} className="block text-xs text-pleros-muted mb-2">
+                Assign picker (optional)
+              </label>
               <div className="flex flex-wrap gap-2 items-center max-w-xl">
                 <select
+                  id={`${ids}-picker`}
                   className="flex-1 min-w-[200px] rounded-md bg-pleros-surface-2 border border-pleros-border px-3 py-2 text-sm text-pleros-text"
                   value={assignPick}
                   onChange={(e) => setAssignPick(e.target.value)}
@@ -240,11 +247,7 @@ export default function FulfillmentTaskDetailPage() {
               <button
                 type="button"
                 disabled={packReq.isPending || t.status === 'PACKED' || t.status === 'DISPATCHED'}
-                title={
-                  packingReady
-                    ? 'Mark PACKED'
-                    : 'Every line must be PICKED or SHORT (update picks via mobile / sync first)'
-                }
+                aria-describedby={packHint ? `${ids}-pack-hint` : undefined}
                 onClick={() => void packReq.mutateAsync()}
                 className="h-9 px-3 rounded-md text-xs font-semibold disabled:opacity-40"
                 style={{
@@ -258,7 +261,7 @@ export default function FulfillmentTaskDetailPage() {
               <button
                 type="button"
                 disabled={dispatchReq.isPending || t.status !== 'PACKED'}
-                title="Requires PACKED"
+                aria-describedby={dispatchHint ? `${ids}-dispatch-hint` : undefined}
                 onClick={() => void dispatchReq.mutateAsync()}
                 className="h-9 px-3 rounded-md text-xs font-semibold disabled:opacity-40"
                 style={{
@@ -277,9 +280,14 @@ export default function FulfillmentTaskDetailPage() {
             {pickAllMut.error ? (
               <p className="text-xs text-red-400 mt-2">{errMsg(pickAllMut.error)}</p>
             ) : null}
-            {!packingReady && ['PENDING', 'PICKING'].includes(t.status) ? (
-              <p className="text-xs mt-2" style={{ color: 'var(--c-warning)' }}>
+            {packHint ? (
+              <p id={`${ids}-pack-hint`} className="text-xs mt-2" style={{ color: 'var(--c-warning)' }}>
                 Confirm picks on each line (or use Pick all / mobile warehouse) before packing.
+              </p>
+            ) : null}
+            {dispatchHint ? (
+              <p id={`${ids}-dispatch-hint`} className="text-xs mt-1 text-pleros-muted">
+                Dispatch becomes available once the task is packed.
               </p>
             ) : null}
           </Card>

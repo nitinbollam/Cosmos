@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useQueryParams } from '@/lib/use-query-params'
+import { useSettingsAccess } from '@/components/settings/permission-gate'
 import { api } from '@/lib/api-admin'
 import { TenantMe, errMsg } from '../types'
 
@@ -30,6 +31,7 @@ type BillingStatus = {
 
 export function BillingTab() {
   const qc = useQueryClient()
+  const { allowed: canWrite, reason: readOnlyReason } = useSettingsAccess('billing')
   const searchParams = useQueryParams()
   const checkoutResult = searchParams.get('checkout')
 
@@ -83,7 +85,8 @@ export function BillingTab() {
           <button
             type="button"
             className="btn-ghost !text-sm"
-            disabled={portalMut.isPending}
+            disabled={!canWrite || portalMut.isPending}
+            title={readOnlyReason ?? undefined}
             onClick={() => portalMut.mutate()}
           >
             {portalMut.isPending ? 'Opening…' : 'Manage subscription'}
@@ -125,7 +128,7 @@ export function BillingTab() {
               <button
                 type="button"
                 className="btn-primary mt-4 w-full"
-                disabled={isCurrent || upgradeMut.isPending || paidUnavailable || (stripeOn && p.id === 'STARTER')}
+                disabled={!canWrite || isCurrent || upgradeMut.isPending || paidUnavailable || (stripeOn && p.id === 'STARTER')}
                 onClick={() => upgradeMut.mutate(p.id)}
               >
                 {isCurrent

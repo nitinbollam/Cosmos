@@ -50,6 +50,7 @@
     "test:e2e:install": "playwright install chromium"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
     "@playwright/test": "^1.55.0",
     "@types/node": "^20.14.10",
     "prettier": "^3.3.3",

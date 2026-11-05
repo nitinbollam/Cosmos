@@ -147,7 +147,7 @@ export default function ApprovalsPage() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <select className="pleros-input !w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+        <select aria-label="Approval type" className="pleros-input !w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
           <option value="PURCHASE_REQUISITION">Purchase requisitions</option>
           <option value="PURCHASE_ORDER">Purchase orders</option>
@@ -156,7 +156,7 @@ export default function ApprovalsPage() {
           <option value="EXPENSE_REPORT">Expense reports</option>
           <option value="CYCLE_COUNT">Cycle counts</option>
         </select>
-        <select className="pleros-input !w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select aria-label="Approval status" className="pleros-input !w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="PENDING">Pending</option>
           <option value="APPROVED">Approved</option>
           <option value="REJECTED">Rejected</option>
@@ -317,6 +317,7 @@ export default function ApprovalsPage() {
                             <input
                               className="pleros-input w-full"
                               placeholder="Reject reason (required)"
+                              aria-label="Reject reason (required)"
                               value={rejectReason}
                               onChange={(e) => setRejectReason(e.target.value)}
                             />

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, formatApiReachabilityError } from '@/lib/api-admin'
 import { adminPath } from '@/lib/admin-path'
@@ -90,6 +90,7 @@ type DemandPlanRow = {
 }
 
 export default function InventoryPage() {
+  const ids = useId()
   const qc = useQueryClient()
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -443,9 +444,15 @@ export default function InventoryPage() {
 
       <div className="pleros-card flex flex-wrap gap-4 items-end">
         <div className="min-w-[200px] flex-1">
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Search</label>
+          <label
+            htmlFor={`${ids}-search`}
+            className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3"
+          >
+            Search
+          </label>
           <div className="flex items-center gap-2">
             <input
+              id={`${ids}-search`}
               className="pleros-input flex-1"
               placeholder="Code or name"
               value={searchInput}
@@ -504,8 +511,18 @@ export default function InventoryPage() {
           </div>
         )}
         <div>
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Category</label>
-          <select className="pleros-input w-[200px]" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <label
+            htmlFor={`${ids}-category`}
+            className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3"
+          >
+            Category
+          </label>
+          <select
+            id={`${ids}-category`}
+            className="pleros-input w-[200px]"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
             <option value="">All</option>
             {(categoriesQ.data ?? []).map((c) => (
               <option key={c} value={c}>
@@ -515,8 +532,18 @@ export default function InventoryPage() {
           </select>
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3">Warehouse</label>
-          <select className="pleros-input w-[220px]" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+          <label
+            htmlFor={`${ids}-warehouse`}
+            className="block text-[11px] uppercase tracking-wider mb-1 text-pleros-text-3"
+          >
+            Warehouse
+          </label>
+          <select
+            id={`${ids}-warehouse`}
+            className="pleros-input w-[220px]"
+            value={warehouseId}
+            onChange={(e) => setWarehouseId(e.target.value)}
+          >
             <option value="">All (totals)</option>
             {(warehousesQ.data ?? []).map((w) => (
               <option key={w.id} value={w.id}>
@@ -758,8 +785,18 @@ export default function InventoryPage() {
             <p className="text-sm text-pleros-text-3 mb-4 font-mono">
               {adjustOpen.code} · {adjustOpen.name}
             </p>
-            <label className="block text-sm mb-1 text-pleros-text-2">Warehouse</label>
-            <select className="pleros-input mb-3" value={adjWarehouse} onChange={(e) => setAdjWarehouse(e.target.value)}>
+            <label
+              htmlFor={`${ids}-adjust-warehouse`}
+              className="block text-sm mb-1 text-pleros-text-2"
+            >
+              Warehouse
+            </label>
+            <select
+              id={`${ids}-adjust-warehouse`}
+              className="pleros-input mb-3"
+              value={adjWarehouse}
+              onChange={(e) => setAdjWarehouse(e.target.value)}
+            >
               <option value="">Select…</option>
               {(warehousesQ.data ?? []).map((w) => (
                 <option key={w.id} value={w.id}>
@@ -767,15 +804,27 @@ export default function InventoryPage() {
                 </option>
               ))}
             </select>
-            <label className="block text-sm mb-1 text-pleros-text-2">Quantity delta (+/-)</label>
+            <label
+              htmlFor={`${ids}-quantity-delta`}
+              className="block text-sm mb-1 text-pleros-text-2"
+            >
+              Quantity delta (+/-)
+            </label>
             <input
+              id={`${ids}-quantity-delta`}
               type="number"
               className="pleros-input mb-3"
               value={adjDelta || ''}
               onChange={(e) => setAdjDelta(parseInt(e.target.value, 10) || 0)}
             />
-            <label className="block text-sm mb-1 text-pleros-text-2">Reason</label>
+            <label
+              htmlFor={`${ids}-reason`}
+              className="block text-sm mb-1 text-pleros-text-2"
+            >
+              Reason
+            </label>
             <input
+              id={`${ids}-reason`}
               className="pleros-input"
               value={adjReason}
               onChange={(e) => setAdjReason(e.target.value)}
@@ -811,6 +860,7 @@ function SkuDrawer({
   onClose: () => void
   onSave: (p: SavePayload) => void
 }) {
+  const ids = useId()
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -1064,19 +1114,63 @@ function SkuDrawer({
       ) : (
         <>
           {error && <p className="text-sm mb-3 text-red-400">{error}</p>}
-          <label className="text-xs text-pleros-text-3">Code *</label>
-          <input className="pleros-input mb-3" value={code} onChange={(e) => setCode(e.target.value)} />
-          <label className="text-xs text-pleros-text-3">Name *</label>
-          <input className="pleros-input mb-3" value={name} onChange={(e) => setName(e.target.value)} />
-          <label className="text-xs text-pleros-text-3">Description</label>
-          <textarea className="pleros-input mb-3 min-h-[72px]" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <label className="text-xs text-pleros-text-3">Category *</label>
-          <input className="pleros-input mb-3" value={cat} onChange={(e) => setCat(e.target.value)} placeholder="e.g. Beverages" />
-          <label className="text-xs text-pleros-text-3">Subcategory</label>
-          <input className="pleros-input mb-3" value={sub} onChange={(e) => setSub(e.target.value)} />
-          <label className="text-xs text-pleros-text-3">Barcode</label>
+          <label htmlFor={`${ids}-code`} className="text-xs text-pleros-text-3">Code *</label>
+          <input
+            id={`${ids}-code`}
+            className="pleros-input mb-3"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+          <label htmlFor={`${ids}-name`} className="text-xs text-pleros-text-3">Name *</label>
+          <input
+            id={`${ids}-name`}
+            className="pleros-input mb-3"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <label
+            htmlFor={`${ids}-description`}
+            className="text-xs text-pleros-text-3"
+          >
+            Description
+          </label>
+          <textarea
+            id={`${ids}-description`}
+            className="pleros-input mb-3 min-h-[72px]"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <label
+            htmlFor={`${ids}-category`}
+            className="text-xs text-pleros-text-3"
+          >
+            Category *
+          </label>
+          <input
+            id={`${ids}-category`}
+            className="pleros-input mb-3"
+            value={cat}
+            onChange={(e) => setCat(e.target.value)}
+            placeholder="e.g. Beverages"
+          />
+          <label
+            htmlFor={`${ids}-subcategory`}
+            className="text-xs text-pleros-text-3"
+          >
+            Subcategory
+          </label>
+          <input
+            id={`${ids}-subcategory`}
+            className="pleros-input mb-3"
+            value={sub}
+            onChange={(e) => setSub(e.target.value)}
+          />
+          <label htmlFor={`${ids}-barcode`} className="text-xs text-pleros-text-3">
+            Barcode
+          </label>
           <div className="flex items-center gap-2">
             <input
+              id={`${ids}-barcode`}
               className="pleros-input flex-1"
               placeholder="Scan or type the product barcode"
               value={barcode}
@@ -1098,16 +1192,37 @@ function SkuDrawer({
           ) : (
             <div className="mb-3" />
           )}
-          <label className="text-xs text-pleros-text-3">Unit of measure</label>
-          <select className="pleros-input mb-3" value={uom} onChange={(e) => setUom(e.target.value)}>
+          <label
+            htmlFor={`${ids}-unit-of-measure`}
+            className="text-xs text-pleros-text-3"
+          >
+            Unit of measure
+          </label>
+          <select
+            id={`${ids}-unit-of-measure`}
+            className="pleros-input mb-3"
+            value={uom}
+            onChange={(e) => setUom(e.target.value)}
+          >
             {UOM_OPTIONS.map((u) => (
               <option key={u} value={u}>
                 {u}
               </option>
             ))}
           </select>
-          <label className="text-xs text-pleros-text-3">Weight (grams)</label>
-          <input className="pleros-input mb-3" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          <label
+            htmlFor={`${ids}-weight-grams`}
+            className="text-xs text-pleros-text-3"
+          >
+            Weight (grams)
+          </label>
+          <input
+            id={`${ids}-weight-grams`}
+            className="pleros-input mb-3"
+            type="number"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+          />
 
           <label className="flex items-center gap-2 mb-2 cursor-pointer">
             <input
@@ -1139,8 +1254,14 @@ function SkuDrawer({
           </label>
           {(ageRestricted || isTobacco) && (
             <>
-              <label className="text-xs text-pleros-text-3">Minimum age</label>
+              <label
+                htmlFor={`${ids}-minimum-age`}
+                className="text-xs text-pleros-text-3"
+              >
+                Minimum age
+              </label>
               <input
+                id={`${ids}-minimum-age`}
                 className="pleros-input mb-3 w-32"
                 type="number"
                 min={18}
@@ -1153,38 +1274,119 @@ function SkuDrawer({
 
           {isTobacco && (
             <>
-              <label className="text-xs text-pleros-text-3">Manufacturer ID</label>
-              <input className="pleros-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
-              <label className="text-xs text-pleros-text-3">Manufacturer DID</label>
-              <input className="pleros-input mb-3 font-mono text-sm" value={manufacturerDid} onChange={(e) => setManufacturerDid(e.target.value)} />
-              <label className="text-xs text-pleros-text-3">Excise tax category</label>
-              <input className="pleros-input mb-3" value={excise} onChange={(e) => setExcise(e.target.value)} />
+              <label
+                htmlFor={`${ids}-manufacturer-id`}
+                className="text-xs text-pleros-text-3"
+              >
+                Manufacturer ID
+              </label>
+              <input
+                id={`${ids}-manufacturer-id`}
+                className="pleros-input mb-3 font-mono text-sm"
+                value={manufacturerId}
+                onChange={(e) => setManufacturerId(e.target.value)}
+              />
+              <label
+                htmlFor={`${ids}-manufacturer-did`}
+                className="text-xs text-pleros-text-3"
+              >
+                Manufacturer DID
+              </label>
+              <input
+                id={`${ids}-manufacturer-did`}
+                className="pleros-input mb-3 font-mono text-sm"
+                value={manufacturerDid}
+                onChange={(e) => setManufacturerDid(e.target.value)}
+              />
+              <label
+                htmlFor={`${ids}-excise-tax-category`}
+                className="text-xs text-pleros-text-3"
+              >
+                Excise tax category
+              </label>
+              <input
+                id={`${ids}-excise-tax-category`}
+                className="pleros-input mb-3"
+                value={excise}
+                onChange={(e) => setExcise(e.target.value)}
+              />
             </>
           )}
 
           {!isTobacco && (
             <>
-              <label className="text-xs text-pleros-text-3">Manufacturer ID (optional)</label>
-              <input className="pleros-input mb-3 font-mono text-sm" value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)} />
+              <label
+                htmlFor={`${ids}-manufacturer-id-optional`}
+                className="text-xs text-pleros-text-3"
+              >
+                Manufacturer ID (optional)
+              </label>
+              <input
+                id={`${ids}-manufacturer-id-optional`}
+                className="pleros-input mb-3 font-mono text-sm"
+                value={manufacturerId}
+                onChange={(e) => setManufacturerId(e.target.value)}
+              />
             </>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-pleros-text-3">Cost</label>
-              <input className="pleros-input" type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
+              <label htmlFor={`${ids}-cost`} className="text-xs text-pleros-text-3">Cost</label>
+              <input
+                id={`${ids}-cost`}
+                className="pleros-input"
+                type="number"
+                step="0.01"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+              />
             </div>
             <div>
-              <label className="text-xs text-pleros-text-3">Sell price</label>
-              <input className="pleros-input" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <label
+                htmlFor={`${ids}-sell-price`}
+                className="text-xs text-pleros-text-3"
+              >
+                Sell price
+              </label>
+              <input
+                id={`${ids}-sell-price`}
+                className="pleros-input"
+                type="number"
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
             </div>
           </div>
-          <label className="text-xs text-pleros-text-3 mt-3 block">Min price</label>
-          <input className="pleros-input mb-3" type="number" step="0.01" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+          <label
+            htmlFor={`${ids}-min-price`}
+            className="text-xs text-pleros-text-3 mt-3 block"
+          >
+            Min price
+          </label>
+          <input
+            id={`${ids}-min-price`}
+            className="pleros-input mb-3"
+            type="number"
+            step="0.01"
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value)}
+          />
 
           <p className="text-sm text-pleros-text-2 mt-4 mb-2">Default stocking (non-batch row)</p>
-          <label className="text-xs text-pleros-text-3">Warehouse</label>
-          <select className="pleros-input mb-3" value={defWh} onChange={(e) => onWarehouseSelect(e.target.value)}>
+          <label
+            htmlFor={`${ids}-warehouse`}
+            className="text-xs text-pleros-text-3"
+          >
+            Warehouse
+          </label>
+          <select
+            id={`${ids}-warehouse`}
+            className="pleros-input mb-3"
+            value={defWh}
+            onChange={(e) => onWarehouseSelect(e.target.value)}
+          >
             <option value="">—</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
@@ -1192,16 +1394,48 @@ function SkuDrawer({
               </option>
             ))}
           </select>
-          <label className="text-xs text-pleros-text-3">Location label</label>
-          <input className="pleros-input mb-3" value={defLoc} onChange={(e) => setDefLoc(e.target.value)} />
+          <label
+            htmlFor={`${ids}-location-label`}
+            className="text-xs text-pleros-text-3"
+          >
+            Location label
+          </label>
+          <input
+            id={`${ids}-location-label`}
+            className="pleros-input mb-3"
+            value={defLoc}
+            onChange={(e) => setDefLoc(e.target.value)}
+          />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-pleros-text-3">Reorder point</label>
-              <input className="pleros-input" type="number" value={reorderPt} onChange={(e) => setReorderPt(e.target.value)} />
+              <label
+                htmlFor={`${ids}-reorder-point`}
+                className="text-xs text-pleros-text-3"
+              >
+                Reorder point
+              </label>
+              <input
+                id={`${ids}-reorder-point`}
+                className="pleros-input"
+                type="number"
+                value={reorderPt}
+                onChange={(e) => setReorderPt(e.target.value)}
+              />
             </div>
             <div>
-              <label className="text-xs text-pleros-text-3">Reorder qty</label>
-              <input className="pleros-input" type="number" value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} />
+              <label
+                htmlFor={`${ids}-reorder-qty`}
+                className="text-xs text-pleros-text-3"
+              >
+                Reorder qty
+              </label>
+              <input
+                id={`${ids}-reorder-qty`}
+                className="pleros-input"
+                type="number"
+                value={reorderQty}
+                onChange={(e) => setReorderQty(e.target.value)}
+              />
             </div>
           </div>
 

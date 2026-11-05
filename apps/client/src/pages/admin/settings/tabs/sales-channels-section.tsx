@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useQueryParams } from '@/lib/use-query-params'
 import { api } from '@/lib/api-admin'
+import { useSettingsAccess } from '@/components/settings/permission-gate'
 import { errMsg } from '../types'
 
 type SalesChannelConnection = {
@@ -27,6 +28,8 @@ type SalesChannelListing = {
 
 export function SalesChannelsSection() {
   const qc = useQueryClient()
+  // Reading listings only needs settings.read, so only the actions that change something are disabled.
+  const { allowed: canWrite, reason: readOnlyReason } = useSettingsAccess('salesChannels')
   const searchParams = useQueryParams()
   const [shopDomain, setShopDomain] = useState('')
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null)
@@ -113,6 +116,7 @@ export function SalesChannelsSection() {
             Sync catalog and orders with external storefronts. Shopify is available now; Amazon, eBay, and Walmart adapters
             ship in later phases.
           </p>
+          {readOnlyReason ? <p className="text-pleros-text-3 text-xs mt-2">{readOnlyReason}</p> : null}
         </div>
       </div>
 
@@ -127,10 +131,11 @@ export function SalesChannelsSection() {
           <input
             className="pleros-input flex-1 min-w-[220px]"
             placeholder="your-store.myshopify.com"
+            disabled={!canWrite}
             value={shopDomain}
             onChange={(e) => setShopDomain(e.target.value)}
           />
-          <button type="button" className="btn-primary !text-sm" onClick={connectShopify} disabled={!shopDomain.trim()}>
+          <button type="button" className="btn-primary !text-sm" onClick={connectShopify} disabled={!canWrite || !shopDomain.trim()}>
             Connect Shopify
           </button>
         </div>
@@ -169,7 +174,7 @@ export function SalesChannelsSection() {
                   <button
                     type="button"
                     className="btn-ghost !text-sm"
-                    disabled={syncAllMut.isPending}
+                    disabled={!canWrite || syncAllMut.isPending}
                     onClick={() => syncAllMut.mutate(conn.id)}
                   >
                     Queue all SKUs
@@ -177,7 +182,7 @@ export function SalesChannelsSection() {
                   <button
                     type="button"
                     className="btn-ghost !text-sm"
-                    disabled={flushMut.isPending}
+                    disabled={!canWrite || flushMut.isPending}
                     onClick={() => flushMut.mutate(conn.id)}
                   >
                     Flush now
@@ -186,7 +191,7 @@ export function SalesChannelsSection() {
                     <button
                       type="button"
                       className="btn-ghost !text-sm text-red-400"
-                      disabled={disconnectMut.isPending}
+                      disabled={!canWrite || disconnectMut.isPending}
                       onClick={() => disconnectMut.mutate(conn.id)}
                     >
                       Disconnect
@@ -230,7 +235,7 @@ export function SalesChannelsSection() {
                         <button
                           type="button"
                           className="btn-ghost !text-xs !py-1 !px-2"
-                          disabled={retryMut.isPending}
+                          disabled={!canWrite || retryMut.isPending}
                           onClick={() =>
                             retryMut.mutate({ connectionId: selectedConnectionId, listingId: listing.id })
                           }

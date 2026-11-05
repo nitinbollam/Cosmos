@@ -6,11 +6,17 @@ import {
   type ScanResult,
 } from './types'
 import { WAREHOUSE_DEFAULT_FORMATS } from './engines'
-import { ScanDeduper } from './dedupe'
+import { CameraScanGate, ScanDeduper } from './dedupe'
 import { useScanner } from './useScanner'
 import { useKeyboardWedge } from './useKeyboardWedge'
 import { ScanFrameOverlay } from './ScanFrameOverlay'
 import './scanner.css'
+
+/**
+ * One audio context for every beep. A new context per scan piled up on phones (one left suspended is never closed),
+ * and browsers cap how many a page may hold — a likely part of camera scanning stopping after ~60 scans (ClickUp 44).
+ */
+let beepContext: AudioContext | null = null
 
 /** Short haptic + beep on a successful read. Best-effort, never throws. */
 function signalHit() {
@@ -24,7 +30,8 @@ function signalHit() {
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!Ctx) return
-    const ctx = new Ctx()
+    beepContext ??= new Ctx()
+    const ctx = beepContext
     if (ctx.state === 'suspended') {
       void ctx.resume().catch(() => {}) // swallow-ok: the scan beep is optional; the scan itself already succeeded
     }
@@ -37,7 +44,8 @@ function signalHit() {
     osc.start()
     osc.stop(ctx.currentTime + 0.09)
     osc.onended = () => {
-      void ctx.close().catch(() => {}) // swallow-ok: closing the beep audio context; nothing depends on it
+      osc.disconnect()
+      gain.disconnect()
     }
   } catch {
     /* audio blocked */
@@ -71,7 +79,9 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
     showCameraInfo = false,
   } = props
 
+  // Scan guns: time-based. The camera gets its own gate, which also confirms reads and counts frames.
   const deduper = useMemo(() => new ScanDeduper(dedupeWindowMs), [dedupeWindowMs])
+  const cameraGate = useMemo(() => new CameraScanGate(dedupeWindowMs), [dedupeWindowMs])
   const [lastHit, setLastHit] = useState<ScanResult | null>(null)
   const [manualValue, setManualValue] = useState('')
   const [showManual, setShowManual] = useState(false)
@@ -84,8 +94,8 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
     (rawValue: string, format: ScanResult['format'], source: ScanResult['source']) => {
       const value = rawValue.trim()
       if (!value) return
-      // Manual entry is a deliberate human action — bypass dedup.
-      if (source !== 'manual' && !deduper.accept(value)) return
+      // Manual entry is a deliberate human action — bypass dedup. Camera reads arrive already gated.
+      if (source === 'wedge' && !deduper.accept(value)) return
 
       const result: ScanResult = {
         rawValue: value,
@@ -106,7 +116,10 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
     formats,
     // Dense 2D codes (the PDF417 on a licence) need more pixels than the browser default.
     highResolution: formats.includes('pdf417'),
-    onDecode: (raw, fmt) => accept(raw, fmt, 'camera'),
+    onFrame: (hit) => {
+      const value = hit?.rawValue.trim() || null
+      if (cameraGate.frameDecoded(value, hit?.format) && hit) accept(hit.rawValue, hit.format, 'camera')
+    },
     onError: emitError,
   })
   scannerRef.current = scanner
@@ -120,14 +133,16 @@ export function BarcodeScannerSheet(props: BarcodeScannerProps) {
       setManualValue('')
       setShowManual(false)
       deduper.reset()
+      cameraGate.reset()
     }
-  }, [open, deduper])
+  }, [open, deduper, cameraGate])
 
   const scanNext = useCallback(() => {
     setLastHit(null)
     deduper.reset()
+    cameraGate.reset()
     scanner.resume()
-  }, [deduper, scanner])
+  }, [deduper, cameraGate, scanner])
 
   const submitManual = useCallback(() => {
     if (!manualValue.trim()) return

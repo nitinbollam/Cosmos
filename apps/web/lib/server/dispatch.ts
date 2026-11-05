@@ -4,7 +4,7 @@ import { dispatchDb } from './db'
 import { orderIdFromStopAddress } from './dispatch-order'
 import { podEvidenceProblem } from './pod-evidence'
 import { statusAfterAssign, statusAfterOutcome, unassignDriverProblem } from './route-assignment'
-import { buildStopItems, NO_ITEMS } from './route-stop-items'
+import { buildLinkedStopItems, NO_ITEMS } from './route-stop-items'
 import { checkRouteStates, stopState } from './route-state'
 import { failureReasonProblem, normalizeFailureReason, podForDelivery, podWithFailure } from './stop-outcome'
 import * as crm from './crm'
@@ -49,7 +49,9 @@ export function listRoutes(tenantId: string, date?: string, statuses?: RouteStat
 export async function getRouteDetail(tenantId: string, id: string) {
   const route = await getRoute(tenantId, id)
   const orderIds = [...new Set(route.stops.map((s) => orderIdFromStopAddress(s.address)).filter((x): x is string => !!x))]
-  if (orderIds.length === 0) return { ...route, stops: route.stops.map((s) => ({ ...s, ...NO_ITEMS, contact: null })) }
+  if (orderIds.length === 0) {
+    return { ...route, stops: route.stops.map((s) => ({ ...s, ...NO_ITEMS, hasLinkedOrder: false, contact: null })) }
+  }
 
   const orders = await orderDb.order.findMany({
     where: { tenantId, id: { in: orderIds } },
@@ -81,10 +83,9 @@ export async function getRouteDetail(tenantId: string, id: string) {
     ...route,
     stops: route.stops.map((s) => {
       const orderId = orderIdFromStopAddress(s.address)
-      const lines = orderId ? linesByOrder.get(orderId) : undefined
       return {
         ...s,
-        ...(lines ? buildStopItems(lines, skuMap, policy) : NO_ITEMS),
+        ...buildLinkedStopItems(orderId, linesByOrder, skuMap, policy),
         contact: orderId ? (contactByOrder.get(orderId) ?? null) : null,
       }
     }),

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
 import { api } from '@/lib/api'
 import { axiosErr } from '@/lib/axios-error'
@@ -34,6 +34,7 @@ type PaymentMethod = 'NET_TERMS' | 'CARD' | 'CASH' | 'CHECK' | 'ACH'
 const stripePublishable = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
 
 export default function CheckoutPage() {
+  const ids = useId()
   const navigate = useNavigate()
   const items = useCartStore((s) => s.items)
   const cartSubtotal = useCartStore((s) => s.subtotal())
@@ -347,24 +348,91 @@ export default function CheckoutPage() {
         <div className="pleros-card">
           <h2 style={{ marginTop: 0 }}>Shipping</h2>
           <p style={{ color: 'var(--c-text-3)', fontSize: 14 }}>Customer: {customer?.name ?? '…'}</p>
-          <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}>Company</label>
-          <input className="pleros-input" style={{ marginTop: 8 }} value={company} onChange={(e) => setCompany(e.target.value)} />
-          <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block' }}>Address line 1</label>
-          <input className="pleros-input" style={{ marginTop: 8 }} value={line1} onChange={(e) => setLine1(e.target.value)} required />
-          <label style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}>Address line 2</label>
-          <input className="pleros-input" style={{ marginTop: 8 }} value={line2} onChange={(e) => setLine2(e.target.value)} />
+          <label
+            htmlFor={`${ids}-company`}
+            style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}
+          >
+            Company
+          </label>
+          <input
+            id={`${ids}-company`}
+            className="pleros-input"
+            style={{ marginTop: 8 }}
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+          />
+          <label
+            htmlFor={`${ids}-address-line-1`}
+            style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block' }}
+          >
+            Address line 1
+          </label>
+          <input
+            id={`${ids}-address-line-1`}
+            className="pleros-input"
+            style={{ marginTop: 8 }}
+            value={line1}
+            onChange={(e) => setLine1(e.target.value)}
+            required
+          />
+          <label
+            htmlFor={`${ids}-address-line-2`}
+            style={{ fontSize: 12, color: 'var(--c-text-3)', display: 'block', marginTop: 12 }}
+          >
+            Address line 2
+          </label>
+          <input
+            id={`${ids}-address-line-2`}
+            className="pleros-input"
+            style={{ marginTop: 8 }}
+            value={line2}
+            onChange={(e) => setLine2(e.target.value)}
+          />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
             <div>
-              <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>City</label>
-              <input className="pleros-input" style={{ marginTop: 8 }} value={city} onChange={(e) => setCity(e.target.value)} />
+              <label
+                htmlFor={`${ids}-city`}
+                style={{ fontSize: 12, color: 'var(--c-text-3)' }}
+              >
+                City
+              </label>
+              <input
+                id={`${ids}-city`}
+                className="pleros-input"
+                style={{ marginTop: 8 }}
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
             </div>
             <div>
-              <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>State</label>
-              <input className="pleros-input" style={{ marginTop: 8 }} value={state} onChange={(e) => setState(e.target.value)} />
+              <label
+                htmlFor={`${ids}-state`}
+                style={{ fontSize: 12, color: 'var(--c-text-3)' }}
+              >
+                State
+              </label>
+              <input
+                id={`${ids}-state`}
+                className="pleros-input"
+                style={{ marginTop: 8 }}
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+              />
             </div>
             <div>
-              <label style={{ fontSize: 12, color: 'var(--c-text-3)' }}>ZIP</label>
-              <input className="pleros-input" style={{ marginTop: 8 }} value={zip} onChange={(e) => setZip(e.target.value)} />
+              <label
+                htmlFor={`${ids}-zip`}
+                style={{ fontSize: 12, color: 'var(--c-text-3)' }}
+              >
+                ZIP
+              </label>
+              <input
+                id={`${ids}-zip`}
+                className="pleros-input"
+                style={{ marginTop: 8 }}
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
+              />
             </div>
           </div>
           <button type="button" className="btn-primary" style={{ marginTop: 24 }} onClick={() => setStep(2)} disabled={!line1.trim()}>
