@@ -497,10 +497,13 @@ export async function resumeOrderAfterCreditApproval(tenantId: string, orderId: 
   if (order.status !== OrderStatus.AWAITING_APPROVAL) return order
 
   const correlationId = randomUUID()
-  await orderDb.order.update({
-    where: { id: orderId },
+  const resumed = await orderDb.order.updateMany({
+    where: { id: orderId, tenantId, status: OrderStatus.AWAITING_APPROVAL },
     data: { status: OrderStatus.PENDING },
   })
+  if (resumed.count !== 1) {
+    return orderDb.order.findFirst({ where: { id: orderId, tenantId }, include: { lineItems: true } })
+  }
 
   if (!defersFulfillmentUntilPayment(order.paymentMethod)) {
     await runOrderFulfillmentPipeline(orderId, tenantId, correlationId)

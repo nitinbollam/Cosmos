@@ -165,8 +165,8 @@ test('two simultaneous transitions never leave the order in a status that contra
       transitionOrderStatus(tenantId, orderId, 'CANCELLED'),
     ])
     const final = (await orderDb.order.findFirstOrThrow({ where: { id: orderId } })).status
-    // Pack then cancel in sequence is legal (PACKED -> CANCELLED). What must never happen is both
-    // reading PROCESSING and both writing: a loser is told 409 and its change does not apply.
+    // Cancellation is only valid before packing. What must never happen is both reading PROCESSING
+    // and both writing: a loser is told 409 and its change does not apply.
     if (cancel.status === 'fulfilled') assert.equal(final, 'CANCELLED')
     else assert.equal(final, 'PACKED')
     // A loser is refused one of two ways, depending on timing: 409 when both read PROCESSING and

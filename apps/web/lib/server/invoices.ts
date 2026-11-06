@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@/generated/prisma-order'
 import { orderDb } from './db'
 import * as crm from './crm'
-import { deriveInvoiceStatus, formatCreditMemoNumber, formatInvoiceNumber, invoiceBalance, toStoredInvoiceStatus } from './invoice-status'
+import {
+  deriveInvoiceStatus,
+  formatCreditMemoNumber,
+  formatInvoiceNumber,
+  invoiceBalance,
+  toStoredInvoiceStatus,
+} from './invoice-status'
 import { enqueuePostingJob } from './posting-outbox'
 import * as notifyTriggers from './notification-triggers'
 import { ApiError } from './session'
@@ -11,7 +17,7 @@ import { toBaseAmount, normalizeCurrency } from './fx-util'
 import { splitBaseAmounts } from './invoice-tax-split'
 import { attemptOrQueue, syncInvoiceOrQueue } from './deferred-work'
 import { swallowed } from './fire-and-forget'
-import { formatMoney } from './money'
+import { formatMoney, money, roundMoney, type MoneyValue } from './money'
 import { assertWithinBalance, invoiceRemaining, parsePaymentAmount } from './payment-amount'
 import {
   allocateShipmentTax,
@@ -32,12 +38,29 @@ function invoiceDueDate(paymentTermsDays: number | null | undefined, issuedAt: D
   return due
 }
 
+function invoiceDisplayStatus(input: {
+  storedStatus: string
+  orderStatus: string
+  totalAmount: number
+  amountPaid: number
+  amountCredited: number
+  paymentMethod?: string
+  issuedAt?: Date | string
+}) {
+  // A paid cancellation is represented by a credit memo. Preserve that accounting status when
+  // the order's terminal status would otherwise make every invoice appear merely void.
+  if (['CANCELLED', 'FAILED'].includes(input.orderStatus) && input.storedStatus === 'CREDITED')
+    return 'CREDITED' as const
+  return deriveInvoiceStatus(input)
+}
+
 export async function issueInvoiceForOrder(
   tenantId: string,
   orderId: string,
   amounts?: { subtotal: number; taxAmount: number; totalAmount: number; currency?: string },
   /** Runs inside the invoice's transaction, so related bookkeeping commits or rolls back with it. */
   inTransaction?: (tx: Prisma.TransactionClient, invoice: { id: string }) => Promise<void>,
+  ownership?: { sagaId: string; claimId: string },
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
@@ -67,6 +90,13 @@ export async function issueInvoiceForOrder(
   const { baseTotal, baseTax } = splitBaseAmounts(totalAmount, taxAmount, fx.fxRateToBase)
   // The invoice and its ledger posting job commit together; a worker posts to the ledger (posting-outbox).
   const finalInvoice = await orderDb.$transaction(async (tx) => {
+    if (ownership) {
+      const owned = await tx.orderSaga.updateMany({
+        where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    }
     const invoice = await tx.invoice.create({
       data: {
         tenantId,
@@ -154,6 +184,7 @@ export async function invoiceShipmentForOrder(
    * instead of billing the shipment again.
    */
   fulfillmentTaskId?: string,
+  ownership?: { sagaId: string; claimId: string },
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
@@ -203,7 +234,10 @@ export async function invoiceShipmentForOrder(
   const markInvoiced = (tx: Prisma.TransactionClient) =>
     Promise.all(
       allocations.map((a) =>
-        tx.orderLineItem.update({ where: { id: a.lineId }, data: { quantityInvoiced: { increment: a.quantity } } }),
+        tx.orderLineItem.update({
+          where: { id: a.lineId },
+          data: { quantityInvoiced: { increment: a.quantity } },
+        }),
       ),
     )
 
@@ -228,6 +262,7 @@ export async function invoiceShipmentForOrder(
         await markInvoiced(tx)
         await recordTask(tx, invoice.id)
       },
+      ownership,
     )
   }
 
@@ -238,9 +273,20 @@ export async function invoiceShipmentForOrder(
   const newTax = existingInvoice.taxAmount.add(taxAmount)
   const newTotal = existingInvoice.totalAmount.add(totalAmount)
   const paidApplied = Prisma.Decimal.min(order.amountPaid ?? new Prisma.Decimal(0), newTotal)
-  const extension = splitBaseAmounts(totalAmount.toNumber(), taxAmount.toNumber(), Number(existingInvoice.fxRateToBase))
+  const extension = splitBaseAmounts(
+    totalAmount.toNumber(),
+    taxAmount.toNumber(),
+    Number(existingInvoice.fxRateToBase),
+  )
 
   const updated = await orderDb.$transaction(async (tx) => {
+    if (ownership) {
+      const owned = await tx.orderSaga.updateMany({
+        where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    }
     const row = await tx.invoice.update({
       where: { id: invoiceId, tenantId },
       data: {
@@ -279,7 +325,11 @@ export async function invoiceShipmentForOrder(
   return updated
 }
 
-export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
+export async function syncInvoiceFromOrder(
+  tenantId: string,
+  orderId: string,
+  ownership?: { sagaId: string; claimId: string },
+) {
   const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
   if (!invoice) return null
 
@@ -289,7 +339,8 @@ export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
   const total = Number(invoice.totalAmount)
   const paid = Number(order.amountPaid ?? 0)
   const credited = Number(invoice.amountCredited)
-  const status = deriveInvoiceStatus({
+  const status = invoiceDisplayStatus({
+    storedStatus: invoice.status,
     orderStatus: order.status,
     totalAmount: total,
     amountPaid: paid,
@@ -297,13 +348,122 @@ export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
     paymentMethod: order.paymentMethod,
     issuedAt: invoice.issuedAt,
   })
+  const data = {
+    amountPaid: new Prisma.Decimal(paid),
+    status: toStoredInvoiceStatus(status) as never,
+  }
 
-  return orderDb.invoice.update({
-    where: { id: invoice.id },
-    data: {
-      amountPaid: new Prisma.Decimal(paid),
-      status: toStoredInvoiceStatus(status) as never,
-    },
+  if (!ownership) {
+    return orderDb.invoice.update({
+      where: { id: invoice.id },
+      data,
+    })
+  }
+  return orderDb.$transaction(async (tx) => {
+    const owned = await tx.orderSaga.updateMany({
+      where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+      data: { updatedAt: new Date() },
+    })
+    if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    return tx.invoice.update({ where: { id: invoice.id }, data })
+  })
+}
+
+/**
+ * Reconcile an invoice when an order is cancelled before packing. A credit memo reverses the
+ * invoice's AR/revenue posting; unpaid invoices are marked VOID, while paid invoices are marked
+ * CREDITED. The cancellation saga handles card refunds separately.
+ */
+export async function reconcileCancelledOrderInvoice(
+  tenantId: string,
+  orderId: string,
+  refundedAmount: MoneyValue = '0',
+  ownership?: { sagaId: string; claimId: string },
+) {
+  const marker = `Order cancellation: ${orderId}`
+  return orderDb.$transaction(async (tx) => {
+    if (ownership) {
+      const owned = await tx.orderSaga.updateMany({
+        where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    }
+    const order = await tx.order.findFirst({
+      where: { id: orderId, tenantId },
+      select: { amountPaid: true },
+    })
+    const invoice = await tx.invoice.findFirst({
+      where: { tenantId, orderId },
+      include: { creditMemos: true },
+    })
+    if (!invoice) return null
+    const invoicePayment = money(invoice.amountPaid)
+    const orderPayment = money(order?.amountPaid ?? '0')
+    const recordedPayment = invoicePayment.gte(orderPayment) ? invoicePayment : orderPayment
+    const priorCancellationMemo = invoice.creditMemos.find((memo) => memo.reason === marker)
+    const creditedBefore = money(invoice.amountCredited)
+    const total = money(invoice.totalAmount)
+    const invoiceTax = money(invoice.taxAmount)
+    const creditRemainder = roundMoney(total.minus(creditedBefore))
+    const creditAmount = creditRemainder.isNegative() ? money('0') : creditRemainder
+    let creditedAfter = creditedBefore
+
+    if (priorCancellationMemo) {
+      const priorMemoTotal = creditedBefore.plus(priorCancellationMemo.totalAmount)
+      const updatedCredit = priorMemoTotal.gt(creditedBefore) ? priorMemoTotal : creditedBefore
+      creditedAfter = updatedCredit.gt(total) ? total : updatedCredit
+    } else if (creditAmount.gt('0.009')) {
+      const taxRate = total.gt(0) ? invoiceTax.div(total) : money('0')
+      const calculatedTax = roundMoney(creditAmount.times(taxRate))
+      const creditTax = calculatedTax.gt(invoiceTax) ? invoiceTax : calculatedTax
+      const subtotalRemainder = roundMoney(creditAmount.minus(creditTax))
+      const creditSubtotal = subtotalRemainder.isNegative() ? money('0') : subtotalRemainder
+      const seq = invoice.creditMemos.length + 1
+      const memo = await tx.creditMemo.create({
+        data: {
+          tenantId,
+          orderId,
+          invoiceId: invoice.id,
+          memoNumber: formatCreditMemoNumber(orderId, seq),
+          customerId: invoice.customerId,
+          totalAmount: creditAmount,
+          reason: marker,
+          lines: [
+            {
+              kind: 'ORDER_CANCELLATION',
+              subtotal: creditSubtotal,
+              taxAmount: creditTax,
+              totalAmount: creditAmount,
+            },
+          ] as never,
+        },
+      })
+      const base = splitBaseAmounts(creditAmount, creditTax, invoice.fxRateToBase)
+      const requestedRefund = money(refundedAmount)
+      const nonnegativeRefund = requestedRefund.isNegative() ? money('0') : requestedRefund
+      const cashRefund = nonnegativeRefund.lt(creditAmount) ? nonnegativeRefund : creditAmount
+      const cashRefundBase = splitBaseAmounts(cashRefund, '0', invoice.fxRateToBase).baseTotal
+      await enqueuePostingJob(tx, {
+        tenantId,
+        kind: 'CREDIT_MEMO_JOURNAL',
+        sourceType: 'CreditMemo',
+        sourceId: memo.id,
+        amount: formatMoney(base.baseTotal),
+        taxAmount: formatMoney(base.baseTax),
+        cashAmount: formatMoney(cashRefundBase),
+      })
+      const updatedCredit = creditedBefore.plus(creditAmount)
+      creditedAfter = updatedCredit.gt(total) ? total : updatedCredit
+    }
+
+    return tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        amountCredited: creditedAfter,
+        status: recordedPayment.lte(0) ? 'VOID' : 'CREDITED',
+      },
+    })
   })
 }
 
@@ -411,8 +571,17 @@ export async function listInvoices(
       where.order = { status: 'FAILED' }
     } else if (status === 'OVERDUE') {
       const raw = await orderDb.invoice.findMany({
-        where: { ...where, status: { in: ['ISSUED', 'PARTIALLY_PAID'] }, order: { status: { notIn: ['CANCELLED', 'FAILED'] } } },
-        include: { order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } }, creditMemos: true },
+        where: {
+          ...where,
+          status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
+          order: { status: { notIn: ['CANCELLED', 'FAILED'] } },
+        },
+        include: {
+          order: {
+            select: { orderNumber: true, status: true, paymentMethod: true, channel: true },
+          },
+          creditMemos: true,
+        },
         orderBy: { issuedAt: 'desc' },
         take: 2000,
       })
@@ -431,7 +600,11 @@ export async function listInvoices(
       return {
         items: slice.map((inv) => ({
           ...inv,
-          balance: invoiceBalance(Number(inv.totalAmount), Number(inv.amountPaid), Number(inv.amountCredited)),
+          balance: invoiceBalance(
+            Number(inv.totalAmount),
+            Number(inv.amountPaid),
+            Number(inv.amountCredited),
+          ),
           displayStatus: 'OVERDUE' as const,
         })),
         total: overdue.length,
@@ -441,7 +614,12 @@ export async function listInvoices(
       }
     } else {
       where.status = status as never
-      where.order = { status: { notIn: ['CANCELLED', 'FAILED'] } }
+      // Cancelled orders now retain a CREDITED invoice when a credit memo was issued. Keep that
+      // result discoverable while preserving the existing exclusion rules for every other status.
+      where.order =
+        status === 'CREDITED'
+          ? { status: { not: 'FAILED' } }
+          : { status: { notIn: ['CANCELLED', 'FAILED'] } }
     }
   } else if (filters?.excludeCancelled) {
     where.order = { status: { not: 'CANCELLED' } }
@@ -450,7 +628,10 @@ export async function listInvoices(
   const [items, total] = await Promise.all([
     orderDb.invoice.findMany({
       where,
-      include: { order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } }, creditMemos: true },
+      include: {
+        order: { select: { orderNumber: true, status: true, paymentMethod: true, channel: true } },
+        creditMemos: true,
+      },
       orderBy: { issuedAt: 'desc' },
       skip: (safePage - 1) * safePageSize,
       take: safePageSize,
@@ -461,8 +642,13 @@ export async function listInvoices(
   return {
     items: items.map((inv) => ({
       ...inv,
-      balance: invoiceBalance(Number(inv.totalAmount), Number(inv.amountPaid), Number(inv.amountCredited)),
-      displayStatus: deriveInvoiceStatus({
+      balance: invoiceBalance(
+        Number(inv.totalAmount),
+        Number(inv.amountPaid),
+        Number(inv.amountCredited),
+      ),
+      displayStatus: invoiceDisplayStatus({
+        storedStatus: inv.status,
         orderStatus: inv.order.status,
         totalAmount: Number(inv.totalAmount),
         amountPaid: Number(inv.amountPaid),
@@ -478,7 +664,11 @@ export async function listInvoices(
   }
 }
 
-export async function getInvoice(tenantId: string, id: string, opts?: { buyerCustomerId?: string }) {
+export async function getInvoice(
+  tenantId: string,
+  id: string,
+  opts?: { buyerCustomerId?: string },
+) {
   const row = await orderDb.invoice.findFirst({
     where: { id, tenantId },
     include: {
@@ -492,8 +682,13 @@ export async function getInvoice(tenantId: string, id: string, opts?: { buyerCus
   }
   return {
     ...row,
-    balance: invoiceBalance(Number(row.totalAmount), Number(row.amountPaid), Number(row.amountCredited)),
-    displayStatus: deriveInvoiceStatus({
+    balance: invoiceBalance(
+      Number(row.totalAmount),
+      Number(row.amountPaid),
+      Number(row.amountCredited),
+    ),
+    displayStatus: invoiceDisplayStatus({
+      storedStatus: row.status,
       orderStatus: row.order.status,
       totalAmount: Number(row.totalAmount),
       amountPaid: Number(row.amountPaid),
@@ -504,7 +699,11 @@ export async function getInvoice(tenantId: string, id: string, opts?: { buyerCus
   }
 }
 
-export async function getInvoiceByOrderId(tenantId: string, orderId: string, opts?: { buyerCustomerId?: string }) {
+export async function getInvoiceByOrderId(
+  tenantId: string,
+  orderId: string,
+  opts?: { buyerCustomerId?: string },
+) {
   const row = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
   if (!row) throw new ApiError(404, 'Invoice not found')
   return getInvoice(tenantId, row.id, opts)
@@ -531,11 +730,7 @@ export async function recordInvoicePayment(
 
 type InvoiceDocOpts = { buyerCustomerId?: string }
 
-async function invoiceToDocInput(
-  tenantId: string,
-  invoiceId: string,
-  opts?: InvoiceDocOpts,
-) {
+async function invoiceToDocInput(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
   const inv = await getInvoice(tenantId, invoiceId, opts)
   return {
     invoiceNumber: inv.invoiceNumber,
@@ -561,13 +756,21 @@ async function invoiceToDocInput(
   }
 }
 
-export async function getInvoiceHtmlDocument(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
+export async function getInvoiceHtmlDocument(
+  tenantId: string,
+  invoiceId: string,
+  opts?: InvoiceDocOpts,
+) {
   const input = await invoiceToDocInput(tenantId, invoiceId, opts)
   const { buildInvoiceHtml } = await import('./invoice-document')
   return buildInvoiceHtml(tenantId, input)
 }
 
-export async function getInvoicePdfDocument(tenantId: string, invoiceId: string, opts?: InvoiceDocOpts) {
+export async function getInvoicePdfDocument(
+  tenantId: string,
+  invoiceId: string,
+  opts?: InvoiceDocOpts,
+) {
   const input = await invoiceToDocInput(tenantId, invoiceId, opts)
   const { buildInvoicePdf } = await import('./invoice-document')
   const pdf = await buildInvoicePdf(tenantId, input)

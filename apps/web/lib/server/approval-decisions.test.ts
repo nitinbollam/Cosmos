@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { ApprovalStatus, ApprovalType } from '@/generated/prisma-tenant'
-import { tenantDb } from './db'
+import { crmDb, ledgerDb, orderDb, tenantDb } from './db'
 import { cancelApprovalRequest, createApprovalRequest, decideApprovalRequest, getApprovalRequest } from './approvals'
 import { onApprovalDecided } from './approval-hooks'
+import { ExpenseReportStatus } from '@/generated/prisma-ledger'
 
 // Shared approval code changed for requisitions: decisions are now conditional and written with their audit event in
 // one transaction, and requests can be closed as CANCELLED. These pin the behaviour every approval type relies on.
@@ -24,6 +25,66 @@ test('a decision and its audit event are written together, exactly once', async 
   assert.equal(audits.length, 1)
   assert.equal(audits[0].action, 'approval.rejected')
   assert.equal((audits[0].metadata as { subjectId: string }).subjectId, req.subjectId)
+})
+
+test('retrying an already committed decision returns it without duplicating its audit event', async () => {
+  const tenantId = tenant()
+  const req = await request(tenantId, ApprovalType.ORDER_CANCELLATION)
+  const decision = { approve: true, decidedBy: 'mgr' }
+  const first = await decideApprovalRequest(tenantId, req.id, decision)
+  const retry = await decideApprovalRequest(tenantId, req.id, decision)
+  assert.equal(retry.id, first.id)
+  assert.equal(retry.status, ApprovalStatus.APPROVED)
+  assert.equal((await decisionAudits(tenantId, req.id)).length, 1)
+})
+
+test('retrying an expense-report approval applies one decision and one posting', async () => {
+  const tenantId = tenant()
+  const report = await ledgerDb.expenseReport.create({
+    data: {
+      tenantId,
+      userId: 'employee',
+      status: ExpenseReportStatus.PENDING_APPROVAL,
+      totalAmount: '123.45',
+    },
+  })
+  const req = await createApprovalRequest(tenantId, {
+    type: ApprovalType.EXPENSE_REPORT,
+    subjectId: report.id,
+    requestedBy: 'employee',
+    context: { total: 123.45 },
+  })
+  const decided = await decideApprovalRequest(tenantId, req.id, { approve: true, decidedBy: 'mgr' })
+
+  await Promise.all([onApprovalDecided(tenantId, decided), onApprovalDecided(tenantId, decided)])
+
+  assert.equal((await ledgerDb.expenseReport.findUniqueOrThrow({ where: { id: report.id } })).status, 'APPROVED')
+  assert.equal(
+    await orderDb.postingJob.count({
+      where: { tenantId, kind: 'EXPENSE_APPROVAL_JOURNAL', sourceType: 'ExpenseReport', sourceId: report.id },
+    }),
+    1,
+  )
+  assert.equal((await decisionAudits(tenantId, req.id)).length, 1)
+})
+
+test('retrying a credit-limit-increase approval keeps one limit change and one audit event', async () => {
+  const tenantId = tenant()
+  const customer = await crmDb.customer.create({
+    data: { tenantId, name: 'Approval retry', creditLimit: '100.00' },
+  })
+  const req = await createApprovalRequest(tenantId, {
+    type: ApprovalType.CREDIT_LIMIT_INCREASE,
+    subjectId: customer.id,
+    requestedBy: 'rep',
+    context: { currentLimit: 100, requestedLimit: 250 },
+  })
+  const decided = await decideApprovalRequest(tenantId, req.id, { approve: true, decidedBy: 'mgr' })
+
+  await Promise.all([onApprovalDecided(tenantId, decided), onApprovalDecided(tenantId, decided)])
+
+  assert.equal(Number((await crmDb.customer.findUniqueOrThrow({ where: { id: customer.id } })).creditLimit), 250)
+  assert.equal(await tenantDb.auditEvent.count({ where: { id: `credit-limit-approved-${req.id}` } }), 1)
 })
 
 test('two approvers at once: one wins, the other gets "already decided", one audit event', async () => {

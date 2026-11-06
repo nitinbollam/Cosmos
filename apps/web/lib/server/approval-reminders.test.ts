@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { after, before, test } from 'node:test'
 import { authDb, notificationDb, tenantDb } from './db'
-import { ESCALATE_AFTER_MS, REMIND_AFTER_MS, dueStages, runApprovalReminders } from './approval-reminders'
+import { APPROVAL_TYPE_LABELS, ESCALATE_AFTER_MS, REMIND_AFTER_MS, dueStages, runApprovalReminders } from './approval-reminders'
 import { listApprovalRequests } from './approvals'
 
 const tenantId = `t-${randomUUID()}`
@@ -63,6 +63,10 @@ test('stages: new → notice, ~2 days → reminder, ~5 days → escalation, only
   assert.deepEqual(dueStages({ ...fresh, createdAt: at(REMIND_AFTER_MS), notifiedAt: now }, now), ['reminder'])
   assert.deepEqual(dueStages({ ...fresh, createdAt: at(28 * DAY) }, now), ['escalated'])
   assert.deepEqual(dueStages({ ...fresh, createdAt: at(ESCALATE_AFTER_MS), escalatedAt: now }, now), [])
+})
+
+test('cancellation requests have a readable approval notification label', () => {
+  assert.equal(APPROVAL_TYPE_LABELS.ORDER_CANCELLATION, 'Order cancellation')
 })
 
 test('approvers are told, reminded and escalated once each, never the requester or inactive users', async () => {

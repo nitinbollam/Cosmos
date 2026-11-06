@@ -7,6 +7,9 @@ import * as dropShip from '../drop-ship'
 import * as invoices from '../invoices'
 import * as quotes from '../quotes'
 import * as orderPaymentAdmin from '../order-payment-admin'
+import * as approvals from '../approvals'
+import { ApprovalType } from '@/generated/prisma-tenant'
+import { isOrderCancellationEligible } from '../order-status'
 import { ApiError, requireSession, requirePermission, assertPermission, assertRole, ADMIN_ROLES, requireIdempotencyKey } from './common'
 
 export async function routeOrders(method: string, seg: string[], req: Request): Promise<Response> {
@@ -23,6 +26,56 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
     ? await requirePortalCustomerId(session)
     : undefined
   const buyerOpts = buyerCustomerId ? { buyerCustomerId } : undefined
+
+  if (seg.length === 3 && seg[2] === 'cancellation-requests') {
+    if (!buyerCustomerId || !isPortalBuyer(session.role)) {
+      throw new ApiError(403, 'Only an authenticated buyer can request cancellation')
+    }
+    const order = await orders.findOrderById(session.tenantId, seg[1], buyerOpts)
+    const buyerRequest = (request: Awaited<ReturnType<typeof approvals.findLatestApprovalForSubject>>) => {
+      if (!request) return null
+      const context = request.context as { reason?: unknown } | null
+      return {
+        id: request.id,
+        status: request.status,
+        reason: typeof context?.reason === 'string' ? context.reason : null,
+        rejectReason: request.rejectReason,
+      }
+    }
+    if (method === 'GET') {
+      return Response.json({
+        request: buyerRequest(
+          await approvals.findLatestApprovalForSubject(
+            session.tenantId,
+            ApprovalType.ORDER_CANCELLATION,
+            order.id,
+          ),
+        ),
+      })
+    }
+    if (method === 'POST') {
+      const body = (await req.json()) as { reason?: string }
+      const reason = body.reason?.trim()
+      if (!reason) throw new ApiError(400, 'Please provide a reason for your cancellation request')
+      if (reason.length > 500) throw new ApiError(400, 'Cancellation reason must be 500 characters or fewer')
+      if (!isOrderCancellationEligible(order.status)) {
+        const guidance = ['SHIPPED', 'DELIVERED', 'RETURNED'].includes(order.status)
+          ? '. Use Return / Credit note for help with a shipped order.'
+          : ''
+        throw new ApiError(400, `Cancellation requests are unavailable once an order is ${order.status.toLowerCase()}${guidance}`)
+      }
+      const result = await approvals.createPendingApprovalRequest(session.tenantId, {
+        type: ApprovalType.ORDER_CANCELLATION,
+        subjectId: order.id,
+        requestedBy: session.userId,
+        context: { reason, orderNumber: order.orderNumber, orderStatus: order.status },
+      }, { includeApproved: true })
+      return Response.json(
+        { request: buyerRequest(result.request), duplicate: result.duplicate },
+        { status: result.duplicate ? 200 : 201 },
+      )
+    }
+  }
 
   if (seg.length === 1 && method === 'POST') {
     const body = (await req.json()) as orders.CreateOrderInput
@@ -121,7 +174,7 @@ export async function routeOrders(method: string, seg: string[], req: Request): 
   }
   if (seg.length === 4 && seg[2] === 'drop-ship' && seg[3] === 'ship' && method === 'POST') {
     await requirePermission(req, 'orders.write')
-    const body = (await req.json()) as { carrier?: string; trackingNumber?: string }
+    const body = (await req.json()) as { carrier?: string; trackingNumber?: string; purchaseOrderId?: string }
     return Response.json(await dropShip.markDropShipLinesShipped(session.tenantId, seg[1], body))
   }
   if (seg.length === 4 && seg[2] === 'drop-ship' && seg[3] === 'create-po' && method === 'POST') {

@@ -34,6 +34,9 @@ function contextSummary(type: string, ctx: Record<string, unknown>): string {
   if (type === 'CREDIT_LIMIT_OVERRIDE') {
     return `Customer · projected $${Number(ctx.projectedTotal ?? 0).toFixed(2)} / limit $${Number(ctx.creditLimit ?? 0).toFixed(2)}`
   }
+  if (type === 'ORDER_CANCELLATION') {
+    return `Order ${String(ctx.orderNumber ?? '')} · ${String(ctx.reason ?? 'Buyer requested cancellation')}`
+  }
   if (type === 'PURCHASE_REQUISITION') {
     const total = ctx.total != null ? formatAmount(String(ctx.total), typeof ctx.currency === 'string' ? ctx.currency : 'USD') : '—'
     const lines = typeof ctx.lineCount === 'number' ? ` · ${ctx.lineCount} line(s)` : ''
@@ -82,7 +85,6 @@ export default function ApprovalsPage() {
   const [statusFilter, setStatusFilter] = useState('PENDING')
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [decidingId, setDecidingId] = useState<string | null>(null)
 
   const q = useQuery<ApprovalRequest[]>({
     queryKey: ['approvals', typeFilter, statusFilter],
@@ -115,10 +117,8 @@ export default function ApprovalsPage() {
   const isApprover = APPROVER_ROLES.includes(me?.role ?? '')
 
   const decide = useMutation({
-    mutationFn: ({ id, approve, rejectReason: reason }: { id: string; approve: boolean; rejectReason?: string }) => {
-      setDecidingId(id)
-      return api.post(`/approvals/${encodeURIComponent(id)}/decide`, { approve, rejectReason: reason })
-    },
+    mutationFn: ({ id, approve, rejectReason: reason }: { id: string; approve: boolean; rejectReason?: string }) =>
+      api.post(`/approvals/${encodeURIComponent(id)}/decide`, { approve, rejectReason: reason }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['approvals'] })
       void qc.invalidateQueries({ queryKey: ['purchase-order'] })
@@ -140,9 +140,9 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-pleros-white">Approvals</h1>
         <p className="text-pleros-muted text-sm mt-1">
-          Purchase requisitions, purchase orders over threshold, high discounts, credit-limit overrides, expense reports and cycle
-          counts awaiting a manager&rsquo;s decision. Pending items are listed longest-waiting first; approvers are emailed when one
-          arrives, reminded after {REMIND_AFTER_DAYS} days, and admins are alerted after {ESCALATE_AFTER_DAYS}.
+          Purchase requisitions, purchase orders, order cancellation requests, discounts, credit-limit overrides, expense reports,
+          and cycle counts awaiting a manager&rsquo;s decision. Pending items are listed longest-waiting first; approvers are emailed
+          when one arrives, reminded after {REMIND_AFTER_DAYS} days, and admins are alerted after {ESCALATE_AFTER_DAYS}.
         </p>
       </div>
 
@@ -151,6 +151,7 @@ export default function ApprovalsPage() {
           <option value="">All types</option>
           <option value="PURCHASE_REQUISITION">Purchase requisitions</option>
           <option value="PURCHASE_ORDER">Purchase orders</option>
+          <option value="ORDER_CANCELLATION">Order cancellations</option>
           <option value="DISCOUNT">Discounts</option>
           <option value="CREDIT_LIMIT_OVERRIDE">Credit limit</option>
           <option value="EXPENSE_REPORT">Expense reports</option>
@@ -239,7 +240,7 @@ export default function ApprovalsPage() {
                     </td>
                     <td className="py-3 pr-4 text-xs whitespace-nowrap">{nameOf(row.requestedBy)}</td>
                     <td className="py-3 pr-4">
-                      <StatusBadge status={row.type} />
+                      <StatusBadge status={row.type === 'ORDER_CANCELLATION' ? 'Order cancellation' : row.type} />
                     </td>
                     <td className="py-3 pr-4 text-pleros-text">
                       {contextSummary(row.type, row.context ?? {})}
@@ -260,6 +261,14 @@ export default function ApprovalsPage() {
                         </Link>
                       ) : null}
                       {row.type === 'CREDIT_LIMIT_OVERRIDE' ? (
+                        <Link
+                          to={`/admin/orders/${encodeURIComponent(row.subjectId)}`}
+                          className="block text-xs text-pleros-accent mt-1"
+                        >
+                          View order →
+                        </Link>
+                      ) : null}
+                      {row.type === 'ORDER_CANCELLATION' ? (
                         <Link
                           to={`/admin/orders/${encodeURIComponent(row.subjectId)}`}
                           className="block text-xs text-pleros-accent mt-1"
@@ -367,7 +376,7 @@ export default function ApprovalsPage() {
                       ) : (
                         '—'
                       )}
-                      {decide.isError && decidingId === row.id ? (
+                      {decide.isError && decide.variables?.id === row.id ? (
                         <p className="text-xs text-red-400 mt-1" role="alert">
                           {errMsg(decide.error)}
                         </p>

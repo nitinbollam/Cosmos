@@ -38,8 +38,8 @@ export async function routeApprovals(method: string, seg: string[], req: Request
       decidedBy: session.userId,
       rejectReason: body.rejectReason,
     })
-    await onApprovalDecided(session.tenantId, updated)
-    return Response.json(updated)
+    const finalRequest = await onApprovalDecided(session.tenantId, updated)
+    return Response.json(finalRequest ?? updated)
   }
 
   throw new ApiError(404, 'Approval route not found')

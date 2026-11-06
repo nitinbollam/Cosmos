@@ -61,4 +61,3 @@ test('a scan on a line with nothing left, or a SKU that is not on the PO, is ref
   )
   assert.equal(scanOverReceiptProblem('PO-1001', 'BEV-COLA-12', undefined, 0, 1), "BEV-COLA-12 isn't on PO-1001")
 })
-

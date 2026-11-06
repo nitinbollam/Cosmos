@@ -36,6 +36,57 @@ export async function createApprovalRequest(tenantId: string, input: CreateAppro
   return row
 }
 
+/** Create one pending request for a subject, rechecking inside a serializable transaction. */
+export async function createPendingApprovalRequest(
+  tenantId: string,
+  input: CreateApprovalInput,
+  opts: { includeApproved?: boolean } = {},
+) {
+  const where = {
+    tenantId,
+    type: input.type,
+    subjectId: input.subjectId,
+    status: opts.includeApproved
+      ? { in: [ApprovalStatus.PENDING, ApprovalStatus.APPROVED] }
+      : ApprovalStatus.PENDING,
+  }
+  try {
+    return await tenantDb.$transaction(
+      async (tx) => {
+        const existing = await tx.approvalRequest.findFirst({ where, orderBy: { createdAt: 'desc' } })
+        if (existing) return { request: existing, duplicate: true }
+        const request = await tx.approvalRequest.create({
+          data: {
+            ...(input.id ? { id: input.id } : {}),
+            tenantId,
+            type: input.type,
+            subjectId: input.subjectId,
+            requestedBy: input.requestedBy,
+            context: input.context as never,
+            status: ApprovalStatus.PENDING,
+          },
+        })
+        return { request, duplicate: false }
+      },
+      { isolationLevel: 'Serializable' },
+    ).then((result) => {
+      if (!result.duplicate) {
+        // Notify only after commit; the reminder worker remains the retry path if this is lost.
+        void import('./approval-reminders')
+          .then(({ notifyApprovalRequested }) => notifyApprovalRequested(tenantId, result.request.id))
+          .catch(swallowed('approvals.notifyApprovalRequested'))
+      }
+      return result
+    })
+  } catch (err) {
+    // A concurrent serializable transaction can win after our read. Return that request rather
+    // than surfacing a conflict or creating a second pending item.
+    const existing = await tenantDb.approvalRequest.findFirst({ where, orderBy: { createdAt: 'desc' } })
+    if (existing) return { request: existing, duplicate: true }
+    throw err
+  }
+}
+
 export async function listApprovalRequests(
   tenantId: string,
   filters?: { type?: ApprovalType; status?: ApprovalStatus },
@@ -68,6 +119,13 @@ export async function findPendingApprovalForSubject(
   })
 }
 
+export async function findLatestApprovalForSubject(tenantId: string, type: ApprovalType, subjectId: string) {
+  return tenantDb.approvalRequest.findFirst({
+    where: { tenantId, type, subjectId },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
 function notPending(status: ApprovalStatus): ApiError {
   return status === ApprovalStatus.CANCELLED
     ? new ApiError(400, 'Approval request was cancelled')
@@ -80,14 +138,20 @@ export async function decideApprovalRequest(
   decision: { approve: boolean; decidedBy: string; rejectReason?: string },
 ) {
   const row = await getApprovalRequest(tenantId, id)
-  if (row.status !== ApprovalStatus.PENDING) throw notPending(row.status)
+  if (row.status !== ApprovalStatus.PENDING) {
+    const sameDecision =
+      (decision.approve && row.status === ApprovalStatus.APPROVED) ||
+      (!decision.approve && row.status === ApprovalStatus.REJECTED)
+    if (sameDecision) return row
+    throw notPending(row.status)
+  }
   // A second person has to sign off: otherwise the requester can approve past their own limit.
   if (decision.approve && row.requestedBy === decision.decidedBy) {
     throw new ApiError(403, "You can't approve your own request. Ask another manager or admin.")
   }
 
   // The decision and its audit event commit together, and only while the request is still pending: of two
-  // approvers deciding at once, one wins and the other gets an error with nothing written.
+  // approvers deciding at once, one wins. A retry of the winning decision is an idempotent read.
   return tenantDb.$transaction(async (tx) => {
     const claimed = await tx.approvalRequest.updateMany({
       where: { id, tenantId, status: ApprovalStatus.PENDING },
@@ -99,8 +163,8 @@ export async function decideApprovalRequest(
       },
     })
     if (claimed.count !== 1) {
-      const now = await tx.approvalRequest.findFirst({ where: { id, tenantId }, select: { status: true } })
-      throw notPending(now?.status ?? ApprovalStatus.APPROVED)
+      const current = await tx.approvalRequest.findFirstOrThrow({ where: { id, tenantId } })
+      throw notPending(current.status)
     }
 
     await auditLog(
@@ -145,5 +209,39 @@ export async function cancelApprovalRequest(
       if (!logged) await auditLog(tenantId, opts.audit, tx)
     }
     return res.count === 1
+  })
+}
+
+export async function rejectApprovedCancellationForStatus(
+  tenantId: string,
+  id: string,
+  decidedBy: string,
+  reason: string,
+) {
+  return tenantDb.$transaction(async (tx) => {
+    const moved = await tx.approvalRequest.updateMany({
+      where: { id, tenantId, type: ApprovalType.ORDER_CANCELLATION, status: ApprovalStatus.APPROVED },
+      data: {
+        status: ApprovalStatus.REJECTED,
+        decidedBy,
+        decidedAt: new Date(),
+        rejectReason: reason,
+      },
+    })
+    const updated = await tx.approvalRequest.findFirstOrThrow({ where: { id, tenantId } })
+    if (moved.count === 1) {
+      await auditLog(
+        tenantId,
+        {
+          action: 'approval.rejected',
+          entityType: 'ApprovalRequest',
+          entityId: id,
+          userId: decidedBy,
+          metadata: { type: updated.type, subjectId: updated.subjectId, rejectReason: reason },
+        },
+        tx,
+      )
+    }
+    return updated
   })
 }

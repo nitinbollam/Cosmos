@@ -142,25 +142,52 @@ export async function submitExpenseReport(tenantId: string, reportId: string, us
 export async function decideExpenseReport(
   tenantId: string,
   reportId: string,
-  decision: { approve: boolean; decidedBy: string; rejectReason?: string },
+  decision: { approve: boolean; decidedBy: string; rejectReason?: string; approvalDecisionId?: string },
 ) {
   const report = await getReport(tenantId, reportId)
+  const alreadyDecided = decision.approve
+    ? report.status === ExpenseReportStatus.APPROVED || report.status === ExpenseReportStatus.PAID
+    : report.status === ExpenseReportStatus.REJECTED
+  if (decision.approvalDecisionId && alreadyDecided) {
+    // The posting outbox deduplicates by report and variant, so a retry can repair a missing enqueue safely.
+    if (decision.approve && report.status === ExpenseReportStatus.APPROVED) {
+      await enqueuePostingJobAfterCommit(expenseApprovedJob(report))
+    }
+    return report
+  }
   if (report.status !== ExpenseReportStatus.PENDING_APPROVAL) {
     throw new ApiError(400, 'Expense report is not pending approval')
   }
 
   if (!decision.approve) {
-    return transitionReport(tenantId, reportId, ExpenseReportStatus.PENDING_APPROVAL, {
-      status: ExpenseReportStatus.REJECTED,
-      decidedAt: new Date(),
-      rejectReason: decision.rejectReason?.trim() || 'Rejected',
-    })
+    try {
+      return await transitionReport(tenantId, reportId, ExpenseReportStatus.PENDING_APPROVAL, {
+        status: ExpenseReportStatus.REJECTED,
+        decidedAt: new Date(),
+        rejectReason: decision.rejectReason?.trim() || 'Rejected',
+      })
+    } catch (error) {
+      if (decision.approvalDecisionId) {
+        const current = await getReport(tenantId, reportId)
+        if (current.status === ExpenseReportStatus.REJECTED) return current
+      }
+      throw error
+    }
   }
 
-  const approved = await transitionReport(tenantId, reportId, ExpenseReportStatus.PENDING_APPROVAL, {
-    status: ExpenseReportStatus.APPROVED,
-    decidedAt: new Date(),
-  })
+  let approved: Awaited<ReturnType<typeof getReport>>
+  try {
+    approved = await transitionReport(tenantId, reportId, ExpenseReportStatus.PENDING_APPROVAL, {
+      status: ExpenseReportStatus.APPROVED,
+      decidedAt: new Date(),
+    })
+  } catch (error) {
+    if (decision.approvalDecisionId) {
+      const current = await getReport(tenantId, reportId)
+      if (current.status === ExpenseReportStatus.APPROVED || current.status === ExpenseReportStatus.PAID) return current
+    }
+    throw error
+  }
   // Dr Employee Expenses, Cr Reimbursements Payable, posted by the outbox worker.
   await enqueuePostingJobAfterCommit(expenseApprovedJob(approved))
   return approved

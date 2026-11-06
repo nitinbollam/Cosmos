@@ -71,4 +71,3 @@ test('with two lines each line keeps its own share however it is received', () =
   assert.equal(half.landedAdderPerUnit, full.landedAdderPerUnit)
   assert.equal(Math.round(full.lineLandedTotal * 100) / 100, 75)
 })
-

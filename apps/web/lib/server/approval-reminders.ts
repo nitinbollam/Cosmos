@@ -28,6 +28,7 @@ const STAGE_ROLES: Record<ApprovalStage, Array<'TENANT_ADMIN' | 'MANAGER'>> = {
 }
 
 export const APPROVAL_TYPE_LABELS: Record<string, string> = {
+  ORDER_CANCELLATION: 'Order cancellation',
   PURCHASE_REQUISITION: 'Purchase requisition',
   PURCHASE_ORDER: 'Purchase order',
   DISCOUNT: 'Discount',
