@@ -60,6 +60,7 @@ export async function issueInvoiceForOrder(
   amounts?: { subtotal: number; taxAmount: number; totalAmount: number; currency?: string },
   /** Runs inside the invoice's transaction, so related bookkeeping commits or rolls back with it. */
   inTransaction?: (tx: Prisma.TransactionClient, invoice: { id: string }) => Promise<void>,
+  ownership?: { sagaId: string; claimId: string },
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
@@ -89,6 +90,13 @@ export async function issueInvoiceForOrder(
   const { baseTotal, baseTax } = splitBaseAmounts(totalAmount, taxAmount, fx.fxRateToBase)
   // The invoice and its ledger posting job commit together; a worker posts to the ledger (posting-outbox).
   const finalInvoice = await orderDb.$transaction(async (tx) => {
+    if (ownership) {
+      const owned = await tx.orderSaga.updateMany({
+        where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    }
     const invoice = await tx.invoice.create({
       data: {
         tenantId,
@@ -176,6 +184,7 @@ export async function invoiceShipmentForOrder(
    * instead of billing the shipment again.
    */
   fulfillmentTaskId?: string,
+  ownership?: { sagaId: string; claimId: string },
 ) {
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
@@ -253,6 +262,7 @@ export async function invoiceShipmentForOrder(
         await markInvoiced(tx)
         await recordTask(tx, invoice.id)
       },
+      ownership,
     )
   }
 
@@ -270,6 +280,13 @@ export async function invoiceShipmentForOrder(
   )
 
   const updated = await orderDb.$transaction(async (tx) => {
+    if (ownership) {
+      const owned = await tx.orderSaga.updateMany({
+        where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    }
     const row = await tx.invoice.update({
       where: { id: invoiceId, tenantId },
       data: {
@@ -308,7 +325,11 @@ export async function invoiceShipmentForOrder(
   return updated
 }
 
-export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
+export async function syncInvoiceFromOrder(
+  tenantId: string,
+  orderId: string,
+  ownership?: { sagaId: string; claimId: string },
+) {
   const invoice = await orderDb.invoice.findFirst({ where: { tenantId, orderId } })
   if (!invoice) return null
 
@@ -327,13 +348,24 @@ export async function syncInvoiceFromOrder(tenantId: string, orderId: string) {
     paymentMethod: order.paymentMethod,
     issuedAt: invoice.issuedAt,
   })
+  const data = {
+    amountPaid: new Prisma.Decimal(paid),
+    status: toStoredInvoiceStatus(status) as never,
+  }
 
-  return orderDb.invoice.update({
-    where: { id: invoice.id },
-    data: {
-      amountPaid: new Prisma.Decimal(paid),
-      status: toStoredInvoiceStatus(status) as never,
-    },
+  if (!ownership) {
+    return orderDb.invoice.update({
+      where: { id: invoice.id },
+      data,
+    })
+  }
+  return orderDb.$transaction(async (tx) => {
+    const owned = await tx.orderSaga.updateMany({
+      where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+      data: { updatedAt: new Date() },
+    })
+    if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    return tx.invoice.update({ where: { id: invoice.id }, data })
   })
 }
 
@@ -346,9 +378,17 @@ export async function reconcileCancelledOrderInvoice(
   tenantId: string,
   orderId: string,
   refundedAmount: MoneyValue = '0',
+  ownership?: { sagaId: string; claimId: string },
 ) {
   const marker = `Order cancellation: ${orderId}`
   return orderDb.$transaction(async (tx) => {
+    if (ownership) {
+      const owned = await tx.orderSaga.updateMany({
+        where: { id: ownership.sagaId, status: 'COMPENSATING', correlationId: ownership.claimId },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    }
     const order = await tx.order.findFirst({
       where: { id: orderId, tenantId },
       select: { amountPaid: true },

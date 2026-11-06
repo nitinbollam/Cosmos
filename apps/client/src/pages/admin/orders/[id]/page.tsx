@@ -132,6 +132,7 @@ export default function OrderDetailPage() {
   const [shipErr, setShipErr] = useState<string | null>(null)
   const [dropShipTracking, setDropShipTracking] = useState('')
   const [dropShipCarrier, setDropShipCarrier] = useState('Vendor')
+  const [dropShipPurchaseOrderId, setDropShipPurchaseOrderId] = useState('')
 
   const orderQ = useQuery({
     queryKey: ['order', id],
@@ -193,6 +194,10 @@ export default function OrderDetailPage() {
       api.post(`/orders/${encodeURIComponent(id)}/drop-ship/ship`, {
         carrier: dropShipCarrier.trim() || 'Vendor',
         trackingNumber: dropShipTracking.trim() || undefined,
+        purchaseOrderId:
+          dropShipPurchaseOrderId === '__all__'
+            ? undefined
+            : dropShipPurchaseOrderId || (dropShipPoIds.length > 1 ? dropShipPoIds[0] : undefined),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['order', id] })
@@ -245,6 +250,13 @@ export default function OrderDetailPage() {
   })
 
   const data = orderQ.data
+  const dropShipPoIds = [
+    ...new Set(
+      (data?.lineItems ?? [])
+        .filter((li) => li.fulfillmentType === 'DROP_SHIP' && li.dropShipPoId)
+        .map((li) => li.dropShipPoId!),
+    ),
+  ]
 
   function openShipEditor() {
     if (!data?.lineItems?.length) return
@@ -489,8 +501,23 @@ export default function OrderDetailPage() {
               </tbody>
             </table>
             {(data.lineItems ?? []).some((li) => li.fulfillmentType === 'DROP_SHIP') &&
-            !['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(data.status) ? (
+            !['DELIVERED', 'RETURNED', 'CANCELLED'].includes(data.status) ? (
               <div className="mt-4 p-4 rounded-lg flex flex-wrap gap-3 items-end" style={{ background: 'var(--c-surface-2)', border: '1px solid var(--c-border)' }}>
+                {dropShipPoIds.length > 1 ? (
+                  <label className="text-xs text-pleros-text-3">
+                    Supplier purchase order
+                    <select
+                      className="pleros-input block mt-1"
+                      value={dropShipPurchaseOrderId || dropShipPoIds[0]}
+                      onChange={(e) => setDropShipPurchaseOrderId(e.target.value)}
+                    >
+                      <option value="__all__">All drop-ship lines</option>
+                      {dropShipPoIds.map((poId) => (
+                        <option key={poId} value={poId}>PO {poId.slice(-8)}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <div>
                   <div className="text-[11px] uppercase tracking-wider mb-1" style={{ color: 'var(--c-text-3)' }}>
                     Carrier

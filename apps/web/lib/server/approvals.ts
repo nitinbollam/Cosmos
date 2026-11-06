@@ -37,8 +37,19 @@ export async function createApprovalRequest(tenantId: string, input: CreateAppro
 }
 
 /** Create one pending request for a subject, rechecking inside a serializable transaction. */
-export async function createPendingApprovalRequest(tenantId: string, input: CreateApprovalInput) {
-  const where = { tenantId, type: input.type, subjectId: input.subjectId, status: ApprovalStatus.PENDING }
+export async function createPendingApprovalRequest(
+  tenantId: string,
+  input: CreateApprovalInput,
+  opts: { includeApproved?: boolean } = {},
+) {
+  const where = {
+    tenantId,
+    type: input.type,
+    subjectId: input.subjectId,
+    status: opts.includeApproved
+      ? { in: [ApprovalStatus.PENDING, ApprovalStatus.APPROVED] }
+      : ApprovalStatus.PENDING,
+  }
   try {
     return await tenantDb.$transaction(
       async (tx) => {

@@ -250,17 +250,19 @@ export async function createPosOrder(
   }
 
   const { withOrderFulfillmentLock } = await import('./order-orchestration')
-  return withOrderFulfillmentLock(tenantId, order.id, async () => {
+  return withOrderFulfillmentLock(tenantId, order.id, async (claim) => {
   const cashOrCheck = resolvedTenders.some((t) => t.method === 'CASH' || t.method === 'CHECK')
   const giftOnly =
     giftApplied >= totalAmount - 0.02 && !resolvedTenders.some((t) => t.method === 'CARD')
   if ((cashOrCheck || giftOnly) && !resolvedTenders.some((t) => t.method === 'CARD')) {
-    await orderDb.order.update({
-      where: { id: order.id },
-      data: { amountPaid: new OrderPrisma.Decimal(totalAmount), confirmedAt: new Date() },
+    const { updateOrderUnderFulfillmentClaim } = await import('./order-orchestration')
+    await updateOrderUnderFulfillmentClaim(tenantId, order.id, claim, {
+      amountPaid: new OrderPrisma.Decimal(totalAmount),
+      confirmedAt: new Date(),
     })
   }
 
+  await claim.assertOwned()
   await tenantDb.posTender.createMany({
     data: resolvedTenders.map((t) => ({
       tenantId,
@@ -270,9 +272,12 @@ export async function createPosOrder(
       amount: new Prisma.Decimal(t.amount),
     })),
   })
+  await claim.assertOwned()
 
   const wms = await import('./wms-fulfillment')
+  await claim.assertOwned()
   await wms.cancelFulfillmentByOrder(tenantId, order.id, 'pos-immediate')
+  await claim.assertOwned()
 
   const inv = await import('./inventory')
   const serials = await import('./inventory-serials')
@@ -281,14 +286,17 @@ export async function createPosOrder(
     warehouseId: li.warehouseId,
     quantity: li.quantity,
   }))
+  await claim.assertOwned()
   await serials.enforceAndShipSerialsForOrder(tenantId, order.id, shipLines)
+  await claim.assertOwned()
   const { shipped } = await inv.commitShipmentForOrder(tenantId, order.id, userId)
+  await claim.assertOwned()
 
     const { transitionOrderStatus, onFulfillmentDispatched, onDeliveryStopDelivered } =
       await import('./order-orchestration')
-    await transitionOrderStatus(tenantId, order.id, 'PACKED', undefined, { coordinationHeld: true })
-  await onFulfillmentDispatched(tenantId, order.id, shipped, undefined, { coordinationHeld: true })
-  await onDeliveryStopDelivered(tenantId, order.id)
+    await transitionOrderStatus(tenantId, order.id, 'PACKED', undefined, { coordinationHeld: true, ownership: claim })
+  await onFulfillmentDispatched(tenantId, order.id, shipped, undefined, { coordinationHeld: true, ownership: claim })
+  await onDeliveryStopDelivered(tenantId, order.id, claim)
 
   void auditLog(tenantId, {
     action: 'pos.order_created',

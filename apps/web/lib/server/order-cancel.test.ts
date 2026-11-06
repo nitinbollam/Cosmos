@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { after, before, test } from 'node:test'
+import { ISOLATED_PROVIDER, ISOLATED_SKIP, assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases, validatePgAdminUrl } from './test-support/isolated-databases'
+import { after, before, test as nodeTest, type TestOptions } from 'node:test'
 import { crmDb, inventoryDb, ledgerDb, orderDb, paymentDb, tenantDb, wmsDb } from './db'
 import { applyCreditUsed } from './credit-limit'
 import {
@@ -15,11 +16,29 @@ import { ensurePostingAccounts } from './ledger-posting'
 import { releaseReservationsOfDeadOrders } from './reservation-safety-net'
 import { ApiError } from './session'
 import * as wmsFulfillment from './wms-fulfillment'
+import { markDropShipLinesShipped } from './drop-ship'
+import { runOrderFulfillmentPipeline } from './order-orchestration'
+
+type TestBody = () => void | Promise<void>
+function test(name: string, fn: TestBody): void
+function test(name: string, options: TestOptions, fn: TestBody): void
+function test(name: string, optionsOrFn: TestOptions | TestBody, maybeFn?: TestBody) {
+  if (typeof optionsOrFn === 'function') {
+    nodeTest(name, { skip: ISOLATED_SKIP }, optionsOrFn)
+    return
+  }
+  nodeTest(name, { ...optionsOrFn, skip: ISOLATED_SKIP || optionsOrFn.skip }, maybeFn!)
+}
 
 const tenantId = `t-${randomUUID()}`
 let customerId = ''
 
 before(async () => {
+  if (ISOLATED_SKIP) return
+  assertIsolated()
+  await prepareIsolatedDatabases([
+    'tenant', 'crm', 'inventory', 'order', 'payment', 'wms', 'ledger', 'notification', 'saleschannels',
+  ])
   await tenantDb.tenantOrganization.create({
     data: {
       id: tenantId,
@@ -37,6 +56,7 @@ before(async () => {
 })
 
 after(async () => {
+  if (ISOLATED_SKIP) return
   await ledgerDb.journalLine.deleteMany({ where: { entry: { tenantId } } })
   await ledgerDb.journalEntry.deleteMany({ where: { tenantId } })
   await ledgerDb.chartAccount.deleteMany({ where: { tenantId } })
@@ -57,6 +77,7 @@ after(async () => {
   await crmDb.creditApplication.deleteMany({ where: { tenantId } })
   await crmDb.customer.deleteMany({ where: { tenantId } })
   await tenantDb.tenantOrganization.delete({ where: { id: tenantId } }).catch(() => undefined)
+  await disposeIsolatedDatabases()
 })
 
 async function seed(
@@ -154,6 +175,19 @@ async function withPatched<T>(
   }
 }
 
+async function raceTogether<A, B>(first: () => Promise<A>, second: () => Promise<B>) {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let ready = 0
+  const start = async <T>(work: () => Promise<T>) => {
+    ready++
+    if (ready === 2) release()
+    await gate
+    return work()
+  }
+  return Promise.allSettled([start(first), start(second)])
+}
+
 /** Make one call to `target[key]` throw (when `when` agrees), as a failing dependency would. */
 function failOnce<T>(
   target: object,
@@ -177,6 +211,78 @@ function failOnce<T>(
   )
 }
 
+function failInvoiceCreateOnce<T>(fn: () => Promise<T>) {
+  const original = (orderDb as unknown as { $transaction: (...args: unknown[]) => Promise<unknown> })
+    .$transaction.bind(orderDb)
+  let armed = true
+  return withPatched(orderDb, '$transaction', async (callback: unknown, ...options: unknown[]) => {
+    if (typeof callback !== 'function') return original(callback, ...options)
+    return original(async (tx: unknown) => {
+      const wrapped = new Proxy(tx as object, {
+        get(target, property, receiver) {
+          const value = Reflect.get(target, property, receiver)
+          if (property !== 'invoice') return typeof value === 'function' ? value.bind(target) : value
+          return new Proxy(value as object, {
+            get(delegate, method, delegateReceiver) {
+              const operation = Reflect.get(delegate, method, delegateReceiver)
+              if (method === 'create') {
+                return (...args: unknown[]) => {
+                  if (armed) {
+                    armed = false
+                    throw new Error('injected invoice failure')
+                  }
+                  return operation.apply(delegate, args)
+                }
+              }
+              return typeof operation === 'function' ? operation.bind(delegate) : operation
+            },
+          })
+        },
+      })
+      return (callback as (transaction: unknown) => Promise<unknown>)(wrapped)
+    }, ...options)
+  }, fn)
+}
+
+function failTransactionalOperationOnce<T>(
+  model: string,
+  method: string,
+  fn: () => Promise<T>,
+  onInjected: () => void,
+) {
+  const original = (orderDb as unknown as { $transaction: (...args: unknown[]) => Promise<unknown> })
+    .$transaction.bind(orderDb)
+  let armed = true
+  return withPatched(orderDb, '$transaction', async (callback: unknown, ...options: unknown[]) => {
+    if (typeof callback !== 'function') return original(callback, ...options)
+    return original(async (tx: unknown) => {
+      const wrapped = new Proxy(tx as object, {
+        get(target, property, receiver) {
+          const value = Reflect.get(target, property, receiver)
+          if (property !== model) return typeof value === 'function' ? value.bind(target) : value
+          return new Proxy(value as object, {
+            get(delegate, operationName, delegateReceiver) {
+              const operation = Reflect.get(delegate, operationName, delegateReceiver)
+              if (operationName === method) {
+                return (...args: unknown[]) => {
+                  if (armed) {
+                    armed = false
+                    onInjected()
+                    throw new Error('injected fault')
+                  }
+                  return operation.apply(delegate, args)
+                }
+              }
+              return typeof operation === 'function' ? operation.bind(delegate) : operation
+            },
+          })
+        },
+      })
+      return (callback as (transaction: unknown) => Promise<unknown>)(wrapped)
+    }, ...options)
+  }, fn)
+}
+
 async function state(s: { orderId: string; taskId: string; skuId: string; warehouseId: string }) {
   const order = await orderDb.order.findFirstOrThrow({ where: { id: s.orderId } })
   const res = await inventoryDb.stockReservation.findMany({
@@ -194,7 +300,10 @@ async function state(s: { orderId: string; taskId: string; skuId: string; wareho
   }
 }
 
-const faults: Array<{ step: string; run: <T>(fn: () => Promise<T>) => Promise<T> }> = [
+const faults: Array<{
+  step: string
+  run: <T>(fn: () => Promise<T>, onInjected?: () => void) => Promise<T>
+}> = [
   {
     step: 'fulfillment',
     run: (fn) =>
@@ -211,7 +320,8 @@ const faults: Array<{ step: string; run: <T>(fn: () => Promise<T>) => Promise<T>
   },
   {
     step: 'backorders',
-    run: (fn) => failOnce(orderDb.backorderLine, 'updateMany', () => true, fn),
+    run: (fn, onInjected = () => {}) =>
+      failTransactionalOperationOnce('backorderLine', 'updateMany', fn, onInjected),
   },
   { step: 'credit', run: (fn) => failOnce(crmDb, '$transaction', () => true, fn) },
 ]
@@ -220,18 +330,52 @@ for (const f of faults) {
   test(`a failure at "${f.step}" stops the cancel, names the step, and the next cancel completes it`, async () => {
     const s = await seed({ net: true })
     const creditBefore = await creditUsed()
+    let backorderLineId: string | undefined
+    if (f.step === 'backorders') {
+      const line = await orderDb.orderLineItem.findFirstOrThrow({ where: { orderId: s.orderId } })
+      const backorder = await orderDb.backorderLine.create({
+        data: {
+          tenantId,
+          orderId: s.orderId,
+          orderLineItemId: line.id,
+          skuId: s.skuId,
+          warehouseId: s.warehouseId,
+          quantity: 2,
+        },
+      })
+      backorderLineId = backorder.id
+    }
+    let faultInjected = false
     await f.run(async () => {
       await assert.rejects(
         () => cancelOrderWithCompensation(tenantId, s.orderId, 'customer request'),
         (err: unknown) =>
           err instanceof ApiError && err.status === 502 && err.message.includes(`"${f.step}"`),
       )
-    })
-    assert.notEqual(
-      (await state(s)).status,
-      'CANCELLED',
-      'not cancelled while a step is outstanding',
-    )
+    }, () => { faultInjected = true })
+    if (f.step === 'backorders') assert.equal(faultInjected, true, 'transactional backorder fault was injected')
+    const interrupted = await state(s)
+    assert.notEqual(interrupted.status, 'CANCELLED', 'not cancelled while a step is outstanding')
+    if (f.step === 'backorders') {
+      assert.deepEqual(interrupted, {
+        status: 'PROCESSING',
+        reservations: ['RELEASED'],
+        reserved: 0,
+        task: 'CANCELLED',
+      })
+      assert.equal(await creditUsed(), creditBefore, 'credit remains reserved until backorder cancellation succeeds')
+      assert.equal(
+        (await orderDb.backorderLine.findUniqueOrThrow({ where: { id: backorderLineId! } })).status,
+        'OPEN',
+        'the failed backorder transaction leaves its row unchanged',
+      )
+      const interruptedSaga = await orderDb.orderSaga.findFirstOrThrow({ where: { orderId: s.orderId } })
+      const interruptedCancel = (interruptedSaga.compensations as {
+        cancel: { complete: boolean; steps: Record<string, string> }
+      }).cancel
+      assert.notEqual(interruptedCancel.complete, true)
+      assert.match(interruptedCancel.steps.backorders, /^failed: injected fault/)
+    }
 
     await cancelOrderWithCompensation(tenantId, s.orderId, 'customer request')
     assert.deepEqual(await state(s), {
@@ -240,6 +384,12 @@ for (const f of faults) {
       reserved: 0,
       task: 'CANCELLED',
     })
+    if (backorderLineId) {
+      assert.equal(
+        (await orderDb.backorderLine.findUniqueOrThrow({ where: { id: backorderLineId } })).status,
+        'CANCELLED',
+      )
+    }
     assert.equal(await creditUsed(), creditBefore - 25, 'credit released exactly once')
 
     const saga = await orderDb.orderSaga.findFirstOrThrow({ where: { orderId: s.orderId } })
@@ -326,7 +476,7 @@ test('a crash after the refund but before it was recorded is not taken off amoun
   const s = await seedPaid('100.00', '0', '100.00')
   await failOnce(
     orderDb.orderSaga,
-    'update',
+    'updateMany',
     (a: { data?: { compensations?: { cancel?: { steps?: Record<string, string> } } } }) =>
       a?.data?.compensations?.cancel?.steps?.payments === 'done',
     async () => {
@@ -654,12 +804,14 @@ test('unpaid and partially paid cancellations post balanced AR and cash credit t
   }
 })
 
-test('PACKED transition and cancellation are mutually exclusive; packed winner is never refunded', async () => {
+test('PACKED transition and cancellation are mutually exclusive; packed winner is never refunded', {
+  skip: ISOLATED_PROVIDER !== 'postgresql',
+}, async () => {
   const s = await seedPaid('25.00', '0', '25.00')
-  const [cancel, packed] = await Promise.allSettled([
-    cancelOrderWithCompensation(tenantId, s.orderId, 'race'),
-    transitionOrderStatus(tenantId, s.orderId, 'PACKED'),
-  ])
+  const [cancel, packed] = await raceTogether(
+    () => cancelOrderWithCompensation(tenantId, s.orderId, 'race'),
+    () => transitionOrderStatus(tenantId, s.orderId, 'PACKED'),
+  )
   const order = await orderDb.order.findFirstOrThrow({ where: { id: s.orderId } })
   const intent = await paymentDb.paymentIntent.findFirstOrThrow({ where: { id: s.intentId } })
   if (order.status === 'PACKED') {
@@ -723,7 +875,8 @@ test('an order that has shipped cannot be cancelled, and nothing is undone', asy
   const s = await seed({ status: 'SHIPPED' })
   await assert.rejects(
     () => cancelOrderWithCompensation(tenantId, s.orderId, 'x'),
-    (err: unknown) => err instanceof ApiError && err.status === 400,
+    (err: unknown) =>
+      err instanceof ApiError && err.status === 400 && /Return \/ Credit note/.test(err.message),
   )
   assert.deepEqual((await state(s)).reservations, ['ACTIVE'])
 })
@@ -771,6 +924,306 @@ test('packing cannot advance a task while cancellation holds its fulfillment lea
   )
 })
 
+test('drop-ship fulfillment works after packing, allows a second supplier shipment, and is idempotent by tracking number', async () => {
+  const s = await seed({ status: 'PACKED', taskStatus: 'PACKED', picked: 5 })
+  const dropSkuId = `drop-${randomUUID()}`
+  const dropLine = await orderDb.orderLineItem.create({
+    data: {
+      orderId: s.orderId,
+      skuId: dropSkuId,
+      warehouseId: s.warehouseId,
+      quantity: 2,
+      unitPrice: '3.00',
+      fulfillmentType: 'DROP_SHIP',
+      supplierId: `supplier-${randomUUID()}`,
+      dropShipPoId: 'supplier-po-1',
+    },
+  })
+  const secondDropLine = await orderDb.orderLineItem.create({
+    data: {
+      orderId: s.orderId,
+      skuId: `drop-${randomUUID()}`,
+      warehouseId: s.warehouseId,
+      quantity: 1,
+      unitPrice: '4.00',
+      fulfillmentType: 'DROP_SHIP',
+      supplierId: `supplier-${randomUUID()}`,
+      dropShipPoId: 'supplier-po-2',
+    },
+  })
+
+  const first = await markDropShipLinesShipped(tenantId, s.orderId, {
+    carrier: 'Supplier A',
+    trackingNumber: 'TRACK-ONE',
+    purchaseOrderId: 'supplier-po-1',
+  })
+  assert.equal(first.shipmentNo, 1)
+  assert.equal((await orderDb.order.findFirstOrThrow({ where: { id: s.orderId } })).status, 'SHIPPED')
+  assert.equal(await orderDb.invoice.count({ where: { orderId: s.orderId } }), 1)
+  assert.equal(
+    Number((await orderDb.orderLineItem.findFirstOrThrow({ where: { id: dropLine.id } })).quantityInvoiced),
+    2,
+  )
+
+  const retry = await markDropShipLinesShipped(tenantId, s.orderId, {
+    carrier: 'Supplier A',
+    trackingNumber: 'TRACK-ONE',
+    purchaseOrderId: 'supplier-po-1',
+  })
+  assert.deepEqual(retry, first)
+  const noTrackingRetry = await markDropShipLinesShipped(tenantId, s.orderId, {
+    carrier: 'Supplier A',
+    purchaseOrderId: 'supplier-po-1',
+  })
+  assert.deepEqual(noTrackingRetry, first)
+  assert.equal(await orderDb.orderShipment.count({ where: { tenantId, orderId: s.orderId } }), 1)
+
+  const secondSupplier = await markDropShipLinesShipped(tenantId, s.orderId, {
+    carrier: 'Supplier B',
+    trackingNumber: 'TRACK-TWO',
+    purchaseOrderId: 'supplier-po-2',
+  })
+  assert.equal(secondSupplier.shipmentNo, 2)
+  assert.equal(await orderDb.orderShipment.count({ where: { tenantId, orderId: s.orderId } }), 2)
+  assert.equal(await orderDb.invoice.count({ where: { orderId: s.orderId } }), 1)
+  assert.equal(
+    Number((await orderDb.orderLineItem.findFirstOrThrow({ where: { id: dropLine.id } })).quantityInvoiced),
+    2,
+  )
+  assert.equal(
+    Number((await orderDb.orderLineItem.findFirstOrThrow({ where: { id: secondDropLine.id } })).quantityInvoiced),
+    1,
+  )
+})
+
+test('drop-ship shipment retry recovers a failed invoice without duplicating the shipment', async () => {
+  const s = await seed({ status: 'PACKED', taskStatus: 'PACKED', picked: 5 })
+  const line = await orderDb.orderLineItem.create({
+    data: {
+      orderId: s.orderId,
+      skuId: `drop-${randomUUID()}`,
+      warehouseId: s.warehouseId,
+      quantity: 2,
+      unitPrice: '3.00',
+      fulfillmentType: 'DROP_SHIP',
+      supplierId: `supplier-${randomUUID()}`,
+      dropShipPoId: 'retry-po',
+    },
+  })
+  await failInvoiceCreateOnce(async () => {
+      const first = await markDropShipLinesShipped(tenantId, s.orderId, {
+        carrier: 'Supplier', trackingNumber: 'RETRY-TRACK', purchaseOrderId: 'retry-po',
+      })
+      assert.equal(await orderDb.invoice.findFirst({ where: { orderId: s.orderId } }), null)
+      const retry = await markDropShipLinesShipped(tenantId, s.orderId, {
+        carrier: 'Supplier', trackingNumber: 'RETRY-TRACK', purchaseOrderId: 'retry-po',
+      })
+      assert.deepEqual(retry, first)
+      assert.equal(await orderDb.orderShipment.count({ where: { tenantId, orderId: s.orderId } }), 1)
+      assert.equal(await orderDb.invoice.count({ where: { tenantId, orderId: s.orderId } }), 1)
+      assert.equal(Number((await orderDb.orderLineItem.findFirstOrThrow({ where: { id: line.id } })).quantityInvoiced), 2)
+    })
+})
+
+test('no-tracking drop-ship retry also resumes billing the existing shipment', async () => {
+  const s = await seed({ status: 'SHIPPED', taskStatus: 'PACKED', picked: 5 })
+  const line = await orderDb.orderLineItem.create({
+    data: {
+      orderId: s.orderId,
+      skuId: `drop-${randomUUID()}`,
+      warehouseId: s.warehouseId,
+      quantity: 1,
+      unitPrice: '4.00',
+      fulfillmentType: 'DROP_SHIP',
+      supplierId: `supplier-${randomUUID()}`,
+      dropShipPoId: 'retry-no-track-po',
+    },
+  })
+  await failInvoiceCreateOnce(async () => {
+    const first = await markDropShipLinesShipped(tenantId, s.orderId, { purchaseOrderId: 'retry-no-track-po' })
+    const retry = await markDropShipLinesShipped(tenantId, s.orderId, { purchaseOrderId: 'retry-no-track-po' })
+    assert.deepEqual(retry, first)
+    assert.equal(await orderDb.orderShipment.count({ where: { tenantId, orderId: s.orderId } }), 1)
+    assert.equal(await orderDb.invoice.count({ where: { tenantId, orderId: s.orderId } }), 1)
+    assert.equal(Number((await orderDb.orderLineItem.findFirstOrThrow({ where: { id: line.id } })).quantityInvoiced), 1)
+  })
+})
+
+test('PostgreSQL isolation helper rejects default and non-local targets', () => {
+  assert.throws(() => validatePgAdminUrl('postgresql://test:test@127.0.0.1:5432/postgres'), /non-default port/)
+  assert.throws(() => validatePgAdminUrl('postgresql://test:test@db.example:55456/postgres'), /localhost/)
+  assert.throws(() => validatePgAdminUrl('postgresql://test:test@127.0.0.1/postgres'), /explicit non-default port/)
+})
+
+test('fulfillment rejects if ownership changes between heartbeat ticks', async () => {
+  const s = await seed({ status: 'PROCESSING' })
+  let enter!: () => void
+  let release!: () => void
+  const entered = new Promise<void>((resolve) => (enter = resolve))
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const operation = withOrderFulfillmentLock(tenantId, s.orderId, async () => {
+    enter()
+    await gate
+  })
+  await entered
+  const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { orderId: s.orderId } })
+  await orderDb.orderSaga.update({ where: { id: saga.id }, data: { correlationId: 'replacement-owner' } })
+  release()
+  await assert.rejects(operation, (err: unknown) => err instanceof ApiError && err.status === 409)
+  const after = await orderDb.orderSaga.findUniqueOrThrow({ where: { id: saga.id } })
+  assert.equal(after.correlationId, 'replacement-owner')
+})
+
+test('cancellation that loses ownership stops before payment and inventory compensation', async () => {
+  const s = await seedPaid('25.00', '0', '25.00')
+  const original = wmsDb.fulfillmentTask.findMany.bind(wmsDb.fulfillmentTask)
+  let stolen = false
+  await withPatched(wmsDb.fulfillmentTask, 'findMany', async (...args: Parameters<typeof original>) => {
+    const rows = await original(...args)
+    if (!stolen) {
+      stolen = true
+      const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { orderId: s.orderId } })
+      await orderDb.orderSaga.update({ where: { id: saga.id }, data: { correlationId: 'replacement-cancel-owner' } })
+    }
+    return rows
+  }, async () => {
+    await assert.rejects(
+      () => cancelOrderWithCompensation(tenantId, s.orderId, 'ownership test'),
+      (err: unknown) => err instanceof ApiError && err.status === 409,
+    )
+  })
+  assert.equal(Number((await paymentDb.paymentIntent.findFirstOrThrow({ where: { id: s.intentId } })).refundedAmount), 0)
+  assert.equal(Number((await orderDb.order.findFirstOrThrow({ where: { id: s.orderId } })).amountPaid), 25)
+  assert.equal(await inventoryDb.stockReservation.count({ where: { orderId: s.orderId, status: 'ACTIVE' } }), 1)
+})
+
+test('pipeline keeps renewing its claim during a long-running inventory stage', async () => {
+  const s = await seed({ status: 'PENDING' })
+  await orderDb.orderLineItem.updateMany({ where: { orderId: s.orderId }, data: { quantityAllocated: 0 } })
+  let enter!: () => void
+  let release!: () => void
+  const entered = new Promise<void>((resolve) => (enter = resolve))
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const original = orderDb.orderLineItem.update.bind(orderDb.orderLineItem)
+  const operation = withPatched(orderDb.orderLineItem, 'update', async (...args: Parameters<typeof original>) => {
+    enter()
+    await gate
+    return original(...args)
+  }, () => runOrderFulfillmentPipeline(s.orderId, tenantId, randomUUID()))
+  await entered
+  const before = (await orderDb.orderSaga.findUniqueOrThrow({ where: { orderId: s.orderId } })).updatedAt
+  await new Promise((resolve) => setTimeout(resolve, 10_500))
+  const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { orderId: s.orderId } })
+  assert.ok(saga.updatedAt > before)
+  assert.equal(await runOrderFulfillmentPipeline(s.orderId, tenantId, randomUUID()), 'ALREADY_RUNNING')
+  release()
+  assert.equal(await operation, 'COMPLETED')
+})
+
+test('drop-ship fulfillment and cancellation cannot both claim an eligible order', {
+  skip: ISOLATED_PROVIDER !== 'postgresql',
+}, async () => {
+  const s = await seed({ status: 'PROCESSING', taskStatus: 'PICKING' })
+  let enterWork!: () => void
+  let releaseWork!: () => void
+  const workEntered = new Promise<void>((resolve) => (enterWork = resolve))
+  const workGate = new Promise<void>((resolve) => (releaseWork = resolve))
+  const fulfillment = withOrderFulfillmentLock(
+    tenantId,
+    s.orderId,
+    async () => {
+      enterWork()
+      await workGate
+      return transitionOrderStatus(tenantId, s.orderId, 'PACKED', undefined, { coordinationHeld: true })
+    },
+  )
+  await workEntered
+  await assert.rejects(
+    () => cancelOrderWithCompensation(tenantId, s.orderId, 'race'),
+    (err: unknown) => err instanceof ApiError && err.status === 409,
+  )
+  releaseWork()
+  await fulfillment
+  assert.equal((await orderDb.order.findFirstOrThrow({ where: { id: s.orderId } })).status, 'PACKED')
+})
+
+test('transition and fulfillment claims block while fresh and can be taken over after expiry', async () => {
+  const transition = await seed({ status: 'PROCESSING' })
+  const transitionSaga = await orderDb.orderSaga.create({
+    data: {
+      tenantId,
+      orderId: transition.orderId,
+      status: 'RUNNING',
+      correlationId: 'active-transition',
+      completedSteps: [],
+      compensations: {},
+    },
+  })
+  await assert.rejects(
+    () => transitionOrderStatus(tenantId, transition.orderId, 'PACKED'),
+    (err: unknown) => err instanceof ApiError && err.status === 409,
+  )
+  await orderDb.orderSaga.update({
+    where: { id: transitionSaga.id },
+    data: { updatedAt: new Date(Date.now() - 3 * 60_000) },
+  })
+  await transitionOrderStatus(tenantId, transition.orderId, 'PACKED')
+  assert.equal((await orderDb.order.findFirstOrThrow({ where: { id: transition.orderId } })).status, 'PACKED')
+  assert.equal((await orderDb.orderSaga.findUniqueOrThrow({ where: { id: transitionSaga.id } })).status, 'FAILED')
+
+  const fulfillmentOrder = await seed({ status: 'PROCESSING' })
+  const fulfillmentSaga = await orderDb.orderSaga.create({
+    data: {
+      tenantId,
+      orderId: fulfillmentOrder.orderId,
+      status: 'COMPENSATING',
+      correlationId: 'active-fulfillment',
+      completedSteps: [],
+      compensations: {},
+    },
+  })
+  await assert.rejects(
+    () => withOrderFulfillmentLock(tenantId, fulfillmentOrder.orderId, async () => undefined),
+    (err: unknown) => err instanceof ApiError && err.status === 409,
+  )
+  await orderDb.orderSaga.update({
+    where: { id: fulfillmentSaga.id },
+    data: { updatedAt: new Date(Date.now() - 3 * 60_000) },
+  })
+  await withOrderFulfillmentLock(tenantId, fulfillmentOrder.orderId, async () => undefined)
+  assert.equal((await orderDb.orderSaga.findUniqueOrThrow({ where: { id: fulfillmentSaga.id } })).status, 'FAILED')
+})
+
+test('a long-running fulfillment callback renews its lease and only its owner releases the claim', async () => {
+  const s = await seed({ status: 'PROCESSING' })
+  let enterWork!: () => void
+  let releaseWork!: () => void
+  const workEntered = new Promise<void>((resolve) => (enterWork = resolve))
+  const workGate = new Promise<void>((resolve) => (releaseWork = resolve))
+  const fulfillment = withOrderFulfillmentLock(tenantId, s.orderId, async () => {
+    enterWork()
+    await workGate
+  })
+  await workEntered
+  const claimedAt = (await orderDb.orderSaga.findUniqueOrThrow({ where: { orderId: s.orderId } })).updatedAt
+  await new Promise((resolve) => setTimeout(resolve, 10_500))
+  const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { orderId: s.orderId } })
+  assert.ok(saga.updatedAt > claimedAt, 'heartbeat must refresh updatedAt while work remains active')
+  await assert.rejects(
+    () => withOrderFulfillmentLock(tenantId, s.orderId, async () => undefined),
+    (err: unknown) => err instanceof ApiError && err.status === 409,
+  )
+  await orderDb.orderSaga.update({
+    where: { id: saga.id },
+    data: { correlationId: 'replacement-owner', status: 'COMPENSATING' },
+  })
+  releaseWork()
+  await assert.rejects(fulfillment, (err: unknown) => err instanceof ApiError && err.status === 409)
+  const after = await orderDb.orderSaga.findUniqueOrThrow({ where: { orderId: s.orderId } })
+  assert.equal(after.correlationId, 'replacement-owner')
+  assert.equal(after.status, 'COMPENSATING')
+})
+
 test('safety net releases reservations held by cancelled or failed orders and leaves live ones', async () => {
   const dead = await seed({ status: 'CANCELLED' })
   const failed = await seed({ status: 'FAILED' })
@@ -785,22 +1238,16 @@ test('safety net releases reservations held by cancelled or failed orders and le
 
 test(
   'cancel and dispatch together end in one consistent state',
-  { skip: process.env.PLEROS_DB_PROVIDER !== 'postgres' },
+  { skip: ISOLATED_PROVIDER !== 'postgresql' },
   async () => {
   let shipped = 0
   let cancelled = 0
   for (let i = 0; i < 15; i++) {
     const s = await seed({ status: 'PACKED', taskStatus: 'PACKED', picked: 5 })
-    await Promise.allSettled([
-      (async () => {
-        await new Promise((r) => setTimeout(r, Math.random() * 15))
-        return dispatchFulfillmentTask(tenantId, s.taskId)
-      })(),
-      (async () => {
-        await new Promise((r) => setTimeout(r, Math.random() * 15))
-        return cancelOrderWithCompensation(tenantId, s.orderId, 'race')
-      })(),
-    ])
+    await raceTogether(
+      () => dispatchFulfillmentTask(tenantId, s.taskId),
+      () => cancelOrderWithCompensation(tenantId, s.orderId, 'race'),
+    )
     const st = await state(s)
     if (st.status === 'SHIPPED') {
       shipped++

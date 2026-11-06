@@ -127,20 +127,24 @@ export async function sellFromVan(
   }
 
   const { withOrderFulfillmentLock } = await import('./order-orchestration')
-  return withOrderFulfillmentLock(tenantId, order.id, async () => {
+  return withOrderFulfillmentLock(tenantId, order.id, async (claim) => {
   const total = Number(created.totalAmount)
   if (collectsMoneyOnTheRoad(paymentMethod)) {
     // The order's own exact total, so the paid amount equals it to the cent.
-    await orderDb.order.update({
-      where: { id: order.id },
-      data: { amountPaid: created.totalAmount, confirmedAt: new Date() },
+    const { updateOrderUnderFulfillmentClaim } = await import('./order-orchestration')
+    await updateOrderUnderFulfillmentClaim(tenantId, order.id, claim, {
+      amountPaid: created.totalAmount,
+      confirmedAt: new Date(),
     })
   }
 
   const wms = await import('./wms-fulfillment')
+  await claim.assertOwned()
   await wms.cancelFulfillmentByOrder(tenantId, order.id, 'van-immediate')
+  await claim.assertOwned()
   const inv = await import('./inventory')
   const serials = await import('./inventory-serials')
+  await claim.assertOwned()
   await serials.enforceAndShipSerialsForOrder(
     tenantId,
     order.id,
@@ -150,13 +154,16 @@ export async function sellFromVan(
         quantity: li.quantity,
       })),
   )
+  await claim.assertOwned()
   const { shipped } = await inv.commitShipmentForOrder(tenantId, order.id, actor.userId)
+  await claim.assertOwned()
     const { transitionOrderStatus, onFulfillmentDispatched, onDeliveryStopDelivered } =
       await import('./order-orchestration')
-    await transitionOrderStatus(tenantId, order.id, 'PACKED', undefined, { coordinationHeld: true })
-  await onFulfillmentDispatched(tenantId, order.id, shipped, undefined, { coordinationHeld: true })
-  await onDeliveryStopDelivered(tenantId, order.id)
+    await transitionOrderStatus(tenantId, order.id, 'PACKED', undefined, { coordinationHeld: true, ownership: claim })
+  await onFulfillmentDispatched(tenantId, order.id, shipped, undefined, { coordinationHeld: true, ownership: claim })
+  await onDeliveryStopDelivered(tenantId, order.id, claim)
 
+  await claim.assertOwned()
   const fresh = await dispatchDb.routeStop.findFirst({ where: { id: stopId } })
   await dispatchDb.routeStop.update({
     where: { id: stopId },
@@ -171,6 +178,7 @@ export async function sellFromVan(
       }) as never,
     },
   })
+  await claim.assertOwned()
 
     return {
       orderId: order.id,

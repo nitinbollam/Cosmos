@@ -55,13 +55,58 @@ async function ensureSaga(orderId: string, tenantId: string, correlationId: stri
 
 /** A RUNNING saga that has not written for this long is treated as crashed and may be taken over. */
 const SAGA_LEASE_MS = 2 * 60_000
+const SAGA_HEARTBEAT_MS = Math.min(10_000, Math.floor(SAGA_LEASE_MS / 3))
+export type FulfillmentClaim = {
+  sagaId: string
+  claimId: string
+  assertOwned: () => Promise<void>
+}
+
+function startSagaHeartbeat(sagaId: string, claimId: string, status: 'RUNNING' | 'COMPENSATING') {
+  let failure: Error | null = null
+  let inFlight: Promise<void> | null = null
+  const timer = setInterval(() => {
+    if (inFlight || failure) return
+    inFlight = (async () => {
+      try {
+        const refreshed = await orderDb.orderSaga.updateMany({
+          where: { id: sagaId, status: status as never, correlationId: claimId },
+          data: { updatedAt: new Date() },
+        })
+        if (refreshed.count !== 1) failure = new ApiError(409, 'Order operation lease was taken over')
+      } catch (err) {
+        failure = err instanceof Error ? err : new Error(String(err))
+      }
+    })().finally(() => {
+      inFlight = null
+    })
+  }, SAGA_HEARTBEAT_MS)
+  return {
+    async assertOwned() {
+      if (failure) throw failure
+      const refreshed = await orderDb.orderSaga.updateMany({
+        where: { id: sagaId, status: status as never, correlationId: claimId },
+        data: { updatedAt: new Date() },
+      })
+      if (refreshed.count !== 1) {
+        failure = new ApiError(409, 'Order operation lease was taken over')
+        throw failure
+      }
+    },
+    async stop() {
+      clearInterval(timer)
+      await inFlight
+      return failure
+    },
+  }
+}
 
 export async function transitionOrderStatus(
   tenantId: string,
   orderId: string,
   nextStatus: OrderStatus,
   extra?: Partial<{ confirmedAt: Date; cancelledAt: Date; failureReason: string | null }>,
-  options?: { coordinationHeld?: boolean },
+  options?: { coordinationHeld?: boolean; ownership?: FulfillmentClaim },
 ) {
   const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
   if (!order) throw new ApiError(404, 'Order not found')
@@ -70,15 +115,49 @@ export async function transitionOrderStatus(
   if (!canTransitionOrderStatus(current, nextStatus)) {
     throw new ApiError(400, `Cannot transition order from ${current} to ${nextStatus}`)
   }
+  if (options?.ownership) {
+    return orderDb.$transaction(async (tx) => {
+      const owned = await tx.orderSaga.updateMany({
+        where: {
+          id: options.ownership!.sagaId,
+          status: 'COMPENSATING' as never,
+          correlationId: options.ownership!.claimId,
+        },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+      const moved = await tx.order.updateMany({
+        where: { id: orderId, tenantId, status: current as never },
+        data: { status: nextStatus as never, ...extra },
+      })
+      if (moved.count !== 1) {
+        const now = await tx.order.findFirst({ where: { id: orderId, tenantId } })
+        if (now?.status !== nextStatus) throw new ApiError(409, `Order status changed while moving it to ${nextStatus}`)
+      }
+      return tx.order.findFirstOrThrow({ where: { id: orderId, tenantId }, include: { lineItems: true, saga: true } })
+    })
+  }
   // Packing/shipping must be serialized with cancellation even for flows without a WMS task
   // (POS, van sale, and drop ship). Both operations claim this saga row; the status change and
   // release happen in one order-database transaction so cancellation sees either side atomically.
   if ((nextStatus === 'PACKED' || nextStatus === 'SHIPPED') && !options?.coordinationHeld) {
     const saga = await ensureSaga(orderId, tenantId, randomUUID())
+    const claimId = randomUUID()
+    const staleBefore = new Date(Date.now() - SAGA_LEASE_MS)
+    const restoreSagaStatus =
+      ['RUNNING', 'COMPENSATING'].includes(saga.status) && saga.updatedAt < staleBefore
+        ? 'FAILED'
+        : saga.status
     return orderDb.$transaction(async (tx) => {
       const claimed = await tx.orderSaga.updateMany({
-        where: { id: saga.id, OR: [{ status: { notIn: ['RUNNING', 'COMPENSATING'] as never[] } }] },
-        data: { status: 'COMPENSATING' as never },
+        where: {
+          id: saga.id,
+          OR: [
+            { status: { notIn: ['RUNNING', 'COMPENSATING'] as never[] } },
+            { updatedAt: { lt: staleBefore } },
+          ],
+        },
+        data: { status: 'COMPENSATING' as never, correlationId: claimId },
       })
       if (claimed.count !== 1)
         throw new ApiError(409, 'Fulfillment or cancellation is already active for this order')
@@ -94,7 +173,11 @@ export async function transitionOrderStatus(
             `Order status changed from ${current} to ${now?.status ?? 'unknown'} while moving it to ${nextStatus}`,
           )
       }
-      await tx.orderSaga.update({ where: { id: saga.id }, data: { status: saga.status as never } })
+      const released = await tx.orderSaga.updateMany({
+        where: { id: saga.id, status: 'COMPENSATING' as never, correlationId: claimId },
+        data: { status: restoreSagaStatus as never, correlationId: saga.correlationId },
+      })
+      if (released.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
       return tx.order.findFirstOrThrow({
         where: { id: orderId, tenantId },
         include: { lineItems: true, saga: true },
@@ -121,6 +204,22 @@ export async function transitionOrderStatus(
   })
 }
 
+export async function updateOrderUnderFulfillmentClaim(
+  tenantId: string,
+  orderId: string,
+  claim: Pick<FulfillmentClaim, 'sagaId' | 'claimId'>,
+  data: Prisma.OrderUpdateInput,
+) {
+  return orderDb.$transaction(async (tx) => {
+    const owned = await tx.orderSaga.updateMany({
+      where: { id: claim.sagaId, status: 'COMPENSATING' as never, correlationId: claim.claimId },
+      data: { updatedAt: new Date() },
+    })
+    if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    return tx.order.update({ where: { id: orderId, tenantId }, data })
+  })
+}
+
 /**
  * Hold the shared order saga lock around fulfillment effects that happen before the terminal
  * PACKED/SHIPPED status write (immediate POS/van sales and supplier drop-ship confirmation).
@@ -129,25 +228,60 @@ export async function transitionOrderStatus(
 export async function withOrderFulfillmentLock<T>(
   tenantId: string,
   orderId: string,
-  fn: () => Promise<T>,
+  fn: (claim: FulfillmentClaim) => Promise<T>,
+  options?: { allowPackedOrShipped?: boolean },
 ): Promise<T> {
   const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
   if (!order) throw new ApiError(404, 'Order not found')
-  if (!isOrderCancellationEligible(order.status))
+  const allowedAfterPacking =
+    options?.allowPackedOrShipped && (order.status === 'PACKED' || order.status === 'SHIPPED')
+  if (!isOrderCancellationEligible(order.status) && !allowedAfterPacking)
     throw new ApiError(409, `Order is no longer eligible for fulfillment from ${order.status}`)
   const saga = await ensureSaga(orderId, tenantId, randomUUID())
+  const claimId = randomUUID()
+  const staleBefore = new Date(Date.now() - SAGA_LEASE_MS)
+  const restoreSagaStatus =
+    ['RUNNING', 'COMPENSATING'].includes(saga.status) && saga.updatedAt < staleBefore
+      ? 'FAILED'
+      : saga.status
   const claimed = await orderDb.orderSaga.updateMany({
-    where: { id: saga.id, OR: [{ status: { notIn: ['RUNNING', 'COMPENSATING'] as never[] } }] },
-    data: { status: 'COMPENSATING' as never },
+    where: {
+      id: saga.id,
+      OR: [
+        { status: { notIn: ['RUNNING', 'COMPENSATING'] as never[] } },
+        { updatedAt: { lt: staleBefore } },
+      ],
+    },
+    data: { status: 'COMPENSATING' as never, correlationId: claimId },
   })
   if (claimed.count !== 1)
     throw new ApiError(409, 'Fulfillment or cancellation is already active for this order')
+  const lease = startSagaHeartbeat(saga.id, claimId, 'COMPENSATING')
   try {
-    return await fn()
+    const freshOrder = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
+    if (!freshOrder) throw new ApiError(404, 'Order not found')
+    const freshAllowedAfterPacking =
+      options?.allowPackedOrShipped &&
+      (freshOrder.status === 'PACKED' || freshOrder.status === 'SHIPPED')
+    if (!isOrderCancellationEligible(freshOrder.status) && !freshAllowedAfterPacking) {
+      throw new ApiError(409, `Order is no longer eligible for fulfillment from ${freshOrder.status}`)
+    }
+    await lease.assertOwned()
+    const result = await fn({ sagaId: saga.id, claimId, assertOwned: () => lease.assertOwned() })
+    await lease.assertOwned()
+    const failure = await lease.stop()
+    if (failure) throw failure
+    const released = await orderDb.orderSaga.updateMany({
+      where: { id: saga.id, status: 'COMPENSATING' as never, correlationId: claimId },
+      data: { status: restoreSagaStatus as never, correlationId: saga.correlationId },
+    })
+    if (released.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    return result
   } finally {
+    await lease.stop()
     await orderDb.orderSaga.updateMany({
-      where: { id: saga.id, status: 'COMPENSATING' as never },
-      data: { status: saga.status as never },
+      where: { id: saga.id, status: 'COMPENSATING' as never, correlationId: claimId },
+      data: { status: restoreSagaStatus as never, correlationId: saga.correlationId },
     })
   }
 }
@@ -164,6 +298,29 @@ async function setStatusIf(
     data: data as never,
   })
   return res.count === 1
+}
+
+/** Fence an order-database status write against the pipeline claim in the same transaction. */
+async function setStatusIfOwned(
+  tenantId: string,
+  orderId: string,
+  sagaId: string,
+  claimId: string,
+  from: OrderStatus[],
+  data: { status: OrderStatus; confirmedAt?: Date; failureReason?: string | null },
+) {
+  return orderDb.$transaction(async (tx) => {
+    const owned = await tx.orderSaga.updateMany({
+      where: { id: sagaId, status: 'RUNNING', correlationId: claimId },
+      data: { updatedAt: new Date() },
+    })
+    if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    const moved = await tx.order.updateMany({
+      where: { id: orderId, tenantId, status: { in: from as never[] } },
+      data: data as never,
+    })
+    return moved.count === 1
+  })
 }
 
 export type PipelineOutcome = 'COMPLETED' | 'ALREADY_RUNNING' | 'SKIPPED'
@@ -195,6 +352,7 @@ export async function runOrderFulfillmentPipeline(
   if (!peek || isTerminal(peek.status)) return 'SKIPPED'
 
   const sagaRow = await ensureSaga(orderId, tenantId, correlationId)
+  const claimId = randomUUID()
   const claim = await orderDb.orderSaga.updateMany({
     where: {
       id: sagaRow.id,
@@ -203,23 +361,40 @@ export async function runOrderFulfillmentPipeline(
         { updatedAt: { lt: new Date(Date.now() - SAGA_LEASE_MS) } },
       ],
     },
-    data: { status: 'RUNNING', correlationId },
+    data: { status: 'RUNNING', correlationId: claimId },
   })
   if (claim.count !== 1) return 'ALREADY_RUNNING'
-
   // Read after claiming: another run may have advanced the order or the saga before we got here.
   const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { id: sagaRow.id } })
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
     include: { lineItems: true },
   })
+  const lease = startSagaHeartbeat(sagaRow.id, claimId, 'RUNNING')
+  try {
+    await lease.assertOwned()
+  } catch (err) {
+    await lease.stop()
+    throw err
+  }
   if (!order || isTerminal(order.status)) {
-    await orderDb.orderSaga.update({ where: { id: saga.id }, data: { status: sagaRow.status } })
+    const released = await orderDb.orderSaga.updateMany({
+      where: { id: saga.id, status: 'RUNNING', correlationId: claimId },
+      data: { status: sagaRow.status, correlationId: sagaRow.correlationId },
+    })
+    await lease.stop()
+    if (released.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
     return 'SKIPPED'
   }
   const steps = parseCompletedSteps(saga.completedSteps)
-  const persistSteps = () =>
-    orderDb.orderSaga.update({ where: { id: saga.id }, data: { completedSteps: steps } })
+  const persistSteps = async () => {
+    await lease.assertOwned()
+    const updated = await orderDb.orderSaga.updateMany({
+      where: { id: saga.id, status: 'RUNNING', correlationId: claimId },
+      data: { completedSteps: steps },
+    })
+    if (updated.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+  }
 
   try {
     const unallocatedStock = order.lineItems.filter(
@@ -230,6 +405,7 @@ export async function runOrderFulfillmentPipeline(
       let anyBackordered = false
 
       for (const item of stockLines) {
+        await lease.assertOwned()
         const remainingToAllocate = item.quantity - (item.quantityAllocated ?? 0)
         if (remainingToAllocate > 0) {
           const result = await backorders.reserveLineWithBackorder(tenantId, {
@@ -241,12 +417,13 @@ export async function runOrderFulfillmentPipeline(
             correlationId,
             preferredBatchId: item.preferredBatchId,
           })
+          await lease.assertOwned()
           if (result.backordered > 0) anyBackordered = true
         }
       }
 
       if (anyBackordered) {
-        await setStatusIf(tenantId, orderId, PRE_PACK_STATUSES, { status: 'BACKORDERED' })
+        await setStatusIfOwned(tenantId, orderId, saga.id, claimId, PRE_PACK_STATUSES, { status: 'BACKORDERED' })
       }
 
       if (!steps.includes('RESERVE_INVENTORY')) {
@@ -258,7 +435,9 @@ export async function runOrderFulfillmentPipeline(
     if (!steps.includes('CREATE_DROP_SHIP')) {
       const hasDropShip = order.lineItems.some((li) => li.fulfillmentType === 'DROP_SHIP')
       if (hasDropShip) {
+        await lease.assertOwned()
         await dropShip.createDropShipPurchaseOrders(tenantId, orderId)
+        await lease.assertOwned()
       }
       steps.push('CREATE_DROP_SHIP')
       await persistSteps()
@@ -268,6 +447,7 @@ export async function runOrderFulfillmentPipeline(
       where: { tenantId, orderId, status: { in: ['PENDING', 'PICKING', 'PACKED'] } },
     })
 
+    await lease.assertOwned()
     if (!openTask || !steps.includes('CREATE_FULFILLMENT')) {
       const refreshedOrder =
         (await orderDb.order.findFirst({
@@ -280,6 +460,7 @@ export async function runOrderFulfillmentPipeline(
       )
       if (fulfillLines.length > 0 && !openTask) {
         try {
+          await lease.assertOwned()
           await wmsFulfillment.createFulfillmentTask(tenantId, {
             orderId,
             correlationId,
@@ -290,6 +471,7 @@ export async function runOrderFulfillmentPipeline(
               batchId: li.preferredBatchId ?? undefined,
             })),
           })
+          await lease.assertOwned()
         } catch (err) {
           if (!(err instanceof ApiError && err.status === 409)) throw err
         }
@@ -301,6 +483,7 @@ export async function runOrderFulfillmentPipeline(
     }
 
     if (!steps.includes('CONFIRM_ORDER')) {
+      await lease.assertOwned()
       const confirmedAt = order.confirmedAt ?? new Date()
       const refreshed = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
       const current = (refreshed?.status ?? order.status) as OrderStatus
@@ -308,11 +491,11 @@ export async function runOrderFulfillmentPipeline(
 
       if (OPEN_STATUSES.includes(current)) {
         if (nextStatus !== current) {
-          await setStatusIf(tenantId, orderId, OPEN_STATUSES, { status: nextStatus, confirmedAt })
+          await setStatusIfOwned(tenantId, orderId, saga.id, claimId, OPEN_STATUSES, { status: nextStatus, confirmedAt })
         } else if (!order.confirmedAt) {
-          await orderDb.order.updateMany({
-            where: { id: orderId, tenantId },
-            data: { confirmedAt },
+          await setStatusIfOwned(tenantId, orderId, saga.id, claimId, OPEN_STATUSES, {
+            status: current,
+            confirmedAt,
           })
         }
       }
@@ -321,7 +504,7 @@ export async function runOrderFulfillmentPipeline(
         order.lineItems.length > 0 &&
         order.lineItems.every((li) => li.fulfillmentType === 'DROP_SHIP')
       if (dropOnly) {
-        await setStatusIf(tenantId, orderId, PRE_PACK_STATUSES, {
+        await setStatusIfOwned(tenantId, orderId, saga.id, claimId, PRE_PACK_STATUSES, {
           status: 'CONFIRMED',
           confirmedAt,
         })
@@ -330,22 +513,29 @@ export async function runOrderFulfillmentPipeline(
       if (order.paymentMethod === 'NET_TERMS') {
         const exposure = netTermsExposure(Number(order.totalAmount), Number(order.amountPaid ?? 0))
         // Recorded per order, so repeating this step after a crash cannot consume the credit twice.
+        await lease.assertOwned()
         await applyCreditUsed(tenantId, order.customerId, exposure, orderId)
+        await lease.assertOwned()
       }
       steps.push('CONFIRM_ORDER')
       await persistSteps()
     }
 
-    await orderDb.orderSaga.update({
-      where: { id: saga.id },
-      data: { status: 'COMPLETED', completedSteps: steps, failureReason: null },
+    await lease.assertOwned()
+    const completed = await orderDb.orderSaga.updateMany({
+      where: { id: saga.id, status: 'RUNNING', correlationId: claimId },
+      data: { status: 'COMPLETED', correlationId, completedSteps: steps, failureReason: null },
     })
+    if (completed.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    await lease.stop()
     return 'COMPLETED'
   } catch (err) {
-    await failPipeline(tenantId, orderId, saga.id, correlationId, err)
+    await failPipeline(tenantId, orderId, saga.id, claimId, correlationId, err, lease)
     throw err instanceof ApiError
       ? err
       : new ApiError(500, err instanceof Error ? err.message : 'Order pipeline failed')
+  } finally {
+    await lease.stop()
   }
 }
 
@@ -359,14 +549,18 @@ async function failPipeline(
   tenantId: string,
   orderId: string,
   sagaId: string,
+  claimId: string,
   correlationId: string,
   err: unknown,
+  lease: ReturnType<typeof startSagaHeartbeat>,
 ) {
   const message = err instanceof Error ? err.message : 'Order pipeline failed'
   const compensations: Record<string, string> = {}
   const undo = async (name: string, fn: () => Promise<unknown>) => {
     try {
+      await lease.assertOwned()
       await fn()
+      await lease.assertOwned()
       compensations[name] = 'done'
     } catch (undoErr) {
       compensations[name] =
@@ -392,15 +586,17 @@ async function failPipeline(
     }
   })
   await undo('status', async () => {
-    await setStatusIf(tenantId, orderId, PRE_PACK_STATUSES, {
+    await setStatusIfOwned(tenantId, orderId, sagaId, claimId, PRE_PACK_STATUSES, {
       status: 'FAILED',
       failureReason: message,
     })
   })
-  await orderDb.orderSaga.update({
-    where: { id: sagaId },
-    data: { status: 'FAILED', failureReason: message, compensations },
+  await lease.assertOwned()
+  const failed = await orderDb.orderSaga.updateMany({
+    where: { id: sagaId, status: 'RUNNING', correlationId: claimId },
+    data: { status: 'FAILED', correlationId, failureReason: message, compensations },
   })
+  if (failed.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
 }
 
 export async function tryCaptureAuthorizedPayment(
@@ -659,9 +855,10 @@ export async function onFulfillmentDispatched(
   shipped?: Array<{ skuId: string; quantity: number; unitCost?: string }>,
   /** The fulfillment task that shipped; an order with backorders ships more than once. */
   fulfillmentTaskId?: string,
-  options?: { coordinationHeld?: boolean },
+  options?: { coordinationHeld?: boolean; ownership?: FulfillmentClaim },
 ) {
   await transitionOrderStatus(tenantId, orderId, 'SHIPPED', undefined, options)
+  await options?.ownership?.assertOwned()
   const order = await orderDb.order.findFirst({
     where: { id: orderId, tenantId },
     include: { lineItems: true },
@@ -674,12 +871,13 @@ export async function onFulfillmentDispatched(
   const { invoiceShipmentForOrder } = await import('./invoices')
   if (fulfillmentTaskId) {
     // A task dispatch must not finish without its invoice: let the error stop it so a retry bills it.
-    await invoiceShipmentForOrder(tenantId, orderId, billedLines, fulfillmentTaskId)
+    await invoiceShipmentForOrder(tenantId, orderId, billedLines, fulfillmentTaskId, options?.ownership)
   } else {
-    await invoiceShipmentForOrder(tenantId, orderId, billedLines).catch((err) =>
+    await invoiceShipmentForOrder(tenantId, orderId, billedLines, undefined, options?.ownership).catch((err) =>
       console.error(`[orders] invoicing failed for order ${orderId}:`, err),
     )
   }
+  await options?.ownership?.assertOwned()
 
   void import('./sales-channels/fulfillment-sync')
     .then(({ syncChannelFulfillmentForOrder }) => syncChannelFulfillmentForOrder(tenantId, orderId))
@@ -698,13 +896,26 @@ export async function onFulfillmentDispatched(
   const cogs = valued
     ? valueOf(shipped.map((l) => ({ quantity: l.quantity, unitCost: l.unitCost! })))
     : fromFloat(await computeOrderCogs(tenantId, billedLines))
-  await enqueuePostingJob(orderDb, {
-    tenantId,
-    kind: 'COGS_JOURNAL',
-    sourceType: 'Order',
-    sourceId: orderId,
-    variant: fulfillmentTaskId ?? `ship:${randomUUID()}`,
-    amount: formatMoney(cogs),
+  await orderDb.$transaction(async (tx) => {
+    if (options?.ownership) {
+      const owned = await tx.orderSaga.updateMany({
+        where: {
+          id: options.ownership.sagaId,
+          status: 'COMPENSATING' as never,
+          correlationId: options.ownership.claimId,
+        },
+        data: { updatedAt: new Date() },
+      })
+      if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+    }
+    await enqueuePostingJob(tx, {
+      tenantId,
+      kind: 'COGS_JOURNAL',
+      sourceType: 'Order',
+      sourceId: orderId,
+      variant: fulfillmentTaskId ?? `ship:${orderId}`,
+      amount: formatMoney(cogs),
+    })
   })
   const { notifyOrderShipped } = await import('./notification-triggers')
   void notifyOrderShipped(tenantId, orderId, order.customerId).catch(
@@ -725,8 +936,13 @@ export async function onFulfillmentDispatched(
   )
 }
 
-export async function onDeliveryStopDelivered(tenantId: string, orderId: string) {
-  await transitionOrderStatus(tenantId, orderId, 'DELIVERED')
+export async function onDeliveryStopDelivered(
+  tenantId: string,
+  orderId: string,
+  ownership?: FulfillmentClaim,
+) {
+  await transitionOrderStatus(tenantId, orderId, 'DELIVERED', undefined, { ownership })
+  await ownership?.assertOwned()
   void emitOrderEvent(
     tenantId,
     'order.delivered',
@@ -756,6 +972,13 @@ type CancelState = {
 }
 
 const CANCEL_LOCK_STATUS = 'COMPENSATING'
+
+function cancellationUnavailableMessage(status: string) {
+  const nextStep = ['SHIPPED', 'DELIVERED', 'RETURNED'].includes(status)
+    ? ' Use Return / Credit note.'
+    : ''
+  return `An order that is ${status} cannot be cancelled.${nextStep}`
+}
 
 function readCancelState(compensations: unknown): CancelState {
   const raw = (compensations as { cancel?: Partial<CancelState> } | null)?.cancel
@@ -789,7 +1012,7 @@ export async function cancelOrderWithCompensation(
   const order = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
   if (!order) throw new ApiError(404, 'Order not found')
   if (order.status !== 'CANCELLED' && !isOrderCancellationEligible(order.status)) {
-    throw new ApiError(400, `An order that is ${order.status} cannot be cancelled`)
+    throw new ApiError(400, cancellationUnavailableMessage(order.status))
   }
 
   const saga0 = await ensureSaga(orderId, tenantId, randomUUID())
@@ -798,42 +1021,53 @@ export async function cancelOrderWithCompensation(
     order.status !== 'CANCELLED' &&
     !canTransitionOrderStatus(order.status as OrderStatus, 'CANCELLED')
   ) {
-    throw new ApiError(400, `An order that is ${order.status} cannot be cancelled`)
+    throw new ApiError(400, cancellationUnavailableMessage(order.status))
   }
 
+  const claimId = randomUUID()
+  const staleBefore = new Date(Date.now() - SAGA_LEASE_MS)
+  const staleSagaClaim =
+    ['RUNNING', CANCEL_LOCK_STATUS].includes(saga0.status) && saga0.updatedAt < staleBefore
   const lock = await orderDb.orderSaga.updateMany({
     where: {
       id: saga0.id,
       OR: [
         { status: { notIn: ['RUNNING', CANCEL_LOCK_STATUS] as never[] } },
-        { updatedAt: { lt: new Date(Date.now() - SAGA_LEASE_MS) } },
+        { updatedAt: { lt: staleBefore } },
       ],
     },
-    data: { status: CANCEL_LOCK_STATUS as never },
+    data: { status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
   })
   if (lock.count !== 1)
     throw new ApiError(409, 'Fulfillment or cancellation is already active for this order')
-  const restoreStatus = saga0.status === CANCEL_LOCK_STATUS ? 'FAILED' : saga0.status
+  const restoreStatus = staleSagaClaim || saga0.status === CANCEL_LOCK_STATUS ? 'FAILED' : saga0.status
+  const lease = startSagaHeartbeat(saga0.id, claimId, 'COMPENSATING')
 
   const claimedAt = new Date()
   let claimedTasks: string[] = []
   try {
     const saga = await orderDb.orderSaga.findUniqueOrThrow({ where: { id: saga0.id } })
     const state = readCancelState(saga.compensations)
+    const assertOwned = () => lease.assertOwned()
     const persist = async () => {
+      await assertOwned()
       const fresh = await orderDb.orderSaga.findUniqueOrThrow({ where: { id: saga.id } })
-      await orderDb.orderSaga.update({
-        where: { id: saga.id },
+      const updated = await orderDb.orderSaga.updateMany({
+        where: { id: saga.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
         data: { compensations: { ...((fresh.compensations as object) ?? {}), cancel: state } },
       })
+      if (updated.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
     }
     const step = async (name: string, fn: () => Promise<void>) => {
       if (state.steps[name] === 'done') return
       try {
+        await assertOwned()
         await fn()
+        await assertOwned()
         state.steps[name] = 'done'
         await persist()
       } catch (err) {
+        if (err instanceof ApiError && err.status === 409) throw err
         const message = err instanceof Error ? err.message : String(err)
         state.steps[name] = `failed: ${message}`.slice(0, 300)
         await persist().catch(swallowed('order-orchestration.step'))
@@ -846,13 +1080,14 @@ export async function cancelOrderWithCompensation(
     }
 
     const current = await orderDb.order.findFirst({ where: { id: orderId, tenantId } })
+    await assertOwned()
     if (
       !current ||
       (current.status !== 'CANCELLED' && !isOrderCancellationEligible(current.status))
     ) {
       throw new ApiError(
         400,
-        `An order that is ${current?.status ?? 'missing'} cannot be cancelled`,
+        current ? cancellationUnavailableMessage(current.status) : 'Order not found',
       )
     }
     // Packing closes the cancellation window. Include packed/dispatched tasks in this check so
@@ -861,6 +1096,7 @@ export async function cancelOrderWithCompensation(
       where: { tenantId, orderId, status: { in: ['PENDING', 'PICKING', 'PACKED', 'DISPATCHED'] } },
       select: { id: true, status: true },
     })
+    await assertOwned()
     if (tasks.some((task) => task.status === 'PACKED' || task.status === 'DISPATCHED')) {
       throw new ApiError(400, 'An order cannot be cancelled after warehouse packing has begun')
     }
@@ -877,6 +1113,7 @@ export async function cancelOrderWithCompensation(
         },
         data: { dispatchClaimedAt: claimedAt },
       })
+      await assertOwned()
       claimedTasks = open.map((t) => t.id)
       if (won.count !== open.length) {
         throw new ApiError(
@@ -911,8 +1148,11 @@ export async function cancelOrderWithCompensation(
         where: { tenantId, orderId, status: { in: ['AUTHORIZED', 'CAPTURED'] } },
       })
       for (const intent of intents) {
+        await assertOwned()
         if (intent.status === 'AUTHORIZED') {
+          await assertOwned()
           await payments.voidIntent(tenantId, intent.id, correlationId)
+          await assertOwned()
           continue
         }
         const captured = Number(intent.capturedAmount ?? intent.amount)
@@ -922,40 +1162,56 @@ export async function cancelOrderWithCompensation(
         // between the two leaves the books right and the refund still to do; a retry finishes it
         // without taking the amount off twice.
         if (!state.adjusted[intent.id]) {
+          await assertOwned()
           await orderDb.$transaction(async (tx) => {
+            const owned = await tx.orderSaga.updateMany({
+              where: { id: saga.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
+              data: { updatedAt: new Date() },
+            })
+            if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
             await tx.order.update({
               where: { id: orderId },
               data: { amountPaid: { decrement: new Prisma.Decimal(refundable) } },
             })
             state.adjusted[intent.id] = refundable.toFixed(2)
             const fresh = await tx.orderSaga.findUniqueOrThrow({ where: { id: saga.id } })
-            await tx.orderSaga.update({
-              where: { id: saga.id },
+            const persisted = await tx.orderSaga.updateMany({
+              where: { id: saga.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
               data: {
                 compensations: { ...((fresh.compensations as object) ?? {}), cancel: state },
               },
             })
+            if (persisted.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
           })
         }
         try {
+          await assertOwned()
           await payments.refund(tenantId, intent.id, undefined, correlationId)
+          await assertOwned()
         } catch (err) {
+          if (err instanceof ApiError && err.status === 409) throw err
           // The refund did not happen: put the amount back so the order is not understated.
           const back = state.adjusted[intent.id]
           delete state.adjusted[intent.id]
           await orderDb
             .$transaction(async (tx) => {
+              const owned = await tx.orderSaga.updateMany({
+                where: { id: saga.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
+                data: { updatedAt: new Date() },
+              })
+              if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
               await tx.order.update({
                 where: { id: orderId },
                 data: { amountPaid: { increment: new Prisma.Decimal(back) } },
               })
               const fresh = await tx.orderSaga.findUniqueOrThrow({ where: { id: saga.id } })
-              await tx.orderSaga.update({
-                where: { id: saga.id },
+              const persisted = await tx.orderSaga.updateMany({
+                where: { id: saga.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
                 data: {
                   compensations: { ...((fresh.compensations as object) ?? {}), cancel: state },
                 },
               })
+              if (persisted.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
             })
             .catch((e) =>
               console.error(
@@ -973,7 +1229,7 @@ export async function cancelOrderWithCompensation(
     await step('invoice', async () => {
       const { reconcileCancelledOrderInvoice } = await import('./invoices')
       const refundedAmount = sumMoney(Object.values(state.adjusted))
-      await reconcileCancelledOrderInvoice(tenantId, orderId, refundedAmount)
+      await reconcileCancelledOrderInvoice(tenantId, orderId, refundedAmount, { sagaId: saga.id, claimId })
     })
 
     await step('reservations', async () => {
@@ -983,9 +1239,16 @@ export async function cancelOrderWithCompensation(
     })
 
     await step('backorders', async () => {
-      await orderDb.backorderLine.updateMany({
-        where: { tenantId, orderId, status: { in: ['OPEN', 'PARTIAL'] } },
-        data: { status: 'CANCELLED' },
+      await orderDb.$transaction(async (tx) => {
+        const owned = await tx.orderSaga.updateMany({
+          where: { id: saga.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
+          data: { updatedAt: new Date() },
+        })
+        if (owned.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
+        await tx.backorderLine.updateMany({
+          where: { tenantId, orderId, status: { in: ['OPEN', 'PARTIAL'] } },
+          data: { status: 'CANCELLED' },
+        })
       })
     })
 
@@ -1003,7 +1266,11 @@ export async function cancelOrderWithCompensation(
       const leftover = await paymentDb.paymentIntent.findMany({
         where: { tenantId, orderId, status: 'AUTHORIZED' },
       })
-      for (const intent of leftover) await payments.voidIntent(tenantId, intent.id, randomUUID())
+      for (const intent of leftover) {
+        await assertOwned()
+        await payments.voidIntent(tenantId, intent.id, randomUUID())
+        await assertOwned()
+      }
     })
 
     // Last: the order only becomes CANCELLED once everything above has been undone.
@@ -1012,29 +1279,36 @@ export async function cancelOrderWithCompensation(
       await transitionOrderStatus(tenantId, orderId, 'CANCELLED', {
         cancelledAt: new Date(),
         failureReason: reason,
-      })
+      }, { ownership: { sagaId: saga.id, claimId, assertOwned } })
     }
     await step('invoice-status', async () => {
       const { syncInvoiceFromOrder } = await import('./invoices')
-      await syncInvoiceFromOrder(tenantId, orderId)
+      await syncInvoiceFromOrder(tenantId, orderId, { sagaId: saga.id, claimId })
     })
     state.complete = true
     await persist()
-    await orderDb.orderSaga.update({ where: { id: saga.id }, data: { status: 'COMPLETED' } })
+    await assertOwned()
+    const completed = await orderDb.orderSaga.updateMany({
+      where: { id: saga.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
+      data: { status: 'COMPLETED', correlationId: saga0.correlationId },
+    })
+    if (completed.count !== 1) throw new ApiError(409, 'Order operation lease was taken over')
     return orderDb.order.findFirstOrThrow({
       where: { id: orderId, tenantId },
       include: { lineItems: true, saga: true },
     })
   } catch (err) {
     // Release the lock so the next cancel attempt can run.
+    await lease.stop()
     await orderDb.orderSaga
       .updateMany({
-        where: { id: saga0.id, status: CANCEL_LOCK_STATUS as never },
-        data: { status: restoreStatus as never },
+        where: { id: saga0.id, status: CANCEL_LOCK_STATUS as never, correlationId: claimId },
+        data: { status: restoreStatus as never, correlationId: saga0.correlationId },
       })
       .catch(swallowed('order-orchestration.step2'))
     throw err
   } finally {
+    await lease.stop()
     if (claimedTasks.length > 0) {
       await wmsDb.fulfillmentTask
         .updateMany({

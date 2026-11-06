@@ -9,6 +9,13 @@ import { isOrderCancellationEligible } from './order-status'
 import { ApiError } from './session'
 import { rejectApprovedCancellationForStatus } from './approvals'
 
+function cancellationStatusRejection(status: string) {
+  const nextStep = ['SHIPPED', 'DELIVERED', 'RETURNED'].includes(status)
+    ? ' Use Return / Credit note.'
+    : ''
+  return `Order is ${status.toLowerCase()} and is no longer eligible for cancellation.${nextStep}`
+}
+
 /** Checks that run before an approver's decision is recorded. Throws to refuse the decision. */
 export async function beforeApprovalDecided(tenantId: string, request: ApprovalRequest) {
   if (request.type === ApprovalType.PURCHASE_REQUISITION) {
@@ -41,8 +48,8 @@ export async function onApprovalDecided(tenantId: string, request: ApprovalReque
         return rejectApprovedCancellationForStatus(
           tenantId,
           request.id,
-          request.decidedBy ?? 'system',
-          `Order is ${order.status.toLowerCase()} and is no longer eligible for cancellation`,
+          'system',
+          cancellationStatusRejection(order.status),
         )
       }
       const { cancelOrder } = await import('./orders')
@@ -55,8 +62,8 @@ export async function onApprovalDecided(tenantId: string, request: ApprovalReque
             return rejectApprovedCancellationForStatus(
               tenantId,
               request.id,
-              request.decidedBy ?? 'system',
-              `Order is ${fresh.status.toLowerCase()} and is no longer eligible for cancellation`,
+              'system',
+              cancellationStatusRejection(fresh.status),
             )
           }
         }

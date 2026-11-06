@@ -41,7 +41,7 @@ type InvoiceChip = {
 type CancellationRequest = {
   id: string
   status: string
-  context: { reason?: string }
+  reason?: string | null
   rejectReason?: string | null
 }
 
@@ -82,6 +82,15 @@ function isAuthenticationError(error: unknown): boolean {
   )
 }
 
+function isForbiddenError(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'response' in error &&
+      (error as { response?: { status?: number } }).response?.status === 403,
+  )
+}
+
 function trackingUrl(carrier: string | null | undefined, trackingNumber: string | null | undefined): string | null {
   if (!trackingNumber?.trim()) return null
   const num = encodeURIComponent(trackingNumber.trim())
@@ -113,6 +122,7 @@ export default function StorefrontOrderDetailPage() {
   const [cancellationReason, setCancellationReason] = useState('')
   const [cancellationError, setCancellationError] = useState<string | null>(null)
   const [cancellationNeedsSignIn, setCancellationNeedsSignIn] = useState(false)
+  const [cancellationForbidden, setCancellationForbidden] = useState(false)
   const [cancellationBusy, setCancellationBusy] = useState(false)
   const [errNeedsSignIn, setErrNeedsSignIn] = useState(false)
 
@@ -124,10 +134,16 @@ export default function StorefrontOrderDetailPage() {
     try {
       const o = await api.get<OrderDetail>(`/orders/${encodeURIComponent(id)}`)
       setOrder(o)
-      const cancellation = await api.get<{ request: CancellationRequest | null }>(
-        `/orders/${encodeURIComponent(id)}/cancellation-requests`,
-      )
-      setCancellationRequest(cancellation.request)
+      try {
+        const cancellation = await api.get<{ request: CancellationRequest | null }>(
+          `/orders/${encodeURIComponent(id)}/cancellation-requests`,
+        )
+        setCancellationRequest(cancellation.request)
+        setCancellationForbidden(false)
+      } catch (error) {
+        setCancellationRequest(null)
+        setCancellationForbidden(isForbiddenError(error))
+      }
       if (['SHIPPED', 'DELIVERED', 'RETURNED'].includes(o.status)) {
         try {
           const inv = await api.get<InvoiceChip>(`/orders/${encodeURIComponent(id)}/invoice`)
@@ -227,6 +243,7 @@ export default function StorefrontOrderDetailPage() {
     } catch (e: unknown) {
       setCancellationError(axiosErr(e))
       setCancellationNeedsSignIn(isAuthenticationError(e))
+      if (isForbiddenError(e)) setCancellationForbidden(true)
     } finally {
       setCancellationBusy(false)
     }
@@ -412,14 +429,14 @@ export default function StorefrontOrderDetailPage() {
               </button>
             ) : null}
           </div>
-          {CANCELLATION_ELIGIBLE.includes(o.status) ? (
+          {CANCELLATION_ELIGIBLE.includes(o.status) && !cancellationForbidden ? (
             <section className="pleros-card" aria-labelledby="cancellation-request-title" style={{ marginTop: 20, padding: 16 }}>
               <h2 id="cancellation-request-title" style={{ fontSize: 16, margin: '0 0 8px', color: 'var(--c-heading)' }}>
                 Cancellation request
               </h2>
               {cancellationRequest?.status === 'PENDING' ? (
                 <p role="status" className="pleros-shop-muted" style={{ margin: 0 }}>
-                  Your request is pending staff approval. Reason: {cancellationRequest.context?.reason}
+                  Your request is pending staff approval. Reason: {cancellationRequest.reason}
                 </p>
               ) : (
                 <form onSubmit={(event) => void requestCancellation(event)}>

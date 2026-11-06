@@ -1,15 +1,39 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { after, before, test } from 'node:test'
+import { ISOLATED_SKIP, assertIsolated, disposeIsolatedDatabases, prepareIsolatedDatabases } from './test-support/isolated-databases'
+import { after, before, test as nodeTest, type TestOptions } from 'node:test'
 import bcrypt from 'bcrypt'
 import { handleApiRequest } from '../../server/api-router'
 import { loginUser } from './auth'
 import { authDb, crmDb, orderDb, paymentDb, tenantDb } from './db'
 
+type TestBody = () => void | Promise<void>
+function test(name: string, fn: TestBody): void
+function test(name: string, options: TestOptions, fn: TestBody): void
+function test(name: string, optionsOrFn: TestOptions | TestBody, maybeFn?: TestBody) {
+  if (typeof optionsOrFn === 'function') {
+    nodeTest(name, { skip: ISOLATED_SKIP }, optionsOrFn)
+    return
+  }
+  nodeTest(name, { ...optionsOrFn, skip: ISOLATED_SKIP || optionsOrFn.skip }, maybeFn!)
+}
+
 const tenantId = `t-${randomUUID()}`
 const userIds: string[] = []
 const tokens: Record<string, string> = {}
 const customers: Record<string, string> = {}
+const userIdsByKey: Record<string, string> = {}
+
+async function withPatched<T>(target: object, key: string, replacement: unknown, fn: () => Promise<T>) {
+  const row = target as Record<string, unknown>
+  const original = row[key]
+  row[key] = replacement
+  try {
+    return await fn()
+  } finally {
+    row[key] = original
+  }
+}
 
 async function makeUser(key: string, role: 'VIEWER' | 'MANAGER') {
   const email = `${key}-${randomUUID().slice(0, 8)}@cancellation.test`
@@ -26,6 +50,7 @@ async function makeUser(key: string, role: 'VIEWER' | 'MANAGER') {
     },
   })
   userIds.push(user.id)
+  userIdsByKey[key] = user.id
   tokens[key] = (await loginUser(email, 'cancel-test-password')).accessToken
   if (role === 'VIEWER') {
     customers[key] = (
@@ -58,6 +83,11 @@ async function orderFor(customerKey: string, status: string = 'PENDING') {
 }
 
 before(async () => {
+  if (ISOLATED_SKIP) return
+  assertIsolated()
+  await prepareIsolatedDatabases([
+    'auth', 'tenant', 'crm', 'order', 'payment', 'wms', 'inventory', 'ledger', 'notification',
+  ])
   await authDb.tenant.create({ data: { id: tenantId, name: 'Cancel', slug: `cancel-${tenantId.slice(-8)}`, settings: {} } })
   await tenantDb.tenantOrganization.create({
     data: { id: tenantId, slug: `cancel-${tenantId.slice(-8)}`, displayName: 'Cancel', settings: {}, metadata: {} },
@@ -68,6 +98,7 @@ before(async () => {
 })
 
 after(async () => {
+  if (ISOLATED_SKIP) return
   await tenantDb.approvalRequest.deleteMany({ where: { tenantId } })
   await orderDb.postingJob.deleteMany({ where: { tenantId } })
   await orderDb.orderSaga.deleteMany({ where: { tenantId } })
@@ -79,6 +110,7 @@ after(async () => {
   await authDb.user.deleteMany({ where: { id: { in: userIds } } })
   await tenantDb.tenantOrganization.delete({ where: { id: tenantId } }).catch(() => undefined)
   await authDb.tenant.delete({ where: { id: tenantId } }).catch(() => undefined)
+  await disposeIsolatedDatabases()
 })
 
 test('buyers can request cancellation only for their own eligible orders and duplicate posts reuse the pending request', async () => {
@@ -95,6 +127,13 @@ test('buyers can request cancellation only for their own eligible orders and dup
   assert.equal(first.status, 201)
   const firstBody = (await first.json()) as { request: { id: string; status: string }; duplicate: boolean }
   assert.equal(firstBody.request.status, 'PENDING')
+  assert.equal('reason' in firstBody.request, true)
+  assert.equal('context' in firstBody.request, false)
+  assert.equal('requestedBy' in firstBody.request, false)
+  assert.equal('decidedBy' in firstBody.request, false)
+  const fetched = await call('buyer-a', 'GET', `/orders/${own.id}/cancellation-requests`)
+  const fetchedBody = (await fetched.json()) as { request: Record<string, unknown> }
+  assert.deepEqual(Object.keys(fetchedBody.request).sort(), ['id', 'reason', 'rejectReason', 'status'])
   assert.equal(firstBody.duplicate, false)
 
   const second = await call('buyer-a', 'POST', `/orders/${own.id}/cancellation-requests`, { reason: 'Duplicate request' })
@@ -113,6 +152,8 @@ test('buyers cannot request cancellation after packing or shipping', async () =>
     const order = await orderFor('buyer-a', status)
     const res = await call('buyer-a', 'POST', `/orders/${order.id}/cancellation-requests`, { reason: 'Cancel please' })
     assert.equal(res.status, 400, status)
+    const body = (await res.json()) as { message: string }
+    if (status === 'SHIPPED') assert.match(body.message, /Return \/ Credit note/)
     assert.equal(await tenantDb.approvalRequest.count({ where: { tenantId, subjectId: order.id } }), 0)
   }
 })
@@ -192,9 +233,54 @@ test('approval rechecks packing eligibility and rejects without refunding after 
   const decision = (await approved.json()) as { status: string; rejectReason: string | null }
   assert.equal(decision.status, 'REJECTED')
   assert.match(String(decision.rejectReason), /no longer eligible/)
+  assert.equal((decision as { decidedBy?: string }).decidedBy, 'system')
+  const audit = await tenantDb.auditEvent.findFirst({
+    where: { tenantId, entityType: 'ApprovalRequest', entityId: request.id, action: 'approval.rejected' },
+  })
+  assert.equal(audit?.userId, 'system')
+  const originalApprovalAudit = await tenantDb.auditEvent.findFirst({
+    where: { tenantId, entityType: 'ApprovalRequest', entityId: request.id, action: 'approval.approved' },
+  })
+  assert.equal(originalApprovalAudit?.userId, userIdsByKey.manager)
   assert.equal((await orderDb.order.findFirstOrThrow({ where: { id: order.id } })).status, 'PACKED')
   assert.equal((await paymentDb.paymentIntent.findFirstOrThrow({ where: { id: intent.id } })).status, 'CAPTURED')
   assert.equal(Number((await paymentDb.paymentIntent.findFirstOrThrow({ where: { id: intent.id } })).refundedAmount), 0)
+})
+
+test('a failed approved cancellation remains retryable and cannot create a duplicate request', async () => {
+  const order = await orderFor('buyer-a')
+  const submitted = await call('buyer-a', 'POST', `/orders/${order.id}/cancellation-requests`, { reason: 'Please cancel' })
+  const { request } = (await submitted.json()) as { request: { id: string } }
+  const sagaModel = orderDb.orderSaga as unknown as Record<string, (...args: unknown[]) => unknown>
+  const original = sagaModel.updateMany.bind(orderDb.orderSaga)
+  let failOnce = true
+  const failedApproval = await withPatched(
+    orderDb.orderSaga,
+    'updateMany',
+    async (...args: unknown[]) => {
+      const input = args[0] as { data?: { status?: string } }
+      if (failOnce && input.data?.status === 'COMPENSATING') {
+        failOnce = false
+        throw new Error('injected cancellation failure')
+      }
+      return original(...args)
+    },
+    () => call('manager', 'POST', `/approvals/${request.id}/decide`, { approve: true }),
+  )
+  assert.equal(failedApproval.status, 500)
+  assert.equal((await tenantDb.approvalRequest.findFirstOrThrow({ where: { id: request.id } })).status, 'APPROVED')
+
+  const duplicate = await call('buyer-a', 'POST', `/orders/${order.id}/cancellation-requests`, { reason: 'Try again' })
+  assert.equal(duplicate.status, 200)
+  const duplicateBody = (await duplicate.json()) as { request: { id: string; status: string }; duplicate: boolean }
+  assert.equal(duplicateBody.duplicate, true)
+  assert.equal(duplicateBody.request.id, request.id)
+  assert.equal(duplicateBody.request.status, 'APPROVED')
+  assert.equal(await tenantDb.approvalRequest.count({ where: { tenantId, subjectId: order.id } }), 1)
+
+  const retry = await call('manager', 'POST', `/approvals/${request.id}/decide`, { approve: true })
+  assert.equal(retry.status, 200)
+  assert.equal((await orderDb.order.findFirstOrThrow({ where: { id: order.id } })).status, 'CANCELLED')
 })
 
 test('staff approval cancels once; repeated approval does not duplicate cancellation effects', async () => {
